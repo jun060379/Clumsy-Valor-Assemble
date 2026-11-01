@@ -142,13 +142,17 @@ def put(row, col, cell):
     sheet.alpha_composite(cell, (col * 448, (row % 7) * 352))
 
 
-def render(f, k, ax, lift=0.0):
-    """one frame on a cell: scaled by k, source x `ax` on the centre column, feet (bottom) on the feet line raised by lift"""
+IDLE_SY = 0.94    # the user found the v2 standing picture a little tall: idle alone is squashed vertically by this (feet stay put)
+
+
+def render(f, k, ax, lift=0.0, sy=1.0):
+    """one frame on a cell: scaled by k (and by sy more, vertically), source x `ax` on the centre column, feet (bottom) on
+    the feet line raised by lift"""
     im = Image.fromarray(f['rgba'])
-    sw, sh = max(1, round(im.width * k)), max(1, round(im.height * k))
+    sw, sh = max(1, round(im.width * k)), max(1, round(im.height * k * sy))
     im = im.resize((sw, sh), Image.LANCZOS)
     ox = round(S.CX - ax * k)
-    oy = round(S.FEET - f['bottom'] * k - lift * k)
+    oy = round(S.FEET - f['bottom'] * k * sy - lift * k * sy)
     cell = Image.new('RGBA', (448, 352), (0, 0, 0, 0))
     cell.alpha_composite(im, (max(0, ox), max(0, oy)), (max(0, -ox), max(0, -oy)))
     return cell, (ox < 0 or oy < 0 or ox + sw > 448 or oy + sh > 352)
@@ -195,7 +199,7 @@ for nm, (fr, row, grounded, sh) in strips.items():
         g = max(fr[i]['slot_bottom'] for i in GROUND1[nm])
         for f in fr: f['lift'] = g - f['slot_bottom']
     for i, f in enumerate(fr):
-        f['cell'], f['clipped'] = render(f, k, f['hip'], f.get('lift', 0.0))
+        f['cell'], f['clipped'] = render(f, k, f['hip'], f.get('lift', 0.0), IDLE_SY if nm == 'idle' and not V1_IDLE else 1.0)
         put(row + i // 9, i % 9, f['cell'])
     cells[nm] = [f['cell'] for f in fr]
     info[nm] = {'src': 'v2 ref' if nm == 'idle' and not V1_IDLE else 'v1', 'row': row, 'n': len(fr), 'scale': round(k, 4), 'head_vs_idle': head[nm]['head_vs_idle'],
