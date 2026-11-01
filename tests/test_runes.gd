@@ -177,9 +177,13 @@ func _initialize() -> void:
 		if D.rooms[k]["type"] == "boss": D.cur = k
 	D.from = "L"
 	D.enter()
-	for i in 30: arena._process(0.016)
-	for mm in arena.mobs: mm.hit(9999.0, 0.0)
-	for i in 120: arena._process(0.016)
+	# the boss title card holds the world first (sortie.gd): skip it, then keep striking until the room is cleared
+	if arena.get("sortie") != null and arena.sortie.tc.active: arena.sortie.tc.finish()
+	for i in 600:
+		await process_frame
+		for mm in arena.mobs:
+			if mm.alive(): mm.hit(9999.0, 0.0)
+		if D.room()["cleared"]: break
 	var L = R.loot
 	check(L != null and is_instance_valid(L), "boss clear makes the chest")
 	for i in 200: L.step(16.0)

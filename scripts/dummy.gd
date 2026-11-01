@@ -22,7 +22,7 @@ func hit(dmg: float, kb: float, mul := 1.0) -> void:
 	flash = 120.0
 	kx = kb * 0.6
 	wob = 1.0
-	arena.damage_text(position + Vector2(0, -95), roundi(dmg * 10.0 * mul), dmg > 1.0)
+	arena.damage_text(position + Vector2(0, -95), roundi(arena.elem_hit(position + Vector2(0, -95), dmg * 10.0 * mul, ["phys"])), dmg > 1.0)
 	arena.spark(position + Vector2(-signf(kb) * 10.0, -60), 14 if dmg > 1 else 8)
 
 func step(dt: float) -> void:

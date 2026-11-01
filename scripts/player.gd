@@ -198,6 +198,13 @@ func read_input() -> void:
 	for k in ["left", "right", "up", "down", "jump", "attack", "guard", "dash", "swap"]:
 		keys[k] = Input.is_action_pressed(k)
 		pressed[k] = Input.is_action_just_pressed(k)
+	# scripted moments (sortie run-out / dash-in, an ult) hold or steer the keys
+	var fo = arena.forced_keys()
+	if fo != null:
+		for k in keys:
+			keys[k] = bool(fo.get(k, false))
+			pressed[k] = false
+		return
 	# the attack key doubles as interact: at a door it opens, and doesn't swing
 	if (pressed["attack"] or pressed["up"]) and on and not attacking() and arena.try_interact():
 		pressed["attack"] = false
@@ -1146,7 +1153,14 @@ func take_hit(m, raw: float) -> String:
 	if inv > 0.0 or dash_inv() or anim == "death" or hp <= 0.0:
 		return "miss"
 	var facing: bool = (m.position.x - position.x) * dir > 0.0
+	raw *= arena.taken_mul(m)                              # the mob's attack element against her own (hurtAmt)
+	var auto: bool = who == "estelle" and arena.auto_parry() > 0.0   # 수호의 맹세: every blow is parried
+	if auto and not (anim == "parry" and f <= 1 and facing):
+		dir = 1 if m.position.x > position.x else -1
+		set_anim("parry")
+		facing = true
 	if who == "estelle" and anim == "parry" and f <= 1 and facing:
+		if auto: arena.ult.rose_burst(position + Vector2(dir * 34.0 * CSCALE, -62.0 * CSCALE))
 		bash_t = 420.0
 		f = 2
 		ft = 0.0
@@ -1176,10 +1190,12 @@ func take_hit(m, raw: float) -> String:
 		ghit = true
 		arena.text(position + Vector2(0, -120.0 * CSCALE), "-" + str(roundi(tk)), Color("#cfe3ff"))
 		qte_offer("hit", {"raw": raw * 0.5, "taken": tk, "victim": who})
+		arena.ult_gain(5.0)
 		if hp <= 0.0: die()
 		return "guard"
 	var tk2 := raw * (0.75 if who == "estelle" else 1.0) * _inm()    # Estelle's passive: 25% less damage taken
 	hp -= tk2
+	arena.ult_gain(12.0)
 	inv = 1200.0
 	arena.sfx("hurt", 0.8)
 	arena.shake(8, -dir)
@@ -1496,8 +1512,9 @@ func _draw() -> void:
 	if who == "estelle" and not on and (an == "guard" or an == "parry"):
 		an = "air_" + an
 	var col := Color.WHITE
-	if inv > 0.0 and anim != "death" and anim != "tag_in" and int(t / 70.0) % 2 == 0:
+	if inv > 0.0 and anim != "death" and anim != "tag_in" and int(t / 70.0) % 2 == 0 and not arena.ult_busy():
 		col = Color(1, 1, 1, 0.45)
+	col.a *= arena.ult_alpha()
 	if anim == "tp_in":
 		col.a *= 1.0 - clampf(float(f) / 3.0, 0.0, 0.85)
 	elif anim == "dig_out":

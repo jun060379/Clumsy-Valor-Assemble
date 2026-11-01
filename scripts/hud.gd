@@ -117,6 +117,8 @@ func _process(delta: float) -> void:
 	ph += dt / 1000.0 * TAU / (3.6 - 2.5 * pant)
 	var f: float = clampf(maxf(0.0, P.hp) / P.MAX_HP, 0.0, 1.0)
 	_ghost(f, dt)
+	if arena.ult != null:
+		u_show += (arena.ult.frac() - u_show) * minf(1.0, dt / 120.0)
 	bl_t -= dt
 	if bl_t < -130.0:
 		bl_t = 260.0 if randf() < 0.2 else 2400.0 + randf() * 2800.0
@@ -146,6 +148,14 @@ func _ghost(f: float, dt: float) -> void:
 	if gw > 0.0: gw -= dt
 	else: ghost = maxf(f, ghost - dt / 700.0)
 	if hf > 0.0: hf -= dt
+
+## 기력 shown (eases toward the gauge, PH.uShow) and whether the ult is ready
+var u_show := 0.0
+func _ult_show() -> float:
+	return u_show
+
+func _ult_full() -> bool:
+	return arena.ult != null and arena.ult.ready_now()
 
 ## what the objective line says: the cave's name and foes left, the training dummies; town objectives come later
 func _objective() -> String:
@@ -191,9 +201,12 @@ func _draw() -> void:
 	var P = arena.player
 	var c := _centre(vs)
 	var a := alpha
-	# 기력: thin outer arc with its own black shadow (no ult yet: 0%)
+	# 기력: thin outer arc with its own black shadow, filled to the gauge (white when ready)
 	draw_arc(c + Vector2(4, 3), RU, A0, A1, 48, Color(0, 0, 0, a), 5.0)
 	draw_arc(c, RU, A0, A1, 48, Color(0, 0, 0, 0.4 * a), 3.0)
+	var uk := _ult_show()
+	if uk > 0.002:
+		draw_arc(c, RU, A0, A0 + (A1 - A0) * uk, maxi(4, int(48 * uk)), Color(Color.WHITE if _ult_full() else SKY, a), 3.0)
 	# crescent: black shadow, track, white ghost, colour
 	var full := _band(1.0)
 	draw_colored_polygon(_off(full, c + Vector2(6, 5)), Color(0, 0, 0, a))
@@ -314,7 +327,10 @@ func _draw_portrait_top(ci: CanvasItem, vs: Vector2) -> void:
 	ci.draw_string(fi, Vector2.ZERO, cur, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(1, 1, 1, na))
 	ci.draw_string(fi, Vector2(cw + 2.0, 0), "/" + str(int(P.MAX_HP)), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1, 1, 1, na * 0.75))
 	ci.draw_set_transform(e, -0.07)
-	UI.shadow_text(ci, UI.anton(true), Vector2(0, 37), "기력 0%", 11, Color(SKY, a))     # PLACEHOLDER: no 기력 (ult gauge) yet
+	var us := "기력 MAX" if _ult_full() else "기력 %d%%" % int(floorf(_ult_show() * 100.0))
+	if _ult_full() and not arena.cfg.touch_ui():
+		us += "  [" + arena.cfg.key_name(int(arena.cfg.kb["ult"][0])) + "]"
+	UI.shadow_text(ci, UI.anton(true), Vector2(0, 37), us, 11, Color(SKY, a))
 	if P.who != "estelle":
 		var cdv: float = P.heal_cd if P.who == "luce" else P.tp_cd
 		var sk := "힐" if P.who == "luce" else "균열"

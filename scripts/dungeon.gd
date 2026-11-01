@@ -358,7 +358,7 @@ func try_interact() -> bool:
 	if d["town"]:
 		if d["boss"] and arena.get("runes") != null and arena.runes.town_gate():
 			return true
-		arena.fade_then(func(): arena.leave_dungeon())
+		arena.sortie.town_door()          # RETURN sweep home, or the clear screen in the cleared boss room
 	else:
 		var rm := room()
 		var n: Dictionary = rooms[rkey(rm["x"] + DIRS[d["d"]][0], rm["y"] + DIRS[d["d"]][1])]
