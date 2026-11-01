@@ -231,8 +231,9 @@ func tod_now() -> Dictionary:
 
 
 # ---------- lights ----------
-func _add_light(p: Vector2, r: float, col: Color, a: float, kind_: String, gy := 0.0) -> Dictionary:
+func _add_light(p: Vector2, r: float, col: Color, a: float, kind_: String, gy := 0.0, fac := "") -> Dictionary:
 	var l := {"k": kind_, "x": p.x, "y": p.y, "gy": gy, "r": r, "a0": a, "a": a, "c": col, "ph": float(ldefs.size())}
+	if fac != "": l["fac"] = fac
 	ldefs.append(l)
 	return l
 
@@ -243,8 +244,8 @@ func _build_lights() -> void:
 		var y := HD.prop_y(p)
 		var w := HW(k)
 		match k:
-			"fire": _add_light(Vector2(x + 96.0, y - 40.0), 240.0, Color8(255, 140, 60), 1.1, "fire", y)
-			"hearth": _add_light(Vector2(x + 89.0, y - 30.0), 200.0, Color8(255, 140, 60), 1.0, "fire", y)
+			"fire": _add_light(Vector2(x + 96.0, y - 40.0), 240.0, Color8(255, 140, 60), 1.1, "fire", y, "fire")
+			"hearth": _add_light(Vector2(x + 89.0, y - 30.0), 200.0, Color8(255, 140, 60), 1.0, "fire", y, "hearth")
 			"sconce": _add_light(Vector2(x + w / 2.0, y - HH(k) * 0.7), 120.0, Color8(255, 200, 120), 0.8, "soft")
 			"candela": _add_light(Vector2(x + w / 2.0, y - HH(k) + 14.0), 110.0, Color8(255, 214, 140), 0.75, "soft")
 			"candle": _add_light(Vector2(x + w / 2.0, y - HH(k) + 4.0), 90.0, Color8(255, 214, 140), 0.7, "soft")
@@ -252,7 +253,13 @@ func _build_lights() -> void:
 	if fl == 0:
 		chand_light = _add_light(Vector2(2020.0, C + 190.0), 330.0, Color8(255, 220, 150), 0.9, "soft")
 		chand_light["chand"] = true
+		chand_light["fac"] = "chand"
 	# the windows' daylight glow is drawn in the additive pass (_draw_glow)
+
+## hFac: a facility the guild has restored (the fireplace, the kitchen hearth, the lobby chandelier); always on
+## when the fame system is not there
+func hfac(id: String) -> bool:
+	return arena.fame == null or arena.fame.fac_ok(id)
 
 ## rimLights in the hall: its own lights as they are
 func rim_lights() -> Array:
@@ -353,7 +360,7 @@ func step(dt: float) -> void:
 		if l["k"] == "soft" and draft != null and absf(l["x"] - draft["x"]) < 600.0:
 			var k: float = draft["v"] * (1.0 - absf(l["x"] - draft["x"]) / 600.0)
 			l["a"] *= 1.0 - 0.35 * k * (0.5 + 0.5 * sin(tt * 31.0 + l["x"]))
-	lit.L = ldefs
+	lit.L = ldefs.filter(func(l): return not l.has("fac") or hfac(l["fac"]))
 	lit.amb = T["amb"]
 	lit.redraw()
 	var P = arena.player
@@ -452,7 +459,7 @@ func _fx(dt: float) -> void:
 		var x: float = p[1]
 		if x < VX0 or x > VX1: continue
 		var y := HD.prop_y(p)
-		if k == "fire" or k == "hearth":
+		if (k == "fire" or k == "hearth") and hfac(k):
 			var cx := x + (96.0 if k == "fire" else 89.0)
 			var cy := y - (30.0 if k == "fire" else 22.0)
 			var ww := 50.0 if k == "fire" else 34.0
@@ -756,10 +763,12 @@ func _prop(ci: CanvasItem, p: Array) -> void:
 		"clock": _pendulum(ci, x, y)
 		"tboard": _trophies(ci, x, y)
 		"fire":
+			if not hfac("fire"): return
 			_flame(ci, x + 74.0, y - 24.0, 0.42, 0.0)
 			_flame(ci, x + 96.0, y - 22.0, 0.52, 2.0)
 			_flame(ci, x + 118.0, y - 24.0, 0.42, 1.0)
 		"hearth":
+			if not hfac("hearth"): return
 			_flame(ci, x + 79.0, y - 17.0, 0.4, 1.0)
 			_flame(ci, x + 99.0, y - 17.0, 0.36, 3.0)
 
@@ -905,7 +914,9 @@ func _draw_front() -> void:
 		var ch_top := cy + HH("chain") * 0.6 - HH("chain") - pv
 		front.draw_texture_rect(tex["chain"], Rect2(-HW("chain") / 2.0, ch_top, HW("chain"), HH("chain")), false)
 		var cb := cy + HH("chain") * 0.6 - 8.0 + HH("chand") - pv
-		front.draw_texture_rect(tex["chand"], Rect2(-HW("chand") / 2.0, cb - HH("chand"), HW("chand"), HH("chand")), false)
+		# not yet restored: hanging dark and dull (brightness .45, saturate .6), no light
+		front.draw_texture_rect(tex["chand"], Rect2(-HW("chand") / 2.0, cb - HH("chand"), HW("chand"), HH("chand")), false,
+			Color.WHITE if hfac("chand") else Color(0.45, 0.43, 0.43))
 		front.draw_set_transform(Vector2.ZERO)
 
 func _draw_labels() -> void:

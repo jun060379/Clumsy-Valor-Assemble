@@ -509,7 +509,7 @@ func _boost(L: Array, T: Dictionary) -> void:
 		var sh := 0.0
 		var lx: float = l["x"]
 		var ly: float = l["y"]
-		if lx > SX0 and lx < STX1 + SL and ly > minf(LOWF, up_y(lx) + BAND - 14.0):
+		if kind == "town" and lx > SX0 and lx < STX1 + SL and ly > minf(LOWF, up_y(lx) + BAND - 14.0):
 			sh = 0.85            # under the terraces
 		else:
 			for o in occ:
@@ -526,11 +526,10 @@ func _light_step(T: Dictionary) -> void:
 	_boost(L, T)
 	lit.L = L
 	lit.amb = T["amb"]
-	# the ambient multiplies the sky too (the prototype multiplies the whole canvas)
-	bg_node.modulate = Color(T["amb"].r, T["amb"].g, T["amb"].b, 1.0)
+	# (the ambient multiply in lit.gd covers the whole screen, the sky behind the world included, as in the prototype)
 	shade.update(T, arena.tod_h, L)
 	lit.redraw()
-	_win_step()
+	if win_sv != null: _win_step()
 
 ## rimLights for the character shader: dimmed by day, plus the sky (sun or moon) as a far light
 func rim_lights() -> Array:

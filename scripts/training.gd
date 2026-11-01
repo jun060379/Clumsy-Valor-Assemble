@@ -35,10 +35,12 @@ func _ready() -> void:
 	gr.set_color(0, Color(1, 1, 1, 1))
 	gr.set_color(1, Color(1, 1, 1, 0))
 	light_tex.gradient = gr
-	lights = Node2D.new()
-	add_child(lights)
-	cmod = CanvasModulate.new()
-	arena.add_child(cmod)
+	# drawLighting as in the town (lit.gd / shade.gd): the yard, its trees and props cast shadows, clouds drift over
+	lit = LIT.new(arena)
+	lit.attach()
+	shade = SHADE.new(arena, self)
+	lit.set_shade(shade)
+	lit.post_fn = func(ci): SKY.draw_fog(ci, self, [[G, 0.8]])
 	bg_layer = CanvasLayer.new()
 	bg_layer.layer = -10
 	arena.add_child(bg_layer)
@@ -51,7 +53,6 @@ func _ready() -> void:
 	front.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	front.draw.connect(_draw_front)
 	arena.add_child(front)
-	_build_lights()
 	glow = Node2D.new()
 	var gm := CanvasItemMaterial.new()
 	gm.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
@@ -61,7 +62,7 @@ func _ready() -> void:
 	life = LIFE.new(self)
 
 func cleanup() -> void:
-	cmod.queue_free()
+	lit.cleanup()
 	bg_layer.queue_free()
 	front.queue_free()
 	queue_free()
@@ -85,9 +86,36 @@ func lamp_glass(x: float, surf: float, flip: bool) -> Vector2:
 	var p := lantern_at(x, surf)
 	return Vector2(x - (p.x - x), p.y) if flip else p
 
-func _build_lights() -> void:
-	for lp in lamps:
-		_add_light(lamp_glass(lp[0], lp[1], lp[2]), 150.0, Color8(255, 196, 110), "lamp")
+## lightSources on the training ground: its three lamps
+func light_sources() -> Array:
+	var L: Array = []
+	var t := Time.get_ticks_msec() / 1000.0
+	for i in lamps.size():
+		var p := lamp_glass(lamps[i][0], lamps[i][1], lamps[i][2])
+		L.append({"k": "lamp", "x": p.x, "y": p.y, "gy": lamps[i][1], "r": 150.0, "a": LIT.fl(t, i + 1), "c": Color8(255, 196, 110)})
+	return L
+
+## occluders (the prototype's arena list): the yard's fence and gate, the three trees
+func shade_occluders() -> Array:
+	var o: Array = [[tex["g_yard"], roundf((900.0 - tex["g_yard"].get_width()) / 2.0), G, 0.0, false, 1.0, false]]
+	for d in deco_back:
+		if d[0].contains("tree"): o.append([tex[d[0]], d[1], d[2], d[3], d[4], 1.0, true])
+	return o
+
+func shade_props() -> Array:
+	var o: Array = []
+	for d in deco_props:
+		o.append([tex[d[0]], d[1], d[2], 0.0, false, 1.0, false])
+	return o
+
+func surf_top(_x: float) -> float:
+	return G
+
+func cloud_bottom(_x: float) -> float:
+	return G + 380.0
+
+func shade_extra(_ci: CanvasItem) -> void:
+	pass
 
 ## the town grows its buildings and trees 1.35x; the training ground draws the kit at its own size (ks is 1 outside town)
 func ks(_k: String) -> float:
@@ -107,13 +135,7 @@ func floor_at(_x: float) -> float:
 # ---------- step ----------
 func step(dt: float) -> void:
 	var T := tod_now()
-	cmod.color = T["amb"]
-	var tt := Time.get_ticks_msec() / 1000.0
 	var vr: Rect2 = arena.view_rect()
-	for l in lights.get_children():
-		var ph: float = l.get_meta("ph")
-		l.visible = vr.grow(l.texture_scale * 32.0).has_point(l.position) and T["lamp"] > 0.15
-		l.energy = 1.1 * T["lamp"] + 0.04 * sin(tt * 5.0 + ph)
 	var P = arena.player
 	near_door = null
 	if P.on and not P.attacking():
@@ -142,6 +164,7 @@ func step(dt: float) -> void:
 			f["vy"] += 0.0009 * dt
 			if f["y"] > f["floor"]: f["t"] = f["life"]
 	tfx = tfx.filter(func(f): return f["t"] < f["life"])
+	_light_step(T)
 	queue_redraw()
 	glow.queue_redraw()
 	front.queue_redraw()

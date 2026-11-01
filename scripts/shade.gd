@@ -50,6 +50,7 @@ var sun := 0.0
 var dir := Vector2(0, 1)
 var lights: Array = []
 var vr := Rect2()
+var clock := -1.0                 # tests: a fixed cloud clock in seconds (the prototype's P.t / 1000)
 
 
 func _init(a, lv) -> void:
@@ -98,7 +99,7 @@ func update(T: Dictionary, h: float, ls: Array) -> void:
 	if sv.size != sz: sv.size = sz
 	var s: float = sz.x / vr.size.x
 	sv.canvas_transform = Transform2D(0.0, Vector2(s, s), 0.0, -vr.position * s)
-	var t := Time.get_ticks_msec() / 1000.0
+	var t := Time.get_ticks_msec() / 1000.0 if clock < 0.0 else clock
 	var A := minf(1.0, 1.35 * sun)
 	cloud_mat.set_shader_parameter("org", Vector2(fmod(t * 18.0, 1800.0), level.G - 460.0))
 	cloud_mat.set_shader_parameter("alpha", 1.0 - (1.0 - A) * (1.0 - A))      # the prototype draws the cloud canvas twice
@@ -178,7 +179,13 @@ func _draw_cloud() -> void:
 		if bx.end.x < vx0 or bx.position.x > vx1: continue
 		if o[2] > level.cloud_bottom(bx.get_center().x) + 1.0: continue
 		_sil(d_cloud, o, bx.position, bx.size.y, Color.WHITE)
-	# clouds pass over people too
+	# clouds pass over people too (and the practice dummies)
+	if level.kind == "training":
+		for dm in arena.dummies:
+			if dm.visible and dm.get("tex") != null and dm.dead <= 0.0:
+				var tw: float = dm.tex.get_width() * 0.82
+				var th: float = dm.tex.get_height() * 0.82
+				d_cloud.draw_texture_rect(dm.tex, Rect2(dm.position.x - tw / 2.0, dm.position.y - th, tw, th), false)
 	var P = arena.player
 	if P.visible and P.position.y <= level.cloud_bottom(P.position.x) + 1.0:
 		P.draw_frame(P.who, P.anim, P.f, P.position, P.dir, Color.WHITE, "", d_cloud)

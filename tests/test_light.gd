@@ -47,7 +47,7 @@ func _initialize() -> void:
 	ok(T._win_on() and T.win_sv.render_target_update_mode == SubViewport.UPDATE_ALWAYS, "the window canvas renders in front of the hall")
 	ok(T.shade.sun < 0.01, "no sun shade at night")
 	ok(SKY.night_k(arena.tod_now()) > 0.9, "the night sky shows at 21:00")
-	ok(T.bg_node.modulate.b > T.bg_node.modulate.r, "the sky takes the blue night ambient")
+	ok(T.lit.amb.b > T.lit.amb.r and T.lit.amb.r < 0.5, "the blue night ambient (it multiplies the sky too)")
 	arena.tod_h = 12.0
 	for i in 3: arena._process(0.016)
 	ok(T.hall_win() < 0.01 and not T._win_on(), "windows dark at noon")
@@ -70,6 +70,28 @@ func _initialize() -> void:
 	var H = arena.level
 	ok(lights_in(arena) == 0, "no Light2D in the hall")
 	ok(H.lit.L.size() > 0 and H.lit.L.any(func(l): return l["k"] == "fire" or l["k"] == "soft"), "hall lights (%d)" % H.lit.L.size())
+	# the chandelier and the fires follow the hall's facilities
+	if arena.fame != null:
+		arena.fame.fac.erase("chand")
+		for i in 2: arena._process(0.016)
+		ok(not H.lit.L.any(func(l): return l.has("chand")), "an unrestored chandelier gives no light")
+		arena.fame.fac["chand"] = 1
+		for i in 2: arena._process(0.016)
+		ok(H.lit.L.any(func(l): return l.has("chand")), "the restored chandelier lights the lobby")
+	# the training ground: the same light, its own occluders
+	arena.go_training()
+	await process_frame
+	arena.tod_h = 12.0
+	for i in 3: arena._process(0.016)
+	var Y = arena.train
+	ok(lights_in(arena) == 0, "no Light2D on the training ground")
+	ok(Y.shade_occluders().size() == 4, "training occluders: the yard and three trees")
+	ok(Y.lit.L.size() == 3 and Y.lit.L.all(func(l): return l["k"] == "lamp"), "three lamps with cones and pools")
+	ok(Y.shade.sun > 0.9, "sun shadows on the training ground at noon")
+	arena.tod_h = 21.0
+	for i in 3: arena._process(0.016)
+	ok(Y.lit.amb.r < 0.5 and SKY.night_k(arena.tod_now()) > 0.9, "night on the training ground")
+	ok(Y.rim_lights().size() == 4, "training rim lights: three lamps and the sky")
 	print("FAILS: ", fails)
 	quit()
 

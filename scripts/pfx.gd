@@ -218,7 +218,7 @@ func _pix_frame() -> void:
 	var vp := get_viewport()
 	var z: float = (vp.get_final_transform() * vp.get_canvas_transform()).x.length()
 	var Ls: Array = []
-	var lv = arena.level
+	var lv = arena.level if arena.level != null else arena.get("train")
 	var P = arena.player
 	if lv != null and lv.has_method("rim_lights") and P != null:
 		# levels drawn by lit.gd hand over their light list: [pos, r, strength, colour]
