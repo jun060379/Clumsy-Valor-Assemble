@@ -148,8 +148,14 @@ const ANIM_N := {"idle": "대기", "start": "출발", "stop": "멈춤", "turn": 
 static func partial_line(id: String) -> String:
 	var s := SD.get_skin(id)
 	if not s.get("partial", false): return ""
+	var done: Array = s.get("done", [])
+	var all := true                    # every animation with a sheet row of its own (chars.gd) has its new art
+	var T: Dictionary = CH.TABLE[s["c"]]
+	for a in T:
+		if int(T[a][0]) >= 0 and not done.has(a): all = false
+	if all: return "부분 완성 · 도트 동작은 전부 새 그림 (얼굴·초상 등은 이전 그림)"
 	var L: Array = []
-	for a in s.get("done", []): L.append(ANIM_N.get(a, a))
+	for a in done: L.append(ANIM_N.get(a, a))
 	return "부분 완성 · 새 그림: " + " · ".join(L) + " (나머지 동작은 이전 그림)"
 
 

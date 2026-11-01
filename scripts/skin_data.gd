@@ -24,30 +24,40 @@ extends RefCounted
 ##   placeholder  true: the name / description were invented and wait for the user's own (the 기본 entries: only the description)
 
 const BASE := {"estelle": "estelle_base", "aida": "aida_base", "luce": "luce_base"}
-## 초심's run and walk: the delivered cycles (18 and 43 frames for two steps) thinned to their key poses by
-## tools/make_skin_chosim.py (KEEP: contact, down, passing, up of each step) and played at sprite timing:
-##   run: 8 frames, 640 ms a cycle (기본's is 680 ms), about 3.1 steps a second; the contacts and the reach hold a little
-##        longer. The art's stride is short for player.gd RUN 0.36 px/ms, so the soles slide a little (a natural cadence
-##        reads better than the 347 ms a cycle that would pin the feet)
+## 초심's run and walk: the delivered cycles (15 and 43 frames for two steps) thinned to their key poses by
+## tools/make_skin_chosim.py (PICK / KEEP: reach, contact, down, passing of each step) and played at sprite timing:
+##   run: 8 of run_15f's frames (source 14, 1, 3, 5, 7, 8, 10, 12; footfalls at 1 and 8), 610 ms a cycle (기본's is
+##        680 ms), about 3.3 steps a second: two source frames apart each, 80 ms; 7 → 8 is one apart, so 7 shows 50 ms.
+##        The art's stride is short for player.gd RUN 0.36 px/ms, so the soles slide a little (pinning them would take
+##        a 398 ms cycle: legs spinning too fast)
 ##   walk: 10 frames, 1050 ms a cycle, about 1.9 steps a second; the soles slide (the art's steps are short for
 ##        townsfolk.gd WALKSP 0.2), as before
-const RUN8 := [85, 85, 75, 75, 85, 85, 75, 75]          # reach, contact, down, passing × 2
+const RUN8 := [80, 80, 80, 80, 50, 80, 80, 80]          # reach, contact, down, passing × 2
+## parry / air_parry have no art: attack2's rising cut and air_combo's (make_skin_chosim.py COMPOSE). Frames 0-1 keep the
+## parry window (180 + 35 ms; drawn as guard frame 1 until a parry lands, player.gd _draw); after a parry lands the cut
+## shows 110 ms and the raised blade 240 ms (기본's 200 + 150: the same 350 ms, a smear frame shouldn't hang)
+const PARRY4 := [180, 35, 110, 240]
 const WALK10 := [105, 105, 105, 105, 105, 105, 105, 105, 105, 105]
 const STEP_RUN8 := [1, 5]       # the frames a foot lands (dust puffs, footstep sounds): 기본's too
 const ROOT := "res://assets/skins/"
 
 const SKINS := [
-	# 초심: Estelle's default since the white dress arrived. Partial: only the rows below are drawn yet; every other row
-	# (attacks, guard, hurt, ...) and picture still comes from the original art (미숙한 결의's files) until it is delivered.
+	# 초심: Estelle's default since the white dress arrived. Every sprite row is its own now (tools/make_skin_chosim.py;
+	# parry / air_parry / tag_in / tag_out made of its other rows' frames); partial because the pictures besides st_base
+	# (face, bust, the tab art, ...) still come from the original art (미숙한 결의's files).
 	{"id": "estelle_base", "c": "estelle", "n": "초심", "d": "흰 드레스에 검은 소매, 검 한 자루. 방패도 망토도 없이 다시 시작하는 차림.", "unlock": {"kind": "default", "value": 0},
 		"dir": ROOT + "estelle_base/", "placeholder": true, "partial": true,
-		# own rows: 0 idle · 3 start (walk start) · 4 stop · 5 turn · 6 jump · 7 runjump · 35 run (8) · 36-37 walk (10)
-		"rows": [0, 3, 4, 5, 6, 7, 35, 36, 37],
-		"anims": {"run": [35, RUN8], "walk": [36, WALK10]},
+		# own rows: 0 idle · 3 start · 4 stop · 5 turn · 6 jump · 7 runjump · 8-10 attack1-3 · 11 kneel · 12 kneel_attack ·
+		# 13 attack_high · 14 guard · 15 parry · 16 air_combo · 17 dive · 18 double_jump · 19 hurt · 20 death · 21 dash ·
+		# 22 vow · 23 air_guard · 24 air_parry · 26 tag_in · 27 tag_out · 28 teeter · 35 run (8) · 36-37 walk (10)
+		"rows": [0, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 26, 27, 28, 35, 36, 37],
+		"anims": {"run": [35, RUN8], "walk": [36, WALK10], "parry": [15, PARRY4], "air_parry": [24, PARRY4]},
 		"bob": {"run": [], "walk": []},           # the frames carry their own rise and fall
 		"steps": {"run": STEP_RUN8},
 		"breath_top": 166,                         # the head's top in the idle cells (player.gd idle breathing)
-		"done": ["idle", "start", "stop", "turn", "jump", "runjump", "run", "walk"]},
+		"done": ["idle", "start", "stop", "turn", "jump", "runjump", "run", "walk", "attack1", "attack2", "attack3", "kneel",
+			"kneel_attack", "attack_high", "guard", "parry", "air_combo", "dive", "double_jump", "hurt", "death", "dash", "vow",
+			"air_guard", "air_parry", "tag_in", "tag_out", "teeter"]},
 	# 미숙한 결의: the original art (cape and shield), the files in assets/chars/estelle and assets/ui/st as they always were
 	{"id": "estelle_misuk", "c": "estelle", "n": "미숙한 결의", "d": "망토와 방패를 두르고 길드 문을 처음 두드리던 날의 차림.", "unlock": {"kind": "story", "value": "estelle_misuk"}, "dir": "", "placeholder": true},
 	{"id": "estelle_s1", "c": "estelle", "n": "순례자의 여행복", "d": "먼 길을 걷는 순례자의 차림. 방패는 등에 메고, 망토 자락엔 길 먼지가 앉았다.", "unlock": {"kind": "fame", "value": 2}, "dir": ROOT + "estelle_s1/", "placeholder": true},

@@ -83,5 +83,9 @@ for i in range(6):
     p = os.path.join(ROOT, f'assets/skins/estelle_base/sheet_{i}.png')
     if os.path.exists(p): cs[i] = Image.open(p).convert('RGBA')
 lab = {0: [('idle', 4)], 3: [('start', 4)], 4: [('stop', 4)], 5: [('turn', 4)], 6: [('jump', 8)], 7: [('runjump', 6)],
-       35: [('run', 8)], 36: [('walk 0-8', 9)], 37: [('walk 9', 1)]}
-sheet_img(cs, sorted(lab), lab, '에스텔 초심 — 지금까지 받은 줄 (나머지 줄은 원래 그림을 씀)', os.path.join(OUT, 'estelle_chosim_ref.png'), lambda r: True)
+       8: [('attack1', 5)], 9: [('attack2', 5)], 10: [('attack3', 5)], 11: [('kneel', 4)], 12: [('kneel_attack', 6)],
+       13: [('attack_high', 5)], 14: [('guard', 4)], 15: [('parry (attack2)', 4)], 16: [('air_combo', 9)], 17: [('dive', 6)],
+       18: [('double_jump', 6)], 19: [('hurt', 2)], 20: [('death', 4)], 21: [('dash', 6)], 22: [('vow', 3)],
+       23: [('air_guard', 4)], 24: [('air_parry (air_combo)', 4)], 26: [('tag_in (dash+attack3)', 6)],
+       27: [('tag_out (runjump)', 4)], 28: [('teeter', 4)], 35: [('run', 8)], 36: [('walk 0-8', 9)], 37: [('walk 9', 1)]}
+sheet_img(cs, sorted(lab), lab, '에스텔 초심 — 전체 줄 (괄호 = 다른 줄 그림을 다시 씀)', os.path.join(OUT, 'estelle_chosim_ref.png'), lambda r: True)

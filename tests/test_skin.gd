@@ -75,11 +75,15 @@ func _initialize() -> void:
 
 	# ---- 초심: a default drawn in parts, its own run / walk; the rest from the original art row by row ----
 	var CB0: Array = load("res://scripts/char_bounds.gd").B["estelle"]
+	var CH0 = load("res://scripts/chars.gd")
 	check(SK.is_ready("estelle_base") and SK.worn("estelle") == "estelle_base", "초심 is worn by default")
-	for r in [0, 3, 4, 5, 6, 7, 35, 36, 37]: check(SK.has_row("estelle_base", r), "초심 draws row %d" % r)
-	for r in [1, 2, 8, 14, 19, 21, 26, 28, 38, 41]: check(not SK.has_row("estelle_base", r), "초심 leaves row %d to the original art" % r)
+	for r in [0, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 26, 27, 28, 35, 36, 37]: check(SK.has_row("estelle_base", r), "초심 draws row %d" % r)
+	for r in [1, 2, 25, 29, 38, 41]: check(not SK.has_row("estelle_base", r), "초심 leaves row %d (unused) to the original art" % r)
+	for an in CH0.A_EST:
+		if int(CH0.A_EST[an][0]) >= 0: check(SK.has_row("estelle_base", int(SK.entry("estelle", an)[0])), "초심 draws its own " + an)
 	check(SK.sheet_row("estelle", 0).resource_path == "res://assets/skins/estelle_base/sheet_0.png", "idle from 초심")
-	check(SK.sheet_row("estelle", 8).resource_path == "res://assets/chars/estelle/estelle_1.png", "attack1 (row 8) from the original art")
+	check(SK.sheet_row("estelle", 8).resource_path == "res://assets/skins/estelle_base/sheet_1.png" and SK.sheet_row("estelle", 28).resource_path == "res://assets/skins/estelle_base/sheet_4.png", "attack1 (row 8) and teeter (row 28) from 초심's sheets")
+	check(SK.entry("estelle", "parry")[0] == 15 and (SK.entry("estelle", "parry")[1] as Array).size() == 4 and int(SK.entry("estelle", "parry")[1][0]) + int(SK.entry("estelle", "parry")[1][1]) == 215, "parry: 4 frames, the same 215 ms parry window")
 	check(SK.sheet_row("estelle", 7).resource_path == "res://assets/skins/estelle_base/sheet_1.png" and SK.sheet_row("estelle", 36).resource_path == "res://assets/skins/estelle_base/sheet_5.png", "runjump and run rows from its own sheets")
 	check((SK.entry("estelle", "run")[1] as Array).size() == 8 and (SK.entry("estelle", "walk")[1] as Array).size() == 10, "its own run (8 key frames) and walk (10)")
 	var rs := 0
@@ -93,7 +97,7 @@ func _initialize() -> void:
 	check(SK.bob("estelle", "run").is_empty() and SK.bob("estelle", "attack1").is_empty() and SK.bob("aida", "run") == load("res://scripts/chars.gd").BOB["aida"]["run"], "초심's frames carry their own bob")
 	check(SK.steps("estelle") == [1, 5] and SK.steps("luce") == [1, 5], "footfalls")
 	var B0: Array = SK.bounds("estelle")
-	check(B0.size() >= 38 * 18 and B0[35 * 18] >= 0 and B0[8 * 18] == CB0[8 * 18], "bounds: 초심's rows merged over the original's")
+	check(B0.size() >= 38 * 18 and B0[35 * 18] >= 0 and B0[25 * 18] == CB0[25 * 18], "bounds: 초심's rows merged over the original's")
 	check(SK.path("estelle", "st_base").begins_with("res://assets/skins/estelle_base/st_base.") and SK.path("estelle", "st_cl") == SK.path("estelle", "st_base"), "its standing picture; a blink it lacks shows the same picture, never the old costume")
 	check(SK.path("estelle", "face") == SK.base_path("estelle", "face") and SK.path("estelle", "st_gear") == SK.base_path("estelle", "st_gear"), "face / gear art still the original's")
 
