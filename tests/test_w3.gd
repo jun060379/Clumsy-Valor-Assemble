@@ -228,7 +228,12 @@ func _initialize() -> void:
 	arena.fame.intro = 1
 	arena.fame.got["r1a"] = 1
 	arena.player.party = [arena.player.who]
+	var rec0: Array = arena.fame.rec.duplicate()
+	arena.fame.rec = ["estelle"]
+	if arena.fame.fame_obj() == "": check(hud._objective() == "", "no fallback while nobody else has joined (ROSTER.length>1)")
+	arena.fame.rec = ["estelle", "aida"]
 	if arena.fame.fame_obj() == "": check(hud._objective() == "분수대에서 파티를 꾸리자", "the fallback shows when fameObj has nothing")
+	arena.fame.rec = rec0
 	arena.player.party = ["estelle", "aida"]
 	if arena.fame.fame_obj() == "": check(hud._objective() == "", "with a party, no fallback")
 	arena.player.party = party
