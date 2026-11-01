@@ -77,7 +77,7 @@ func _initialize() -> void:
 	PF.ca = 0.0
 	PF.hit = 0.0
 	PF._process(0.016)
-	check(not PF.pass_rect.visible and PF.vig.visible, "quiet: only the vignette overlay (no screen read)")
+	check(PF.pass_rect.visible and not PF.vig.visible, "quiet: the bloom pass still runs (it carries the vignette)")
 	arena.screen_fx = false
 	arena.post_wave(Vector2(500, 300))
 	PF._process(0.016)

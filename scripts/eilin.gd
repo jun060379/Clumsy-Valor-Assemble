@@ -1,4 +1,5 @@
 extends Node
+const PIXP := preload("res://scripts/player.gd")
 ## Eilin, the receptionist: a person who lives in the world, not a counter fixture.
 ## She walks between maps on a chain of portals (town <-> hall 1F <-> 2F <-> 3F <-> her room); her place comes from the hour,
 ## and she keeps walking at real speed even when you are on another map. Ported from hall.js (EIL / EN / eilPlan / eRoute / ewp /
@@ -372,12 +373,13 @@ func draw_on(ci: CanvasItem, cx: float, cy: float) -> void:
 	var w: float = S["w"]
 	var h: float = S["h"]
 	var src := Rect2(fi * w, 0, w, h)
+	var mk := Color(2, 1, 1, 1) if ci.material == PIXP.pix_mat_marked() else Color.WHITE      # 캐릭터 도트화 marker (char_pix.gdshader)
 	if flip:
 		ci.draw_set_transform(Vector2(roundf(cx), 0), 0.0, Vector2(-1, 1))
-		ci.draw_texture_rect_region(S["tex"], Rect2(-roundf(w / 2.0), roundf(cy - h + 1.0), w, h), src)
+		ci.draw_texture_rect_region(S["tex"], Rect2(-roundf(w / 2.0), roundf(cy - h + 1.0), w, h), src, mk)
 		ci.draw_set_transform(Vector2.ZERO)
 	else:
-		ci.draw_texture_rect_region(S["tex"], Rect2(roundf(cx - w / 2.0), roundf(cy - h + 1.0), w, h), src)
+		ci.draw_texture_rect_region(S["tex"], Rect2(roundf(cx - w / 2.0), roundf(cy - h + 1.0), w, h), src, mk)
 
 ## the speech bubble over her head
 func draw_say(ci: CanvasItem, cy: float) -> void:

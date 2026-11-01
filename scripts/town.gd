@@ -78,6 +78,7 @@ var horse := {"st": "idle", "t": 0.0, "next": 4000.0, "neck": 0.0, "tail": 0.0, 
 
 func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	material = preload("res://scripts/player.gd").pix_mat_marked()     # 캐릭터 도트화 for Eilin drawn among the props
 	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 	z_index = -5
 	G = arena.ground_y

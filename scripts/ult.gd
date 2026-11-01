@@ -400,6 +400,7 @@ func fx_step(dt: float) -> void:
 ## dark parts (rifts, tears) with normal blending
 func _draw() -> void:
 	for f in fx:
+		if arena.get("pfx") != null and arena.pfx.owns(f["k"]): continue     # drawn in pixels by pfx.gd
 		var k: float = f["t"] / f["life"]
 		match f["k"]:
 			"hollow": _hollow(f)
@@ -470,6 +471,7 @@ func _draw_glow() -> void:
 	var C: Array = PAL[who]
 	var col: Color = INFO[who]["col"]
 	for f in fx:
+		if arena.get("pfx") != null and arena.pfx.owns(f["k"]): continue
 		var k: float = f["t"] / f["life"]
 		match f["k"]:
 			"burst":

@@ -72,6 +72,16 @@ var my := 0.0
 var gate_in := Vector2.INF
 var gate_out := Vector2.INF
 var gate_t := 0.0
+# the rift gates (riftStep / riftExit): pfx tears she walks through; her sprite is cut at the gate's line
+const RIFTM := {"heavy": {"a": 105.0, "b": 150.0, "oa": 60.0, "ob": 130.0, "rel": 200.0, "h": 150.0, "k": 1.0, "w": 1.0},
+	"quick": {"a": 20.0, "b": 110.0, "oa": 10.0, "ob": 80.0, "rel": 110.0, "h": 118.0, "k": 2.2, "w": 0.7}}
+var g_in = null
+var g_out = null
+var in_t := 0.0
+var out_t := 0.0
+var rd := 1
+var gdx := 0.0
+var gclip = null             # {x, keep}: keep < 0 = only what is left of x shows, > 0 = right
 # Luce
 var heal_cd := 0.0
 var heal_t := 0.0
@@ -319,7 +329,12 @@ func check_hits() -> void:
 		add_ghost(140.0, -dir * 14.0 * CSCALE)
 		if atk.has("arc"):
 			var c: Array = atk["arc"]
-			arena.slash_fx(position + Vector2(dir * c[0] * CSCALE, c[1] * CSCALE), c[2] * CSCALE * MELEE_K * 1.12, c[3], c[4], dir, CH.COLOR[who])
+			arena.slash_fx(position + Vector2(dir * c[0] * CSCALE, c[1] * CSCALE), c[2] * CSCALE * MELEE_K * 1.12, c[3], c[4], dir, CH.COLOR[who], c[5] if c.size() > 5 else 1.0)
+		# swingWorld: dust kicked off the ground toward the swing
+		if on:
+			var heavy0: bool = anim in ["attack3", "cthrust", "cwave"]
+			arena.pfx.dust(position.x + dir * 18.0 * CSCALE, position.y, dir, heavy0)
+			if heavy0: arena.pfx.dust(position.x - dir * 10.0 * CSCALE, position.y, -dir, false)
 		if atk.get("streak", false):
 			arena.streak_fx(position.x + dir * 20.0 * CSCALE, position.x + dir * (170.0 if anim == "cthrust" else 105.0) * CSCALE, position.y - 50.0 * CSCALE, dir)
 	var b: Array = atk["box"]
@@ -328,12 +343,14 @@ func check_hits() -> void:
 	var by: float = position.y + b[1] * CSCALE
 	var bh: float = b[3] * CSCALE
 	var hit_any := false
+	var hp0 := Vector2.INF
 	for e in foes_alive():
 		var ex: float = e.position.x
 		var ey: float = e.position.y
 		if in_arc(atk, ex, ey, 95.0, bx, by, bw, bh):
 			e.hit(atk["dmg"], dir * atk["kb"], atk_mul())
 			hit_any = true
+			if hp0 == Vector2.INF: hp0 = Vector2(ex, ey - 50.0)
 	if hit_any:
 		hit_done = true
 		var heavy: bool = atk.get("heavy", false)
@@ -342,6 +359,8 @@ func check_hits() -> void:
 		if who == "aida" and _rk(): arena.runes.clone_hits(atk)
 		arena.hitstop = atk.get("stop", 55)
 		arena.shake(atk.get("shake", 4), dir)
+		var ac: Array = atk.get("arc", [])
+		arena.slash_mark(hp0, (ac[3] + ac[4]) / 2.0 if ac.size() > 4 else 0.0, atk["dmg"])
 		if heavy:
 			arena.flash = 0.2
 		if anim in ["attack3", "cthrust", "attack_high"] or (anim == "air_combo" and f >= 6):
@@ -406,6 +425,16 @@ func rift_exit() -> void:
 		inv = maxf(inv, 250.0)
 	gate_out = position + Vector2(-dir * (30.0 if rift_q else 42.0) * CSCALE, 0)
 	gate_t = 0.0
+	# riftExit: the way in closes, the way out opens behind her and she steps out of it
+	if g_in != null:
+		g_in["rel"] = true
+		g_in = null
+	var M: Dictionary = RIFTM["quick" if rift_q else "heavy"]
+	rd = dir
+	out_t = 0.0
+	g_out = arena.pfx.gate(position.x - dir * (30.0 if rift_q else 42.0) * CSCALE, position.y, M["h"] * CSCALE, M["k"], M["w"])
+	gdx = -dir * 125.0 * CSCALE
+	gclip = {"x": g_out["x"], "keep": dir}
 	arena.sfx("dig", 0.5)
 	if r_strike != null:
 		# both gates snap shut: whatever stood on the path she cut through is cut
@@ -517,12 +546,13 @@ func step(dt: float) -> void:
 			pass
 		elif on:
 			set_anim("dash")
-			arena.dust(position, -dir, true)
 			arena.sfx("dash")
+			arena.pfx.dash_start(self, false)
 		else:
 			set_anim("airdash")
 			vy = minf(vy, 0.05)
 			arena.sfx("dash")
+			arena.pfx.dash_start(self, true)
 		dash_cd = 200.0
 	if dash_cd > 0.0: dash_cd -= dt
 
@@ -564,6 +594,7 @@ func step(dt: float) -> void:
 	elif a in ["tp_in", "dig_out", "rturn", "dig_in"]:
 		vx = 0.0
 		if dig_air and a != "rturn": vy = 0.0
+		_rift_step(a, dt)
 	elif a == "mark" or a == "amark":
 		vx = 0.0
 		if dig_air: vy = 0.0
@@ -615,6 +646,7 @@ func step(dt: float) -> void:
 	elif a == "heal":
 		vx = 0.0
 		heal_t += dt
+		if randf() < dt / 75.0 and heal_t < 700.0: arena.pfx.heal_cross(position.x, position.y, CSCALE)
 		if heal_t >= 700.0 and not fx_done and _rk() and arena.runes.has("aura"):
 			fx_done = true
 			arena.runes.aura_start()
@@ -636,12 +668,15 @@ func step(dt: float) -> void:
 			heal_cd = 9000.0 * _cdk()
 			arena.sfx("ready", 0.9)
 			arena.flash = 0.1
-			arena.ring(position + Vector2(0, -60.0 * CSCALE), 40.0, Color("#fff1b0"))
+			arena.pfx.heal_burst(position.x, position.y, CSCALE)
 			arena.text(position + Vector2(0, -130.0 * CSCALE), "+%d" % int(hv), Color("#ffe9a8"))
 			if al > 0:
 				arena.text(position + Vector2(0, -165.0 * CSCALE), "동료 +%d" % int(hv), Color("#fff1b0"))
 	elif attacking():
 		if a == "dive":
+			if f == 1 and not fx_done:
+				fx_done = true
+				arena.pfx.dive_start(self)
 			if f < 2:
 				vx = 0.0
 			elif f == 2:
@@ -652,7 +687,7 @@ func step(dt: float) -> void:
 				arena.sfx("slam")
 				arena.shake(14, dir)
 				arena.flash = 0.35
-				arena.dust(position, 0, true)
+				arena.pfx.slam(position.x, position.y, who)
 				arena.hitstop = 50.0
 				for e in foes_alive():
 					if absf(e.position.x - position.x) < 110.0 and absf(e.position.y - position.y) < 40.0:
@@ -871,7 +906,7 @@ func locomotion(dt: float, move: int, a: String) -> void:
 			vy = -DJUMPV
 			set_anim("double_jump")
 			arena.sfx("djump")
-			arena.ring(position + Vector2(0, -10), 26.0)
+			arena.pfx.djump(self)
 		if want("attack"):
 			take("attack")
 			start_attack()
@@ -1498,18 +1533,6 @@ func _draw() -> void:
 		var k2: float = 1.0 - g["t"] / g["life"]
 		var gc: Color = CH.COLOR[g["c"]]
 		draw_frame(g["c"], g["anim"], g["f"], Vector2(g["x"], g["y"]) - position, g["dir"], Color(gc.r, gc.g, gc.b, 0.45 * k2).lightened(0.3))
-	# Aida's rift gates
-	for gp in [gate_in, gate_out]:
-		if gp != Vector2.INF and gate_t < 520.0:
-			var u: float = gate_t / 520.0
-			var hh := 150.0 * CSCALE * (1.0 - maxf(0.0, u - 0.6) / 0.4)
-			var w := 16.0 * minf(1.0, gate_t / 80.0) * (1.0 - maxf(0.0, u - 0.6) / 0.4)
-			var c: Vector2 = gp - position + Vector2(0, -hh / 2.0)
-			draw_set_transform(c, 0.0, Vector2(w / hh, 1.0))
-			draw_circle(Vector2.ZERO, hh / 2.0, Color(0.35, 0.12, 0.6, 0.85))
-			draw_set_transform(c, 0.0, Vector2(w * 0.45 / hh, 0.92))
-			draw_circle(Vector2.ZERO, hh / 2.0, Color(0.85, 0.7, 1.0, 0.9))
-			draw_set_transform(Vector2.ZERO)
 	var an := anim
 	var fr2 := f
 	if who == "estelle" and an == "parry" and bash_t <= 0.0:
@@ -1521,68 +1544,89 @@ func _draw() -> void:
 	if inv > 0.0 and anim != "death" and anim != "tag_in" and int(t / 70.0) % 2 == 0 and not arena.ult_busy():
 		col = Color(1, 1, 1, 0.45)
 	col.a *= arena.ult_alpha()
-	if anim == "tp_in":
-		col.a *= 1.0 - clampf(float(f) / 3.0, 0.0, 0.85)
-	elif anim == "dig_out":
-		col.a *= clampf(0.3 + float(f) / 2.0, 0.0, 1.0)
 	var variant := ""
 	if anim == "tp_in" or anim == "dig_out":
 		variant = "_air" if dig_air else ("_q" if rift_q else "")
-	draw_frame(who, an, fr2, Vector2.ZERO, dir, col, variant)
+	if not anim in ["tp_in", "dig_out"] and (gclip != null or gdx != 0.0 or g_in != null or g_out != null): _rift_clean()
+	if gclip != null: draw_frame(who, an, fr2, Vector2(gdx, 0), dir, col, variant, null, gclip["x"] - position.x, gclip["keep"])
+	else: draw_frame(who, an, fr2, Vector2(gdx, 0), dir, col, variant)
 
-## 캐릭터 도트화 (charPix): the characters drawn on a world-pixel grid with hard alpha and a 32-step palette ("dot"),
-## plus cel-shaded light from above and a dark rim ("shade", the prototype's default). One shared material.
-const PIX_SH := """
-shader_type canvas_item;
-uniform int mode = 2;
-uniform float k = 1.6;          // sheet texels per world pixel (448 px cells drawn 224 x ~1.25)
-const float TH = 100.0 / 255.0;
-void fragment() {
-	if (mode == 0) {
-		COLOR = texture(TEXTURE, UV) * COLOR;
-	} else {
-		vec2 tp = TEXTURE_PIXEL_SIZE * k;
-		vec2 su = (floor(UV / tp) + 0.5) * tp;
-		vec4 c = texture(TEXTURE, su);
-		if (c.a < TH) {
-			bool rim = mode == 2 && (texture(TEXTURE, su + vec2(tp.x, 0.0)).a >= TH || texture(TEXTURE, su - vec2(tp.x, 0.0)).a >= TH
-				|| texture(TEXTURE, su + vec2(0.0, tp.y)).a >= TH || texture(TEXTURE, su - vec2(0.0, tp.y)).a >= TH);
-			COLOR = rim ? vec4(24.0 / 255.0, 14.0 / 255.0, 36.0 / 255.0, COLOR.a) : vec4(0.0);
-		} else {
-			vec3 col = c.rgb * 255.0;
-			if (mode == 2) {
-				float vy = clamp((fract(su.y * 7.0) - 0.08) / 0.88, 0.0, 1.0);   // 7 rows a sheet: height in the cell
-				float lit = 1.08 - 0.22 * vy;
-				float L = dot(col, vec3(0.299, 0.587, 0.114)) / 255.0 * lit;
-				float q = 0.1;
-				float cel[6] = float[](0.1, 0.26, 0.44, 0.64, 0.84, 1.0);
-				for (int i = 0; i < 6; i++) { if (abs(cel[i] - L) < abs(q - L)) q = cel[i]; }
-				float kk = 1.0 + 0.4 * (clamp(q / max(0.04, L / lit), 0.55, 1.6) - 1.0);
-				float m = (col.r + col.g + col.b) / 3.0;
-				col = (vec3(m) + (col - vec3(m)) * 1.12) * kk;
-			}
-			col = (col - 128.0) * 1.06 + vec3(126.0, 120.0, 120.0);
-			col = clamp(floor(col / 8.0 + 0.5) * 8.0, 0.0, 255.0) / 255.0;
-			COLOR = vec4(col, 1.0) * COLOR;
-		}
-	}
-}
-"""
+## 캐릭터 도트화 (charPix): shaders/char_pix.gdshader. One shared material for the party, the townsfolk and the hero over
+## the slow-time grade; a "marked" twin for the level nodes that draw Eilin among their props (her draws carry r + 1).
+const PIX_SH := preload("res://shaders/char_pix.gdshader")
 const PIXM := {"off": 0, "dot": 1, "shade": 2}
 static var _pix: ShaderMaterial
+static var _pixm: ShaderMaterial
 static func pix_mat() -> ShaderMaterial:
 	if _pix == null:
-		var sh := Shader.new()
-		sh.code = PIX_SH
 		_pix = ShaderMaterial.new()
-		_pix.shader = sh
+		_pix.shader = PIX_SH
 	return _pix
+
+static func pix_mat_marked() -> ShaderMaterial:
+	if _pixm == null:
+		_pixm = ShaderMaterial.new()
+		_pixm.shader = PIX_SH
+		_pixm.set_shader_parameter("marked", true)
+		_pixm.set_shader_parameter("mode", pix_mat().get_shader_parameter("mode"))
+	return _pixm
 
 static func set_pix(m: String) -> void:
 	pix_mat().set_shader_parameter("mode", PIXM.get(m, 2))
+	pix_mat_marked().set_shader_parameter("mode", PIXM.get(m, 2))
+
+## per frame (pfx.gd): the screen scale and the lights near the camera for the rim
+static func pix_frame(zoom: float, lights: Array) -> void:
+	var lp := PackedVector4Array()
+	var lc := PackedVector4Array()
+	for l in lights:
+		if lp.size() >= 8: break
+		lp.append(Vector4(l[0].x, l[0].y, l[1], l[2]))
+		lc.append(Vector4(l[3].r, l[3].g, l[3].b, 1.0))
+	while lp.size() < 8:
+		lp.append(Vector4.ZERO)
+		lc.append(Vector4.ZERO)
+	for m in [pix_mat(), pix_mat_marked()]:
+		m.set_shader_parameter("zoom", zoom)
+		m.set_shader_parameter("nl", mini(lights.size(), 8))
+		m.set_shader_parameter("lp", lp)
+		m.set_shader_parameter("lc", lc)
 
 ## `ci`: draw onto another canvas item (the townsfolk use the same sheets); null = the player itself
-func draw_frame(c: String, an: String, fr: int, at: Vector2, d: int, col: Color, variant := "", ci: CanvasItem = null) -> void:
+func _rift_step(a: String, dt: float) -> void:
+	if who != "aida": return
+	var M: Dictionary = RIFTM["quick" if rift_q else "heavy"]
+	if a == "tp_in":
+		if g_in == null:
+			rd = dir
+			in_t = 0.0
+			g_in = arena.pfx.gate(position.x + dir * (30.0 if rift_q else 42.0) * CSCALE, position.y, M["h"] * CSCALE, M["k"], M["w"])
+		in_t += dt
+		var u := clampf((in_t - M["a"]) / M["b"], 0.0, 1.0)
+		gdx = rd * 125.0 * CSCALE * u * u
+		gclip = {"x": g_in["x"], "keep": -rd} if u > 0.0 else null
+	elif a == "dig_out" and g_out != null:
+		out_t += dt
+		var u2 := clampf((out_t - M["oa"]) / M["ob"], 0.0, 1.0)
+		var w := 1.0 - u2
+		gdx = -rd * 125.0 * CSCALE * w * w
+		gclip = {"x": g_out["x"], "keep": rd}
+		if out_t > M["rel"]:
+			g_out["rel"] = true
+			g_out = null
+			gclip = null
+			gdx = 0.0
+
+func _rift_clean() -> void:
+	if g_in != null: g_in["rel"] = true
+	if g_out != null: g_out["rel"] = true
+	g_in = null
+	g_out = null
+	gclip = null
+	gdx = 0.0
+
+## `cx`/`keep`: cut the sprite at local x = cx (keep < 0: the part left of it shows, > 0: the right)
+func draw_frame(c: String, an: String, fr: int, at: Vector2, d: int, col: Color, variant := "", ci: CanvasItem = null, cx := NAN, keep := 0) -> void:
 	if ci == null: ci = self
 	var rf: Array = CH.resolve(c, an, fr, variant)
 	var row: int = rf[0]
@@ -1592,7 +1636,18 @@ func draw_frame(c: String, an: String, fr: int, at: Vector2, d: int, col: Color,
 	var w := CW * sc
 	var h := CHH * sc
 	ci.draw_set_transform(at, 0.0, Vector2(d, 1))
-	ci.draw_texture_rect_region(sheet, Rect2(-w / 2.0, -BASE * sc, w, h), src, col)
+	if not is_nan(cx):
+		var b := d * (cx - at.x)
+		var u0 := -w / 2.0
+		var u1 := w / 2.0
+		if keep * d > 0: u0 = maxf(u0, b)
+		else: u1 = minf(u1, b)
+		if u1 > u0:
+			var s0 := src.position.x + (u0 + w / 2.0) / w * src.size.x
+			var s1 := src.position.x + (u1 + w / 2.0) / w * src.size.x
+			ci.draw_texture_rect_region(sheet, Rect2(u0, -BASE * sc, u1 - u0, h), Rect2(s0, src.position.y, s1 - s0, src.size.y), col)
+	else:
+		ci.draw_texture_rect_region(sheet, Rect2(-w / 2.0, -BASE * sc, w, h), src, col)
 	ci.draw_set_transform(Vector2.ZERO)
 
 

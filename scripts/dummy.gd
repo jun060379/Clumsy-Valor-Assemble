@@ -24,6 +24,7 @@ func hit(dmg: float, kb: float, mul := 1.0) -> void:
 	wob = 1.0
 	arena.damage_text(position + Vector2(0, -95), roundi(arena.elem_hit(position + Vector2(0, -95), dmg * 10.0 * mul, ["phys"])), dmg > 1.0)
 	arena.spark(position + Vector2(-signf(kb) * 10.0, -60), 14 if dmg > 1 else 8)
+	if arena.get("pfx") != null: arena.pfx.hit(position.x - signf(kb) * 10.0, position.y - 60.0, 1 if kb >= 0.0 else -1, 1.25 if dmg >= 2 else 1.0)
 
 func step(dt: float) -> void:
 	if flash > 0.0: flash -= dt

@@ -53,6 +53,7 @@ var snd_vy := 0.0
 
 func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	material = preload("res://scripts/player.gd").pix_mat_marked()     # 캐릭터 도트화 for Eilin drawn among the props
 	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 	z_index = -5
 	G = arena.ground_y
@@ -97,6 +98,7 @@ func _ready() -> void:
 	front.z_index = 8
 	front.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	front.draw.connect(_draw_front)
+	front.material = material
 	arena.add_child(front)
 	# prompts and her speech bubble ride the camera on their own canvas so the evening ambient doesn't dim them
 	lbl_layer = CanvasLayer.new()

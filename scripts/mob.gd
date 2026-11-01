@@ -113,6 +113,7 @@ func hit(dmg: float, kb: float, mul := 1.0) -> void:
 	var hd := signf(position.x - arena.player.position.x)
 	arena.damage_text(position + Vector2(0, -95 if not M.has("fly") else -40), roundi(d), dmg > 1.0)
 	arena.spark(position + Vector2(-hd * 10.0, -20.0 if M.has("fly") else -62.0 * M["s"] / 3.0), 14 if dmg > 1.0 else 8)
+	if arena.get("pfx") != null: arena.pfx.hit(position.x - hd * 10.0, position.y - (20.0 if M.has("fly") else 62.0 * M["s"] / 3.0), int(hd) if hd != 0.0 else 1, 1.25 if dmg >= 2.0 else 1.0)
 	if hp <= 0.0:
 		dead = 1.0
 		set_a("die")
