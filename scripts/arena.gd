@@ -298,7 +298,7 @@ func _start_world2() -> void:
 				return
 		go_town(s[1], s[2])
 		return
-	go_town(Vector2(700.0, ground_y), 1)
+	go_town(Vector2(380.0, ground_y), 1)
 
 func save_now() -> void:
 	if save != null: save.save()
