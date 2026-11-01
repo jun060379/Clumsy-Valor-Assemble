@@ -586,10 +586,16 @@ func _mem(vs: Vector2, col: Color) -> void:
 			fill = Color("#111")
 		if t0 == 6 and not hx and not got and not can: rim = col
 		if t0 == 6 and not hx and got: rim = col
+		if lock and not hx: fill = Color.BLACK          # .mn.lock: black, its left border 4 px in her colour
 		var k2 := 1.4142
 		if can: p.draw_colored_polygon(dia.call(s * k2 + 7.0 * pulse), Color(col, 0.6 * (1.0 - pulse) * a))
 		if id == sel: p.draw_polyline(_closed(dia.call(s * k2 + 6.0)), Color.WHITE, 3.0)
 		p.draw_colored_polygon(dia.call(s * k2), Color(rim, a))
+		if lock and s * k2 > 6.0 * k2:
+			# the element's left side, turned 45°: the top-left edge, 4 px deep
+			var o: PackedVector2Array = dia.call(s * k2)
+			var n: PackedVector2Array = dia.call(s * k2 - 4.0 * k2)
+			p.draw_colored_polygon(PackedVector2Array([o[3], o[0], n[0], n[3]]), Color(col, a))
 		p.draw_colored_polygon(dia.call(s * k2 - 3.0 * k2), Color(fill, a))
 		var ri := maxf(1.0, s * k2 - 8.0 * k2)
 		if hx and not got:

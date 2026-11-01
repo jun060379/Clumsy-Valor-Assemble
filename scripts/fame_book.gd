@@ -36,7 +36,7 @@ var content_h := 0.0
 var drag := {}
 # the level road (roadInit): drag with rubber-banding at the ends, a flick carries on and snaps to a card, the wheel and
 # the keys step a card, it glides in on open and to a card that is claimed
-const ROAD_STEP := 128.0
+const ROAD_STEP := 178.0          # .lv: 168 px cards, 10 apart
 var road_sp = null               # UIA.Spring on scroll["lv"] while it glides
 var road_w := 600.0              # the road's view width (cr) as last drawn
 var hover := Vector2(-999, -999)
@@ -310,6 +310,11 @@ func _tab_step(d: int) -> void:
 
 func _go_tab(tb: String) -> void:
 	if tb == cur_tab(): return
+	if book() == "gbk" and tb == "rune":
+		# the 룬 도감 tab is a door: the rune codex book opens over the town (prototype fmEl click → cdxOpen('rune'))
+		menu.page = ""
+		menu.open_codex("rune")
+		return
 	var L: Array = TABS[book()]
 	var ti := 0
 	var tj := 0
@@ -374,7 +379,7 @@ func road_rb(sx: float) -> float:
 	return sx
 
 func _road_max() -> float:
-	return maxf(0.0, (FD.AMAX - 1) * 128.0 - (paper_r.size.x - 60.0))
+	return maxf(0.0, (FD.AMAX - 1) * ROAD_STEP - (paper_r.size.x - 60.0))
 
 ## spring to a place on the road (clamped to its ends), with a starting speed (px/s along the scroll)
 func road_go(target: float, v: float, resp: float, damp: float) -> void:
@@ -394,14 +399,14 @@ func road_fling(h: Array) -> void:
 
 ## where the road sits with level lv's card in the middle
 func road_center(lv: int) -> float:
-	return (lv - 2) * ROAD_STEP + 59.0 - road_w / 2.0
+	return (lv - 2) * ROAD_STEP + 84.0 - road_w / 2.0
 
 func road_to(lv: int, resp := 0.5) -> void:
 	road_go(roundf(road_center(lv) / ROAD_STEP) * ROAD_STEP, 0.0, resp, 0.85)
 
 func _scroll_max() -> float:
 	if cur_tab() == "lv":
-		return maxf(0.0, (FD.AMAX - 1) * 128.0 - (paper_r.size.x - 60.0))
+		return maxf(0.0, (FD.AMAX - 1) * ROAD_STEP - (paper_r.size.x - 60.0))
 	return maxf(0.0, content_h - paper_r.size.y + 16.0)
 
 
@@ -1355,74 +1360,88 @@ func _p_fac(cr: Rect2) -> void:
 	_flow(cr, B)
 
 func _p_people(cr: Rect2) -> void:
-	var cw := maxf(150.0, (cr.size.x - 10.0 * 4.0) / 5.0)
-	var per := maxi(1, int((cr.size.x + 10.0) / (cw + 10.0)))
-	cw = (cr.size.x - 10.0 * (per - 1)) / per
+	# .paper .people: a grid of polaroids (auto-fill, ≥150 px, 10 apart, padding 10 6): each card 210 tall, a 5 px white
+	# frame and a soft drop, turned -1.6° (odd) / 1.4° (even), a strip of tape over the top edge; members show their
+	# portrait, the not-yet-met a black cut-out; the rank stamp only on the silhouettes. fm_up: 40 px up, 3°, .6 s, 55 ms apart
+	var ink := Color(0.169, 0.133, 0.094)
+	var x0 := cr.position.x + 6.0
+	var w := cr.size.x - 12.0
+	var per := maxi(1, int((w + 10.0) / 160.0))
+	var cw := (w - 10.0 * (per - 1)) / per
 	var ch := 210.0
 	var sy: float = scroll.get("people", 0.0)
 	var rows := ceili(float(FD.FPEOPLE.size()) / per)
-	content_h = rows * (ch + 10.0)
+	content_h = 10.0 + rows * (ch + 10.0)
 	for i in FD.FPEOPLE.size():
 		var p: Dictionary = FD.FPEOPLE[i]
-		var cx := cr.position.x + (i % per) * (cw + 10.0)
-		var cy := cr.position.y + (i / per) * (ch + 10.0) - sy
+		var cx := x0 + (i % per) * (cw + 10.0)
+		var cy := cr.position.y + 10.0 + (i / per) * (ch + 10.0) - sy
 		var u := S.k(tab_t, i * 55.0, 600.0)
-		cy += 40.0 * (1.0 - S.bk(u))
-		if cy + ch < cr.position.y - 4.0 or cy > cr.end.y: continue
+		var e := S.bk(u)
+		var a := clampf(u * 2.0, 0.0, 1.0)
+		if cy + ch < cr.position.y - 20.0 or cy > cr.end.y + 20.0: continue
 		var in_g: bool = (fame.bran == 1) if p.get("b", false) else (p.has("c") and fame.rec.has(p["c"]))
-		var r := Rect2(cx, cy, cw, ch)
-		var clip_top := maxf(r.position.y, cr.position.y - 6.0)
-		var clip_bot := minf(r.end.y, cr.end.y + 8.0)
-		var vr := Rect2(r.position.x, clip_top, r.size.x, clip_bot - clip_top)
-		_ci.draw_colored_polygon(S.clip(vr, [[3, 0], [100, 2], [97, 100], [0, 98]]), Color("#1a1620"))
+		var known: bool = p.has("c") or p.get("b", false)
+		var rot := (-1.6 if i % 2 == 0 else 1.4) + 3.0 * (1.0 - e)
+		var cc := Vector2(cx + cw / 2.0, cy + ch / 2.0 + 40.0 * (1.0 - e))
+		var m := Transform2D(deg_to_rad(rot), cc) * Transform2D(0.0, -Vector2(cw, ch) / 2.0)
+		var box := func(r: Rect2) -> PackedVector2Array: return PackedVector2Array([m * r.position, m * Vector2(r.end.x, r.position.y), m * r.end, m * Vector2(r.position.x, r.end.y)])
+		# the drop (0 6 12 rgba(0,0,0,.35)) and the white frame (0 0 0 5px #fff)
+		for k in 3:
+			var g := 6.0 - k * 2.0
+			_ci.draw_colored_polygon(box.call(Rect2(-5.0 - g, 6.0 - 5.0 - g, cw + 10.0 + g * 2.0, ch + 10.0 + g * 2.0)), Color(0, 0, 0, 0.1 * a))
+		_ci.draw_colored_polygon(box.call(Rect2(-5, -5, cw + 10.0, ch + 10.0)), Color(1, 1, 1, a))
+		_ci.draw_colored_polygon(box.call(Rect2(0, 0, cw, ch)), Color(0.102, 0.086, 0.125, a))
+		_ci.draw_set_transform_matrix(m)
 		if p.has("por"):
 			var tx: Texture2D = _tex(p["por"])
 			var ih := ch * 0.96
 			var iw := ih * tx.get_width() / tx.get_height()
-			var ir := Rect2(cx + cw / 2.0 - iw / 2.0, cy + ch + 6.0 - ih, iw, ih)
-			# crop to the card
-			var src := Rect2(Vector2.ZERO, tx.get_size())
-			var dst := ir
-			var lo := maxf(ir.position.x, cx)
-			var hi := minf(ir.end.x, cx + cw)
-			var top := maxf(ir.position.y, clip_top)
-			var bot := minf(ir.end.y, clip_bot)
-			if hi > lo and bot > top:
+			var ir := Rect2(cw / 2.0 - iw / 2.0, ch + 6.0 - ih, iw, ih)
+			var lo := maxf(ir.position.x, 0.0)
+			var hi := minf(ir.end.x, cw)
+			var bot := minf(ir.end.y, ch)
+			if hi > lo:
 				var sx := tx.get_width() / iw
 				var syy := tx.get_height() / ih
-				src = Rect2((lo - ir.position.x) * sx, (top - ir.position.y) * syy, (hi - lo) * sx, (bot - top) * syy)
-				dst = Rect2(lo, top, hi - lo, bot - top)
+				var src := Rect2((lo - ir.position.x) * sx, 0, (hi - lo) * sx, (bot - ir.position.y) * syy)
+				var dst := Rect2(lo, ir.position.y, hi - lo, bot - ir.position.y)
 				if in_g:
-					_ci.draw_texture_rect_region(tx, Rect2(dst.position + Vector2(4, 0), dst.size), src, Color.BLACK)
-					_ci.draw_texture_rect_region(tx, dst, src, Color.WHITE)
+					_ci.draw_texture_rect_region(tx, Rect2(dst.position + Vector2(4, 0), Vector2(minf(dst.size.x, cw - 4.0 - dst.position.x), dst.size.y)), Rect2(src.position, Vector2(src.size.x * minf(1.0, (cw - 4.0 - dst.position.x) / dst.size.x), src.size.y)), Color(0, 0, 0, a))
+					_ci.draw_texture_rect_region(tx, dst, src, Color(1, 1, 1, a))
 				else:
-					_ci.draw_texture_rect_region(tx, dst, src, Color(0.02, 0.02, 0.03))
+					_ci.draw_texture_rect_region(tx, dst, src, Color(0, 0, 0, a))
 		else:
-			# a silhouette: head and shoulders
-			var c := Vector2(cx + cw / 2.0, cy + ch * 0.18)
-			_ci.draw_circle(c + Vector2(0, ch * 0.18), cw * 0.17, Color.BLACK)
-			_ci.draw_colored_polygon(PackedVector2Array([Vector2(cx + cw * 0.16, cy + ch), Vector2(cx + cw * 0.3, cy + ch * 0.62), Vector2(cx + cw * 0.7, cy + ch * 0.62), Vector2(cx + cw * 0.84, cy + ch)]), Color.BLACK)
+			# .ph: a head and shoulders cut out in black (inset 18 % 26 % 0)
+			var pr := Rect2(cw * 0.26, ch * 0.18, cw * 0.48, ch * 0.82)
+			_ci.draw_circle(Vector2(pr.get_center().x, pr.position.y + pr.size.y * 0.22), pr.size.x * 0.22 * 1.2, Color(0, 0, 0, a))
+			var sh := PackedVector2Array()
+			for k in 17:
+				var an := PI + PI * k / 16.0
+				sh.append(Vector2(pr.get_center().x + cos(an) * pr.size.x * 0.55, pr.end.y + sin(an) * pr.size.y * 0.55 * 0.62))
+			_ci.draw_colored_polygon(sh, Color(0, 0, 0, a))
 			var stt := "%d등급" % p["r"]
-			_ci.draw_set_transform(Vector2(cx + cw - 30.0, cy + 14.0), deg_to_rad(6.0))
-			_ci.draw_rect(Rect2(-24, -9, S.tw(S.noto(), stt, 11) + 16.0, 18), Color.BLACK)
-			_ci.draw_string(S.noto(), Vector2(-16, 4), stt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color.WHITE)
-			_ci.draw_set_transform(Vector2.ZERO)
-		if in_g:
-			var stt := "선배" if p.get("sr", false) else "길드원"
-			_ci.draw_set_transform(Vector2(cx + cw - 30.0, cy + 14.0), deg_to_rad(6.0))
-			_ci.draw_rect(Rect2(-24, -9, S.tw(S.noto(), stt, 11) + 16.0, 18), col())
-			_ci.draw_string(S.noto(), Vector2(-16, 4), stt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color.BLACK)
-			_ci.draw_set_transform(Vector2.ZERO)
-		# label
-		var ly := cy + ch - 52.0
-		if ly + 52.0 <= cr.end.y + 8.0 and ly >= cr.position.y - 10.0:
-			for k in 6:
-				_ci.draw_rect(Rect2(cx, ly + k * 3.0, cw, 3.0), Color(0, 0, 0, 0.92 * k / 6.0))
-			_ci.draw_rect(Rect2(cx, ly + 18.0, cw, 34.0), Color(0, 0, 0, 0.92))
-			var nm: String = p["n"] if (in_g or not (p.has("c") or p.get("b", false))) else "???"
-			var role: String = p["role"] if in_g else ("첫 의뢰를 마치면 에일린이 소개해 준다" if (p.has("c") or p.get("b", false)) else "%s · %s" % [p["role"], p["hint"]])
-			_ci.draw_string(S.bhs(), Vector2(cx + 10.0, ly + 24.0), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color.WHITE)
-			_ci.draw_multiline_string(S.noto(), Vector2(cx + 10.0, ly + 40.0), role, HORIZONTAL_ALIGNMENT_LEFT, cw - 16.0, 11, 2, Color(0.81, 0.78, 0.85))
+			var sw := S.tw(S.noto(), stt, 11) + 16.0
+			_ci.draw_set_transform_matrix(m * Transform2D(deg_to_rad(6.0), Vector2(cw - 6.0 - sw / 2.0, 6.0 + 9.0)))
+			_ci.draw_rect(Rect2(-sw / 2.0, -9, sw, 18), Color(0, 0, 0, a))
+			_ci.draw_string(S.noto(), Vector2(-sw / 2.0 + 8.0, 4), stt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(ink, a))
+			_ci.draw_set_transform_matrix(m)
+		# .pl: the gradient foot, the name (Black Han Sans 18, in the book's ink) and the line under it
+		var nm: String = p["n"] if (in_g or not known) else "???"
+		var role: String = p["role"] if in_g else ("첫 의뢰를 마치면 에일린이 소개해 준다" if known else "%s · %s" % [p["role"], p["hint"]])
+		var rl := S.noto().get_multiline_string_size(role, HORIZONTAL_ALIGNMENT_LEFT, cw - 20.0, 11).y
+		var lh := 6.0 + 24.0 + rl + 8.0
+		var ly := ch - lh
+		for k in 8:
+			var f := float(k) / 8.0
+			_ci.draw_rect(Rect2(0, ly + lh * 0.35 * f, cw, lh * 0.35 / 8.0 + 0.5), Color(0, 0, 0, 0.92 * f * a))
+		_ci.draw_rect(Rect2(0, ly + lh * 0.35, cw, lh * 0.65), Color(0, 0, 0, 0.92 * a))
+		_ci.draw_string(S.bhs(), Vector2(10.0, ly + 6.0 + 19.0), nm, HORIZONTAL_ALIGNMENT_LEFT, cw - 20.0, 18, Color(ink, a))
+		_ci.draw_multiline_string(S.noto(), Vector2(10.0, ly + 30.0 + 11.0), role, HORIZONTAL_ALIGNMENT_LEFT, cw - 20.0, 11, -1, Color(0.81, 0.78, 0.85, a))
+		# the tape: 54 × 16, rgba(255,236,160,.75), -3°, 9 px over the top edge (the card clips it)
+		_ci.draw_set_transform_matrix(m * Transform2D(deg_to_rad(-3.0), Vector2(cw / 2.0, -1.0)))
+		_ci.draw_rect(Rect2(-27, 0, 54, 7), Color(1.0, 0.925, 0.627, 0.75 * a))
+		_ci.draw_set_transform(Vector2.ZERO)
 
 func _dun_list(lc: Rect2) -> void:
 	var y := lc.position.y + 4.0
@@ -1611,32 +1630,40 @@ func _p_lv(cr: Rect2) -> void:
 	var hh := cr.size.y - 50.0
 	var x := cr.position.x - sx
 	for i in range(2, FD.AMAX + 1):
-		var cw := 118.0
-		# the road's viewport: a card half out of it fades with what is left in view
+		# .lv: 168 × 184, white (lock: rgba(255,255,255,.55)), the number in Anton 34 with its state beside it,
+		# the reward lines; .cur / .next / .can rims, .got at .55 with the red 수령 stamp
+		var cw := 168.0
 		var vis := clampf((minf(x + cw, cr.end.x + 4.0) - maxf(x, cr.position.x - 2.0)) / cw, 0.0, 1.0)
 		if vis > 0.02:
 			var R := FD.a_reward(i)
 			var gotit: bool = fame.lvc.has(str(i))
 			var can := i <= L and not gotit
 			var nxt := i == L + 1
-			var r := Rect2(x, y0 + (0.0 if i % 2 else 10.0), cw, hh - 14.0)
-			var bg := Color(1, 1, 1, 0.65) if can else (Color(1, 1, 1, 0.35) if gotit else Color(0, 0, 0, 0.05))
-			bg.a *= vis
-			_ci.draw_colored_polygon(S.clip(r, [[0, 0], [100, 0], [96, 100], [3, 97]]), bg)
-			if i == L: _ci.draw_rect(Rect2(r.position, Vector2(r.size.x, 4)), Color("#7fd0ff", vis))
-			if can: _ci.draw_rect(Rect2(r.position, Vector2(4, r.size.y)), Color("#7fd0ff", vis))
-			var a := (0.5 if gotit else 1.0) * vis
-			_ci.draw_string(S.anton(true), r.position + Vector2(10, 44), str(i), HORIZONTAL_ALIGNMENT_LEFT, -1, 40, Color(INK if (can or nxt or i == L) else INK3, a))
-			var stt := "받음" if gotit else ("받을 수 있음" if can else ("다음 레벨" if nxt else ("지금" if i == L else "")))
-			_ci.draw_string(S.noto(), r.position + Vector2(12, 62), stt, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(Color("#2f6d94"), a))
-			var ry := r.position.y + 88.0
-			for line in FD.rw_txt(R).split(" · "):
-				_ci.draw_string(S.noto(), Vector2(r.position.x + 12.0, ry), line, HORIZONTAL_ALIGNMENT_LEFT, cw - 18.0, 12, Color(INK, a))
-				ry += 18.0
+			var lock := i > L
+			var r := Rect2(x, y0, cw, minf(184.0, hh - 14.0))
+			var bg := Color("#dff1ff") if can else (Color(1, 1, 1, 0.55) if lock else Color.WHITE)
+			var ga := 0.55 if gotit else 1.0
+			bg.a *= vis * ga
+			var shp := S.clip(r, [[0, 0], [100, 0], [96, 100], [3, 97]])
+			_ci.draw_colored_polygon(shp, bg)
+			var rim := Color("#7fd0ff") if can else (Color("#9fc4d8") if nxt else (Color("#2f6d94") if i == L else Color(0, 0, 0, 0)))
+			if rim.a > 0.0:
+				var rl := shp.duplicate()
+				rl.append(shp[0])
+				_ci.draw_polyline(rl, Color(rim, vis * ga), 2.0)
+			var a := ga * vis
+			var num := str(i)
+			var nc := Color("#b8ac94") if lock else Color("#2f6d94")
+			_ci.draw_string(S.anton(true), r.position + Vector2(12, 10 + 31), num, HORIZONTAL_ALIGNMENT_LEFT, -1, 34, Color(nc, a))
+			var stt := "받음" if gotit else ("받을 수 있음" if can else ("다음 레벨" if nxt else ""))
+			if stt != "": _ci.draw_string(S.noto(), r.position + Vector2(12 + S.tw(S.anton(true), num, 34) + 4.0, 10 + 31), stt, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(INK3, a))
+			if i == L: _ci.draw_string(S.anton(), Vector2(r.end.x - 10.0 - S.tw(S.anton(), "NOW", 11), r.position.y + 10.0 + 9.0), "NOW", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color("#2f6d94", a))
+			var ry := r.position.y + 10.0 + 34.0 + 4.0
+			_ci.draw_multiline_string(S.noto(), Vector2(r.position.x + 12.0, ry + 13.0), FD.rw_txt(R).replace(" · ", "   "), HORIZONTAL_ALIGNMENT_LEFT, cw - 24.0, 12, -1, Color(Color("#9a8e7c") if lock else Color("#4a3e32"), a))
 			if gotit and vis > 0.9:
-				_ci.draw_set_transform(r.get_center() + Vector2(0, 30), deg_to_rad(-12.0))
-				_ci.draw_rect(Rect2(-26, -13, 52, 26), Color(0.84, 0.16, 0.21, 0.7), false, 2.0)
-				_ci.draw_string(S.bhs(), Vector2(-17, 7), "수령", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.84, 0.16, 0.21, 0.75))
+				_ci.draw_set_transform(Vector2(r.end.x - 10.0 - 26.0, r.end.y - 12.0 - 13.0), deg_to_rad(-12.0))
+				_ci.draw_rect(Rect2(-26, -13, 52, 26), Color(0.784, 0.137, 0.173, 0.72), false, 2.5)
+				_ci.draw_string(S.bhs(), Vector2(-17, 7), "수령", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.784, 0.137, 0.173, 0.75))
 				_ci.draw_set_transform(Vector2.ZERO)
 			if can and vis > 0.9:
 				var br := Rect2(r.position.x + 12.0, r.end.y - 36.0, 62.0, 24.0)
@@ -1647,9 +1674,9 @@ func _p_lv(cr: Rect2) -> void:
 					road_to(ii)
 					fame.lv_claim(ii)
 					arena.sfx("heavy", 0.5))
-		x += 128.0
+		x += ROAD_STEP
 	# the marker under the road
-	var f := clampf(sx / maxf(1.0, (FD.AMAX - 1) * 128.0 - (paper_r.size.x - 60.0)), 0.0, 1.0)
+	var f := clampf(sx / maxf(1.0, (FD.AMAX - 1) * ROAD_STEP - (paper_r.size.x - 60.0)), 0.0, 1.0)
 	_ci.draw_rect(Rect2(cr.position.x, cr.end.y - 4.0, cr.size.x, 2.0), Color(0, 0, 0, 0.12))
 	_ci.draw_rect(Rect2(cr.position.x + (cr.size.x - 60.0) * f, cr.end.y - 6.0, 60.0, 6.0), Color("#2f6d94"))
 

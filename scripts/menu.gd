@@ -9,6 +9,7 @@ const OPTIONS := preload("res://scripts/options.gd")
 ## step 5-2 pages: 대장간, 가방, 파티, 캐릭터, the 도감 books, Bran's choices
 const FORGE := preload("res://scripts/ui_forge.gd")
 const BAG := preload("res://scripts/ui_bag.gd")
+const BAGP := BAG                  # loc(): toLocaleString's thousands commas
 const PARTY := preload("res://scripts/ui_party.gd")
 const CHARP := preload("res://scripts/ui_char.gd")
 const CODEX := preload("res://scripts/ui_codex.gd")
@@ -635,7 +636,7 @@ func _draw_fg() -> void:
 	# money, bottom left
 	ci.draw_set_transform(Vector2(22, vs.y - 22.0), deg_to_rad(-3.0))
 	var cx := 0.0
-	for pair in [["실링 ", str(arena.shilling)], ["기억석 ", str(arena.runes.mem) if arena.get("runes") != null else "0"]]:
+	for pair in [["실링 ", BAGP.loc(int(arena.shilling))], ["기억석 ", str(arena.runes.mem) if arena.get("runes") != null else "0"]]:
 		var w0 := UI.text_w(bf, pair[0], 14)
 		var w1 := UI.text_w(bf, pair[1], 14)
 		UI.para(ci, cx, -10, w0 + w1 + 20.0, 22, 3.9, Color.BLACK)
@@ -647,7 +648,7 @@ func _draw_fg() -> void:
 ## phInfo: the extra line under an entry
 func _info(k: String) -> String:
 	if k == "party": return "%d / 3 편성" % arena.player.party.size()
-	if k == "forge": return "실링 %d" % arena.shilling
+	if k == "forge": return "실링 " + BAGP.loc(int(arena.shilling))
 	if arena.get("runes") != null:
 		if k == "char":
 			var M = arena.runes.memory
@@ -724,6 +725,11 @@ func _draw_page_fg(ci: CanvasItem, vs: Vector2) -> void:
 
 ## fameOpen / advOpen: a book on a given tab (from Eilin, the rank cut, ...)
 func open_book(b: String, tb := "") -> void:
+	# fameOpen('rune') opens the rune codex book instead (the guild book never keeps 룬 도감 as its tab)
+	if b == "gbk" and tb == "rune":
+		if page == "gbk": page = ""
+		if page == "": open_codex("rune")
+		return
 	if tb != "": book.set_tab(b, tb)
 	if page == "gbk" or page == "abk":
 		page = b
