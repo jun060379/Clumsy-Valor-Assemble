@@ -5,6 +5,8 @@ extends Control
 ## whole line, the next turns the page.
 
 const AMB := preload("res://scripts/ambience.gd")
+const UI := preload("res://scripts/ui_kit.gd")
+const TALK := preload("res://scripts/talk_fx.gd")
 ## VOICE: base pitch, wave, low-pass, blip length (s), volume, ms per letter
 const VOICE := {"bran": [131.0, "square", 1400.0, 0.055, 0.045, 42.0], "estelle": [392.0, "square", 3000.0, 0.04, 0.035, 30.0],
 	"aida": [294.0, "square", 2200.0, 0.035, 0.03, 28.0], "luce": [523.0, "triangle", 4000.0, 0.04, 0.06, 28.0], "def": [262.0, "square", 2400.0, 0.04, 0.035, 32.0]}
@@ -26,6 +28,8 @@ var on_close = null
 var choices: Array = []         # [[label, Callable], ...] offered on the last line (ask)
 var ch_i := 0
 var ch_rects: Array = []
+var talk = TALK.new()            # the v3 talk scene (cut-in, bust, balloon, ransom name, tumbling letters, choices)
+var _lay: Array = []             # canvas items: cut-in shards, art silhouettes (solid), the rest
 
 
 func _ready() -> void:
@@ -33,6 +37,16 @@ func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	voice_ap = AudioStreamPlayer.new()
 	add_child(voice_ap)
+	for i in 3:
+		var c := Control.new()
+		c.set_anchors_preset(Control.PRESET_FULL_RECT)
+		c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		c.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		if i == 1: c.material = UI.solid_mat()
+		var k := i
+		c.draw.connect(func(): _draw_layer(k, c))
+		add_child(c)
+		_lay.append(c)
 
 func _voice() -> Array:
 	return VOICE.get(who, VOICE["def"])
@@ -76,21 +90,27 @@ func open(w: String, p: Texture2D, n: String, r: String, L: Array, cb) -> void:
 	on_close = cb
 	choices = []
 	active = true
+	var col := UI.col(arena.player.who) if arena != null and arena.get("player") != null else Color("#ff3d7f")
+	talk.reset(w, p, n, r, col)
 	queue_redraw()
 
 ## called by the arena every frame while open
 func step(dt: float) -> void:
 	t += dt
+	talk.step(dt)
 	var full := line()
 	if shown < full.length():
 		var n0 := int(shown)
 		shown = minf(full.length(), shown + dt / _voice()[5])
 		if int(shown) > n0 and not QUIET.contains(full[int(shown) - 1]): _blip()
+		talk.show(full, int(shown))
 		if t > 150.0 and (Input.is_action_just_pressed("attack") or Input.is_action_just_pressed("jump")):
 			shown = full.length()          # the first press shows the whole line (dlgDone)
 			t = 0.0
+			talk.show(full, full.length(), true)
 		queue_redraw()
 		return
+	talk.show(full, full.length(), true)
 	if not choices.is_empty() and i >= lines.size() - 1:
 		_step_choices()
 		queue_redraw()
@@ -104,11 +124,13 @@ func advance() -> void:
 	if typing():
 		shown = line().length()
 		t = 0.0
+		talk.show(line(), line().length(), true)
 		queue_redraw()
 		return
 	i += 1
 	t = 0.0
 	shown = 0.0
+	talk.new_line()
 	arena.sfx("step", 0.3)
 	if i >= lines.size():
 		active = false
@@ -119,37 +141,19 @@ func advance() -> void:
 	queue_redraw()
 
 func _draw() -> void:
+	for c in _lay: c.queue_redraw()
+
+func _draw_layer(k: int, c: Control) -> void:
 	if not active: return
 	var vs := get_viewport_rect().size
-	var bh := 118.0
-	var bx := 16.0
-	var bw := vs.x - 32.0
-	var by := vs.y - bh - 16.0
-	# portrait stands on the box's left end
-	if por != null:
-		var ph := minf(250.0, vs.y * 0.52)
-		var pw := por.get_width() * ph / por.get_height()
-		draw_texture_rect(por, Rect2(bx + 6.0, by - ph + 30.0, pw, ph), false)
-	var px := bx + 170.0 if vs.x > 560.0 else bx + 12.0
-	box = Rect2(bx, by, bw, bh)
-	draw_rect(Rect2(bx, by, bw, bh), Color(0.06, 0.05, 0.07, 0.9))
-	draw_rect(Rect2(bx, by, bw, bh), Color(1.0, 0.91, 0.66, 0.5), false, 2.0)
-	draw_rect(Rect2(bx, by, 4.0, bh), Color("#8fcf8a"))
-	var fb: Font = arena.font_black
-	var fr: Font = arena.font_bold
-	draw_string(fb, Vector2(px, by + 28.0), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color("#ffe9a8"))
-	var nw := fb.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 17).x
-	draw_string(fr, Vector2(px + nw + 10.0, by + 28.0), role, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1, 1, 1, 0.55))
-	var s: String = line().substr(0, int(shown))
-	draw_multiline_string(fr, Vector2(px, by + 58.0), s, HORIZONTAL_ALIGNMENT_LEFT, bx + bw - px - 20.0, 16, 3, Color("#fff6df"))
-	if typing(): return
-	if not choices.is_empty() and i >= lines.size() - 1:
-		_draw_choices(vs, by, fr)
-		return
-	var hint := "▶ 공격 키" if i < lines.size() - 1 else "■ 공격 키로 닫기"
-	var hw := fr.get_string_size(hint, HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x
-	var bob := sin(Time.get_ticks_msec() / 200.0) * 2.0
-	draw_string(fr, Vector2(bx + bw - hw - 16.0, by + bh - 12.0 + bob), hint, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1, 1, 1, 0.6))
+	match k:
+		0: talk.draw_back(c, vs)
+		1: talk.draw_sil(c, vs)
+		2:
+			var on_last := not choices.is_empty() and i >= lines.size() - 1 and not typing()
+			talk.set_choices(choices.map(func(x): return String(x[0])) if on_last else [], ch_i)
+			talk.draw_front(c, vs)
+			box = talk.box
 
 
 # ---------- choices (the prototype's dlgOpen buttons) ----------
@@ -191,32 +195,20 @@ func _input(ev: InputEvent) -> void:
 		return
 	if choices.is_empty() or i < lines.size() - 1 or t <= 150.0 or typing(): return
 	if ev is InputEventMouseMotion:
-		for k in ch_rects.size():
-			if ch_rects[k].has_point(ev.position): ch_i = k
+		var k0: int = talk.choice_at(ev.position)
+		if k0 >= 0 and k0 != ch_i:
+			ch_i = k0
+			arena.sfx("ready", 0.15)
 	elif ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-		for k in ch_rects.size():
-			if ch_rects[k].has_point(ev.position):
-				get_viewport().set_input_as_handled()
-				_pick(k)
-				return
+		var k1: int = talk.choice_at(ev.position)
+		if k1 >= 0:
+			get_viewport().set_input_as_handled()
+			_pick(k1)
+			return
+	elif ev is InputEventKey and ev.pressed and not ev.echo and ev.keycode >= KEY_1 and ev.keycode <= KEY_9 and ev.keycode - KEY_1 < choices.size():
+		get_viewport().set_input_as_handled()
+		ch_i = ev.keycode - KEY_1
+		_pick(ch_i)
 	elif ev is InputEventKey and ev.pressed and not ev.echo and ev.keycode == KEY_ESCAPE:
 		get_viewport().set_input_as_handled()
 		_pick(choices.size() - 1)
-
-## the choice buttons stack up on the right over the box
-func _draw_choices(vs: Vector2, by: float, fr: Font) -> void:
-	ch_rects.clear()
-	var n := choices.size()
-	var w := 0.0
-	for c in choices: w = maxf(w, fr.get_string_size(String(c[0]), HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x)
-	w += 46.0
-	var h := 30.0
-	var x0 := vs.x - 30.0 - w
-	var y0 := by - 10.0 - n * (h + 6.0)
-	for k in n:
-		var r := Rect2(x0 + (6.0 if k == ch_i else 0.0), y0 + k * (h + 6.0), w, h)
-		ch_rects.append(r)
-		var on := k == ch_i
-		draw_colored_polygon(PackedVector2Array([r.position + Vector2(8, 0), Vector2(r.end.x, r.position.y), r.end - Vector2(8, 0), Vector2(r.position.x, r.end.y)]), Color("#fff6df") if on else Color(0.06, 0.05, 0.07, 0.92))
-		draw_rect(Rect2(r.position + Vector2(10, 6), Vector2(4, h - 12)), Color("#8fcf8a"))
-		draw_string(fr, Vector2(r.position.x + 24.0, r.position.y + 20.0), String(choices[k][0]), HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.08, 0.06, 0.08) if on else Color("#fff6df"))

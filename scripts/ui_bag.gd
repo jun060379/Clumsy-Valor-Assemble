@@ -105,7 +105,11 @@ func _paint(vs: Vector2) -> void:
 	# the right: her colour, dots, a slanted edge
 	var right := PackedVector2Array([Vector2(vs.x * 0.47, 0), Vector2(vs.x, 0), Vector2(vs.x, vs.y), Vector2(vs.x * 0.55, vs.y)])
 	draw_colored_polygon(right, col)
-	UI.dots(self, Rect2(vs.x * 0.47, 0, vs.x * 0.53, vs.y), 0.3, 1.0)
+	# .burst (left 76 %, top 52 %, 80 s a turn) and the drifting dots (w_dotf 6 s)
+	UI.burst(self, Vector2(vs.x * 0.76, vs.y * 0.52), maxf(vs.x, vs.y) * 1.6, 0.14, t / 80000.0 * TAU)
+	draw_colored_polygon(PackedVector2Array([Vector2(0, 0), Vector2(vs.x * 0.47, 0), Vector2(vs.x * 0.55, vs.y), Vector2(0, vs.y)]), Color.BLACK)
+	var dsc := fmod(t / 6000.0, 1.0)
+	UI.dots(self, Rect2(vs.x * 0.47, 0, vs.x * 0.53, vs.y), 0.3, 1.0, Vector2(-44.0 * dsc, 22.0 * dsc))
 	# title and categories
 	draw_set_transform(Vector2(44, 52), deg_to_rad(-4.0))
 	draw_string(UI.bhs(), Vector2.ZERO, "가방", HORIZONTAL_ALIGNMENT_LEFT, -1, 34, Color.WHITE)
@@ -160,8 +164,10 @@ func _paint(vs: Vector2) -> void:
 		var on := i == sel
 		var two: bool = o["kind"] == "erune" or (o["kind"] == "gear" and o.get("c", "") != "")
 		var h := 44.0 if two else 34.0
-		var e := UI.bk(clampf((t - i * 30.0) / 300.0, 0.0, 1.0))
-		var x := x0 - 30.0 * (1.0 - e)
+		# .sbody .it: in from 60 px right, .5s --bk, 60 ms apart (opacity .3s)
+		var e0 := clampf((t - i * 60.0) / 500.0, 0.0, 1.0)
+		var x := x0 + 60.0 * (1.0 - UI.bk(e0))
+		var e := clampf((t - i * 60.0) / 300.0, 0.0, 1.0)
 		var nm := oname(o)
 		var small := ""
 		var rtxt := ""
@@ -200,26 +206,34 @@ func _paint(vs: Vector2) -> void:
 ## bgSpot: the picked thing, large
 func _spot(vs: Vector2, o: Dictionary, col: Color) -> void:
 	var g := ocol(o)
-	var k := UI.bk(clampf(pop_t / 380.0, 0.0, 1.0))
+	# .spot.pop: the disc spins in from a fifth of its size (w_pop), the gem drops from 2.4x (w_popd) and bobs (w_bob),
+	# the name stamps down (w_stamp); all .45s --bk
+	var k := UI.bk(clampf(pop_t / 450.0, 0.0, 1.0))
 	var cc := Vector2(vs.x * 0.765, vs.y * 0.34)
-	var rad := vs.y * 0.27 * (0.85 + 0.15 * k)
+	var rad := vs.y * 0.27 * lerpf(0.2, 1.0, k)
+	var spin := deg_to_rad(-90.0) * (1.0 - k)
 	draw_circle(cc, rad + 6.0, g)
 	draw_circle(cc, rad, Color(0.05, 0.05, 0.07))
 	for i in 30:
-		var a0 := float(i) / 30.0 * TAU + t / 9000.0
+		var a0 := float(i) / 30.0 * TAU + t / 14000.0 * TAU + spin
 		var a1 := a0 + TAU / 60.0
 		draw_colored_polygon(PackedVector2Array([cc, cc + Vector2(cos(a0), sin(a0)) * rad, cc + Vector2(cos(a1), sin(a1)) * rad]), Color(g, 0.85))
 	draw_circle(cc, rad * 0.3, Color(0.05, 0.05, 0.07))
-	var dr := rad * 0.48
-	draw_colored_polygon(rrect(Rect2(cc - Vector2(dr, dr) * 0.7, Vector2(dr, dr) * 1.4), 45.0 + 8.0 * (1.0 - k)), Color.WHITE)
-	gem(self, cc, dr * 0.8, g, false)
+	var kd := clampf(pop_t / 450.0, 0.0, 1.0)
+	var dr := vs.y * 0.27 * 0.48 * lerpf(2.4, 1.0, k)
+	var bob := -0.08 * dr * 1.4 * (0.5 - 0.5 * cos(t / 2600.0 * TAU))
+	var gc := cc + Vector2(0, bob)
+	var ga := clampf(kd * 2.0, 0.0, 1.0)
+	draw_colored_polygon(rrect(Rect2(gc - Vector2(dr, dr) * 0.7, Vector2(dr, dr) * 1.4), 45.0), Color(1, 1, 1, ga))
+	gem(self, gc, dr * 0.8, Color(g, ga), false)
 	# name plate
 	var nm := oname(o)
 	if o["kind"] == "gear": nm += " +%d" % int(o["v"].get("lv", 0))
 	elif o["kind"] == "erune": nm += " ★%d" % int(o["it"].get("rs", 1))
 	var np := Vector2(vs.x * 0.55, vs.y * 0.6)
-	draw_set_transform(np, deg_to_rad(-6.0))
+	var ks := UI.bk(clampf((pop_t - 80.0) / 450.0, 0.0, 1.0))
 	var nw := tw(UI.bhs(), nm, 28) + 30.0
+	draw_set_transform_matrix(Transform2D(deg_to_rad(-6.0 - 12.0 * (1.0 - ks)), Vector2.ONE * lerpf(2.2, 1.0, ks), 0.0, np + Vector2(nw / 2.0, -13.0)) * Transform2D(0.0, Vector2(-nw / 2.0, 13.0)))
 	UI.para(self, 0, -34, nw, 42, 6.0, Color.BLACK)
 	draw_string(UI.bhs(), Vector2(14, 0), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 28, Color.WHITE)
 	draw_set_transform(Vector2.ZERO)

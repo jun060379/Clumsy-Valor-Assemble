@@ -3,6 +3,7 @@ extends Control
 ## down; a tap / Enter rips it all away into CHOOSE YOUR HERO; 출격 drops the chosen leader into the guild town.
 
 const UI := preload("res://scripts/ui_kit.gd")
+const UIA := preload("res://scripts/ui_anim.gd")
 const CH := preload("res://scripts/chars.gd")
 const T_SWORD := preload("res://assets/ui/title/logo_sword.png")
 const T_BANNER := preload("res://assets/ui/title/logo_banner.png")
@@ -35,6 +36,7 @@ var sel_t := 0.0
 var card_rects: Array = []
 var go_rect := Rect2()
 var clock := 0.0
+var trn := UIA.Tr.new()          # .card transition: transform .3s --bk, background .15s
 
 
 func _ready() -> void:
@@ -50,6 +52,7 @@ func _process(delta: float) -> void:
 		return
 	var dt := minf(delta * 1000.0, 250.0)   # real time, like the prototype's CSS / rAF clocks
 	clock += dt
+	trn.step(dt)
 	t += dt
 	if not intro_done and t > 820.0 + PIECES.size() * 70.0 + 620.0:
 		intro_done = true
@@ -364,12 +367,14 @@ func _draw_select(vs: Vector2) -> void:
 		var on := i == sel
 		var r := Rect2(x0 + i * (cw + gap), cy, cw, ch)
 		card_rects.append(r)
-		var sc := 1.06 if on else 1.0
-		var c0 := r.get_center() + Vector2(0, -8.0 if on else 0.0)
+		var sc: float = trn.get_v("s%d" % i, 1.06 if on else 1.0, 300.0, "bk")
+		var lift: float = trn.get_v("y%d" % i, -8.0 if on else 0.0, 300.0, "bk")
+		var wk: float = trn.get_v("w%d" % i, 1.0 if on else 0.0, 150.0, "ease")
+		var c0 := r.get_center() + Vector2(0, lift)
 		draw_set_transform(c0, 0.0, Vector2(sc, sc))
 		var lr := Rect2(-cw / 2.0, -ch / 2.0, cw, ch)
-		draw_colored_polygon(UI.clip(lr, [[7, 0], [100, 0], [93, 100], [0, 100]]), Color.WHITE if on else Color.BLACK)
-		var tcol := Color.BLACK if on else Color.WHITE
+		draw_colored_polygon(UI.clip(lr, [[7, 0], [100, 0], [93, 100], [0, 100]]), Color.BLACK.lerp(Color.WHITE, wk))
+		var tcol := Color.WHITE.lerp(Color.BLACK, wk)
 		var pr := Rect2(-60, lr.position.y + 8.0, 120, 120)
 		draw_rect(pr, Color(0, 0, 0, 0.25))
 		_preview(C["c"], pr)

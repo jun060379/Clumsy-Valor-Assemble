@@ -17,6 +17,7 @@ var hold := 0.0                  # extra cover time asked by mid
 var frames := 0
 var lt := 0.0                    # NOW LOADING opacity
 var _mid_ran := false
+var dots_t := 0.0
 var speed := 1.0                 # test hook: ?slowtx in the page URL plays it at 1/10 speed (screenshots)
 
 
@@ -54,6 +55,7 @@ func _process(delta: float) -> void:
 		return
 	var dt := minf(delta * 1000.0, 250.0) * speed   # real time, like the prototype's CSS / rAF clocks
 	t += dt
+	dots_t += dt
 	if phase == "in" and t >= 590.0:
 		phase = "cover"
 		t = 0.0
@@ -120,4 +122,7 @@ func _draw() -> void:
 		var w := UI.text_w(f, s, 13)
 		draw_set_transform(vs / 2.0, deg_to_rad(-6.0))
 		draw_string(f, Vector2(-w / 2.0, 5), s, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(col, lt))
+		# txdots: "", ".", "..", "..." on steps(4) over 1 s
+		var nd := int(fmod(dots_t / 1000.0, 1.0) * 4.0)
+		draw_string(f, Vector2(w / 2.0 + 2.0, 5), ".".repeat(nd), HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(col, lt))
 		draw_set_transform(Vector2.ZERO)

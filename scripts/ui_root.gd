@@ -6,17 +6,31 @@ extends Control
 const TITLE := preload("res://scripts/title.gd")
 const MENU := preload("res://scripts/menu.gd")
 const SWEEP := preload("res://scripts/sweep.gd")
+const UIA := preload("res://scripts/ui_anim.gd")
 
 var arena
 var title
 var menu
 var sweep
 var mouse_held := {}            # button -> action pressed by it
+var _xcb
+
+## web test hook (screenshots): window.cvaX("expression") runs a GDScript expression on the arena
+func _x(src: String) -> void:
+	var e := Expression.new()
+	if e.parse(src) != OK: return
+	e.execute([], arena)
 
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	UIA.hook_web()
+	if OS.has_feature("web"):
+		_xcb = JavaScriptBridge.create_callback(func(a: Array): _x(str(a[0]) if a.size() > 0 else ""))
+		JavaScriptBridge.get_interface("window").cvaX = _xcb
+	var ck = UIA.clock_node()
+	if ck != null: add_child(ck)
 	menu = Control.new()
 	menu.set_script(MENU)
 	menu.arena = arena
