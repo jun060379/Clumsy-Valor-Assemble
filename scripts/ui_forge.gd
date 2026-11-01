@@ -68,7 +68,7 @@ var sel_t := 9999.0            # rows: the last pick (margin transition)
 var prev_sel := -1
 var list_off := 0.0
 var hb: Array = []
-var lift: ColorRect             # the strike's FGE filter (brightness 2.6 → 1, 380 ms ease-out) as an additive lift
+var lift: ColorRect             # the strike's FGE filter: brightness(2.6) contrast(1.2) → none, 380 ms ease-out
 
 
 func _ready() -> void:
@@ -77,13 +77,19 @@ func _ready() -> void:
 	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 
 
+## the FGE filter: the page's own pixels through brightness(b) then contrast(c) (CSS filter math, each step clamped)
+const FILTER_SH := "shader_type canvas_item;\nrender_mode unshaded;\nuniform sampler2D scr : hint_screen_texture, filter_nearest;\nuniform float br = 1.0;\nuniform float ct = 1.0;\nvoid fragment(){ vec3 c = textureLod(scr, SCREEN_UV, 0.0).rgb; c = clamp(c * br, 0.0, 1.0); c = clamp((c - 0.5) * ct + 0.5, 0.0, 1.0); COLOR = vec4(c, 1.0); }"
 func _lift_node() -> void:
 	if lift != null: return
+	var bb := BackBufferCopy.new()
+	bb.copy_mode = BackBufferCopy.COPY_MODE_VIEWPORT
+	add_child(bb)
 	lift = ColorRect.new()
-	lift.set_anchors_preset(Control.PRESET_FULL_RECT)
 	lift.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var m := CanvasItemMaterial.new()
-	m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	var sh := Shader.new()
+	sh.code = FILTER_SH
+	var m := ShaderMaterial.new()
+	m.shader = sh
 	lift.material = m
 	lift.visible = false
 	add_child(lift)
@@ -169,12 +175,15 @@ func _tick(dt: float) -> void:
 	# the FGE shake (w_shake .4s linear) and filter flashes
 	_lift_node()
 	var bt := since("bright")
-	lift.visible = bt < 380.0
+	lift.visible = bt < 380.0 and live()
 	if lift.visible:
-		var k := 0.4 * (1.0 - AE.ez("ease-out", bt / 380.0))
+		# FGE.animate([{filter:'brightness(2.6) contrast(1.2)'},{filter:'none'}],{duration:380,easing:'ease-out'})
+		var k := AE.ez("ease-out", bt / 380.0)
 		lift.size = get_viewport_rect().size + Vector2(40, 40)
 		lift.position = Vector2(-20, -20)
-		lift.color = Color(k, k, k, 1.0)
+		var m: ShaderMaterial = lift.material
+		m.set_shader_parameter("br", lerpf(2.6, 1.0, k))
+		m.set_shader_parameter("ct", lerpf(1.2, 1.0, k))
 	var sk := since("shake")
 	_set_shake(_shake(sk) if sk < 400.0 else Vector2.ZERO)
 
@@ -367,6 +376,8 @@ func do_up() -> void:
 			busy = 0)
 		return
 	bran_hit = true
+	clk.erase("hitout")
+	clk.erase("hit2")
 	mark("hit")
 	_sink_all()
 	after(150.0, func():
@@ -569,6 +580,7 @@ func _paint(vs: Vector2) -> void:
 	draw_set_transform(Vector2.ZERO)
 	_halves(vs)
 	if not fly.is_empty(): _fly()
+	if p == "up": _bran_hit(vs)
 	# z order as ZC: the cut-in (raised at the tap) under the banner its hit stamps (raised later)
 	if clk.has("cut"): _cut(vs, col)
 	for o in stamps: _rbig(vs, col, o)
@@ -829,6 +841,9 @@ func _bran(vs: Vector2, e: Dictionary) -> void:
 	if a > 0.0:
 		var m := _itm(Transform2D(0.0, r.position + Vector2(bx, 0)), r.position + r.size / 2.0, e)
 		_sil(POR, m, r.size, a)
+
+## .bran.bh: the hammer pose, raised (zIndex = ++ZC) over the white .fflash, under the banners
+func _bran_hit(vs: Vector2) -> void:
 	if bran_hit:
 		var h2 := vs.y * 1.04
 		var w2 := h2 * HIT.get_width() / HIT.get_height()
@@ -852,7 +867,13 @@ func _bran(vs: Vector2, e: Dictionary) -> void:
 		var ho := since("hitout")
 		if ho < 1e8: ha = 1.0 - clampf(ho / 160.0, 0.0, 1.0)
 		var m2 := Transform2D(0.0, r2.position + r2.size / 2.0 + tr) * Transform2D(0.0, Vector2(sc, sc), 0.0, Vector2.ZERO) * Transform2D(0.0, -r2.size / 2.0)
-		_sil(HIT, m2, r2.size, ha, bri)
+		if bri > 1.0:
+			# b1.animate filter brightness(5) saturate(0) → none (90 ms): the animated filter replaces the drop shadows
+			draw_set_transform_matrix(m2)
+			draw_texture_rect(HIT, Rect2(Vector2.ZERO, r2.size), false, Color(bri, bri, bri, ha))
+			draw_set_transform(Vector2.ZERO)
+		else:
+			_sil(HIT, m2, r2.size, ha, bri)
 
 ## an image with the CSS drop-shadow(10px 0 0 #000) drop-shadow(-3px 0 0 #fff) pair
 func _sil(tex: Texture2D, m: Transform2D, size: Vector2, a: float, bri := 1.0) -> void:
@@ -1736,6 +1757,7 @@ func _rbig(vs: Vector2, col: Color, o: Dictionary) -> void:
 		var d := k - 110.0 - i * 34.0
 		var la := 0.0
 		var ls := 1.0
+		var blur := 0.0
 		var ly := (-0.05 if i % 2 else 0.04) * fs2
 		var lx := 0.0
 		var lr := 0.0
@@ -1749,6 +1771,7 @@ func _rbig(vs: Vector2, col: Color, o: Dictionary) -> void:
 			var e := UI.bez(0.2, 1.3, 0.4, 1.0, u)
 			la = clampf(e, 0.0, 1.0) if d > 0.0 else 0.0
 			ls = lerpf(2.8, 1.0, e)
+			blur = 6.0 * (1.0 - clampf(e, 0.0, 1.0)) if d > 0.0 else 0.0
 		if sink > 0.0:
 			var kk := AE.ez("ease-in", clampf((sink - i * 14.0) / 200.0, 0.0, 1.0))
 			la *= 1.0 - kk
@@ -1762,7 +1785,17 @@ func _rbig(vs: Vector2, col: Color, o: Dictionary) -> void:
 			var w: float = ws[i]
 			var m := lm * xf(Vector2(x + lx, ly + (0.06 * fs2 if i == 0 else 0.0) - (sz - fs2) * 0.8), Vector2(w / 2.0, sz / 2.0), lr, ls)
 			draw_set_transform_matrix(m)
-			draw_string(lf, Vector2(0, lf.get_ascent(sz) * 0.92), s[i], HORIZONTAL_ALIGNMENT_LEFT, -1, sz, Color(lc, la * gone_a))
+			var bp := Vector2(0, lf.get_ascent(sz) * 0.92)
+			if blur > 0.4:
+				# filter: blur(6px → 0): the letter spread into a soft glow (taps on two rings around it), scaled with the letter
+				var rbl := blur / ls
+				var ta := la * gone_a / 13.0 * 2.2
+				draw_string(lf, bp, s[i], HORIZONTAL_ALIGNMENT_LEFT, -1, sz, Color(lc, minf(1.0, ta * 1.6)))
+				for kq in 12:
+					var go := Vector2.from_angle(TAU * kq / 12.0) * rbl * (1.0 if kq % 2 else 0.5) * 1.6
+					draw_string(lf, bp + go, s[i], HORIZONTAL_ALIGNMENT_LEFT, -1, sz, Color(lc, minf(1.0, ta)))
+			else:
+				draw_string(lf, bp, s[i], HORIZONTAL_ALIGNMENT_LEFT, -1, sz, Color(lc, la * gone_a))
 		x += ws[i]
 	draw_set_transform(Vector2.ZERO)
 	# .rs: the sub tag
@@ -1798,9 +1831,16 @@ func _cut(vs: Vector2, col: Color) -> void:
 	var ca := 1.0 - clampf(out / 220.0, 0.0, 1.0) if out < 1e8 else 1.0
 	var cf := since("cutflash")
 	var bri := 1.0
+	var sat := 1.0
 	if cf < 180.0:
-		var u := cf / 180.0
-		bri = lerpf(1.0, 6.0, u / 0.35) if u < 0.35 else lerpf(6.0, 1.0, AE.ez("ease-out", (u - 0.35) / 0.65))
+		# cut.animate: brightness(1) → [35 %] brightness(6) saturate(0) → none, 180 ms ease-out over the whole run
+		var u := AE.ez("ease-out", cf / 180.0)
+		if u < 0.35:
+			bri = lerpf(1.0, 6.0, u / 0.35)
+			sat = lerpf(1.0, 0.0, u / 0.35)
+		else:
+			bri = lerpf(6.0, 1.0, (u - 0.35) / 0.65)
+			sat = lerpf(0.0, 1.0, (u - 0.35) / 0.65)
 	var E := [0.2, 0.8, 0.3, 1.0]
 	var box := Rect2(-vs.x * 0.2, vs.y * 0.12, vs.x * 1.4, vs.y * 0.76)
 	var band := func(kk: int) -> Array:
@@ -1816,7 +1856,12 @@ func _cut(vs: Vector2, col: Color) -> void:
 			a = 1.0
 		return [Transform2D(0.0, Vector2(tx * box.size.x, 0)) * xf(box.position, box.size / 2.0, -8.0), a * ca]
 	var b0: Array = band.call(0)
-	var lift := func(cc: Color) -> Color: return Color(minf(1.0, cc.r * bri), minf(1.0, cc.g * bri), minf(1.0, cc.b * bri), cc.a) if bri <= 1.0 else cc.lerp(Color.WHITE, clampf((bri - 1.0) / 5.0, 0.0, 1.0))
+	var lift := func(cc: Color) -> Color:
+		var r := minf(1.0, cc.r * bri)
+		var g := minf(1.0, cc.g * bri)
+		var b := minf(1.0, cc.b * bri)
+		var l := 0.2126 * r + 0.7152 * g + 0.0722 * b
+		return Color(lerpf(l, r, sat), lerpf(l, g, sat), lerpf(l, b, sat), cc.a)
 	draw_colored_polygon(poly(Rect2(Vector2.ZERO, box.size), [[0, 10], [100, 0], [100, 90], [0, 100]], b0[0]), lift.call(Color(0.0, 0.0, 0.0, b0[1])))
 	var cl := [[0, 55], [38, 40], [100, 4], [100, 86], [62, 70], [0, 70]]
 	var b1: Array = band.call(1)
