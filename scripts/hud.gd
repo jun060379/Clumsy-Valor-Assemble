@@ -40,10 +40,15 @@ var hf := 0.0
 var bl_t := 2500.0
 var jx := 0.0
 var idle_t := 0.0                # ms since the last input (things dim after 3 s)
-# objective line: shows on change, slides away after 4 s
+# objective line (#loc i): shows on change, slides away after 4 s (the .off class: opacity and translate over .5 s);
+# guild objectives (fameObj, outside the cave) are yellow (.fobj)
 var objective := ""
 var obj_shown := ""
+var obj_fobj := false
 var obj_t := 99999.0
+var obj_on := true               # not .off
+var obj_tr_t := 1e9              # ms since the last .off toggle (its CSS transition)
+var obj_from := Vector2(1, 0)    # (opacity, translate x) when that transition began
 var clock := 0.0
 var qte_on := {}                 # bench member -> clock when their QTE card came up
 
@@ -98,6 +103,7 @@ func _process(delta: float) -> void:
 	clock += dt
 	idle_t += dt
 	obj_t += dt
+	obj_tr_t += dt
 	var P = arena.player
 	if ph_ch != P.who:
 		ph_ch = P.who
@@ -133,10 +139,17 @@ func _process(delta: float) -> void:
 	var over: bool = sp.x < 300.0 and sp.y > vs.y - 230.0
 	alpha += ((0.3 if over else 1.0) - alpha) * minf(1.0, dt / 160.0)
 	# objective line
-	var ob := _objective()
-	if ob != obj_shown:
-		obj_shown = ob
+	var ob := _objective_ex()
+	if ob[0] != obj_shown:
+		if obj_shown == "":          # from hidden (display:none): no transition, it is simply there
+			obj_on = true
+			obj_tr_t = 1e9
+		else:
+			_obj_set(true)
+		obj_shown = ob[0]
 		obj_t = 0.0
+	obj_fobj = ob[1]
+	if obj_t >= 4000.0: _obj_set(false)
 	queue_redraw()
 	sil.queue_redraw()
 	get_child(1).queue_redraw()
@@ -161,20 +174,42 @@ func _ult_show() -> float:
 func _ult_full() -> bool:
 	return arena.ult != null and arena.ult.ready_now()
 
-## what the objective line says: the cave's name and foes left, the training ground's ghost / dummies; town objectives come later
+## what the objective line says, and whether it is a guild objective (hudExtras obj + the .fobj test):
+## the room's name and foes left, the training ground's ghost / dummies, fameObj (letters, reports, the trial),
+## else the party hint. The original hides all but the guild ones; the port keeps the rest visible on purpose.
 func _objective() -> String:
-	if objective != "": return objective
+	return _objective_ex()[0]
+
+func _objective_ex() -> Array:
+	if objective != "": return [objective, false]
 	var lk: String = arena.level_kind()
 	if lk == "dungeon":
 		var n := 0
 		for m in arena.mobs:
 			if not m.is_dead(): n += 1
-		return "버섯 동굴 · 남은 적 %d" % n
+		var tpl: Dictionary = arena.level.tpl if arena.level != null and "tpl" in arena.level else {}
+		return ["%s · 남은 적 %d" % [String(tpl.get("name", "")), n], false]
 	if lk == "":
-		return "유령 퇴치 0 / 1" if arena.ghost != null and arena.ghost.alive() else "허수아비 부수기"
-	var o: String = arena.fame.fame_obj() if arena.fame != null else ""     # fameObj: letters, reports, the trial
-	if o == "" and arena.player.party.size() < 2: o = "분수대에서 파티를 꾸리자"    # alone: go form a party
-	return o
+		return ["유령 퇴치 0 / 1" if arena.ghost != null and arena.ghost.alive() else "허수아비 부수기", false]
+	var o: String = arena.fame.fame_obj() if arena.fame != null else ""
+	if o != "": return [o, true]
+	# alone, with someone to take along: PARTY.length<2 && ROSTER.length>1
+	var roster: int = arena.fame.rec.size() if arena.fame != null else 1
+	if arena.player.party.size() < 2 and roster > 1: return ["분수대에서 파티를 꾸리자", false]
+	return ["", false]
+
+## toggle .off: a CSS transition from wherever the line is now
+func _obj_set(on: bool) -> void:
+	if on == obj_on: return
+	obj_from = _obj_vis()
+	obj_on = on
+	obj_tr_t = 0.0
+
+## (opacity, translate x): opacity on `ease`, translate on cubic-bezier(.16,1,.3,1), both .5 s
+func _obj_vis() -> Vector2:
+	var to := Vector2(1, 0) if obj_on else Vector2(0, -20)
+	if obj_tr_t >= 500.0: return to
+	return Vector2(lerpf(obj_from.x, to.x, UIA.p(obj_tr_t, 0.0, 500.0, "ease")), lerpf(obj_from.y, to.y, UIA.p(obj_tr_t, 0.0, 500.0, "ez")))
 
 func _tc() -> Color:
 	return UI.col(arena.player.who)
@@ -399,18 +434,26 @@ func _draw_loc(ci: CanvasItem, vs: Vector2) -> void:
 	ci.draw_string(fi, Vector2(w + 15.0, 18), tm, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0, 0, 0, 0.85 * a))
 	ci.draw_string(fi, Vector2(w + 13.0, 16), tm, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1, 1, 1, 0.85 * a))
 	if obj_shown != "":
-		var k := clampf((obj_t - 4000.0) / 500.0, 0.0, 1.0)
-		var e := 1.0 - pow(1.0 - k, 3)
-		var oa := (1.0 - e) * a
+		var v := _obj_vis()
+		var oa := v.x * a
 		if oa > 0.0:
-			var ox := -20.0 * e
-			UI.shadow_text(ci, UI.noto(), Vector2(ox, 40), "▶ ", 11, Color(_tc(), oa))
-			UI.shadow_text(ci, UI.noto(), Vector2(ox + UI.text_w(UI.noto(), "▶ ", 11), 40), obj_shown, 11, Color(1, 1, 1, oa))
+			# 700 11px Noto Sans KR, white (#ffd34d for .fobj), text-shadow 0 0 3px #000, 1px 1px 0 #000; '▶ ' in --tc
+			var ox := v.y
+			var nf := UI.noto()
+			var aw := UI.text_w(nf, "▶ ", 11)
+			_halo_text(ci, nf, Vector2(ox, 40), "▶ ", 11, Color(_tc(), oa))
+			_halo_text(ci, nf, Vector2(ox + aw, 40), obj_shown, 11, Color(Color("#ffd34d") if obj_fobj else Color.WHITE, oa))
 	ci.draw_set_transform(Vector2.ZERO)
+
+## text with a soft 3 px black glow under a hard 1 px drop (text-shadow: 0 0 3px #000, 1px 1px 0 #000)
+func _halo_text(ci: CanvasItem, f: Font, p: Vector2, s: String, fs: int, c: Color) -> void:
+	for d in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1), Vector2(-1.5, -1.5), Vector2(1.5, -1.5), Vector2(-1.5, 1.5), Vector2(1.5, 1.5)]:
+		ci.draw_string(f, p + d, s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0, 0, 0, 0.22 * c.a))
+	UI.shadow_text(ci, f, p, s, fs, c)
 
 ## 피로도 chip (sortie.js #stm)
 var stm_last := -1
-var stm_hit_t := 1e9               # stmHit: the chip jolts and flashes when fatigue is spent
+var stm_hit_t := -1e9              # stmHit: the chip jolts and flashes when fatigue is spent
 var stm_drop := {}                 # segment -> ms since it emptied (stmDrop)
 func _draw_fatigue(ci: CanvasItem, at: Vector2) -> void:
 	var F = arena.fatigue
@@ -643,12 +686,12 @@ func _face(ci: CanvasItem, tex: Texture2D, c: Vector2, r: float, mod: Color) -> 
 		uvs.append(Vector2(0.5, 0.5) + d * 0.5)
 	ci.draw_polygon(pts, PackedColorArray([mod]), uvs, tex)
 
-## dash charges: two small diamonds, bottom right (above the dash button on touch screens)
+## dash charges: two small diamonds just above the touch dash button (touch UI only, as #dashui)
 func _draw_pips(ci: CanvasItem, vs: Vector2) -> void:
+	# #dashui lives inside the touch dash button (#padR .b-ds), so keyboard and pad players never see it
+	if not arena.cfg.touch_ui(): return
 	var P = arena.player
-	var base := Vector2(vs.x - 30.0, vs.y - 22.0)
-	if arena.cfg.touch_ui():
-		base = TOUCH.pip_base(get_viewport())     # #dashui: a row just above the dash button
+	var base: Vector2 = TOUCH.pip_base(get_viewport())     # a row just above the dash button
 	# H2/H3 #dashui .pip: 11 px diamonds, 2 px white rim on black, filled with the leader's colour (dim while recharging)
 	var tc := _tc()
 	for i in 2:
