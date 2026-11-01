@@ -87,12 +87,14 @@ func _initialize() -> void:
 	P.dir = 1
 	P.qte_end()
 	P.qte["cd"] = 0.0
+	if arena.get("runes") != null: arena.runes.force_roll = 0.999     # no crit roll in either hit
 	G.hit(1.0, 3.0)
 	var back: float = G.max_hp - G.hp
 	G.hp = G.max_hp
 	P.dir = -1
 	G.hit(1.0, 3.0)
 	var front: float = G.max_hp - G.hp
+	if arena.get("runes") != null: arena.runes.force_roll = -1.0
 	check(back >= front * 1.75, "BACKSTAB: from behind %.0f vs facing %.0f" % [back, front])
 
 	# ---- banished, back in 4 s ----
