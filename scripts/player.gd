@@ -182,6 +182,12 @@ func take(k: String) -> void:
 func cur_atk():
 	if anim == "air_combo":
 		return CH.ATK["air1"] if f < 3 else (CH.ATK["air2"] if f < 6 else CH.ATK["air3"])
+	if anim == "cthrust":
+		# the charged thrust (charge / gcharge release): 3 damage and kb 16 when fully charged, else 2 and 10
+		var ct: Dictionary = CH.ATK["cthrust"].duplicate()
+		ct["dmg"] = 3 if cfull else 2
+		ct["kb"] = 16 if cfull else 10
+		return ct
 	return CH.ATK.get(anim)
 
 func move_axis() -> int:

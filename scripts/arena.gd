@@ -478,9 +478,13 @@ func shadow_y() -> float:
 				var py: float = level.plat_y(p, x)
 				if py >= y - 2.0 and py < shy: shy = py
 		return shy
-	for pl in platforms:
+	# elsewhere: GROUND (raised cave rock is not a floor here, as in the prototype), or a plank / the hall landing below
+	var pls: Array = platforms.duplicate()
+	if level != null and level.kind == "hall" and level.landing != null:
+		pls.append({"x": level.landing["x0"], "y": level.landing["y"], "w": level.landing["x1"] - level.landing["x0"]})
+	for pl in pls:
 		if x > pl.x - 2.0 and x < pl.x + pl.w + 2.0 and pl.y >= y - 2.0 and pl.y < shy: shy = pl.y
-	if P.on and y < shy: shy = y          # standing on something else (a ramp, the hall landing, raised rock): at her feet
+	if P.plat is Dictionary and P.plat.has("ramp"): shy = y      # on the hall stairs (P.ramp): at her feet
 	return shy
 
 func shadow_rx(shy: float) -> float:

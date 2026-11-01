@@ -138,6 +138,31 @@ func _initialize() -> void:
 	P.position.y = arena.ground_y - 130.0
 	check(arena.cam_y_top() == -90.0, "hall gallery: camY -90")
 
+	# shadow in the cave: raised rock is not a floor for it (GROUND below, as drawn in the prototype)
+	arena.enter_dungeon()
+	var rock: Dictionary = arena.solids[0] if not arena.solids.is_empty() else {}
+	if not rock.is_empty():
+		P.position = Vector2(rock.x + rock.w / 2.0, rock.top)
+		P.on = true
+		check(arena.shadow_y() == arena.ground_y, "standing on raised cave rock: the shadow stays on GROUND")
+	# the hall: the landing is a plank for it; on the stairs (P.ramp) it sits at her feet
+	arena.go_hall(0, Vector2(1760, arena.ground_y), 1)
+	var Hl = arena.level
+	if Hl.landing != null:
+		P.position = Vector2((Hl.landing["x0"] + Hl.landing["x1"]) / 2.0, Hl.landing["y"] - 100.0)
+		P.on = false
+		check(arena.shadow_y() == Hl.landing["y"], "over the hall landing: on the landing")
+		var r: Dictionary = Hl.ramps[0]
+		var rx: float = (r["x0"] + r["x1"]) / 2.0
+		P.position = Vector2(rx, Hl.ramp_y(r, rx))
+		P.on = true
+		P.plat = r
+		check(arena.shadow_y() == P.position.y, "on the stairs: at her feet")
+		P.plat = null
+	else:
+		check(false, "hall floor 0 has a landing")
+	P.position = Vector2(1760, arena.ground_y)
+
 	# ---- the lootGet tink ----
 	arena.loot_tink()
 	check(arena._tinks.size() == 6 and arena._tinks[0].data.size() == int(22050 * 0.14) * 2, "the tink: 140 ms triangle blips (6 pitches, 1.4-1.9 kHz)")
@@ -160,6 +185,11 @@ func _initialize() -> void:
 	Input.action_release("attack")
 	run(arena, 32)
 	check(P.anim == "cthrust", "released after >= 200 ms: the charged thrust")
+	check(not P.cfull and P.cur_atk()["dmg"] == 2 and P.cur_atk()["kb"] == 10, "held under 650 ms: 2 damage, kb 10")
+	P.cfull = true
+	check(P.cur_atk()["dmg"] == 3 and P.cur_atk()["kb"] == 16, "fully charged: 3 damage, kb 16")
+	P.cfull = false
+	check(load("res://scripts/chars.gd").ATK["cthrust"]["dmg"] == 3, "the shared ATK table is left alone")
 	run(arena, 800)
 	Input.action_release("guard")
 	run(arena, 300)

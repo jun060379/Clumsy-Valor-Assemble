@@ -169,6 +169,7 @@ func _dev_px() -> Vector2i:
 func _bloom_setup() -> void:
 	for sv in bsv: sv.queue_free()
 	bsv.clear()
+	_bg_att.clear()
 	bpx = _dev_px()
 	var src := bpx / 2 if arena != null and arena.get("low_end") else bpx
 	bq = Vector2i(maxi(1, bpx.x >> 2), maxi(1, bpx.y >> 2))
@@ -235,6 +236,28 @@ func _bloom_step(run: bool) -> void:
 		var xf: Transform2D = get_viewport().get_canvas_transform()
 		var base: Vector2 = get_viewport().get_visible_rect().size
 		bsv[0].canvas_transform = Transform2D.IDENTITY.scaled(Vector2(bsv[0].size) / base) * xf
+		_bloom_bg(Transform2D.IDENTITY.scaled(Vector2(bsv[0].size) / base))
+
+## the prototype's bloom reads the whole canvas, sky and mountains included: attach the background CanvasLayers
+## (layer < 0) to the source viewport too, so bright, thin things (the damage numbers, sparks) average against the
+## sky in the quarter-res bright pass as they do there, instead of against black
+var _bg_att := {}              # canvas RID -> its CanvasLayer
+func _bloom_bg(sc: Transform2D) -> void:
+	var vp: RID = bsv[0].get_viewport_rid()
+	var want := {}
+	for c in arena.get_children():
+		if c is CanvasLayer and c.layer < 0 and c.visible: want[c.get_canvas()] = c
+	for rid in _bg_att.keys():
+		if not want.has(rid):
+			if is_instance_valid(_bg_att[rid]): RenderingServer.viewport_remove_canvas(vp, rid)
+			_bg_att.erase(rid)
+	for rid in want:
+		var L: CanvasLayer = want[rid]
+		if not _bg_att.has(rid):
+			RenderingServer.viewport_attach_canvas(vp, rid)
+			_bg_att[rid] = L
+		RenderingServer.viewport_set_canvas_stacking(vp, rid, L.layer, 0)
+		RenderingServer.viewport_set_canvas_transform(vp, rid, sc * L.transform)
 
 func _process(delta: float) -> void:
 	var dt := minf(delta * 1000.0, 100.0)
