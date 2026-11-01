@@ -1,7 +1,10 @@
 extends Node2D
 ## 버섯 동굴: a side-scrolling map of wide rooms (a left→right spine from the entrance to the boss, plus 1–2 side branches
 ## that climb or drop a floor and lead to a treasure or rest room). Ported from the prototype's dunReset / dungeonEnter /
-## updDungeon and its cave drawing. Rock is drawn as textured polygons; torches, lanterns, mushrooms and crystals are real lights.
+## updDungeon and its cave drawing (drawDungeon 5127): the rock masses are baked at art resolution as the prototype bakes
+## them (cave_ter.gd) and take the room's light on their edges; the room is lit as drawLighting lights it (lit.gd): the
+## night-blue ambient multiplied over everything, then the torches, lanterns, mushrooms, crystals, doors and the heroine's
+## own glow added as shaped pools. No Light2D.
 
 const H := 500.0
 const TW := 80.0
@@ -33,8 +36,12 @@ const WAVES := {
 const DIRS := {"L": [-1, 0, "R"], "R": [1, 0, "L"], "U": [0, -1, "D"], "D": [0, 1, "U"]}
 ## door look per kind of room behind it: light colour; the signboard names it
 const DOORSTY := {"fight": Color8(255, 168, 58), "boss": Color8(255, 60, 50), "camp": Color8(255, 160, 80), "vault": Color8(255, 210, 100), "start": Color8(190, 210, 255), "town": Color8(235, 240, 255)}
+const DOORA := {"fight": 0.6, "boss": 0.8, "camp": 0.75, "vault": 0.75, "start": 0.45, "town": 0.7}     # DOORSTY .a
+const DOORPT := {"boss": true}                                                                          # sh 'point': lit while sealed
 const SIGNI := {"fight": 0, "boss": 1, "vault": 2, "camp": 3, "start": 4, "town": 4}
 const DOPEN := [30, 26, 122, 170]
+const CT := preload("res://scripts/cave_ter.gd")
+const LIT := preload("res://scripts/lit.gd")
 
 var kind := "dungeon"
 var arena
@@ -53,47 +60,45 @@ var msg_t := 0.0
 var near_gate = null
 var atk_t := 0.0
 var walls: Array = []
-var dress: Array = []
 var spores: Array = []
 var tex := {}
-var t_rock: Texture2D
-var t_wall: Texture2D
-var lights: Node2D
-var cmod: CanvasModulate
+var lit                          # lit.gd: the ambient multiply and the shaped lights (drawLighting)
+var L: Array = []                # lightSources() this frame (light dicts as lit.gd takes them)
+var L_rim: Array = []            # DUN._L: no player light, no small glows (rims on rock and on characters)
+var amb := Color(0.36, 0.385, 0.62)
+var masses: Array = []           # [{m: cave_ter mass, n: Node2D, gain}]
+var n_walls: Node2D              # draw order inside the cave node (drawDungeon): back walls, doors (+ their light),
+var n_doors: Node2D              # wall fixtures, the rock masses, then the camp fire, the chest and the door tags
+var n_door_add: Node2D
+var n_props: Node2D
+var n_rock: Node2D
+var n_misc: Node2D
 var bg_layer: CanvasLayer
 var bg_node: Node2D
-var front: Node2D
-var light_tex: GradientTexture2D
+var front: Node2D                # after the light pass (drawDungeonFront): spores, floor fog, the door prompt
+var front_add: Node2D            # the door spill on the floor, additive
+var sign_w := {}                 # sign emission as flat white (tintImg) and its blur
 
 
 func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 	z_index = -5
-	light_mask = 3                   # lit by the cave's lights (cull mask 2); characters are not
 	for f in DirAccess.get_files_at("res://assets/cave"):
 		if f.ends_with(".png"):
 			tex[f.get_basename()] = load("res://assets/cave/" + f)
 		elif f.ends_with(".png.import"):
 			var k := f.get_basename().get_basename()
 			if not tex.has(k): tex[k] = load("res://assets/cave/" + k + ".png")
-	t_rock = tex["rtex"]
-	t_wall = _wall_tile()
-	light_tex = GradientTexture2D.new()
-	light_tex.fill = GradientTexture2D.FILL_RADIAL
-	light_tex.fill_from = Vector2(0.5, 0.5)
-	light_tex.fill_to = Vector2(1.0, 0.5)
-	light_tex.width = 256
-	light_tex.height = 256
-	var gr := Gradient.new()
-	gr.set_color(0, Color(1, 1, 1, 1))
-	gr.set_color(1, Color(1, 1, 1, 0))
-	light_tex.gradient = gr
-	lights = Node2D.new()
-	add_child(lights)
-	cmod = CanvasModulate.new()
-	cmod.color = Color(0.62, 0.58, 0.74)
-	arena.add_child(cmod)
+	CT.init_art(tex)
+	_sign_tints()
+	n_walls = _layer(Callable(), -1)
+	n_doors = _layer(_draw_doors, -1)
+	n_door_add = _layer(_draw_doors_add, CanvasItemMaterial.BLEND_MODE_ADD)
+	n_props = _layer(_draw_props, -1)
+	n_rock = _layer(Callable(), -1)
+	n_misc = _layer(_draw_misc, -1)
+	lit = LIT.new(arena)
+	lit.attach()
 	bg_layer = CanvasLayer.new()
 	bg_layer.layer = -10
 	arena.add_child(bg_layer)
@@ -101,38 +106,57 @@ func _ready() -> void:
 	bg_node.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	bg_node.draw.connect(_draw_bg)
 	bg_layer.add_child(bg_node)
+	front_add = Node2D.new()
+	front_add.z_index = 9
+	front_add.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	var am := CanvasItemMaterial.new()
+	am.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	front_add.material = am
+	front_add.draw.connect(_draw_spill)
+	arena.add_child(front_add)
 	front = Node2D.new()
-	front.z_index = 8
-	front.light_mask = 3
+	front.z_index = 9
 	front.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	front.draw.connect(_draw_front)
 	arena.add_child(front)
 
+func _layer(fn: Callable, blend: int) -> Node2D:
+	var n := Node2D.new()
+	n.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	if blend >= 0:
+		var m := CanvasItemMaterial.new()
+		m.blend_mode = blend
+		n.material = m
+		n.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	if fn.is_valid(): n.draw.connect(fn)
+	add_child(n)
+	return n
+
+## tintImg: the signboard's emission as a flat silhouette (tinted per door when drawn), and a blurred copy (blur 4px)
+func _sign_tints() -> void:
+	for si in 5:
+		var im: Image = (tex["sign%de" % si] as Texture2D).get_image()
+		if im.is_compressed(): im.decompress()
+		im.convert(Image.FORMAT_RGBA8)
+		for y in im.get_height():
+			for x in im.get_width():
+				var c := im.get_pixel(x, y)
+				im.set_pixel(x, y, Color(1, 1, 1, c.a))
+		var pad := 8
+		var bl := Image.create(im.get_width() + pad * 2, im.get_height() + pad * 2, false, Image.FORMAT_RGBA8)
+		bl.blit_rect(im, Rect2i(Vector2i.ZERO, im.get_size()), Vector2i(pad, pad))
+		var sz := bl.get_size()
+		bl.resize(maxi(1, sz.x / 4), maxi(1, sz.y / 4), Image.INTERPOLATE_BILINEAR)
+		bl.resize(sz.x, sz.y, Image.INTERPOLATE_BILINEAR)
+		sign_w[si] = [ImageTexture.create_from_image(im), ImageTexture.create_from_image(bl), pad]
+
 
 func cleanup() -> void:
-	cmod.queue_free()
+	lit.cleanup()
 	bg_layer.queue_free()
 	front.queue_free()
+	front_add.queue_free()
 	queue_free()
-
-
-## the wall-kit stone, mirrored into a seamless tile (art region [104,2,95,95], 1 art px = 2 world px)
-func _wall_tile() -> Texture2D:
-	var src: Image = (tex["wkit"] as Texture2D).get_image()
-	src.decompress()
-	var part := src.get_region(Rect2i(104, 2, 95, 95))
-	var im := Image.create(190, 190, false, part.get_format())
-	im.blit_rect(part, Rect2i(0, 0, 95, 95), Vector2i(0, 0))
-	var fx := part.duplicate()
-	fx.flip_x()
-	im.blit_rect(fx, Rect2i(0, 0, 95, 95), Vector2i(95, 0))
-	var fy := part.duplicate()
-	fy.flip_y()
-	im.blit_rect(fy, Rect2i(0, 0, 95, 95), Vector2i(0, 95))
-	var fxy := fx.duplicate()
-	fxy.flip_y()
-	im.blit_rect(fxy, Rect2i(0, 0, 95, 95), Vector2i(95, 95))
-	return ImageTexture.create_from_image(im)
 
 
 # ---------- the map ----------
@@ -188,6 +212,7 @@ func generate() -> void:
 		if r["type"] != "fight" and r["type"] != "boss": r["cleared"] = true
 	cur = main[0]["k"]
 	from = ""
+	prebuild()
 
 
 func anchor_of(d: String) -> Vector2:
@@ -216,7 +241,6 @@ func enter() -> void:
 	if rm["type"] == "boss": doors.append({"d": "town", "x": tpl["w"] / 2.0, "y": G, "town": true, "boss": true})
 	chest = {"x": tpl["w"] / 2.0} if rm["type"] == "vault" and not rm.get("looted", false) else null
 	walls = _wall_segs()
-	dress = _dressing()
 	# stand just inside the door you came through
 	var ent := anchor_of(from) if from != "" else anchor_of("L")
 	var P = arena.player
@@ -238,8 +262,9 @@ func enter() -> void:
 	msg = ("⚠ 감독관 해골" if rm["type"] == "boss" else tpl["name"] + (" (정리됨)" if rm["cleared"] and rm["type"] == "fight" else ""))
 	msg_t = 1400.0 if rm["once"] else 2600.0
 	rm["once"] = true
-	_build_lights()
-	queue_redraw()
+	_build_masses()
+	_light_step(Time.get_ticks_msec() / 1000.0)
+	_redraw_all()
 
 func spawn_wave() -> void:
 	if wave >= waves.size(): return
@@ -352,10 +377,8 @@ func step(dt: float) -> void:
 		if s["y"] < cam_r.position.y - 20.0 or s["x"] < cam_r.position.x - 40.0 or s["x"] > cam_r.end.x + 40.0:
 			s["x"] = cam_r.position.x + randf() * cam_r.size.x
 			s["y"] = cam_r.end.y + 10.0
-	_flicker(tt)
-	queue_redraw()
-	front.queue_redraw()
-	bg_node.queue_redraw()
+	_light_step(tt)
+	_redraw_all()
 
 ## airPush: a swing, a thrust or a slam blows the spores near it along
 func air_push(x: float, y: float, d: float, R: float, F: float) -> void:
@@ -411,247 +434,239 @@ func door_kind(d: Dictionary) -> String:
 	return n["type"] if n != null and DOORSTY.has(n["type"]) else "fight"
 
 
-# ---------- set dressing ----------
+# ---------- the room's rock ----------
 func _rnd_seq(seed: int) -> Callable:
 	var st := [seed]
 	return func() -> float:
 		st[0] = (st[0] * 9301 + 49297) % 233280
 		return float(st[0]) / 233280.0
 
-func _wall_segs() -> Array:
-	var rnd := _rnd_seq(int(tpl["w"]) * 3 + int(tpl["top"]))
+## wallSegs: a back wall behind every wall torch and most raised rock, merged where they meet
+func _wall_segs(T: Dictionary = {}) -> Array:
+	var tp: Dictionary = T if not T.is_empty() else tpl
+	var rnd := _rnd_seq(int(tp["w"]) * 3 + int(tp["top"]))
 	var segs: Array = []
-	for p in tpl["props"]:
+	for p in tp["props"]:
 		if p.size() > 3 and p[3] == "w":
 			segs.append([p[1] - 170.0 - rnd.call() * 80.0, p[1] + 170.0 + rnd.call() * 80.0, p[2] + 250.0 + rnd.call() * 80.0])
-	for s in tpl["solids"]:
+	for s in tp["solids"]:
 		if rnd.call() < 0.7:
 			segs.append([s[0] - 60.0, s[0] + s[1] + 60.0, s[2] + 200.0 + rnd.call() * 120.0])
 	segs.sort_custom(func(a, b): return a[0] < b[0])
 	var m: Array = []
 	for s0 in segs:
-		var s1 := [maxf(-40.0, s0[0]), minf(tpl["w"] + 40.0, s0[1]), minf(tpl["top"] + 170.0, s0[2])]
+		var s1 := [maxf(-40.0, s0[0]), minf(tp["w"] + 40.0, s0[1]), minf(tp["top"] + 170.0, s0[2])]
 		if not m.is_empty() and s1[0] < m[-1][1] + 60.0:
 			m[-1][1] = maxf(m[-1][1], s1[1])
 			m[-1][2] = maxf(m[-1][2], s1[2])
 		else:
 			m.append(s1)
+	return m.map(func(v): return {"x0": CT.jr(v[0]), "x1": CT.jr(v[1]), "h": CT.jr(v[2])})
+
+func ceil_y() -> float:
+	return arena.ground_y - tpl["top"] - 250.0
+
+## drawDungeon's drawTerrain calls for a template: back walls (rim 0.6), the ceiling (no rim), the side walls, the ground
+## with every raised block in it (rim 0.9), the ledges (with a soft drop shadow): [key, kind, args, gain, layer, shadow]
+func _mass_specs(tn: String) -> Array:
+	var T: Dictionary = RTPL[tn]
+	var G: float = arena.ground_y
+	var w: float = T["w"]
+	var cy: float = G - T["top"] - 250.0
 	var out: Array = []
-	for i in m.size():
-		out.append({"x0": m[i][0], "x1": m[i][1], "h": m[i][2], "poly": _wall_poly(m[i][0], m[i][1], m[i][2], int(m[i][0]) * 7 + int(m[i][2]) + i * 131)})
+	var ws := _wall_segs(T)
+	for i in ws.size():
+		var sg: Dictionary = ws[i]
+		out.append(["w%d" % i, "wall", [sg["x0"], sg["x1"], sg["h"], int(sg["x0"] * 7 + sg["h"] + i * 131), G], 0.6, 0, false])
+	out.append(["ceil", "terrain", [-TW * 8.0, w + TW * 8.0, cy - TW * 6.0, cy, {"fringe": true}], 0.0, 1, false])
+	out.append(["lw", "terrain", [-TW * 8.0, 0.0, cy - 10.0, G + 20.0, {"jag": 6.0}], 1.0, 1, false])
+	out.append(["rw", "terrain", [w, w + TW * 8.0, cy - 10.0, G + 20.0, {"jag": 6.0}], 1.0, 1, false])
+	var steps: Array = T["solids"].map(func(so): return [float(so[0]), float(so[0] + so[1]), G - so[2] - SURF])
+	out.append(["ground", "ground", [-TW * 8.0, w + TW * 8.0, G + H + 60.0, steps, G, SURF], 0.9, 1, false])
+	for i in T["ledges"].size():
+		var l: Array = T["ledges"][i]
+		var py: float = G - l[1]
+		out.append(["p%d" % i, "terrain", [float(l[0]), float(l[0] + l[2]), py - SURF, py - SURF + 34.0, {"lip": true, "fringe": true, "jag": 2.0}], 1.0, 1, true])
 	return out
 
-## an organic, angular back-wall silhouette: chunky facets along a crest with 1–3 shoulders
-func _wall_poly(x0: float, x1: float, h: float, seed: int) -> PackedVector2Array:
-	var rnd := _rnd_seq(seed)
-	var G: float = arena.ground_y
-	var w := x1 - x0
-	var tl: float = w * (0.08 + rnd.call() * 0.08)
-	var tr: float = w * (0.08 + rnd.call() * 0.08)
-	var peaks: Array = []
-	for i in 1 + int(rnd.call() * 3):
-		peaks.append([x0 + tl + rnd.call() * (w - tl - tr), (24.0 + rnd.call() * 36.0)])
-	var top := G - h
-	var pts := PackedVector2Array()
-	pts.append(Vector2(x0, G + 30))
-	pts.append(Vector2(x0 + tl * 0.3, top + 80))
-	var x: float = x0 + tl
-	while x <= x1 - tr:
-		var y := top + 52.0
-		for pk in peaks:
-			y -= maxf(0.0, pk[1] * (1.0 - absf(x - pk[0]) / (w * 0.35)))
-		y += (rnd.call() - 0.5) * 16.0
-		pts.append(Vector2(x, roundf(y / 2.0) * 2.0))
-		x += 20.0 + floorf(rnd.call() * 28.0)
-	pts.append(Vector2(x1 - tr * 0.3, top + 80))
-	pts.append(Vector2(x1, G + 30))
-	return pts
+static var PEND := {}            # template -> [WorkerThreadPool task, its masses]: built off the main thread
 
-func _dressing() -> Array:
-	var rnd := _rnd_seq(int(tpl["w"]) + int(tpl["top"]) * 3)
-	var d: Array = []
-	var door_xs: Array = tpl["door"].values().map(func(a): return a[0])
-	var free := func(x: float) -> bool: return not door_xs.any(func(dx): return absf(dx - x) < 170.0) and not tpl["solids"].any(func(s): return x > s[0] - 60.0 and x < s[0] + s[1] + 60.0)
-	var x := 200.0
-	while x < tpl["w"] - 150.0:
-		if free.call(x): d.append(["back", "pillarA" if rnd.call() < 0.5 else "pillarB", x, 0.0])
-		x += 520.0 + rnd.call() * 300.0
-	for s in tpl["solids"]:
-		if s[0] > 40: d.append(["front", "bouldM", s[0] - 10.0, 0.0])
-		if s[0] + s[1] < tpl["w"] - 40: d.append(["front", "bouldS", s[0] + s[1] + 14.0, 0.0])
-	for l in tpl["ledges"]:
-		if l[2] >= 220: d.append(["hang", "mossA" if rnd.call() < 0.5 else "mossB", l[0] + l[2] * (0.3 + rnd.call() * 0.4), float(l[1])])
-	x = 380.0
-	while x < tpl["w"] - 200.0:
-		if free.call(x): d.append(["front", "bouldL" if rnd.call() < 0.5 else "bouldS", x, 0.0])
-		x += 700.0 + rnd.call() * 400.0
-	return d
+static func _build_set(specs: Array, res: Dictionary) -> void:
+	for sp in specs:
+		res[sp[0]] = CT.build(sp[1], sp[2])
+
+func _ck(tn: String) -> String:
+	return "%s@%d" % [tn, int(arena.ground_y)]
+
+## every template this map uses, baked in the background as soon as the map exists
+func prebuild() -> void:
+	var seen := {}
+	for r in rooms.values():
+		var tn: String = r["tpl"]
+		var ck := _ck(tn)
+		if seen.has(ck) or CT.CACHE.has(ck) or PEND.has(ck): continue
+		seen[ck] = true
+		var res := {}
+		var id := WorkerThreadPool.add_task(_build_set.bind(_mass_specs(tn), res), false, "cave " + tn)
+		PEND[ck] = [id, res]
+
+## settle every background bake (leaving the cave, or quitting with bakes still running)
+static func drain() -> void:
+	for ck in PEND.keys():
+		WorkerThreadPool.wait_for_task_completion(PEND[ck][0])
+		CT.CACHE[ck] = PEND[ck][1]
+	PEND.clear()
+
+func _exit_tree() -> void:
+	drain()
+
+func _build_masses() -> void:
+	for par in [n_walls, n_rock]:
+		for c in par.get_children():
+			par.remove_child(c)
+			c.queue_free()
+	masses = []
+	var tn: String = room()["tpl"]
+	var ck := _ck(tn)
+	var specs := _mass_specs(tn)
+	if PEND.has(ck):
+		WorkerThreadPool.wait_for_task_completion(PEND[ck][0])
+		CT.CACHE[ck] = PEND[ck][1]
+		PEND.erase(ck)
+	if not CT.CACHE.has(ck):
+		var res := {}
+		_build_set(specs, res)
+		CT.CACHE[ck] = res
+	var C: Dictionary = CT.CACHE[ck]
+	for sp in specs:
+		_add_mass(n_walls if sp[4] == 0 else n_rock, CT.finish(C[sp[0]]), sp[3], sp[5])
+
+func _add_mass(par: Node2D, m: Dictionary, gain: float, shadow: bool) -> void:
+	var sn: Node2D = null
+	if shadow:
+		sn = Node2D.new()
+		sn.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		sn.draw.connect(_draw_mass_shadow.bind(sn, m))
+		par.add_child(sn)
+	var n := Node2D.new()
+	n.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	var mat := ShaderMaterial.new()
+	mat.shader = CT.shader()
+	mat.set_shader_parameter("deep", not arena.low_end)
+	n.material = mat
+	n.draw.connect(_draw_mass.bind(n, m))
+	par.add_child(n)
+	masses.append({"m": m, "n": n, "s": sn, "gain": gain})
+
+func _draw_mass(n: Node2D, m: Dictionary) -> void:
+	n.draw_texture_rect(m["tex"], Rect2(CT.jr(m["ox"]), CT.jr(m["oy"]), m["w"] * 2.0, m["h"] * 2.0), false)
+
+func _draw_mass_shadow(n: Node2D, m: Dictionary) -> void:
+	var sb: Dictionary = CT.shadow_of(m)
+	var t: Texture2D = sb["tex"]
+	var p: float = sb["pad"] * 2.0
+	n.draw_texture_rect(t, Rect2(CT.jr(m["ox"]) + 10.0 - p, CT.jr(m["oy"]) + 14.0 - p, t.get_width() * 2.0, t.get_height() * 2.0), false, Color(1, 1, 1, 0.6))
 
 
-# ---------- lights ----------
-func _add_light(p: Vector2, r: float, col: Color, energy: float, flick: bool) -> void:
-	var l := PointLight2D.new()
-	l.texture = light_tex
-	l.texture_scale = r * 2.2 / 256.0
-	l.color = col
-	l.energy = energy
-	l.position = p
-	l.range_item_cull_mask = 2      # the cave only (light_mask 3): characters, mobs and loot keep the ambient and their rim light
-	l.set_meta("e0", energy)
-	l.set_meta("flick", flick)
-	l.set_meta("ph", p.x * 0.01)
-	lights.add_child(l)
-
-func _build_lights() -> void:
-	for c in lights.get_children():
-		c.queue_free()
+# ---------- light ----------
+## lightSources() in the cave: wall torches, hanging lanterns, glowing mushrooms and crystals, the camp fire, the chest,
+## the doors (an open one, or the boss door even sealed), the cave eyes, and a faint glow around the heroine
+func _light_sources(tt: float) -> Array:
+	var out: Array = []
 	var G: float = arena.ground_y
 	for p in tpl["props"]:
 		var y: float = G - p[2]
 		var k: String = p[0]
 		var mode: String = p[3] if p.size() > 3 else ""
-		if mode == "w": _add_light(Vector2(p[1], y - 164.0), 230.0, Color8(255, 160, 80), 1.15, true)
-		elif mode == "c": _add_light(Vector2(p[1], y - 184.0), 170.0, Color8(255, 196, 110), 0.85, false)
-		elif k.begins_with("mush"): _add_light(Vector2(p[1], y - 30.0), 150.0 if k == "mushL" else 100.0, Color8(90, 255, 210), 0.75, false)
-		elif k.begins_with("crys"): _add_light(Vector2(p[1], y - 35.0), 150.0 if k == "crysL" else 100.0, Color8(190, 120, 255), 0.7, false)
-	if room()["type"] == "camp": _add_light(Vector2(tpl["w"] * 0.75, G - 36.0), 300.0, Color8(255, 150, 70), 1.1, true)
-	if chest != null: _add_light(Vector2(chest["x"], G - 40.0), 160.0, Color8(255, 210, 100), 0.8, false)
+		var x: float = p[1]
+		if mode == "w": out.append({"k": "fire", "x": x, "y": y - 164.0, "gy": y, "r": 230.0, "a": LIT.fl(tt, x * 0.01) * 1.25, "c": Color8(255, 160, 80)})
+		elif mode == "c": out.append({"k": "soft", "x": x, "y": y - 184.0, "r": 170.0, "a": 0.85, "c": Color8(255, 196, 110)})
+		elif k.begins_with("mush"): out.append({"k": "soft", "x": x, "y": y - 30.0, "r": 150.0 if k == "mushL" else 100.0, "a": 0.75, "c": Color8(90, 255, 210)})
+		elif k.begins_with("crys"): out.append({"k": "soft", "x": x, "y": y - 35.0, "r": 150.0 if k == "crysL" else 100.0, "a": 0.7, "c": Color8(190, 120, 255)})
+	if room()["type"] == "camp": out.append({"k": "fire", "x": tpl["w"] * 0.75, "y": G - 36.0, "gy": G, "r": 300.0, "a": LIT.fl(tt, 5.0) * 1.1, "c": Color8(255, 150, 70)})
+	if chest != null: out.append({"k": "soft", "x": chest["x"], "y": G - 40.0, "r": 160.0, "a": 0.8, "c": Color8(255, 220, 130)})
 	for d in doors:
-		var c: Color = DOORSTY[door_kind(d)]
-		_add_light(Vector2(d["x"], d["y"] - 70.0), 190.0, c, 0.0, false)
-		lights.get_child(lights.get_child_count() - 1).set_meta("door", d)
-	_add_light(Vector2.ZERO, 260.0, Color8(255, 230, 210), 0.45, false)
-	lights.get_child(lights.get_child_count() - 1).set_meta("player", true)
+		if d["boss"] and not gate_open: continue
+		var kd := door_kind(d)
+		var ko: float = 1.0 if d["town"] else open_k
+		if gate_open or d["town"] or DOORPT.has(kd):
+			out.append({"k": "soft", "x": d["x"], "y": d["y"] - 50.0, "r": 150.0 + 110.0 * ko, "a": DOORA[kd] * (0.6 + 0.6 * ko), "c": DOORSTY[kd]})
+	for m in arena.mobs:
+		if m.kind == "eye" and not m.is_dead():
+			out.append({"k": "soft", "x": m.position.x, "y": m.position.y - 30.0, "r": 90.0, "a": 0.6, "c": Color8(200, 120, 255)})
+	var P = arena.player
+	out.append({"k": "player", "x": P.position.x, "y": P.position.y - 70.0, "r": 160.0, "a": 0.35, "c": Color8(230, 220, 255)})
+	return out
 
-func _flicker(tt: float) -> void:
+## per frame: the light list, the cave's ambient (todNow at 22:30, the weather included), and each mass's edge light
+func _light_step(tt: float) -> void:
+	if tpl.is_empty(): return
+	L = _light_sources(tt)
+	L_rim = L.filter(func(l): return l["k"] != "player" and (l["k"] != "soft" or l["r"] > 100.0))
+	var h: float = arena.tod_h
+	arena.tod_h = 22.5
+	amb = arena.tod_now()["amb"]
+	arena.tod_h = h
+	lit.L = L
+	lit.amb = amb
+	lit.redraw()
 	var vr: Rect2 = arena.view_rect()
-	for l in lights.get_children():
-		# a light renders only when its circle reaches the screen (each one is another pass over what it touches)
-		l.visible = l.has_meta("player") or vr.grow(l.texture_scale * 32.0).has_point(l.position)
-		if l.has_meta("player"):
-			l.position = arena.player.position + Vector2(0, -70)
-		elif l.has_meta("door"):
-			var d: Dictionary = l.get_meta("door")
-			var open: bool = (gate_open or d["town"]) and not (d["boss"] and not gate_open)
-			l.energy = (1.0 if d["town"] and not d["boss"] else open_k) * (0.9 if open else 0.0)
-			if l.energy <= 0.01: l.visible = false     # a shut door's light costs a pass for nothing
-		elif l.get_meta("flick"):
-			var ph: float = l.get_meta("ph")
-			l.energy = l.get_meta("e0") * (0.85 + 0.1 * sin(tt * 7.0 + ph) + 0.05 * sin(tt * 19.0 + ph * 3.0))
+	for e in masses:
+		var m: Dictionary = e["m"]
+		var x := CT.jr(m["ox"])
+		var y := CT.jr(m["oy"])
+		var w: float = m["w"] * 2.0
+		var hh: float = m["h"] * 2.0
+		var on: bool = not (x > vr.end.x + 60.0 or x + w < vr.position.x - 60.0)
+		e["n"].visible = on
+		if e["s"] != null: e["s"].visible = on
+		if not on: continue
+		var mat: ShaderMaterial = e["n"].material
+		if e["gain"] <= 0.0:
+			mat.set_shader_parameter("on", 0)
+			continue
+		var P: Array = CT.rim_params(x, y, w, hh, L_rim, e["gain"])
+		mat.set_shader_parameter("rc", P[0])
+		mat.set_shader_parameter("rd", P[1])
+		mat.set_shader_parameter("fk", 0.94 + 0.06 * sin(tt * 7.0 + x * 0.01))
+		mat.set_shader_parameter("on", 1)
+
+## rimLights() in the cave: DUN._L (no player light, no small glows), [pos, r, strength, colour] for char_pix and the mobs
+func rim_lights() -> Array:
+	var out: Array = []
+	for l in L_rim:
+		out.append([Vector2(l["x"], l["y"]), l["r"], l["a"], l["c"]])
+	return out
+
+func _redraw_all() -> void:
+	for n in [n_doors, n_door_add, n_props, n_misc, front, front_add, bg_node]:
+		n.queue_redraw()
 
 
 # ---------- drawing ----------
-func ceil_y() -> float:
-	return arena.ground_y - tpl["top"] - 250.0
-
-func _thsh(i: float, s: float) -> float:
-	var v := sin(i * 127.1 + s * 311.7) * 43758.5453
-	return v - floorf(v)
-
-## a rock block: textured polygon (rock texture at 2 world px per art px), jittered sides, lit left band, shaded right band, dark outline
-func rock(x0: float, x1: float, y0: float, y1: float, lip: bool, fringe: bool, jag := 6.0) -> void:
-	var sd := x0 + y0
-	var pts := PackedVector2Array()
-	var x := x0 + 6.0
-	while x <= x1 - 6.0:
-		pts.append(Vector2(x, y0))
-		x += 8.0
-	pts.append(Vector2(x1 - 6.0, y0))
-	pts.append(Vector2(x1, y0 + 6.0))
-	var y := y0 + 6.0
-	while y <= y1:
-		pts.append(Vector2(x1 + roundf((_thsh(y, sd + 1.0) - 0.5) * jag * 2.0), y))
-		y += 10.0
-	pts.append(Vector2(x1, y1))
-	pts.append(Vector2(x0, y1))
-	y = y1
-	while y >= y0 + 6.0:
-		pts.append(Vector2(x0 + roundf((_thsh(y, sd + 2.0) - 0.5) * jag * 2.0), y))
-		y -= 10.0
-	pts.append(Vector2(x0, y0 + 6.0))
-	_poly_tex(pts, t_rock, 2.0, Color.WHITE)
-	draw_rect(Rect2(x0 - 4.0, y0, 10.0, y1 - y0), Color(0.75, 0.69, 0.86, 0.12))
-	draw_rect(Rect2(x1 - 8.0, y0, 12.0, y1 - y0), Color(0.06, 0.04, 0.1, 0.3))
-	var closed := pts.duplicate()
-	closed.append(pts[0])
-	draw_polyline(closed, Color8(23, 16, 31), 2.0)
-	if lip: _lip(x0 + 2.0, x1 - 2.0, y0)
-	if fringe: _fringe(x0 + 4.0, x1 - 4.0, y1 - 8.0)
-
-func _poly_tex(pts: PackedVector2Array, t: Texture2D, k: float, col: Color) -> void:
-	pts = clean_poly(pts)
-	if Geometry2D.triangulate_polygon(pts).is_empty():
-		for part in Geometry2D.decompose_polygon_in_convex(pts):
-			_poly_tex_raw(part, t, k, col)
-		return
-	_poly_tex_raw(pts, t, k, col)
-
-## drop repeated and collinear points so the polygon always triangulates
-static func clean_poly(pts: PackedVector2Array) -> PackedVector2Array:
-	var out := PackedVector2Array()
-	for p in pts:
-		if out.is_empty() or out[out.size() - 1].distance_to(p) > 0.5:
-			out.append(p)
-	if out.size() > 1 and out[0].distance_to(out[out.size() - 1]) < 0.5:
-		out.remove_at(out.size() - 1)
-	var i := 0
-	while out.size() > 3 and i < out.size():
-		var a := out[(i - 1 + out.size()) % out.size()]
-		var b := out[i]
-		var c := out[(i + 1) % out.size()]
-		if absf((b - a).cross(c - b)) < 0.01:
-			out.remove_at(i)
-		else:
-			i += 1
-	return out
-
-func _poly_tex_raw(pts: PackedVector2Array, t: Texture2D, k: float, col: Color) -> void:
-	var uvs := PackedVector2Array()
-	var sz := t.get_size() * k
-	for p in pts:
-		uvs.append(Vector2(p.x / sz.x, p.y / sz.y))
-	draw_colored_polygon(pts, col, uvs, t)
-
-## moss lip: the top rows of the tile set's top piece, tiled (mirrored every other) along an edge
-func _lip(x0: float, x1: float, y: float) -> void:
-	var t: Texture2D = tex["tT"]
-	var x := floorf(x0 / 80.0) * 80.0
-	var i := int(x / 80.0)
-	while x < x1:
-		var a := maxf(x, x0)
-		var b := minf(x + 80.0, x1)
-		var src := Rect2(a - x, 0, b - a, 14)
-		if i % 2 == 1:
-			src = Rect2(80.0 - (b - x), 0, b - a, 14)
-		draw_texture_rect_region(t, Rect2(a, y - 4.0, b - a, 14.0), src)
-		x += 80.0
-		i += 1
-
-## stalactite fringe under a ledge, tapering toward both ends
-func _fringe(x0: float, x1: float, y: float) -> void:
-	var t: Texture2D = tex["rfringe"]
-	var w := 352.0
-	var x := floorf(x0 / w) * w
-	while x < x1:
-		var a := maxf(x, x0)
-		var b := minf(x + w, x1)
-		var edge := minf(a - x0, x1 - b)
-		var k := clampf(edge / 60.0, 0.35, 1.0)
-		draw_texture_rect_region(t, Rect2(a, y, b - a, 64.0 * k), Rect2((a - x) / 2.0, 7, (b - a) / 2.0, 32))
-		x += w
-
 func _img(k: String, x: float, y: float, s := 1.0, flip := false, col := Color.WHITE, ci: CanvasItem = null) -> void:
 	if not tex.has(k): return
 	if ci == null: ci = self
 	var t: Texture2D = tex[k]
-	var w := t.get_width() * s
-	var h := t.get_height() * s
+	var w := roundf(t.get_width() * s)
+	var h := roundf(t.get_height() * s)
 	if flip:
-		ci.draw_set_transform(Vector2(x, 0), 0.0, Vector2(-1, 1))
-		ci.draw_texture_rect(t, Rect2(-w / 2.0, y - h, w, h), false, col)
+		ci.draw_set_transform(Vector2(roundf(x), 0), 0.0, Vector2(-1, 1))
+		ci.draw_texture_rect(t, Rect2(-roundf(w / 2.0), roundf(y - h), w, h), false, col)
 		ci.draw_set_transform(Vector2.ZERO)
 	else:
-		ci.draw_texture_rect(t, Rect2(x - w / 2.0, y - h, w, h), false, col)
+		ci.draw_texture_rect(t, Rect2(roundf(x - w / 2.0), roundf(y - h), w, h), false, col)
+
+## a radial falloff (the prototype's two-stop radial gradients), optionally clipped to a rect
+func _radial(ci: CanvasItem, c: Vector2, r: float, col: Color, a: float, clip := Rect2()) -> void:
+	if a <= 0.003: return
+	var t := LIT.soft_tex()
+	var full := Rect2(c - Vector2(r, r), Vector2(r, r) * 2.0)
+	var dst := full if clip.size == Vector2.ZERO else full.intersection(clip)
+	if dst.size.x <= 0.0 or dst.size.y <= 0.0: return
+	var ts := t.get_size()
+	var src := Rect2((dst.position - full.position) / full.size * ts, dst.size / full.size * ts)
+	ci.draw_texture_rect_region(t, dst, src, Color(col, a))
 
 func _draw_bg() -> void:
 	var vs := get_viewport_rect().size
@@ -675,152 +690,158 @@ func _draw_bg() -> void:
 			bg_node.draw_texture_rect(im, Rect2(x, y, w, im.get_height() * sc), false)
 		x += w
 		i += 1
-	bg_node.draw_rect(Rect2(Vector2.ZERO, vs), Color(0.03, 0.02, 0.06, 0.25))
+	bg_node.draw_rect(Rect2(Vector2.ZERO, vs), Color(8 / 255.0, 5 / 255.0, 16 / 255.0, 0.25))
 
-func _draw() -> void:
+## wall fixtures and the few props that match the set (drawDungeon): torches, lanterns on their chains, mushrooms, crystals
+func _draw_props() -> void:
 	if tpl.is_empty(): return
 	var G: float = arena.ground_y
 	var tt := Time.get_ticks_msec() / 1000.0
 	var cy := ceil_y()
-	# back walls and pillars
-	for w in walls:
-		_poly_tex(w["poly"], t_wall, 2.0, Color(0.72, 0.68, 0.8))
-		var cl: PackedVector2Array = w["poly"].duplicate()
-		draw_polyline(cl, Color8(18, 12, 26), 2.0)
-	for d in dress:
-		if d[0] == "back": _img(d[1], d[2], G + 4.0, 1.0, false, Color(0.75, 0.72, 0.82))
-	_draw_doors(tt)
-	# wall fixtures and props
 	for p in tpl["props"]:
 		var y: float = G - p[2]
 		var k: String = p[0]
+		var x: float = p[1]
 		var mode: String = p[3] if p.size() > 3 else ""
 		if mode == "w":
-			_img("torchF", p[1], y - 110.0)
-			_img("fflame%d" % (int(tt * 9.0 + p[1]) % 4), p[1], y - 150.0)
+			_img("torchF", x, y - 110.0, 1.0, false, Color.WHITE, n_props)
+			_img("fflame%d" % (int(floorf(tt * 9.0 + x)) % 4), x, y - 150.0, 1.0, false, Color.WHITE, n_props)
 		elif mode == "c":
+			# lanternChain: up to the ceiling, or to a ledge above it
 			var yb := y - 150.0 - 112.0
-			var yt := cy + 20.0
+			var yt := minf(yb - 40.0, cy + 20.0)
+			for pl in arena.platforms:
+				if x > pl.x and x < pl.x + pl.w and pl.y + 40.0 < yb and pl.y + 40.0 > yt: yt = pl.y + 40.0
 			var ch: Texture2D = tex["chain"]
 			var yy := yb - ch.get_height()
 			while yy > yt - ch.get_height():
-				draw_texture_rect(ch, Rect2(p[1] - ch.get_width() / 2.0, maxf(yt, yy), ch.get_width(), minf(ch.get_height(), yb - maxf(yt, yy))), false)
+				var y0 := maxf(yt, yy)
+				n_props.draw_texture_rect(ch, Rect2(roundf(x - ch.get_width() / 2.0), roundf(y0), ch.get_width(), minf(ch.get_height(), yb - y0)), false)
 				yy -= ch.get_height() - 6.0
-			_img("lantern", p[1], y - 150.0)
+			_img("lantern", x, y - 150.0, 1.0, false, Color.WHITE, n_props)
 		elif k.begins_with("mush") or k.begins_with("crys"):
-			_img(k, p[1], y + 4.0, 1.0, int(p[1] * 7) % 3 == 0)
-		elif tex.has(k):
-			_img(k, p[1], y + 4.0)
-	# room shell and rock masses
-	rock(-TW * 8.0, tpl["w"] + TW * 8.0, cy - TW * 6.0, cy, false, true, 0.0)
-	rock(-TW * 8.0, 0.0, cy - 10.0, G + 20.0, false, false)
-	rock(tpl["w"], tpl["w"] + TW * 8.0, cy - 10.0, G + 20.0, false, false)
-	rock(-TW * 8.0, tpl["w"] + TW * 8.0, G - SURF, G + H + 60.0, true, false, 0.0)
-	for so in arena.solids:
-		rock(so.x, so.x + so.w, so.top - SURF, G + 2.0, true, false, 3.0)
-	for pl in arena.platforms:
-		draw_rect(Rect2(pl.x + 10.0, pl.y + 24.0, pl.w, 26.0), Color(0, 0, 0, 0.3))
-		rock(pl.x, pl.x + pl.w, pl.y - SURF, pl.y - SURF + 34.0, true, true, 2.0)
-	for d in dress:
-		if d[0] == "hang": _img(d[1], d[2], G - d[3] + 30.0 + 130.0)
-	var rm := room()
-	if rm["type"] == "camp":
-		var x: float = tpl["w"] * 0.75
-		draw_rect(Rect2(x - 24.0, G - 6.0, 48.0, 6.0), Color8(58, 42, 32))
-		var fi := int(tt * 10.0) % 4
-		_img("flame%d" % fi, x, G - 2.0, 1.4)
-		_img("flame%d" % ((fi + 2) % 4), x - 12.0, G - 2.0, 1.0)
-		_img("flame%d" % ((fi + 1) % 4), x + 12.0, G - 2.0, 1.0)
-	if chest != null:
-		var cx: float = chest["x"]
-		draw_rect(Rect2(cx - 26.0, G - 34.0, 52.0, 34.0), Color8(90, 58, 32))
-		draw_rect(Rect2(cx - 26.0, G - 44.0, 52.0, 14.0), Color8(122, 82, 48))
-		draw_rect(Rect2(cx - 4.0, G - 34.0, 8.0, 10.0), Color8(232, 192, 96))
+			_img(k, x, y + 4.0, 1.0, int(x * 7) % 3 == 0, Color.WHITE, n_props)
 
-func _draw_doors(tt: float) -> void:
+## drawDoors: one shared timber frame in a pool of shade, the boards while sealed, a crooked signboard
+func _draw_doors() -> void:
+	if tpl.is_empty(): return
 	var fr: Texture2D = tex["dframe"]
+	var tt := Time.get_ticks_msec() / 1000.0
+	var ci := n_doors
 	for d in doors:
 		if d["boss"] and not gate_open: continue
-		var kind := door_kind(d)
-		var c: Color = DOORSTY[kind]
+		var kd := door_kind(d)
 		var open: bool = gate_open or d["town"]
 		var k: float = 1.0 if d["town"] and not d["boss"] else open_k
 		var w := fr.get_width()
 		var h := fr.get_height()
 		var x: float = roundf(d["x"] - w / 2.0)
 		var y: float = roundf(d["y"] + 8.0 - h)
-		draw_texture(fr, Vector2(x, y))
-		var ox: float = x + DOPEN[0]
-		var oy: float = y + DOPEN[1]
-		var ow: float = DOPEN[2] - DOPEN[0]
-		var fy: float = d["y"] + 6.0
-		if open and k > 0.0:
-			var fl := 0.82 + 0.18 * sin(tt * 9.0) * sin(tt * 5.3) if kind == "camp" else (0.72 + 0.28 * sin(tt * 2.2) if kind == "boss" else 0.92 + 0.08 * sin(tt * 3.1 + d["x"]))
-			var A := k * fl
-			# light in the tunnel: brightest low in the middle, motes drifting in it
-			var steps := 6
-			for i in steps:
-				var u := float(i) / steps
-				draw_rect(Rect2(ox, oy + (fy - oy) * u, ow, (fy - oy) / steps + 1.0), Color(c, (0.3 + 0.45 * u) * A))
-			draw_rect(Rect2(ox + ow * 0.3, oy + 8.0, ow * 0.4, fy - oy - 8.0), Color(1, 0.97, 0.9, 0.35 * A))
-			for i in 8:
-				var sp := 0.4 + (i % 4) * 0.25
-				var mx := ox + 6.0 + fposmod(i * 37.0 + sin(tt * 0.7 + i) * 10.0 + ow * 4.0, ow - 12.0)
-				var my := fy - 6.0 - fposmod(tt * 22.0 * sp + i * 53.0, (fy - oy) - 14.0)
-				draw_rect(Rect2(roundf(mx), roundf(my), 2, 2), Color(1, 0.96, 0.86, 0.5 * A * (0.5 + 0.5 * sin(tt * 2.0 + i * 1.3))))
+		_radial(ci, Vector2(d["x"], d["y"] - h * 0.45), w * 0.9, Color8(6, 4, 12), 0.5, Rect2(d["x"] - w, d["y"] - h * 1.5, w * 2.0, h * 1.6))
+		ci.draw_texture(fr, Vector2(x, y))
 		if not open:
 			var pk: Texture2D = tex["dplank"]
-			draw_texture(pk, Vector2(roundf(d["x"] - pk.get_width() / 2.0), roundf(d["y"] + 8.0 - pk.get_height())))
-		draw_rect(Rect2(x, y, w, h), Color(0.05, 0.03, 0.09, 0.18 * (1.0 - k)))
-		# the crooked signboard
-		var si: int = SIGNI.get(kind, 0)
+			ci.draw_texture(pk, Vector2(roundf(d["x"] - pk.get_width() / 2.0), roundf(d["y"] + 8.0 - pk.get_height())))
+		ci.draw_rect(Rect2(x, y, w, h), Color(Color8(12, 8, 22), 0.18 * (1.0 - k)))
+		var si: int = SIGNI.get(kd, 0)
 		var sg: Texture2D = tex["sign%d" % si]
-		var ang := fposmod(sin(d["x"] * 12.9898 + d["y"] * 4.1) * 43758.5, 1.0) * 0.11 + (-0.03 if d["d"] == "L" else 0.03) + sin(tt * 1.3 + d["x"]) * 0.006
-		var sx: float = d["x"] + fposmod(d["x"] * 7.0, 13.0) - 6.0
-		var sy: float = y - sg.get_height() * 0.5 + 12.0
-		draw_set_transform(Vector2(roundf(sx), roundf(sy)), ang)
-		draw_texture(sg, -sg.get_size() / 2.0)
-		draw_texture(tex["sign%de" % si], -sg.get_size() / 2.0, Color(c.r * 1.6, c.g * 1.6, c.b * 1.6, 0.22 + 0.6 * k))
-		draw_set_transform(Vector2.ZERO)
+		ci.draw_set_transform(_sign_at(d, y, sg), _sign_ang(d, tt))
+		ci.draw_texture(sg, -sg.get_size() / 2.0)
+		ci.draw_set_transform(Vector2.ZERO)
+	# the camp fire, the chest and the door tags come after the rock (n_misc)
 
-func _draw_front() -> void:
+func _sign_at(d: Dictionary, y: float, sg: Texture2D) -> Vector2:
+	var sx: float = d["x"] + fmod(d["x"] * 7.0, 13.0) - 6.0
+	return Vector2(roundf(sx), roundf(y - sg.get_height() * 0.5 + 12.0))
+
+func _sign_ang(d: Dictionary, tt: float) -> float:
+	var v: float = sin(d["x"] * 12.9898 + d["y"] * 4.1) * 43758.5
+	return fmod(v, 1.0) * 0.11 + (-0.03 if d["d"] == "L" else 0.03) + sin(tt * 1.3 + d["x"]) * 0.006
+
+## the light of an open door (added): the opening fills with an arch of light, dimmer under the lintel and against the
+## posts, brightest low in the middle, with motes drifting in it; a glow around the opening; a flash as the boards go;
+## the signboard's paint glows in the door's colour
+func _draw_doors_add() -> void:
+	if tpl.is_empty(): return
+	var fr: Texture2D = tex["dframe"]
+	var tt := Time.get_ticks_msec() / 1000.0
+	var ci := n_door_add
+	for d in doors:
+		if d["boss"] and not gate_open: continue
+		var kd := door_kind(d)
+		var c: Color = DOORSTY[kd]
+		var open: bool = gate_open or d["town"]
+		var k: float = 1.0 if d["town"] and not d["boss"] else open_k
+		var w := fr.get_width()
+		var h := fr.get_height()
+		var x: float = roundf(d["x"] - w / 2.0)
+		var y: float = roundf(d["y"] + 8.0 - h)
+		var ox0: float = x + DOPEN[0]
+		var oy0: float = y + DOPEN[1]
+		var ow: float = DOPEN[2] - DOPEN[0]
+		var oh: float = DOPEN[3] - DOPEN[1]
+		var ocx := ox0 + ow / 2.0
+		if open and k > 0.0:
+			var fl := (0.82 + 0.18 * sin(tt * 9.0) * sin(tt * 5.3)) if kd == "camp" else ((0.72 + 0.28 * sin(tt * 2.2)) if kd == "boss" else (0.92 + 0.08 * sin(tt * 3.1 + d["x"])))
+			var A := k * fl
+			var fy: float = d["y"] + 6.0
+			var clip := Rect2(ox0, oy0, ow, fy - oy0)
+			var ym := oy0 + (fy - oy0) * 0.3
+			ci.draw_polygon(PackedVector2Array([Vector2(ox0, oy0), Vector2(ox0 + ow, oy0), Vector2(ox0 + ow, ym), Vector2(ox0, ym)]),
+				PackedColorArray([Color(c, 0.35 * A), Color(c, 0.35 * A), Color(c, 0.6 * A), Color(c, 0.6 * A)]))
+			ci.draw_polygon(PackedVector2Array([Vector2(ox0, ym), Vector2(ox0 + ow, ym), Vector2(ox0 + ow, fy), Vector2(ox0, fy)]),
+				PackedColorArray([Color(c, 0.6 * A), Color(c, 0.6 * A), Color(c, 0.75 * A), Color(c, 0.75 * A)]))
+			var y6 := oy0 + 6.0
+			for half in 2:
+				var xa := ox0 + ow * 0.5 * half
+				var xb := xa + ow * 0.5
+				var aa := 0.0 if half == 0 else 0.45 * A
+				var ab := 0.45 * A if half == 0 else 0.0
+				ci.draw_polygon(PackedVector2Array([Vector2(xa, y6), Vector2(xb, y6), Vector2(xb, fy), Vector2(xa, fy)]),
+					PackedColorArray([Color(c, aa), Color(c, ab), Color(c, ab), Color(c, aa)]))
+			_radial(ci, Vector2(ocx, fy - oh * 0.22), oh * 0.72, Color8(255, 248, 230), 0.6 * A, clip)
+			for i in 8:
+				var sp := 0.4 + (i % 4) * 0.25
+				var mx := ox0 + 6.0 + fmod(i * 37.0 + sin(tt * 0.7 + i) * 10.0 + ow * 4.0, ow - 12.0)
+				var my := fy - 6.0 - fmod(tt * 22.0 * sp + i * 53.0, oh - 14.0)
+				ci.draw_rect(Rect2(roundf(mx), roundf(my), 2, 2), Color(Color8(255, 246, 220), 0.5 * A * (0.5 + 0.5 * sin(tt * 2.0 + i * 1.3))))
+			_radial(ci, Vector2(ocx, oy0 + oh * 0.6), ow * 1.25, c, 0.22 * A, Rect2(ocx - ow * 1.3, oy0 - ow * 0.7, ow * 2.6, oh + ow * 0.8))
+			if open_k < 1.0 and not d["town"]:
+				ci.draw_rect(Rect2(ox0 - open_k * 24.0, oy0 - open_k * 16.0, ow + open_k * 48.0, fy - oy0 + open_k * 16.0), Color(c, 0.6 * (1.0 - open_k)))
+		var si: int = SIGNI.get(kd, 0)
+		var sg: Texture2D = tex["sign%d" % si]
+		var em: Array = sign_w[si]
+		ci.draw_set_transform(_sign_at(d, y, sg), _sign_ang(d, tt))
+		ci.draw_texture(em[0], -sg.get_size() / 2.0, Color(c, 0.22 + 0.6 * k))
+		if k > 0.0:
+			var bt: Texture2D = em[1]
+			ci.draw_texture(bt, -bt.get_size() / 2.0, Color(c, 0.35 * k))
+		ci.draw_set_transform(Vector2.ZERO)
+
+## after the rock, still under the light pass: the camp fire, the chest, the door tags
+func _draw_misc() -> void:
 	if tpl.is_empty(): return
 	var G: float = arena.ground_y
 	var tt := Time.get_ticks_msec() / 1000.0
-	for d in dress:
-		if d[0] == "front": _img(d[1], d[2], G + 6.0, 1.0, false, Color.WHITE, front)
-	# door spill on the floor
-	for d in doors:
-		var open: bool = (gate_open or d["town"]) and not (d["boss"] and not gate_open)
-		if not open: continue
-		var k: float = 1.0 if d["town"] and not d["boss"] else open_k
-		var c: Color = DOORSTY[door_kind(d)]
-		for i in 4:
-			var hw: float = [200.0, 95.0, 60.0, 45.0][i]
-			var hh: float = [18.0, 10.0, 8.0, 3.5][i]
-			front.draw_set_transform(Vector2(d["x"], d["y"] - SURF + 3.0), 0.0, Vector2(1.0, hh / hw))
-			front.draw_circle(Vector2.ZERO, hw, Color(c, [0.16, 0.2, 0.18, 0.5][i] * k))
-		front.draw_set_transform(Vector2.ZERO)
-	# spores
-	for s in spores:
-		var a: float = 0.45 + 0.4 * sin(tt * 2.0 + s["ph"])
-		var sz: float = s["s"]
-		front.draw_rect(Rect2(roundf(s["x"]) - sz, roundf(s["y"]) - sz, sz * 2.0 + 2.0, sz * 2.0 + 2.0), Color(s["c"], a * 0.25))
-		front.draw_rect(Rect2(roundf(s["x"]), roundf(s["y"]), sz, sz), Color(s["c"], a))
-	# low fog hugging the floor
-	var vr: Rect2 = arena.view_rect()
-	for i in 3:
-		var off := fposmod(tt * (8.0 + i * 5.0) + i * 300.0, 600.0)
-		var x := floorf((vr.position.x - off) / 600.0) * 600.0 + off - 600.0
-		while x < vr.end.x + 600.0:
-			front.draw_set_transform(Vector2(x + 300.0, G - 14.0 - i * 10.0), 0.0, Vector2(1.0, (26.0 - i * 4.0) / 320.0))
-			front.draw_circle(Vector2.ZERO, 320.0, Color(0.47, 0.39, 0.67, 0.06 - i * 0.015))
-			x += 600.0
-		front.draw_set_transform(Vector2.ZERO)
-	# door tags and the prompt
-	var ARW := {"L": "◀", "R": "▶", "U": "▲", "D": "▼"}
+	var ci := n_misc
 	var rm := room()
 	var fnt: Font = arena.font_black
+	if rm["type"] == "camp":
+		var x: float = tpl["w"] * 0.75
+		ci.draw_rect(Rect2(x - 24.0, G - 6.0, 48.0, 6.0), Color8(58, 42, 32))
+		var fi := int(tt * 10.0) % 4
+		_img("flame%d" % fi, x, G - 2.0, 1.4, false, Color.WHITE, ci)
+		_img("flame%d" % ((fi + 2) % 4), x - 12.0, G - 2.0, 1.0, false, Color.WHITE, ci)
+		_img("flame%d" % ((fi + 1) % 4), x + 12.0, G - 2.0, 1.0, false, Color.WHITE, ci)
+		var s3: String = "쉬었다" if rm.get("rest_used", false) else "모닥불 — 다가가면 회복"
+		var tw3 := fnt.get_string_size(s3, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
+		ci.draw_string(fnt, Vector2(x - tw3 / 2.0, G - 110.0), s3, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.86, 0.86, 0.86, 0.5) if rm.get("rest_used", false) else Color("#ffe9a8"))
+	if chest != null:
+		var cx: float = chest["x"]
+		ci.draw_rect(Rect2(cx - 26.0, G - 34.0, 52.0, 34.0), Color8(90, 58, 32))
+		ci.draw_rect(Rect2(cx - 26.0, G - 44.0, 52.0, 14.0), Color8(122, 82, 48))
+		ci.draw_rect(Rect2(cx - 4.0, G - 34.0, 8.0, 10.0), Color8(232, 192, 96))
+	var ARW := {"L": "◀", "R": "▶", "U": "▲", "D": "▼"}
 	for d in doors:
 		if d["boss"] and not gate_open: continue
 		var open: bool = gate_open or (d["town"] and not d["boss"])
@@ -833,16 +854,55 @@ func _draw_front() -> void:
 				tag += " ☠"
 		var tw := fnt.get_string_size(tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x + 20.0
 		var y: float = d["y"] - 248.0
-		front.draw_rect(Rect2(d["x"] - tw / 2.0, y - 15.0, tw, 22.0), Color(0.04, 0.03, 0.05, 0.75))
-		front.draw_string(fnt, Vector2(d["x"] - tw / 2.0 + 10.0, y + 1.0), tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color("#ffe9a8") if open else Color("#9c917a"))
+		ci.draw_rect(Rect2(d["x"] - tw / 2.0, y - 15.0, tw, 22.0), Color(0.04, 0.03, 0.05, 0.75))
+		ci.draw_string(fnt, Vector2(d["x"] - tw / 2.0 + 10.0, y + 1.0), tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color("#ffe9a8") if open else Color("#9c917a"))
+
+## drawDoorSpill: the floor in front of an open door, soft pools of its light on the walkable surface (added, after the
+## light pass); the frame itself is not lit by it
+func _draw_spill() -> void:
+	if tpl.is_empty(): return
+	var fr: Texture2D = tex["dframe"]
+	var tt := Time.get_ticks_msec() / 1000.0
+	var w := float(fr.get_width())
+	var ow: float = DOPEN[2] - DOPEN[0]
+	var st := LIT.soft_tex()
+	for d in doors:
+		if d["boss"] and not gate_open: continue
+		if not (gate_open or d["town"]): continue
+		var kd := door_kind(d)
+		var k: float = 1.0 if d["town"] and not d["boss"] else open_k
+		if k <= 0.0: continue
+		var fl := (0.82 + 0.18 * sin(tt * 9.0) * sin(tt * 5.3)) if kd == "camp" else ((0.72 + 0.28 * sin(tt * 2.2)) if kd == "boss" else (0.92 + 0.08 * sin(tt * 3.1 + d["x"])))
+		var A := k * fl
+		var cx: float = roundf(d["x"] - w / 2.0) + DOPEN[0] + ow / 2.0
+		var fy: float = d["y"] - SURF + 3.0
+		for e in [[w * 1.3, 18.0, 0.42, 0.0], [w * 0.62, 10.0, 0.5, ow * 0.18 * sin(tt * 0.6 + d["x"])], [w * 0.5, 8.0, 0.4, -ow * 0.22], [ow * 0.62, 3.5, 0.9, 0.0]]:
+			front_add.draw_texture_rect(st, Rect2(cx + e[3] - e[0], fy - e[1], e[0] * 2.0, e[1] * 2.0), false, Color(DOORSTY[kd], e[2] * A))
+
+## drawDungeonFront (after the light pass): floating spores, low fog hugging the floor, the door prompt
+func _draw_front() -> void:
+	if tpl.is_empty(): return
+	var G: float = arena.ground_y
+	var tt := Time.get_ticks_msec() / 1000.0
+	for s in spores:
+		var a: float = 0.45 + 0.4 * sin(tt * 2.0 + s["ph"])
+		var sz: float = s["s"]
+		front.draw_rect(Rect2(roundf(s["x"]) - sz, roundf(s["y"]) - sz, sz * 2.0 + 2.0, sz * 2.0 + 2.0), Color(s["c"], a * 0.25))
+		front.draw_rect(Rect2(roundf(s["x"]), roundf(s["y"]), sz, sz), Color(s["c"], a))
+	var vr: Rect2 = arena.view_rect()
+	for i in 3:
+		var off := fposmod(tt * (8.0 + i * 5.0) + i * 300.0, 600.0)
+		var x := floorf((vr.position.x - off) / 600.0) * 600.0 + off - 600.0
+		while x < vr.end.x + 600.0:
+			front.draw_set_transform(Vector2(x + 300.0, G - 14.0 - i * 10.0), 0.0, Vector2(1.0, (26.0 - i * 4.0) / 320.0))
+			front.draw_circle(Vector2.ZERO, 320.0, Color(120 / 255.0, 100 / 255.0, 170 / 255.0, 0.06 - i * 0.015))
+			x += 600.0
+		front.draw_set_transform(Vector2.ZERO)
 	if near_gate != null:
+		var fnt: Font = arena.font_black
 		var d2 = near_gate
 		var s: String = arena.cfg.kh() + ("마을로 돌아가기" if d2["town"] else "이동")
 		var tw2 := fnt.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x + 20.0
 		var y2: float = d2["y"] - 280.0 + sin(tt * 4.0) * 3.0
 		front.draw_rect(Rect2(d2["x"] - tw2 / 2.0, y2 - 16.0, tw2, 24.0), Color(0, 0, 0, 0.6))
 		front.draw_string(fnt, Vector2(d2["x"] - tw2 / 2.0 + 10.0, y2 + 1.0), s, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#ffe9a8"))
-	if rm["type"] == "camp":
-		var s3: String = "쉬었다" if rm.get("rest_used", false) else "모닥불 — 다가가면 회복"
-		var tw3 := fnt.get_string_size(s3, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
-		front.draw_string(fnt, Vector2(tpl["w"] * 0.75 - tw3 / 2.0, G - 110.0), s3, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.86, 0.86, 0.86, 0.5) if rm.get("rest_used", false) else Color("#ffe9a8"))
