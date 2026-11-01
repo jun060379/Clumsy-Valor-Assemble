@@ -709,7 +709,7 @@ func _prop(ci: CanvasItem, p: Array) -> void:
 		return
 	if k == "ladder" and fl == 2: _ladder_up(ci, x, y)
 	if k == "banner":
-		hi(ci, "banO", x, y)       # the rank-3 banner (banN) comes with the guild system
+		hi(ci, "banN" if _rank() >= 3 else "banO", x, y)       # the banner over the door is replaced from rank 3
 		return
 	if k == "herbs":
 		ci.draw_rect(Rect2(roundf(x + HW(k) / 2.0 - 1.0), G - 256.0, 2.0, y - HH(k) - (G - 256.0) + 4.0), Color("#5a4028"))
@@ -775,9 +775,13 @@ func _pendulum(ci: CanvasItem, x: float, y: float) -> void:
 	ci.draw_texture_rect(tex["pend"], Rect2(-HW("pend") / 2.0, -2.0, HW("pend"), HH("pend")), false)
 	ci.draw_set_transform(Vector2.ZERO)
 
-## trophies on the dining hall board: one per fame rank (rank 1 for now); a lone hook waits over every empty plaque
+## HALL.rank(): the guild's fame rank 0..6 (fame.gd r - 1)
+func _rank() -> int:
+	return clampi(arena.fame.r - 1, 0, 6) if arena.fame != null else 1
+
+## trophies on the dining hall board: one per fame rank; a lone hook waits over every empty plaque
 func _trophies(ci: CanvasItem, x: float, y: float) -> void:
-	var n := 1
+	var n := mini(6, _rank())
 	var w := HW("tboard")
 	var h := HH("tboard")
 	var FR := [0.100, 0.258, 0.418, 0.580, 0.739, 0.900]

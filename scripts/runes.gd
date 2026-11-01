@@ -587,8 +587,9 @@ func _best_step(k: String) -> void:
 	for i in range(had + 1, st + 1):
 		x += (BSTEPB if is_boss(k) else BSTEP)[i]
 	best_stage[k] = st
-	if arena != null and arena.get("fame") != null and arena.fame.has_method("gain_exp"):
-		arena.fame.gain_exp(x)
+	# the observation EXP itself is paid by fame.gd (its own obs stages); paying it here too would double it
+	if arena != null and arena.get("fame") != null:
+		return
 
 ## damage multiplier of an attack element vs a target's elements
 static func eff_mul(atk: String, defs: Array) -> float:
@@ -914,7 +915,7 @@ func salvage(idx: Array) -> int:
 	return sil
 
 
-# ---------- test kit (Shift+F12) ----------
+# ---------- test kit (Home) ----------
 func test_fill() -> void:
 	for r in RUNE: add_rune(r, 2)
 	for i in 6: gearbag.append(make_gear(roll_grade0(0.6)))
@@ -965,14 +966,15 @@ func test_cmd(cmd: String) -> void:
 					loot.hit_chest()
 
 func _unhandled_input(ev_: InputEvent) -> void:
-	if ev_ is InputEventKey and ev_.pressed and not ev_.echo and ev_.keycode == KEY_F12:
-		if ev_.shift_pressed:
+	# Home = test kit, End = rune book, Page Down = boss room (moved off F12, which the fame test keys use)
+	if ev_ is InputEventKey and ev_.pressed and not ev_.echo and ev_.keycode in [KEY_HOME, KEY_END, KEY_PAGEDOWN]:
+		if ev_.keycode == KEY_HOME:
 			test_fill()
 			arena.text(arena.player.position + Vector2(0, -170), "실링 +1000 · 기억석 +150 · 룬 · 장비 6개 · 피로도 가득", SHC)
 			arena.sfx("ready", 0.6)
-		elif ev_.ctrl_pressed and arena.ui_root != null:
+		elif ev_.keycode == KEY_END and arena.ui_root != null:
 			arena.ui_root.menu.open_page("codex_rune")
-		elif ev_.alt_pressed:
+		elif ev_.keycode == KEY_PAGEDOWN:
 			# straight to the cave's boss room (the prototype's 보스방 바로가기); with Shift the fatigue drops to 10
 			if ev_.shift_pressed and arena.fatigue != null:
 				arena.fatigue.v = 10

@@ -127,6 +127,7 @@ func _initialize() -> void:
 
 	# ---- the pages: Bran's choices → forge → back to his choices; the codex opens, turns, shuts ----
 	var M = arena.ui_root.menu
+	if arena.get("fame") != null: arena.fame.bran = true     # he has met the party through Eilin
 	M.open_bran(false, "흐흐, 왔습니까.")
 	check(M.page == "bran" and arena.ui_root.holds(), "Bran's choices open and hold the world")
 	M.bran_page.choices[0][2].call()

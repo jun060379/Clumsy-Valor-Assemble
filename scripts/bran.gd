@@ -174,6 +174,7 @@ func talk() -> void:
 			talk_t = 600.0
 			M.open_bran(false, "접수대의 에일린한테 먼저 인사부터 하고 오쇼. 일 하나 끝내고 오면, 그때 얘기합시다. 흐흐."))
 		return
+	if arena.fame != null: arena.fame.finc("bran")     # counts toward the guild requests (fame.gd)
 	var L := greet()
 	# his last line stays up with the choices (branTalk): 장비를 맡기고 싶어요 · 잡담한다 · 그만 가볼게요
 	var head: Array = L.slice(0, L.size() - 1)
