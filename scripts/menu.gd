@@ -623,6 +623,9 @@ func _info(k: String) -> String:
 	if k == "party": return "%d / 3 편성" % arena.player.party.size()
 	if k == "forge": return "실링 %d" % arena.shilling
 	if arena.get("runes") != null:
+		if k == "char":
+			var M = arena.runes.memory
+			return "Lv %d · 남은 포인트 %d" % [M.lv(arena.player.who), M.pts_left(arena.player.who)]
 		if k == "bag": return "장비 %d · 룬 %d" % [arena.runes.gearbag.size(), arena.runes.rune_count()]
 		if k == "best": return "%d / %d 등록" % [arena.runes.best_seen.size(), arena.runes.ENEMY.size()]
 	return ""

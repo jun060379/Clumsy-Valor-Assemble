@@ -17,6 +17,7 @@ extends Node
 
 const CH := preload("res://scripts/chars.gd")
 const LOOT := preload("res://scripts/loot.gd")
+const MEMORY := preload("res://scripts/memory.gd")
 
 const GRADE := {"common": ["일반", Color("#b9b2a3")], "uncommon": ["고급", Color("#7fc77a")], "rare": ["레어", Color("#6aa7ff")], "elite": ["엘리트", Color("#b48cff")],
 	"epic": ["에픽", Color("#ff9d4d")], "legend": ["전설", Color("#ffd34d")], "unique": ["고유", Color("#ff6fae")]}
@@ -48,7 +49,7 @@ const RUNE := {
 	"clone": {"n": "그림자 분신", "g": "unique", "k": "x", "who": "aida", "d": "스킬 [균열]이 [그림자 분신]으로 바뀐다. 분신이 3초간 일반 공격를 따라 한다."},
 	"aura": {"n": "축복 오라", "g": "unique", "k": "x", "who": "luce", "d": "스킬 [힐]이 [축복 오라]로 바뀐다. 8초간 주변 동료가 초당 체력 2 회복."},
 }
-const RUNE_TAG := {"firmstep": "굳건", "surge": "격류", "lamp": "등불", "oath": "맹세", "giantB": "거인", "tagbell": "종", "breeze": "바람", "aura": "오라"}
+const RUNE_TAG := {"firmstep": "굳건", "surge": "격류", "lamp": "등불", "oath": "맹세", "giantB": "거인", "tagbell": "종", "breeze": "바람", "aura": "오라", "n_gp": "자동 패링", "n_ls": "성소"}
 ## rune stars ★1–★8: the effect scales by RSM (★4 = the written value)
 const RSM := [1.0, 0.7, 0.8, 0.9, 1.0, 1.1, 1.25, 1.4, 1.6]
 const RMAX := 8
@@ -124,10 +125,13 @@ var loot                     # the boss chest of this run (loot.gd), or null
 var _tot := {}               # gear totals cache per member
 var fx_node: Node2D
 var hud_node: Control
+var memory                   # memory.gd: character levels and the memory tree (its combat hooks are called from here)
 
 
 func _init() -> void:
 	rng.randomize()
+	memory = MEMORY.new()
+	add_child(memory)
 	reset()
 
 func reset() -> void:
@@ -182,6 +186,7 @@ func setup(a) -> void:
 	hud_node.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud_node.draw.connect(_draw_hud)
 	layer.add_child(hud_node)
+	memory.setup(self)
 	changed()
 
 
@@ -320,12 +325,15 @@ func gear_tot(c: String) -> Dictionary:
 		if it.get("wt", "") == "중갑": T["heavy"] += 1
 	for k in T:
 		if k != "heavy": T[k] = round1(T[k])
+	if memory != null:
+		var M: Dictionary = memory.stat_add(c)          # stat nodes (최대 체력, 회복량) count like gear
+		for k in M: T[k] = round1(T.get(k, 0.0) + M[k])
 	_tot[c] = T
 	return T
 
-## level multiplier (LVM): character levels are not here yet
-func lvm(_c: String) -> float:
-	return 1.0          # PLACEHOLDER: LVCURVE by character level comes with the level system
+## level multiplier (LVM): LVCURVE by the member's level (memory.gd)
+func lvm(c: String) -> float:
+	return memory.lvm(c) if memory != null else 1.0
 
 ## the member's numbers with gear on (gearApply)
 func stats(c: String) -> Dictionary:
@@ -512,7 +520,7 @@ func drop_loot(p: Vector2, big: bool) -> void:
 	arena.text(p + Vector2(0, -120), "실링 +%d" % got, SHC)
 	var m0 := (1 + (1 if rand() < 0.5 else 0)) if big else (1 if rand() < 0.25 else 0)
 	if m0 > 0:
-		var m := maxi(1, dmul(m0))
+		var m := maxi(1, roundi(dmul(m0) * mem_decay()))
 		mem += m
 		arena.text(p + Vector2(0, -150), "기억석 +%d" % m, MEMC)
 
@@ -538,6 +546,27 @@ func pay(rw: String) -> void:
 		var it := make_gear(roll_grade(0.5))
 		gearbag.append(it)
 		arena.text(p + Vector2(0, -160), "장비 · " + it["n"], GRADE[it["g"]][1])
+
+## memDecay: 기억석 from the dungeon thins out when the party is over its recommended top level
+func mem_decay() -> float:
+	return memory.mem_decay(6) if memory != null else 1.0
+
+## the chapter tasks' counts: the highest rune star anywhere, runes engraved on worn gear
+func max_star() -> int:
+	var m := 0
+	for c in gear:
+		for s in gear[c]:
+			if has_rune_item(gear[c][s]): m = maxi(m, int(gear[c][s].get("rs", 1)))
+	for it in gearbag:
+		if has_rune_item(it): m = maxi(m, int(it.get("rs", 1)))
+	return m
+
+func engraved() -> int:
+	var n := 0
+	for c in gear:
+		for s in gear[c]:
+			if has_rune_item(gear[c][s]): n += 1
+	return n
 
 func mat_get(k: String, n: int) -> void:
 	mats[k] = int(mats.get(k, 0)) + n
@@ -652,6 +681,7 @@ func out_mul(e) -> float:
 	if cr > 0.0 and rand() * 100.0 < cr:
 		m *= 1.5
 		if e != null: arena.text(e.position + Vector2(24, -130), "치명!", Color("#ffd34d"))
+	if memory != null: m *= memory.out_mul(c, e)
 	return m
 
 ## incoming damage multiplier for the member in play (runeIn + defence)
@@ -662,16 +692,18 @@ func in_mul() -> float:
 	if has("stone"): m *= 1.0 - 0.05 * RV("stone")
 	if has("wall") and P.hp < P.MAX_HP * 0.5: m *= 1.0 - 0.1 * RV("wall")
 	if has("oath") and (P.anim == "guard" or P.anim == "parry"): m *= 1.15
+	if memory != null: m *= memory.in_mul()
 	return m * 150.0 / (150.0 + gear_tot(P.who)["def"])
 
 ## skill cooldown multiplier (지혜로움)
 func cd_k() -> float:
-	return 1.0 - 0.12 * RV("wise") if has("wise") else 1.0
+	var k := 1.0 - 0.12 * RV("wise") if has("wise") else 1.0
+	return k * (memory.mul(arena.player.who, "cd") if memory != null and arena != null else 1.0)
 
 ## the ultimate's gauge / cooldown multiplier (고요한 기도), for the ultimate when it comes
 func ult_k() -> float:
 	var k := 1.0 + 0.1 * RV("prayer") if has("prayer") else 1.0
-	return k * (1.0 + gear_tot(arena.player.who)["ult"] / 100.0)
+	return k * (1.0 + gear_tot(arena.player.who)["ult"] / 100.0) * (memory.mul(arena.player.who, "ult") if memory != null else 1.0)
 
 func ev(e: String, tg = null) -> void:
 	var P = arena.player
@@ -694,6 +726,7 @@ func ev(e: String, tg = null) -> void:
 		arena.text(P.position + Vector2(0, -130.0 * P.CSCALE), "+%d" % fa, Color("#9fe3a0"))
 	if e == "hit" and tg != null and ATKEL[P.who].has("dark"):
 		tg.set_meta("dark_t", Time.get_ticks_msec() + 6000)
+	if memory != null and e != "hit": memory.ev(e)
 
 ## after a blow lands: 불씨's fire, the hit event; returns extra damage to take off the target
 func after_hit(e) -> float:
@@ -727,6 +760,9 @@ func tick(dt: float) -> void:
 	var P = arena.player
 	var T := gear_tot(P.who)
 	P.RUN = 0.36 * (1.0 + T["ms"] / 100.0 - 0.02 * T["heavy"]) * ((1.0 + 0.15 * RV("breeze")) if rbn("breeze") > 0 else 1.0)
+	if memory != null:
+		memory.tick(dt)
+		P.RUN *= memory.spd()
 	if rb.has("aura") and rb["aura"]["t"] > 0.0:
 		aura_acc += dt
 		while aura_acc >= 1000.0:
@@ -934,7 +970,7 @@ func _ready() -> void:
 		_js_cb = JavaScriptBridge.create_callback(func(a: Array): test_cmd(str(a[0]) if a.size() > 0 else ""))
 		JavaScriptBridge.get_interface("window").cvaTest = _js_cb
 
-## "page <key>" opens a menu page · "close" shuts it · "station <up|eng|fuse|dis>" · "fill" · "lowfat" · "kill" · "chesthit <n>"
+## "page <key>" opens a menu page · "close" shuts it · "station <up|eng|fuse|dis>" · "fill" · "memlv <n>" · "lowfat" · "kill" · "chesthit <n>"
 func test_cmd(cmd: String) -> void:
 	var w := cmd.split(" ")
 	var M = arena.ui_root.menu if arena != null and arena.ui_root != null else null
@@ -948,6 +984,10 @@ func test_cmd(cmd: String) -> void:
 		"station":
 			if M != null: M.forge.go_station(w[1])
 		"fill": test_fill()
+		"memlv":                 # screenshots: everyone's memory level (and lamps for the breakthrough)
+			for c in ROSTER: memory.T(c)["lv"] = clampi(int(w[1]) if w.size() > 1 else 12, 1, 12)
+			mats["lamp"] = int(mats.get("lamp", 0)) + 3
+			memory._changed()
 		"start":
 			if arena.ui_root != null and arena.ui_root.title.active: arena.ui_root.title._go()
 		"lowfat":

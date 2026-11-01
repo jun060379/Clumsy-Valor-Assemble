@@ -444,7 +444,7 @@ func _draw_party(ci: CanvasItem, vs: Vector2) -> void:
 		var a := 1.0 if on or not idle else 0.55
 		var ctr := r.get_center()
 		var R := 24.0 * (1.12 if on else 1.0)
-		var hk: float = clampf(P.hpm[c] / CH.STATS[c]["hp"], 0.0, 1.0)
+		var hk: float = clampf(P.hpm[c] / (arena.runes.max_hp(c) if arena.get("runes") != null else CH.STATS[c]["hp"]), 0.0, 1.0)
 		ci.draw_circle(ctr, R, Color(0, 0, 0, 0.55 * a))
 		if hk > 0.0:
 			var pts := PackedVector2Array([ctr])

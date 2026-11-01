@@ -501,7 +501,7 @@ func step(dt: float) -> void:
 
 	if charges < 2:
 		recharge += dt
-		if recharge >= 1300.0:
+		if recharge >= 1300.0 * _mk("rch"):          # 등불을 끄고 / 깊은 그늘: faster dash charge
 			recharge = 0.0
 			charges += 1
 	var dash_ok := charges > 0 and dash_cd <= 0.0 and not anim in ["hurt", "death", "dive", "dash", "airdash", "backstep", "tag_in", "swap_in"] and not busy_rift()
@@ -626,12 +626,12 @@ func step(dt: float) -> void:
 			fx_done = true
 			_rev("skill")
 			_rev("heal")
-			var hv := 30.0
+			var hv := float(roundi(30.0 * _lvh("luce")))    # 30 × level × 회복량
 			hp = minf(MAX_HP, hp + hv)
 			var al := 0
 			for c in party:
-				if c != who and hpm[c] > 0.0 and hpm[c] < CH.STATS[c]["hp"]:
-					hpm[c] = minf(CH.STATS[c]["hp"], hpm[c] + hv)
+				if c != who and hpm[c] > 0.0 and hpm[c] < _mhp(c):
+					hpm[c] = minf(_mhp(c), hpm[c] + hv)
 					al += 1
 			heal_cd = 9000.0 * _cdk()
 			arena.sfx("ready", 0.9)
@@ -1155,14 +1155,16 @@ func take_hit(m, raw: float) -> String:
 	if inv > 0.0 or dash_inv() or anim == "death" or hp <= 0.0:
 		return "miss"
 	var facing: bool = (m.position.x - position.x) * dir > 0.0
+	var mg: String = arena.runes.memory.guard_hit(m, facing) if _rk() else ""   # 성소 / 의족을 박고 (memory nodes)
+	if mg == "miss": return "miss"
 	raw *= arena.taken_mul(m)                              # the mob's attack element against her own (hurtAmt)
-	var auto: bool = who == "estelle" and arena.auto_parry() > 0.0   # 수호의 맹세: every blow is parried
+	var auto: bool = (who == "estelle" and arena.auto_parry() > 0.0) or mg == "gp"   # 수호의 맹세: every blow is parried
 	if auto and not (anim == "parry" and f <= 1 and facing):
 		dir = 1 if m.position.x > position.x else -1
 		set_anim("parry")
 		facing = true
 	if who == "estelle" and anim == "parry" and f <= 1 and facing:
-		if auto: arena.ult.rose_burst(position + Vector2(dir * 34.0 * CSCALE, -62.0 * CSCALE))
+		if auto and mg != "gp": arena.ult.rose_burst(position + Vector2(dir * 34.0 * CSCALE, -62.0 * CSCALE))
 		bash_t = 420.0
 		f = 2
 		ft = 0.0
@@ -1174,6 +1176,7 @@ func take_hit(m, raw: float) -> String:
 		m.st = "hurt"
 		if m.flared:
 			arena.perfect_parry(m)
+			_rev("pparry")
 		qte_offer("parry")
 		_rev("parry")
 		_rev("skill")
@@ -1235,9 +1238,10 @@ func party_step(dt: float) -> void:
 		qte_offer("low")
 	last_hp = hp
 	# Luce's passive: while she is in the party, members on standby slowly recover
-	for c in party:
-		if c != who and hpm[c] > 0.0:
-			hpm[c] = minf(CH.STATS[c]["hp"], hpm[c] + dt * 0.002)
+	if party.has("luce"):
+		for c in party:
+			if c != who and hpm[c] > 0.0:
+				hpm[c] = minf(_mhp(c), hpm[c] + dt * 0.002 * _lvm("luce"))
 	if anim == "death":
 		dead_t += dt
 		if dead_t > 650.0 and not party_down:
@@ -1251,7 +1255,7 @@ func party_step(dt: float) -> void:
 				swap(true, nx)
 		if dead_t > 2200.0 and party_down and anim == "death":
 			for c in party:
-				hpm[c] = CH.STATS[c]["hp"]
+				hpm[c] = _mhp(c)
 			hp = MAX_HP
 			last_hp = hp
 			inv = 1500.0
@@ -1338,17 +1342,17 @@ func swap(tag: bool, to = null) -> void:
 	var q_low: bool = qte["low"]
 	if tag:
 		qte_end()
-		swap_cd = 900.0
+		swap_cd = 900.0 * _mk("swap")
 		_rev("tag")
 		# what each member brings when tagged in
 		if nx == "estelle" and q_hit != null and q_hit["victim"] == old:
-			hpm[old] = minf(CH.STATS[old]["hp"], hpm[old] + q_hit["taken"])
+			hpm[old] = minf(_mhp(old), hpm[old] + q_hit["taken"])
 			var take_dmg: float = q_hit["raw"] * 0.75
 			hp = maxf(1.0, hp - take_dmg)
 			last_hp = hp
 			arena.text(position + Vector2(0, -175.0 * CSCALE), "수호! " + CH.NAME[old] + " 피해 대신 받음", Color("#ffe39a"))
 		if nx == "luce" and q_low:
-			hpm[old] = minf(CH.STATS[old]["hp"], hpm[old] + 30.0)
+			hpm[old] = minf(_mhp(old), hpm[old] + 30.0)
 			arena.text(position + Vector2(0, -175.0 * CSCALE), "구원! " + CH.NAME[old] + " +30", Color("#fff1b0"))
 		tag_mul = 2.0 if nx == "aida" else 1.0
 		if nx == "aida":
@@ -1363,7 +1367,7 @@ func swap(tag: bool, to = null) -> void:
 		tag_in_at(tg, keep_x)
 		arena.text(position + Vector2(0, -150.0 * CSCALE), "TAG!  " + CH.NAME[nx], Color("#ffe39a"))
 	else:
-		swap_cd = 2200.0
+		swap_cd = 2200.0 * _mk("swap")
 		if on:
 			swap_to = keep_x
 			position.x = clampf(keep_x - keep_dir * 170.0, 30.0, arena.world_w - 30.0)
@@ -1476,7 +1480,7 @@ func qte_offer(reason: String, data = null) -> void:
 		if not qte["who"].has(c): qte["who"].append(c)
 	if reason == "hit": qte["hit"] = data
 	if reason == "low": qte["low"] = true
-	qte["t"] = QTE_T
+	qte["t"] = QTE_T * _mk("qteT")
 	qte["cd"] = 3500.0
 	arena.sfx("ready", 0.5)
 
@@ -1608,6 +1612,20 @@ func _cdk() -> float:
 
 func _inm() -> float:
 	return arena.runes.in_mul() if _rk() else 1.0
+
+## memory nodes: a multiplier of the member in control (rch, swap, qteT), the level multiplier, max HP of any member
+func _mk(key: String) -> float:
+	return arena.runes.memory.mul(who, key) if _rk() else 1.0
+
+func _lvm(c: String) -> float:
+	return arena.runes.lvm(c) if _rk() else 1.0
+
+## heals that grow with the level and 회복량 (30 × LVM × (1 + heal%))
+func _lvh(c: String) -> float:
+	return _lvm(c) * (1.0 + (arena.runes.gear_tot(c)["heal"] / 100.0 if _rk() else 0.0))
+
+func _mhp(c: String) -> float:
+	return arena.runes.max_hp(c) if _rk() else CH.STATS[c]["hp"]
 
 ## 방패 던지기 replaces Estelle's shield skill
 func _shield_throw() -> bool:

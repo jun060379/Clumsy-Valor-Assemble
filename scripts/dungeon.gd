@@ -306,7 +306,7 @@ func step(dt: float) -> void:
 	if rm["type"] == "camp" and not rm.get("rest_used", false) and absf(P.position.x - tpl["w"] * 0.75) < 90.0 and P.position.y > G - 10.0:
 		rm["rest_used"] = true
 		for c in P.party:
-			P.hpm[c] = minf(P.CH.STATS[c]["hp"], P.hpm[c] + P.CH.STATS[c]["hp"] * 0.5)
+			P.hpm[c] = minf(arena.runes.max_hp(c), P.hpm[c] + arena.runes.max_hp(c) * 0.5)
 		P.hp = minf(P.MAX_HP, P.hp + P.MAX_HP * 0.5)
 		arena.ring(P.position + Vector2(0, -60), 30.0, Color("#bff0c0"))
 		arena.text(P.position + Vector2(0, -160), "모닥불 · 파티 체력 회복", Color("#bff0c0"))
@@ -375,7 +375,7 @@ func pay() -> void:
 		return
 	if rw == "heal":
 		for c in P.party:
-			P.hpm[c] = minf(P.CH.STATS[c]["hp"], P.hpm[c] + P.CH.STATS[c]["hp"] * 0.35)
+			P.hpm[c] = minf(arena.runes.max_hp(c), P.hpm[c] + arena.runes.max_hp(c) * 0.35)
 		P.hp = minf(P.MAX_HP, P.hp + P.MAX_HP * 0.35)
 		arena.text(P.position + Vector2(0, -190), "보상 · 회복", Color("#9fe3a0"))
 	elif rw == "iron":

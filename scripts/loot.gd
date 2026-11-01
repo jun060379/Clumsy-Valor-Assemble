@@ -205,7 +205,7 @@ func break_chest() -> void:
 	var top: bool = gi >= D["chest_cap"]
 	var out: Array = []
 	for i in 2 + gi: out.append({"kind": "sh", "v": runes.dmul(4.0 + gi * 2 + runes.rng.randi() % 3)})
-	for i in 1 + gi: out.append({"kind": "mem", "v": maxi(1, runes.dmul(1.0 + floorf(gi / 2.0)))})
+	for i in 1 + gi: out.append({"kind": "mem", "v": maxi(1, roundi(runes.dmul(1.0 + floorf(gi / 2.0)) * runes.mem_decay()))})   # memDecay
 	var nR := 1 + int(floor(gi / 1.5)) + (1 if gi >= 4 else 0)
 	for i in nR:
 		var g: String = runes.roll_grade(minf(1.0, 0.2 + gi * 0.2))
