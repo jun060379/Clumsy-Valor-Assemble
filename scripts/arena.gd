@@ -1,5 +1,6 @@
 extends Node2D
-## Training ground: flat ground, one-way platforms, practice dummies on the left, monster waves on the right.
+## Training ground (훈련장): the yard drawn by training.gd, one-way platforms, practice dummies (an unbreakable row on the right)
+## and the ghost (ghost.gd), as in the prototype's arena.
 ## Owns the camera, hitstop, screen shake, sound, slow-motion (perfect dodge) and the hit effects.
 
 const PLAYER := preload("res://scripts/player.gd")
@@ -29,11 +30,13 @@ const SORTIE := preload("res://scripts/sortie.gd")
 const ULT := preload("res://scripts/ult.gd")
 const SAVE := preload("res://scripts/save_game.gd")
 const ELEM := preload("res://scripts/elements.gd")
-const WAVES := [["goblin", "goblin", "eye"], ["mush", "goblin", "goblin"], ["mush", "mush", "eye", "goblin"], ["skel", "goblin", "eye", "mush"], ["skel", "skel", "eye", "eye", "goblin"]]
+const GHOST := preload("res://scripts/ghost.gd")
+const TRAINING := preload("res://scripts/training.gd")
+const AW := 2000.0            # training ground width
 
 const H := 500.0
 var ground_y := H - 70.0
-var world_w := 2800.0
+var world_w := AW
 var platforms: Array = []
 var player
 var dummies: Array = []
@@ -45,8 +48,10 @@ var shake_dir := 1
 var fx: Array = []           # {k, ...}
 var mobs: Array = []
 var proj: Array = []         # monster projectiles
-var wave := 0
-var wave_t := 1500.0         # countdown to the next wave
+var ghost                     # the training ground's ghost (ghost.gd)
+var train                     # the training ground's scenery, lamps and gate (training.gd), while she is there
+var score := 0                # training ground SCORE / BEST (hits, breaks, banishing the ghost, parrying it)
+var best := 0
 var witch := 0.0             # perfect-dodge slow motion (ms left)
 var witch_max := 1.0
 var was_dash := false
@@ -75,8 +80,6 @@ var fade_rect: ColorRect
 var fade := 0.0
 var fade_dir := 0
 var fade_cb = null
-var near_entry := false
-var near_exit := false
 var train_platforms: Array = []
 # front end (step 4): settings, 피로도, title / menus
 var cfg                       # settings.gd: device, stick, key bindings (saved)
@@ -96,11 +99,6 @@ var ult                       # ult.gd: 기력 gauges, the ult moves and their w
 var save                      # save_game.gd: user://save.json
 var hit_by := ""              # who a delayed hit (Luce's light) belongs to, for its element
 
-var t_sky: Texture2D = preload("res://assets/bg/bg_sky.png")
-var t_mtn: Texture2D = preload("res://assets/bg/bg_mountains.png")
-var t_forest: Texture2D = preload("res://assets/bg/bg_forest.png")
-var t_ground: Texture2D = preload("res://assets/bg/k_ground.png")
-var t_dirt: Texture2D = preload("res://assets/bg/k_dirt.png")
 var fx_layer: Node2D
 var pfx                       # pfx.gd: the pixel-art effects (swings, hits, tells, rifts, Luce's light, dodge afterimages)
 var flash_rect: ColorRect
@@ -119,8 +117,6 @@ func _ready() -> void:
 		{"x": 520.0, "y": ground_y - 150.0, "w": 190.0},
 		{"x": 170.0, "y": ground_y - 120.0, "w": 150.0},
 		{"x": 960.0, "y": ground_y - 130.0, "w": 170.0},
-		{"x": 1700.0, "y": ground_y - 140.0, "w": 220.0},
-		{"x": 2250.0, "y": ground_y - 120.0, "w": 180.0},
 	]
 	train_platforms = platforms.duplicate()
 	var sh := Shader.new()
@@ -130,14 +126,22 @@ func _ready() -> void:
 		var ap := AudioStreamPlayer.new()
 		add_child(ap)
 		sfx_pool.append(ap)
-	var spots := [[80.0, ground_y], [250.0, ground_y - 120.0], [600.0, ground_y - 150.0]]
+	# spawnDummy: two on platforms, two on the ground, then a row of six that never break (damage testing)
+	var spots := [[600.0, ground_y - 150.0], [760.0, ground_y], [250.0, ground_y - 120.0], [80.0, ground_y]]
+	for i in 6: spots.append([1300.0 + i * 115.0, ground_y, true])
 	for s in spots:
 		var d := Node2D.new()
 		d.set_script(DUMMY)
 		d.position = Vector2(s[0], s[1])
 		d.arena = self
+		d.inv = s.size() > 2
 		add_child(d)
 		dummies.append(d)
+	ghost = Node2D.new()
+	ghost.set_script(GHOST)
+	ghost.arena = self
+	ghost.visible = false
+	add_child(ghost)
 	player = Node2D.new()
 	player.set_script(PLAYER)
 	player.arena = self
@@ -399,7 +403,11 @@ func toggle_member(c: String) -> void:
 		FOLK.of(self).join_party(c)
 
 func foes() -> Array:
-	return (dummies if level == null else []) + mobs.filter(func(m): return m.alive())
+	var out: Array = mobs.filter(func(m): return m.alive())
+	if level == null:
+		out = dummies.filter(func(d): return d.alive()) + out
+		if ghost != null and ghost.alive(): out.append(ghost)
+	return out
 
 func view_rect() -> Rect2:
 	var vs := get_viewport_rect().size
@@ -441,6 +449,10 @@ func clear_room() -> void:
 
 func _drop_level() -> void:
 	clear_room()
+	if train != null:
+		train.cleanup()
+		train = null
+	if ghost != null: ghost.leave()
 	if level != null:
 		level.cleanup()
 	level = null
@@ -497,16 +509,22 @@ func go_hall(fl: int, at: Vector2, d: int) -> void:
 	snap_camera()
 	_autosave()
 
+## enterScene('arena'): dummies stand again, the ghost is up at x 700, she comes in at x 530
 func go_training() -> void:
 	_drop_level()
-	for dm in dummies: dm.visible = true
-	world_w = 2800.0
+	for dm in dummies:
+		dm.visible = true
+		dm.reset()
+	world_w = AW
 	platforms = train_platforms.duplicate()
-	player.position = Vector2(560.0, ground_y)
+	player.position = Vector2(530.0, ground_y)
 	player.dir = 1
 	player.on = true
-	wave = 0
-	wave_t = 1500.0
+	player.vy = 0.0
+	train = TRAINING.new()
+	train.arena = self
+	add_child(train)
+	ghost.enter()
 	snap_camera()
 	_autosave()
 
@@ -517,14 +535,8 @@ func party_wiped() -> void:
 func try_interact() -> bool:
 	if level != null:
 		return level.try_interact()
-	if near_entry:
-		sfx("ready", 0.6)
-		fade_then(func(): enter_dungeon())
-		return true
-	if near_exit:
-		sfx("ready", 0.6)
-		fade_then(func(): go_town(Vector2(820.0 + 378.0, ground_y), 1))
-		return true
+	if train != null:
+		return train.try_interact()      # the gate: 길드 마을로
 	return false
 
 func platform_under(p: Vector2):
@@ -573,20 +585,19 @@ func _process(delta: float) -> void:
 			ult.step(dt)
 		for d in dummies:
 			d.step(dt)
+		if ghost != null: ghost.step(dt * wk)
 		for m in mobs:
 			m.step(dt * wk)
 		step_proj(dt * wk)
 		step_luce(dt)
 		dodge_check()
-		step_waves(dt)
 		eil.world(dt)
 		var lk := level_kind()
 		if lk == "hall" or lk == "town": eil.upd(dt)
 		if level != null:
 			level.step(dt)
-		else:
-			near_entry = absf(player.position.x - (world_w - 110.0)) < 90.0 and player.on and absf(player.position.y - ground_y) < 4.0
-			near_exit = absf(player.position.x - 450.0) < 46.0 and player.on and absf(player.position.y - ground_y) < 4.0
+		elif train != null:
+			train.step(dt)
 	# fades between rooms
 	if fade_dir == 1:
 		fade = minf(1.0, fade + dt / 260.0)
@@ -636,60 +647,7 @@ func _process(delta: float) -> void:
 
 
 # ---------- background & ground ----------
-func _draw() -> void:
-	if level != null:
-		return
-	var vs := get_viewport_rect().size
-	var c := cam.get_screen_center_position() if cam else Vector2(vs.x / 2, H / 2)
-	var left := c.x - vs.x / 2.0
-	# sky: one image stretched to the screen
-	var sk := H / t_sky.get_height()
-	var sw := t_sky.get_width() * sk
-	var sx := left - fmod(left * 0.05, sw)
-	while sx < left + vs.x:
-		draw_texture_rect(t_sky, Rect2(sx, 0, sw, H), false)
-		sx += sw
-	_tile(t_mtn, 2.0, 0.2, ground_y - 40.0, left, vs.x, Color(0.85, 0.85, 0.95))
-	_tile(t_forest, 1.6, 0.45, ground_y + 10.0, left, vs.x, Color(0.75, 0.8, 0.75))
-	# ground strip + dirt below
-	var gx := floorf(left / t_ground.get_width()) * t_ground.get_width()
-	while gx < left + vs.x:
-		draw_texture(t_ground, Vector2(gx, ground_y - 8.0))
-		var dy := ground_y - 8.0 + t_ground.get_height()
-		while dy < H:
-			draw_texture(t_dirt, Vector2(gx, dy))
-			dy += t_dirt.get_height()
-		gx += t_ground.get_width()
-	# the way back to town
-	var tl := "길드 마을로" + ("  ·  공격 키" if near_exit else "")
-	var tlw := font_black.get_string_size(tl, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x + 20.0
-	draw_rect(Rect2(450.0 - tlw / 2.0, ground_y - 200.0, tlw, 24.0), Color(0, 0, 0, 0.6))
-	draw_string(font_black, Vector2(450.0 - tlw / 2.0 + 10.0, ground_y - 183.0), tl, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#ffe9a8"))
-	draw_rect(Rect2(440.0, ground_y - 170.0, 4.0, 170.0), Color(0.35, 0.28, 0.2))
-	# the way into the cave: a dark mouth at the right end of the training ground
-	var ex := world_w - 110.0
-	draw_rect(Rect2(ex - 60.0, ground_y - 150.0, 120.0, 150.0), Color(0.08, 0.06, 0.1))
-	draw_circle(Vector2(ex, ground_y - 150.0), 60.0, Color(0.08, 0.06, 0.1))
-	draw_rect(Rect2(ex - 60.0, ground_y - 150.0, 6.0, 150.0), Color(0.35, 0.3, 0.25))
-	draw_rect(Rect2(ex + 54.0, ground_y - 150.0, 6.0, 150.0), Color(0.35, 0.3, 0.25))
-	var lbl := "버섯 동굴" + ("  ·  공격 키로 입장" if near_entry else "")
-	var lw := font_black.get_string_size(lbl, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x + 20.0
-	draw_rect(Rect2(ex - lw / 2.0, ground_y - 250.0, lw, 24.0), Color(0, 0, 0, 0.6))
-	draw_string(font_black, Vector2(ex - lw / 2.0 + 10.0, ground_y - 233.0), lbl, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#ffe9a8"))
-	# one-way platforms: plank with a lit top edge
-	for pl in platforms:
-		draw_rect(Rect2(pl.x, pl.y, pl.w, 14), Color("#5a3b24"))
-		draw_rect(Rect2(pl.x, pl.y, pl.w, 3), Color("#c8915a"))
-		draw_rect(Rect2(pl.x, pl.y + 14, pl.w, 3), Color(0, 0, 0, 0.35))
-
-func _tile(tex: Texture2D, s: float, par: float, bottom: float, left: float, width: float, mod: Color) -> void:
-	var w := tex.get_width() * s
-	var h := tex.get_height() * s
-	var off := left * (1.0 - par)
-	var x := off + floorf((left - off) / w) * w
-	while x < left + width:
-		draw_texture_rect(tex, Rect2(x, bottom - h, w, h), false, mod)
-		x += w
+## the training ground draws itself (training.gd); the town, hall and cave are their own levels
 
 
 # ---------- effects ----------
@@ -725,25 +683,6 @@ func spawn(k: String, x: float, delay: float, y := -1.0, pl = null, elite := fal
 	m.z_index = 1
 	mobs.append(m)
 	return m
-
-func step_waves(dt: float) -> void:
-	if level != null:
-		return
-	if mobs.any(func(m): return not m.is_dead()):
-		return
-	wave_t -= dt
-	if wave_t > 0.0:
-		return
-	var list: Array = WAVES[wave % WAVES.size()]
-	wave += 1
-	for j in list.size():
-		var x := 1500.0 + randf() * 1100.0
-		var m = spawn(list[j], x, 150.0 + j * 140.0)
-		if wave > 1 and j == 0:
-			m.notice(false)
-	big_word("WAVE %d" % wave, Color("#ffd34d"), 900.0, Vector2(0, 0))
-	sfx("ready", 0.7)
-	wave_t = 2500.0
 
 func shoot(m, p: Vector2, v: Vector2, big := false) -> void:
 	proj.append({"x": p.x, "y": p.y, "vx": v.x, "vy": v.y, "t": 0.0, "life": 1800.0 if big else 2600.0, "m": m, "big": big})

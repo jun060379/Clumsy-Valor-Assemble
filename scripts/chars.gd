@@ -17,7 +17,7 @@ const ROWFIX_AIDA := {8: 1 / 1.04, 9: 1 / 1.12, 14: 1 / 1.1, 15: 1 / 1.08, 16: 1
 ## guard key = each member's skill; Estelle has the only shield
 const SKILL := {"estelle": "방패", "aida": "균열", "luce": "치유"}
 ## who can answer which moment (QTE): Estelle covers a hit ally, Aida a finisher/parry, Luce someone in danger or a parry
-const QTE_WHO := {"hit": ["estelle"], "low": ["luce"], "finisher": ["aida"], "parry": ["aida", "luce"]}
+const QTE_WHO := {"hit": ["estelle"], "low": ["luce"], "finisher": ["aida"], "backstab": ["aida"], "parry": ["aida", "luce"]}
 const QTE_LBL := {"estelle": "수호", "aida": "기습", "luce": "구원"}
 
 const COMMON := {
