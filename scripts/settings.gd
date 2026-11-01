@@ -34,7 +34,7 @@ func _init(a) -> void:
 	dev = String(cf.get_value("ui", "dev", dev))
 	stick = String(cf.get_value("ui", "stick", stick))
 	arena.screen_fx = bool(cf.get_value("ui", "pfx", true))
-	arena.pix = String(cf.get_value("ui", "pix2", "off"))
+	arena.pix = String(cf.get_value("ui", "pix2", "shade"))
 	arena.tod_auto = bool(cf.get_value("ui", "tod_auto", true))
 	arena.weather = String(cf.get_value("ui", "weather", "clear"))
 	arena.ambient = bool(cf.get_value("ui", "ambient", true))
