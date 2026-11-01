@@ -282,7 +282,7 @@ func forced_keys() -> Variant:
 	return null
 
 func ult_gain(n: float) -> void:
-	if ult != null: ult.gain(n)
+	if ult != null: ult.gain(n * (runes.ult_k() if runes != null else 1.0))   # ultGain wraps: 고요한 기도, 기력 획득 gear, memory nodes
 
 ## Estelle's vow (auto-parry) time left
 func auto_parry() -> float:
@@ -785,6 +785,7 @@ func dodge_check() -> void:
 		var m = threatened()
 		if m != null:
 			perfect_dodge()
+			if runes != null: runes.ev("pdodge")       # memory nodes (극한 회피에 성공하면 …)
 	was_dash = d
 
 func perfect_dodge() -> void:

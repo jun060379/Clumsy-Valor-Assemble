@@ -18,6 +18,7 @@ extends RefCounted
 ##   town_x     float   where she last left the village
 ##   fame       any     fame.get_state() when that system exists (restored with fame.set_state(...))
 ##   inventory  any     inventory.get_state() when that system exists (restored with inventory.set_state(...))
+##   memory     any     runes.memory.get_state(): character levels and memory trees (restored with set_state, before HP)
 
 const VERSION := 1
 
@@ -57,6 +58,7 @@ func snapshot() -> Dictionary:
 	if F != null and F.has_method("get_state"): d["fame"] = F.get_state()
 	var I = arena.get("runes")
 	if I != null and I.has_method("get_state"): d["inventory"] = I.get_state()
+	if I != null and I.get("memory") != null: d["memory"] = I.memory.get_state()
 	return d
 
 func save() -> bool:
@@ -84,9 +86,13 @@ func apply(d: Dictionary) -> Array:
 	var who := String(d.get("who", party[0]))
 	if not party.has(who): who = party[0]
 	P.party = party
+	# levels and gear first: they set everyone's max HP
+	var I0 = arena.get("runes")
+	if I0 != null and I0.get("memory") != null and d.get("memory") is Dictionary: I0.memory.set_state(d["memory"])
+	if I0 != null and I0.has_method("set_state") and d.has("inventory"): I0.set_state(d["inventory"])
 	var hpm: Dictionary = d.get("hpm", {})
 	for c in roster:
-		if hpm.has(c): P.hpm[c] = clampf(float(hpm[c]), 0.0, P.CH.STATS[c]["hp"])
+		if hpm.has(c): P.hpm[c] = clampf(float(hpm[c]), 0.0, I0.max_hp(c) if I0 != null else P.CH.STATS[c]["hp"])
 	if who != P.who: P.switch_char(who)
 	P.hp = clampf(float(d.get("hp", P.MAX_HP)), 1.0, P.MAX_HP)
 	P.last_hp = P.hp
@@ -102,7 +108,5 @@ func apply(d: Dictionary) -> Array:
 		arena.sortie.town_x = float(d.get("town_x", arena.sortie.town_x))
 	var F = arena.get("fame")
 	if F != null and F.has_method("set_state") and d.has("fame"): F.set_state(d["fame"])
-	var I = arena.get("runes")
-	if I != null and I.has_method("set_state") and d.has("inventory"): I.set_state(d["inventory"])
 	loaded = true
 	return [String(d.get("scene", "town")), Vector2(float(d.get("x", 700.0)), float(d.get("y", arena.ground_y))), int(d.get("dir", 1)), int(d.get("fl", 0))]

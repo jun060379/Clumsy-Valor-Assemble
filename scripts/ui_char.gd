@@ -2,8 +2,9 @@ extends "res://scripts/ui_page.gd"
 ## 캐릭터 (prototype CHARACTER SCREEN v2, cx v2): tabs 상세 · 장비 · 스킬 · 기억 · 기록 along the top, the member's faces
 ## top right. 상세 = the numbers with gear on (+ what gear adds), the passive; 장비 = seven blades (WEAPON … ACC 3), the picked
 ## piece as a card (stats, its rune), 교체 = what in the bag fits, with a stat diff, and 해제.
-## 스킬 · 기억 · 기록 belong to other systems and show a short note for now.
+## 스킬 · 기억 · 기록 are drawn by ui_char_mem.gd (mx): the moves, the memory tree and levels (memory.gd), the record and memorial.
 
+const MEMUI := preload("res://scripts/ui_char_mem.gd")
 const ST := {"estelle": "res://assets/ui/st/estelle_base.webp", "aida": "res://assets/ui/st/aida_base.webp", "luce": "res://assets/ui/st/luce_base.webp"}
 const GEAR_ART := {"estelle": "res://assets/ui/st/estelle_gear.webp", "aida": "res://assets/ui/st/aida_gear.webp", "luce": "res://assets/ui/st/luce_gear.webp"}
 const FACE := {"estelle": preload("res://assets/ui/faces/estelle.png"), "aida": preload("res://assets/ui/faces/aida.png"), "luce": preload("res://assets/ui/faces/luce.png")}
@@ -19,11 +20,13 @@ var gi := 0
 var picking := false
 var slam_t := 0.0
 var tab_t := 0.0
+var mx                           # ui_char_mem.gd: the 스킬 · 기억 · 기록 tabs
 
 
 func _ready() -> void:
 	super()
 	keys = ["char"]
+	mx = MEMUI.new(self)
 
 var want_c := ""                 # cxOpen(c): open on this member instead of the one in control
 
@@ -35,12 +38,15 @@ func _opened() -> void:
 	picking = false
 	slam_t = 0.0
 	tab_t = 0.0
+	mx.opened()
 
 func _tick(dt: float) -> void:
 	slam_t += dt
 	tab_t += dt
+	mx.tick(dt)
 
 func _key(k: int) -> void:
+	if tab in ["skill", "match", "rec"] and mx.key(k): return
 	if k == KEY_ESCAPE:
 		if picking: picking = false
 		else: back()
@@ -59,6 +65,7 @@ func _tab(k: String) -> void:
 	tab = k
 	tab_t = 0.0
 	picking = false
+	mx.tab_changed()
 	sfx("ready", 0.2)
 
 func _member(cc: String) -> void:
@@ -66,6 +73,7 @@ func _member(cc: String) -> void:
 	c = cc
 	slam_t = 0.0
 	picking = false
+	mx.member_changed()
 	sfx("ready", 0.2)
 
 func roster() -> Array:
@@ -79,7 +87,9 @@ func _paint(vs: Vector2) -> void:
 	draw_rect(Rect2(Vector2.ZERO, vs), Color.BLACK)
 	if tab == "gear": _gear(vs, col)
 	elif tab == "attr": _attr(vs, col)
-	else: _soon(vs, col)
+	else:
+		mx.paint(vs, col)
+		if mx.clean: return          # 감상: only the memorial art and its ✕
 	_tabs(vs, col)
 	# faces, top right
 	var fx := vs.x - 64.0 - roster().size() * 48.0
@@ -350,18 +360,9 @@ func _gear_card(vs: Vector2, col: Color) -> void:
 static func _xr(xf: Transform2D, r: Rect2) -> PackedVector2Array:
 	return PackedVector2Array([xf * r.position, xf * Vector2(r.end.x, r.position.y), xf * r.end, xf * Vector2(r.position.x, r.end.y)])
 
-func _soon(vs: Vector2, col: Color) -> void:
-	draw_colored_polygon(PackedVector2Array([Vector2(vs.x * 0.5, 0), Vector2(vs.x, 0), Vector2(vs.x, vs.y), Vector2(vs.x * 0.4, vs.y)]), col)
-	UI.dots(self, Rect2(vs.x * 0.4, 0, vs.x * 0.6, vs.y), 0.25, 1.0)
-	var t0 := tx(ST[c])
-	var h := vs.y * 1.02
-	_art(vs, ST[c], Rect2(vs.x * 0.02, vs.y * 1.03 - h, h * t0.get_width() / t0.get_height(), h))
-	_name(Vector2(vs.x * 0.54, vs.y * 0.2))
-	var s := "준비 중"                 # PLACEHOLDER: 스킬 · 기억 · 기록 tabs come with their systems
-	var c0 := Vector2(vs.x * 0.7, vs.y * 0.55)
-	draw_set_transform(c0, deg_to_rad(-4.0))
-	var w := tw(UI.bhs(), s, 44) + 50.0
-	UI.para(self, -w / 2.0 + 6.0, -34.0, w, 64, 12.0, Color.BLACK)
-	UI.para(self, -w / 2.0, -40.0, w, 64, 12.0, Color.WHITE)
-	draw_string(UI.bhs(), Vector2(-w / 2.0 + 25.0, 8.0), s, HORIZONTAL_ALIGNMENT_LEFT, -1, 44, Color.BLACK)
-	draw_set_transform(Vector2.ZERO)
+func _wheel(d: int, _p: Vector2) -> void:
+	mx.wheel(d)
+
+func back() -> void:
+	mx.hush()
+	super()

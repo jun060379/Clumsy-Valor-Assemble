@@ -282,18 +282,18 @@ func t_val(t: Dictionary) -> int:
 		"bs4": return bs_n(4)
 		"rank": return r
 		"seenN": return seen.size()
-		"maxStar": return int(arena.max_star()) if arena.has_method("max_star") else 0
-		"engraved": return int(arena.engraved()) if arena.has_method("engraved") else 0
+		"maxStar": return int(arena.runes.max_star()) if arena.get("runes") != null else 0
+		"engraved": return int(arena.runes.engraved()) if arena.get("runes") != null else 0
 		"anyLv3": return 1 if _any_lv(3) else 0
 		"anyLv6": return 1 if _any_lv(6) else 0
-		"breakthrough": return 1 if arena.has_method("any_breakthrough") and arena.any_breakthrough() else 0
+		"breakthrough": return 1 if arena.get("runes") != null and arena.runes.memory.any_break() else 0
 	return 0
 
-## 세계수 levels per member belong to the character system (not in the port yet)
+## 세계수 levels per member (the memory tree's level, runes.memory)
 func _any_lv(n: int) -> bool:
-	if not arena.has_method("char_level"): return false
+	if arena.get("runes") == null: return false
 	for ch in FD.ALLC:
-		if rec.has(ch) and int(arena.char_level(ch)) >= n: return true
+		if rec.has(ch) and arena.runes.memory.lv(ch) >= n: return true
 	return false
 
 func ch_done(C: Dictionary) -> bool:
@@ -527,7 +527,7 @@ func poll(force := false) -> void:
 			if P.party.size() >= 2: finc("enterParty")
 		if scene == "dungeon" and lk != "dungeon" and fac_ok("fire"):
 			for ch in P.party:
-				if ch != P.who: P.hpm[ch] = P.CH.STATS[ch]["hp"]
+				if ch != P.who: P.hpm[ch] = arena.runes.max_hp(ch) if arena.get("runes") != null else P.CH.STATS[ch]["hp"]
 		scene = lk
 	if not rec.has(arena.player.who): rec.append(arena.player.who)
 	var tr := f_trial()

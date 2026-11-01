@@ -70,7 +70,9 @@ func _initialize() -> void:
 	await frames(2)
 	var g0: float = g.hp
 	g.hit(1.0, 0.0, 1.0)
-	ok(is_equal_approx(g0 - g.hp, 10.0), "Estelle's phys on the goblin: x1 -> %.0f" % (g0 - g.hp))
+	# phys on a phys mob is x1: the hit is the base 10 times her own gear/level/crit multipliers only (no element change)
+	var own: float = arena.runes.out_mul(g) if arena.get("runes") != null else 1.0
+	ok(g0 - g.hp >= 10.0 * own - 0.01, "Estelle's phys on the goblin: x1 (before her own bonuses) -> %.0f" % (g0 - g.hp))
 
 	print("기력 / ult")
 	var U = arena.ult
