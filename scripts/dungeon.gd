@@ -70,6 +70,7 @@ func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 	z_index = -5
+	light_mask = 3                   # lit by the cave's lights (cull mask 2); characters are not
 	for f in DirAccess.get_files_at("res://assets/cave"):
 		if f.ends_with(".png"):
 			tex[f.get_basename()] = load("res://assets/cave/" + f)
@@ -102,6 +103,7 @@ func _ready() -> void:
 	bg_layer.add_child(bg_node)
 	front = Node2D.new()
 	front.z_index = 8
+	front.light_mask = 3
 	front.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	front.draw.connect(_draw_front)
 	arena.add_child(front)
@@ -477,6 +479,7 @@ func _add_light(p: Vector2, r: float, col: Color, energy: float, flick: bool) ->
 	l.color = col
 	l.energy = energy
 	l.position = p
+	l.range_item_cull_mask = 2      # the cave only (light_mask 3): characters, mobs and loot keep the ambient and their rim light
 	l.set_meta("e0", energy)
 	l.set_meta("flick", flick)
 	l.set_meta("ph", p.x * 0.01)

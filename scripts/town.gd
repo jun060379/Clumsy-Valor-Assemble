@@ -22,6 +22,11 @@ const PXK := 1.78
 const LIFE := preload("res://scripts/town_life.gd")
 const TF := preload("res://scripts/townsfolk.gd")
 const BRAN := preload("res://scripts/bran.gd")
+const LIT := preload("res://scripts/lit.gd")
+const SHADE := preload("res://scripts/shade.gd")
+const SKY := preload("res://scripts/sky.gd")
+## the hall facade's windows (g_hall_win px): they light up from 18:40 and before 06:20
+const HALL_WIN := [[87, 359], [93, 289], [169, 287], [169, 369], [247, 235], [253, 365], [323, 129], [327, 233], [389, 359], [401, 235], [489, 369], [495, 287], [561, 289], [563, 359]]
 ## leaf rows of the canopies (baked by splitting each tree by the prototype's colour rule: g >= r*0.85 and g > b*1.3)
 const TREE_ROWS := {"f_tree2": [2, 247], "f_tree3": [2, 247], "f_bigtree": [2, 307]}
 const LAMP_BAN := Vector2(35, 86)     # where the lamp's banner (q_lamp_ban) sits on q_lamp
@@ -58,8 +63,11 @@ var t_band: Texture2D
 var t_wall: Texture2D
 var near_door = null
 var kind := "town"
-var lights: Node2D
-var cmod: CanvasModulate
+var lit                       # lit.gd: shade, ambient, lights, hall windows, fog (drawLighting)
+var win_sv: SubViewport         # the hall windows drawn apart (LIT.wc): the heroine cut out of them
+var win_draw: Node2D
+var win_cut: Node2D
+var shade                     # shade.gd: sun shadow volumes, cloud shadows, the deep shade under the terraces
 var bg_layer: CanvasLayer
 var bg_node: Node2D
 var front: Node2D
@@ -102,10 +110,14 @@ func _ready() -> void:
 	gr.set_color(0, Color(1, 1, 1, 1))
 	gr.set_color(1, Color(1, 1, 1, 0))
 	light_tex.gradient = gr
-	lights = Node2D.new()
-	add_child(lights)
-	cmod = CanvasModulate.new()
-	arena.add_child(cmod)
+	lit = LIT.new(arena)
+	lit.attach()
+	shade = SHADE.new(arena, self)
+	lit.set_shade(shade)
+	lit.pre_fn = _draw_windows
+	lit.pre.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	lit.post_fn = func(ci): SKY.draw_fog(ci, self, [[G, 0.8], [TTOP, 0.6]])
+	_win_setup()
 	bg_layer = CanvasLayer.new()
 	bg_layer.layer = -10
 	arena.add_child(bg_layer)
@@ -118,7 +130,6 @@ func _ready() -> void:
 	front.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	front.draw.connect(_draw_front)
 	arena.add_child(front)
-	_build_lights()
 	life = LIFE.new(self)
 	bran = BRAN.new(self)
 	folk = TF.of(arena)
@@ -141,7 +152,7 @@ func _ready() -> void:
 	lbl_layer.add_child(labels)
 
 func cleanup() -> void:
-	cmod.queue_free()
+	lit.cleanup()
 	bg_layer.queue_free()
 	front.queue_free()
 	folk_node.queue_free()
@@ -441,47 +452,209 @@ func lantern_at(x: float, surf: float) -> Vector2:
 	return Vector2(x + lx, surf - (im.get_height() - ly))
 
 
-# ---------- lights ----------
-func _add_light(p: Vector2, r: float, col: Color, kind: String) -> void:
-	var l := PointLight2D.new()
-	l.texture = light_tex
-	l.texture_scale = r * 2.2 / 64.0
-	l.color = col
-	l.position = p
-	l.set_meta("kind", kind)
-	l.set_meta("ph", p.x * 0.01)
-	lights.add_child(l)
+# ---------- lights (lightSources, drawLighting: lit.gd / shade.gd) ----------
+## the hall windows' glow: up from 18:40, down by 06:20
+func hall_win() -> float:
+	var hh := fposmod(arena.tod_h, 24.0)
+	return clampf((hh - 18.7) / 0.9, 0.0, 1.0) if hh >= 12.0 else clampf((6.3 - hh) / 0.7, 0.0, 1.0)
 
-func _build_lights() -> void:
-	for lp in lamps:
-		_add_light(lantern_at(lp[0], lp[1]), 150.0, Color8(255, 196, 110), "lamp")
-	# string lights: one small light per bulb; phones get three wider ones per string (each light is a pass)
-	var nb := 3 if arena.low_end else 7
+## a point on a building grown about its door (BM)
+func bm(k: String, x: float, y: float) -> Vector2:
+	for b in bld:
+		if b[0] == k and b.size() > 4 and b[4] != null:
+			var ax: float = b[1] + b[4]
+			return Vector2(ax + (x - ax) * BS, b[2] + (y - b[2]) * BS)
+	return Vector2(x, y)
+
+func win_y0() -> float:
+	return TTOP - (tex["g_hall_win"].get_height() - PK) * BS
+
+func light_sources() -> Array:
+	var L: Array = []
+	var t := Time.get_ticks_msec() / 1000.0
+	for i in lamps.size():
+		var p := lantern_at(lamps[i][0], lamps[i][1])
+		L.append({"k": "lamp", "x": p.x, "y": p.y, "gy": lamps[i][1], "r": 150.0, "a": LIT.fl(t, i), "c": Color8(255, 196, 110)})
 	for s in light_strings:
-		var yy: float = up_y((s[0] + s[1]) / 2.0) + BAND - 10.0
-		for i in nb:
-			var u := (i + 0.5) / nb
-			_add_light(Vector2(s[0] + (s[1] - s[0]) * (0.07 + u * 0.86), yy + 58.0 * (0.55 + sin(u * PI) * 0.3)), 60.0 * (1.5 if nb < 7 else 1.0), Color8(255, 210, 130), "lamp")
-	_add_light(Vector2(4350.0 + 27.0 * PK, G - 20.0), 260.0, Color8(255, 150, 70), "fire")
-	_add_light(Vector2(7443.0, LOWF - 50.0), 200.0, Color8(255, 140, 50), "fire")
-	_add_light(Vector2(HDOOR, TTOP - 60.0), 200.0, Color8(255, 196, 120), "lamp")
-	_add_light(Vector2(HDOOR, LOWF - 90.0), 260.0, Color8(255, 170, 90), "lamp")
+		var yy: float = up_y((s[0] + s[1]) / 2.0) + BAND - 10.0 + 18.0
+		for i in 7:
+			var bu: Array = LIT.BULBS[i]
+			L.append({"k": "bulb", "x": s[0] + (s[1] - s[0]) * bu[0], "y": yy - 18.0 + bu[1], "r": 60.0, "a": 0.8 + 0.2 * sin(t * 3.0 + i * 1.7), "c": Color8(255, 214, 140)})
+	L.append({"k": "fire", "x": 4350.0 + 27.0 * PK, "y": G - 30.0, "gy": G, "r": 230.0, "a": LIT.fl(t, 9) * 1.1, "c": Color8(255, 150, 70)})
+	var fp := bm("g_forge", 7443.0, LOWF - 52.0)        # the forge: a contained glow in the mouth, not a sun
+	L.append({"k": "fire", "x": fp.x, "y": fp.y, "gy": LOWF, "r": 170.0, "a": LIT.fl(t, 4) * 0.5, "c": Color8(255, 140, 60)})
+	L.append({"k": "soft", "x": HDOOR, "y": LOWF - 80.0 * BS, "r": 200.0, "a": 0.7, "c": Color8(200, 230, 255)})
+	# the warm glow at the door you stand by, as big as its building
+	if near_door != null and near_door.has("to"):
+		var dk := 1.0
+		if near_door["name"] == "길드 본관": dk = BS
+		else:
+			for b in bld:
+				if b.size() > 4 and b[4] != null and absf(b[1] + b[4] - near_door["x"]) < 2.0:
+					dk = ks(b[0])
+					break
+		L.append({"k": "soft", "x": near_door["x"], "y": near_door["y"] - 46.0 * dk, "r": 110.0 * dk, "a": 0.85, "c": Color8(255, 200, 130)})
+	var wf := hall_win()
+	if wf > 0.01:
+		var y0 := win_y0()
+		for w in HALL_WIN:
+			L.append({"k": "win", "x": HXB + w[0] * BS, "y": y0 + w[1] * BS, "r": 70.0 * BS, "a": wf * (0.9 + 0.1 * sin(t * 1.3 + w[0])), "c": Color8(255, 200, 120)})
+	return L
+
+## how deep the shade is at each light (cheap geometric test) -> boost: lights read brighter in shade
+func _boost(L: Array, T: Dictionary) -> void:
+	var u := LIT.sun_dir(arena.tod_h)
+	var occ := shade_occluders()
+	for l in L:
+		var sh := 0.0
+		var lx: float = l["x"]
+		var ly: float = l["y"]
+		if lx > SX0 and lx < STX1 + SL and ly > minf(LOWF, up_y(lx) + BAND - 14.0):
+			sh = 0.85            # under the terraces
+		else:
+			for o in occ:
+				var bx: Rect2 = SHADE.box(o)
+				var yb: float = o[2]
+				if ly < bx.position.y or ly > yb + 8.0: continue
+				var rch := (yb - ly) * u.x / u.y
+				if lx > minf(bx.position.x, bx.position.x + rch) and lx < maxf(bx.end.x, bx.end.x + rch):
+					sh = maxf(sh, 0.55 if o[6] else 0.7)
+		l["boost"] = minf(1.25, maxf(T["lamp"], sh * 1.2))
+
+func _light_step(T: Dictionary) -> void:
+	var L := light_sources()
+	_boost(L, T)
+	lit.L = L
+	lit.amb = T["amb"]
+	# the ambient multiplies the sky too (the prototype multiplies the whole canvas)
+	bg_node.modulate = Color(T["amb"].r, T["amb"].g, T["amb"].b, 1.0)
+	shade.update(T, arena.tod_h, L)
+	lit.redraw()
+	_win_step()
+
+## rimLights for the character shader: dimmed by day, plus the sky (sun or moon) as a far light
+func rim_lights() -> Array:
+	var T := tod_now()
+	var nk := clampf((T["sky"].a - 0.33) / 0.33, 0.0, 1.0)
+	var out: Array = lit.rim_lights(0.12 + 0.88 * nk)
+	var h := fposmod(arena.tod_h, 24.0)
+	var day := h >= 6.0 and h < 18.0
+	var u := (h - 6.0) / 12.0 if day else fposmod(h - 18.0, 24.0) / 12.0
+	var ang := PI * (1.0 - u)
+	var P = arena.player
+	var warm := day and (h < 8.5 or h > 16.0)
+	out.append([P.position + Vector2(cos(ang) * 1600.0, -200.0 - sin(ang) * 1400.0), 4000.0, (0.95 if warm else 0.75) if day else 0.6,
+		(Color8(255, 165, 105) if warm else Color8(255, 238, 210)) if day else Color8(150, 175, 255)])
+	return out
+
+## occluders: buildings (not the ring or the anvil), the hall, the trees — [tex, x, y_bottom, sink, flip, scale, tree]
+func shade_occluders() -> Array:
+	var o: Array = []
+	for b in bld:
+		var k: String = b[0]
+		if k == "g_ring" or k == "g_anvil": continue
+		var tx: Texture2D = tex["g_wagon2"] if k == "g_wagon" and tex.has("g_wagon2") else tex[k]
+		o.append([tx, b[1], b[2], b[3], b.size() > 7 and b[7], ks(k), false])
+	o.append([tex["g_hall"], HXB, TTOP, 1.0, false, BS, false])
+	for d in deco_back:
+		if d[0].contains("tree"): o.append([tex[d[0]], d[1], d[2], d[3], d[4], ks(d[0]), true])
+	return o
+
+func shade_props() -> Array:
+	var o: Array = []
+	for d in deco_props:
+		o.append([tex[d[0]], d[1], d[2], 0.0, d.size() > 3 and d[3], ks(d[0]), false])
+	return o
+
+## surfTop: what clouds land on from above
+func surf_top(x: float) -> float:
+	if x < SX0: return G
+	if x < STX1 + SL: return up_y(x) if x < STX1 else G + (LOWF - G) * minf(1.0, (x - STX1) / SL)
+	return LOWF
+
+## cloud shade stops at the terraces' edge: the lower plaza lives in their shade
+func cloud_bottom(x: float) -> float:
+	if x >= SX0 and x <= STX1 + SL: return minf(LOWF, up_y(x) + BAND - 14.0)
+	return G + 380.0
+
+## the lower plaza lives under the terraces: deep shade
+func shade_extra(ci: CanvasItem) -> void:
+	var vr: Rect2 = arena.view_rect()
+	if vr.end.x < SX0 or vr.position.x > STX1 + SL: return
+	var pts := PackedVector2Array([Vector2(SX0, G)])
+	var x := SX0
+	while x <= STX1 + SL:
+		pts.append(Vector2(x, minf(LOWF, up_y(x) + BAND - 14.0)))
+		x += 40.0
+	pts.append(Vector2(STX1 + SL, LOWF + 40.0))
+	pts.append(Vector2(SX0, LOWF + 40.0))
+	ci.draw_colored_polygon(pts, Color(0, 0, 0, 0.55))
+
+## the hall facade's lit windows: drawn into their own small canvas (the facade's size) with someone walking past one now
+## and then, the window glows, and the heroine cut out of it (whoever stands in front of the hall hides them); laid over
+## the world after the ambient at the windows' strength
+func _win_setup() -> void:
+	win_sv = SubViewport.new()
+	win_sv.disable_3d = true
+	win_sv.transparent_bg = true
+	win_sv.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	win_sv.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
+	var k := 0.5 if arena.low_end else 1.0
+	var im: Texture2D = tex["g_hall_win"]
+	win_sv.size = Vector2i(ceili(im.get_width() * BS * k), ceili(im.get_height() * BS * k))
+	lit.add_child(win_sv)
+	win_sv.canvas_transform = Transform2D(0.0, Vector2(k, k), 0.0, -Vector2(HXB, win_y0()) * k)
+	win_draw = Node2D.new()
+	win_draw.draw.connect(_draw_win_canvas)
+	win_sv.add_child(win_draw)
+	win_cut = Node2D.new()
+	var m := ShaderMaterial.new()
+	var sh := Shader.new()
+	sh.code = SHADE.CUT_SH
+	m.shader = sh
+	win_cut.material = m
+	win_cut.draw.connect(func():
+		var P = arena.player
+		if P.visible: P.draw_frame(P.who, P.anim, P.f, P.position, P.dir, Color.WHITE, "", win_cut))
+	win_sv.add_child(win_cut)
+
+func _win_on() -> bool:
+	var vr: Rect2 = arena.view_rect()
+	return hall_win() > 0.01 and HXB + tex["g_hall_win"].get_width() * BS > vr.position.x and HXB < vr.end.x and win_y0() < vr.end.y and TTOP > vr.position.y
+
+func _win_step() -> void:
+	var on := _win_on()
+	win_sv.render_target_update_mode = SubViewport.UPDATE_ALWAYS if on else SubViewport.UPDATE_DISABLED
+	if on:
+		win_draw.queue_redraw()
+		win_cut.queue_redraw()
+
+func _draw_win_canvas() -> void:
+	var im: Texture2D = tex["g_hall_win"]
+	var y0 := win_y0()
+	win_draw.draw_texture_rect(im, Rect2(HXB, y0, im.get_width() * BS, im.get_height() * BS), false)
+	var s2 = life.sil
+	if s2 != null:
+		# the silhouette darkens only the window pixels: the window art itself, tinted brown
+		var u: float = s2["t"] / s2["life"]
+		var wx: float = s2["wx"] + s2["dir"] * (u - 0.5) * 34.0
+		var wy: float = s2["wy"] + 4.0
+		var brown := Color(70.0 / 255.0, 40.0 / 255.0, 25.0 / 255.0, 0.72)
+		for r in [Rect2(wx - 8.0, wy - 4.0, 16.0, 16.0), Rect2(wx - 3.0, wy - 14.0, 6.0, 10.0), Rect2(wx - 5.0, wy - 12.0, 10.0, 6.0)]:
+			win_draw.draw_texture_rect_region(im, Rect2(HXB + r.position.x * BS, y0 + r.position.y * BS, r.size.x * BS, r.size.y * BS), r, brown)
+	for l in lit.L:
+		if l["k"] == "win": LIT.shape(win_draw, l, 1.0)
+
+func _draw_windows(ci: CanvasItem) -> void:
+	if not _win_on(): return
+	var im: Texture2D = tex["g_hall_win"]
+	ci.draw_texture_rect(win_sv.get_texture(), Rect2(HXB, win_y0(), im.get_width() * BS, im.get_height() * BS), false, Color(1, 1, 1, hall_win()))
 
 
 # ---------- step ----------
 func step(dt: float) -> void:
 	var T := tod_now()
-	cmod.color = T["amb"]
-	var tt := Time.get_ticks_msec() / 1000.0
 	var vr: Rect2 = arena.view_rect()
-	for l in lights.get_children():
-		var ph: float = l.get_meta("ph")
-		# only lights whose circle reaches the screen render: each 2D light redraws what it touches, costly on phones
-		l.visible = vr.grow(l.texture_scale * 32.0).has_point(l.position) and T["lamp"] > 0.15
-		if l.get_meta("kind") == "fire":
-			l.energy = 0.6 + 0.6 * T["lamp"] + 0.1 * sin(tt * 7.0 + ph)
-		else:
-			l.energy = 1.1 * T["lamp"] + 0.04 * sin(tt * 5.0 + ph)
 	# doors
 	var P = arena.player
 	near_door = null
@@ -534,6 +707,7 @@ func step(dt: float) -> void:
 			f["vy"] += 0.0009 * dt
 			if f["y"] > f["floor"]: f["t"] = f["life"]
 	tfx = tfx.filter(func(f): return f["t"] < f["life"])
+	_light_step(T)
 	queue_redraw()
 	front.queue_redraw()
 	bg_node.queue_redraw()
@@ -596,10 +770,20 @@ func _draw_bg() -> void:
 	var fo: Texture2D = tex["bg_forest"]
 	_layer(fo, 0.42, G + 2.0 - 242.0 * PXK - cam_y * 0.25, PXK, cam_x, vs)
 	bg_node.draw_rect(Rect2(0, G + 1.0 - cam_y * 0.25, vs.x, vs.y + 400.0), Color8(14, 74, 78))
-	bg_node.draw_rect(Rect2(Vector2.ZERO, vs), Color(0.04, 0.03, 0.09, 0.2 + 0.2 * dim))
+	# far haze: a vertical gradient, light above the forest, heavier toward the ground
+	var hy0 := G - 260.0 - cam_y * 0.25
+	var hy1 := G + 20.0 - cam_y * 0.25
+	var hc := Color(10.0 / 255.0, 8.0 / 255.0, 24.0 / 255.0)
+	var ha0 := 0.18 * dim
+	var ha1 := 0.2 + 0.28 * dim
+	if hy0 > 0.0: bg_node.draw_rect(Rect2(0, 0, vs.x, hy0), Color(hc, ha0))
+	bg_node.draw_polygon(PackedVector2Array([Vector2(0, hy0), Vector2(vs.x, hy0), Vector2(vs.x, hy1), Vector2(0, hy1)]),
+		PackedColorArray([Color(hc, ha0), Color(hc, ha0), Color(hc, ha1), Color(hc, ha1)]))
+	if hy1 < vs.y: bg_node.draw_rect(Rect2(0, hy1, vs.x, vs.y - hy1), Color(hc, ha1))
 	var skc: Color = T["sky"]
 	if skc.a > 0.003:
 		bg_node.draw_rect(Rect2(Vector2.ZERO, vs), skc)
+	SKY.draw_night(bg_node, T, arena.tod_h, cam_x, G - mt.get_height() * PXK - 40.0 - cam_y * 0.12, vs.x)
 
 ## ping-pong tiling (every other tile mirrored)
 func _layer(im: Texture2D, par: float, y: float, k: float, cam_x: float, vs: Vector2) -> void:

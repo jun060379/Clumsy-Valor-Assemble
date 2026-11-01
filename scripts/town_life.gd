@@ -25,6 +25,8 @@ var bird_t := 4000.0
 var rain: Array = []
 var snow: Array = []
 var flies: Array = []        # fireflies (two meadows: the lower plaza / the valley)
+var sil = null               # someone walking past a lit hall window: {wx, wy, t, dir, life} (town.gd draws it)
+var sil_t := 5000.0
 
 
 func _init(tn) -> void:
@@ -66,6 +68,16 @@ func step(dt: float) -> void:
 			town.tfx.append({"k": "leaf", "x": vr.position.x - 40.0 - randf() * 200.0, "y": vr.position.y + 60.0 + randf() * (vr.size.y - 100.0), "vx": 0.12 + randf() * 0.15,
 				"vy": 0.01 + randf() * 0.03, "t": 0.0, "life": 5000.0 + randf() * 2000.0, "ph": randf() * 9.0, "c": Color("#6f8f44") if randf() < 0.5 else Color("#b8a64a")})
 	prev_gust = gust
+	# someone walks past a lit window now and then
+	sil_t -= dt
+	if sil_t <= 0.0:
+		sil_t = 5000.0 + randf() * 7000.0
+		if town.hall_win() > 0.5:
+			var w: Array = town.HALL_WIN[randi() % town.HALL_WIN.size()]
+			sil = {"wx": float(w[0]), "wy": float(w[1]), "t": 0.0, "dir": -1.0 if randf() < 0.5 else 1.0, "life": 2200.0 + randf() * 1200.0}
+	if sil != null:
+		sil["t"] += dt
+		if sil["t"] > sil["life"]: sil = null
 	# landing flattens the grass around you
 	if P.on and not prev_on: land = {"x": P.position.x, "y": P.position.y, "t": t}
 	prev_on = P.on

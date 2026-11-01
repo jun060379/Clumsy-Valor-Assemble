@@ -6,6 +6,7 @@ extends Node2D
 ## Art: assets/hall, 1 art px = 2 world px. The back wall is built from bays (window / plain); anything hung on or set against
 ## the wall gets a plain bay behind it.
 
+const LITS := preload("res://scripts/lit.gd")
 const HD := preload("res://scripts/hall_data.gd")
 const PLASTER := Color(186 / 255.0, 162 / 255.0, 135 / 255.0)
 ## the sky behind the windows: day / dusk / night pictures cross-fade with the hour
@@ -30,14 +31,14 @@ var draft = null
 var px := 0.0
 var near_door = null
 var doors: Array = []
-var lights: Node2D
-var cmod: CanvasModulate
+var lit                       # lit.gd: ambient multiply and the shaped lights (hallLights through lightShape)
+var ldefs: Array = []         # the lights: {k, x, y, gy, r, a, c, ph}
 var front: Node2D
 var lbl_layer: CanvasLayer
 var labels: Node2D
 var glow: Node2D
 var light_tex: GradientTexture2D
-var chand_light: PointLight2D
+var chand_light = null        # the chandelier's light dict (it swings)
 var sun := 0.0
 var wr = null
 var tfx: Array = []
@@ -82,10 +83,8 @@ func _ready() -> void:
 	gr.set_color(0, Color(1, 1, 1, 1))
 	gr.set_color(1, Color(1, 1, 1, 0))
 	light_tex.gradient = gr
-	lights = Node2D.new()
-	add_child(lights)
-	cmod = CanvasModulate.new()
-	arena.add_child(cmod)
+	lit = preload("res://scripts/lit.gd").new(arena)
+	lit.attach()
 	# additive pass: sunlight through the windows, dust motes in it
 	glow = Node2D.new()
 	glow.z_index = 1
@@ -111,7 +110,7 @@ func _ready() -> void:
 	_build_lights()
 
 func cleanup() -> void:
-	cmod.queue_free()
+	lit.cleanup()
 	front.queue_free()
 	lbl_layer.queue_free()
 	queue_free()
@@ -232,16 +231,9 @@ func tod_now() -> Dictionary:
 
 
 # ---------- lights ----------
-func _add_light(p: Vector2, r: float, col: Color, a: float, kind_: String) -> PointLight2D:
-	var l := PointLight2D.new()
-	l.texture = light_tex
-	l.texture_scale = r * 2.2 / 64.0
-	l.color = col
-	l.position = p
-	l.set_meta("kind", kind_)
-	l.set_meta("a", a)
-	l.set_meta("ph", p.x * 0.013)
-	lights.add_child(l)
+func _add_light(p: Vector2, r: float, col: Color, a: float, kind_: String, gy := 0.0) -> Dictionary:
+	var l := {"k": kind_, "x": p.x, "y": p.y, "gy": gy, "r": r, "a0": a, "a": a, "c": col, "ph": float(ldefs.size())}
+	ldefs.append(l)
 	return l
 
 func _build_lights() -> void:
@@ -251,15 +243,20 @@ func _build_lights() -> void:
 		var y := HD.prop_y(p)
 		var w := HW(k)
 		match k:
-			"fire": _add_light(Vector2(x + 96.0, y - 40.0), 240.0, Color8(255, 140, 60), 1.1, "fire")
-			"hearth": _add_light(Vector2(x + 89.0, y - 30.0), 200.0, Color8(255, 140, 60), 1.0, "fire")
+			"fire": _add_light(Vector2(x + 96.0, y - 40.0), 240.0, Color8(255, 140, 60), 1.1, "fire", y)
+			"hearth": _add_light(Vector2(x + 89.0, y - 30.0), 200.0, Color8(255, 140, 60), 1.0, "fire", y)
 			"sconce": _add_light(Vector2(x + w / 2.0, y - HH(k) * 0.7), 120.0, Color8(255, 200, 120), 0.8, "soft")
 			"candela": _add_light(Vector2(x + w / 2.0, y - HH(k) + 14.0), 110.0, Color8(255, 214, 140), 0.75, "soft")
 			"candle": _add_light(Vector2(x + w / 2.0, y - HH(k) + 4.0), 90.0, Color8(255, 214, 140), 0.7, "soft")
 			"door3": _add_light(Vector2(x + w / 2.0, y - 80.0), 100.0, Color8(87, 211, 194), 0.7, "soft")
 	if fl == 0:
-		chand_light = _add_light(Vector2(2020.0, C + 190.0), 330.0, Color8(255, 220, 150), 0.9, "chand")
-	# the windows' daylight glow is drawn in the additive pass (_draw_glow): two dozen more Light2Ds cost too much on the web build
+		chand_light = _add_light(Vector2(2020.0, C + 190.0), 330.0, Color8(255, 220, 150), 0.9, "soft")
+		chand_light["chand"] = true
+	# the windows' daylight glow is drawn in the additive pass (_draw_glow)
+
+## rimLights in the hall: its own lights as they are
+func rim_lights() -> Array:
+	return lit.rim_lights()
 
 func chand_a() -> float:
 	var t := Time.get_ticks_msec() / 1000.0
@@ -341,28 +338,24 @@ func stair_hint() -> bool:
 # ---------- step ----------
 func step(dt: float) -> void:
 	var T := tod_now()
-	cmod.color = T["amb"]
 	var tt := Time.get_ticks_msec() / 1000.0
-	var vr: Rect2 = arena.view_rect()
-	for l in lights.get_children():
-		# only the lights near the screen: every Light2D re-draws the whole hall in the compatibility renderer
-		var rr: float = l.texture_scale * 32.0
-		l.visible = l.position.x + rr > vr.position.x and l.position.x - rr < vr.end.x
-		if not l.visible: continue
-		var ph: float = l.get_meta("ph")
-		var a: float = l.get_meta("a")
-		var kd: String = l.get_meta("kind")
-		var flick := 0.85 + 0.1 * sin(tt * 7.0 + ph) + 0.05 * sin(tt * 19.0 + ph * 3.0)
-		if kd == "fire": l.energy = a * flick * (0.55 + 0.45 * T["lamp"])
-		else: l.energy = a * (flick if kd == "chand" else 1.0) * (0.35 + 0.75 * T["lamp"])
-		if kd == "soft" and draft != null and absf(l.position.x - draft["x"]) < 600.0:
-			var k: float = draft["v"] * (1.0 - absf(l.position.x - draft["x"]) / 600.0)
-			l.energy *= 1.0 - 0.35 * k * (0.5 + 0.5 * sin(tt * 31.0 + l.position.x))
 	if chand_light != null:
 		var ang := chand_a()
 		var pv := C + 24.0 + HH("chain") * 0.6 - HH("chain")
 		var ln := C + 190.0 - pv
-		chand_light.position = Vector2(2020.0 + sin(ang) * ln, pv + cos(ang) * ln)
+		chand_light["x"] = 2020.0 + sin(ang) * ln
+		chand_light["y"] = pv + cos(ang) * ln
+	for l in ldefs:
+		var a0: float = l["a0"]
+		var ph: float = l["ph"]
+		l["a"] = a0 * (LITS.fl(tt, ph) if l["k"] == "fire" or l.has("chand") else 1.0)
+		l["boost"] = T["lamp"]
+		if l["k"] == "soft" and draft != null and absf(l["x"] - draft["x"]) < 600.0:
+			var k: float = draft["v"] * (1.0 - absf(l["x"] - draft["x"]) / 600.0)
+			l["a"] *= 1.0 - 0.35 * k * (0.5 + 0.5 * sin(tt * 31.0 + l["x"]))
+	lit.L = ldefs
+	lit.amb = T["amb"]
+	lit.redraw()
 	var P = arena.player
 	var E = arena.eil
 	var eh: bool = E.here() and E.wait <= 0.0

@@ -220,7 +220,16 @@ func _pix_frame() -> void:
 	var Ls: Array = []
 	var lv = arena.level
 	var P = arena.player
-	if lv != null and lv.get("lights") != null and P != null:
+	if lv != null and lv.has_method("rim_lights") and P != null:
+		# levels drawn by lit.gd hand over their light list: [pos, r, strength, colour]
+		# rimEntity: the three strongest within reach (k = (1 - d/R)^1.3 x a)
+		for l in lv.rim_lights():
+			var d2: float = l[0].distance_to(P.position + Vector2(0, -60))
+			if d2 >= l[1] * 2.2: continue
+			Ls.append([l[0], l[1], l[2], l[3], -pow(1.0 - d2 / (l[1] * 2.2), 1.3) * l[2]])
+		Ls.sort_custom(func(a, b): return a[4] < b[4])
+		Ls.resize(mini(Ls.size(), 3))
+	elif lv != null and lv.get("lights") != null and P != null:
 		for l in lv.lights.get_children():
 			if not (l is PointLight2D) or not l.visible or l.energy <= 0.01 or l.has_meta("player"): continue
 			var r: float = l.texture_scale * 64.0 / 2.2
