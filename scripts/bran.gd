@@ -165,7 +165,8 @@ func greet() -> Array:
 func talk() -> void:
 	talk_t = 2000.0
 	play("talk")
-	# TODO(step 5 · guild system): the prototype gates the forge until Bran has met you through Eilin (FAME.bran)
+	# the forge belongs to the guild: Bran keeps it shut until he has met you through Eilin (fame.gd bran_gate)
+	if arena.fame != null and not arena.fame.bran_gate(): return
 	arena.open_dialog("bran", POR, "브랜", "길드 대장장이", greet(), func():
 		talk_t = 600.0
 		# TODO forge menu: 장비를 맡기고 싶어요 (forge / gear screen) · 잡담한다 (CHAT / CHAT_C) · 그만 가볼게요 ('또 오십쇼. 필요하면요. 흐흐.')

@@ -17,6 +17,7 @@ const WEATHERS := ["clear", "rain", "snow"]
 const SETTINGS := preload("res://scripts/settings.gd")
 const FATIGUE := preload("res://scripts/fatigue.gd")
 const UIROOT := preload("res://scripts/ui_root.gd")
+const FAME := preload("res://scripts/fame.gd")
 const WAVES := [["goblin", "goblin", "eye"], ["mush", "goblin", "goblin"], ["mush", "mush", "eye", "goblin"], ["skel", "goblin", "eye", "mush"], ["skel", "skel", "eye", "eye", "goblin"]]
 
 const H := 500.0
@@ -72,6 +73,7 @@ var fatigue                   # fatigue.gd: 피로도 160, +1 / 6 min (nothing s
 var ambient := true           # 환경음 (no ambient sound yet)
 var screen_fx := true         # 화면 효과 (no post effects yet)
 var ui_root                   # ui_root.gd: title, top-right buttons, main menu, transitions
+var fame                      # fame.gd: guild fame, quests, adventurer level, the guild / adventure books' data, cut-ins
 
 var t_sky: Texture2D = preload("res://assets/bg/bg_sky.png")
 var t_mtn: Texture2D = preload("res://assets/bg/bg_mountains.png")
@@ -163,6 +165,10 @@ func _ready() -> void:
 	tc.set_script(TOUCH)
 	tc.arena = self
 	ui.add_child(tc)
+	fame = Node.new()
+	fame.set_script(FAME)
+	fame.arena = self
+	add_child(fame)
 	var ui2 := CanvasLayer.new()
 	ui2.layer = 5
 	add_child(ui2)
@@ -394,6 +400,8 @@ func platform_under(p: Vector2):
 func _process(delta: float) -> void:
 	if ui_root != null and ui_root.holds():
 		return            # the world holds still under the title, a menu page or a transition
+	if fame != null and fame.holds():
+		return            # …and under the rank cut and the guild's title cards
 	var dt := minf(delta * 1000.0, 50.0)
 	if witch > 0.0:
 		witch -= dt

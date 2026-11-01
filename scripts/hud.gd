@@ -158,7 +158,8 @@ func _objective() -> String:
 		return "버섯 동굴 · 남은 적 %d" % n
 	if lk == "":
 		return "허수아비 부수기"
-	return ""                    # PLACEHOLDER: town / hall objectives come with the guild quests
+	if arena.fame != null: return arena.fame.fame_obj()     # fameObj: letters, reports, the trial
+	return ""
 
 func _tc() -> Color:
 	return UI.col(arena.player.who)

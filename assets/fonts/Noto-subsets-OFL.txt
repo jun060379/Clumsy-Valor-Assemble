@@ -1,0 +1,3 @@
+FameSymbols.otf: a few symbols (✓ › ‹ Ⅰ–Ⅳ █ ▓ ▒ ░ ╳ → ⚠ × ▼ ▲) subset from Noto Sans CJK KR Bold.
+NotoSerifKR-Black-sub.otf: Noto Serif CJK KR Black, subset to ASCII, Hangul KS X 1001 (2350 syllables), jamo and a few punctuation marks.
+Both Noto fonts: Copyright Google / Adobe, SIL Open Font License 1.1 (same terms as BlackHanSans-OFL.txt).

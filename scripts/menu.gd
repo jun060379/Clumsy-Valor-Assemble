@@ -5,6 +5,7 @@ extends Control
 
 const UI := preload("res://scripts/ui_kit.gd")
 const OPTIONS := preload("res://scripts/options.gd")
+const BOOK := preload("res://scripts/fame_book.gd")
 const ICON := {
 	"fs": preload("res://assets/ui/icons/tb_fs.svg"), "gbk": preload("res://assets/ui/icons/tb_gbk.svg"), "abk": preload("res://assets/ui/icons/tb_abk.svg"),
 	"pty": preload("res://assets/ui/icons/tb_pty.svg"), "cxb": preload("res://assets/ui/icons/tb_cxb.svg"), "bgb": preload("res://assets/ui/icons/tb_bgb.svg"),
@@ -31,6 +32,7 @@ var ui_root
 var page := ""                  # "" / hub / opts / help / a PAGE key
 var from_hub := false
 var opts
+var book                        # fame_book.gd: the 길드 수첩 / 모험 수첩 pages (gbk / abk)
 var art_sil: Control
 var art: Control
 var fg: Control
@@ -75,6 +77,12 @@ func _ready() -> void:
 	opts.menu = self
 	add_child(opts)
 	opts.visible = false
+	book = Control.new()
+	book.set_script(BOOK)
+	book.menu = self
+	book.arena = arena
+	book.fame = arena.fame
+	add_child(book)
 
 func _layer(solid: bool) -> Control:
 	var c := Control.new()
@@ -173,6 +181,8 @@ func _input(ev: InputEvent) -> void:
 		return
 	if page == "opts" or page == "help":
 		return                   # options.gd takes it
+	if page == "gbk" or page == "abk":
+		return                   # fame_book.gd takes it
 	var tap := _tap(ev)
 	var key := _key(ev)
 	if page == "hub":
@@ -620,3 +630,13 @@ func _draw_page_fg(ci: CanvasItem, vs: Vector2) -> void:
 		UI.para(ci, c.x - lw / 2.0 - 14.0, c.y + 62.0, lw + 28.0, 24, 4.0, Color(0, 0, 0, a))
 		ci.draw_string(UI.noto(), Vector2(c.x - lw / 2.0, c.y + 79.0), line, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1, 1, 1, a))
 	close_rect = _draw_close(ci, vs, col)
+
+
+## fameOpen / advOpen: a book on a given tab (from Eilin, the rank cut, ...)
+func open_book(b: String, tb := "") -> void:
+	if tb != "": book.set_tab(b, tb)
+	if page == "gbk" or page == "abk":
+		page = b
+		return
+	if page != "": return
+	open_page(b)

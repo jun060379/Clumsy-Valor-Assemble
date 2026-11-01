@@ -404,12 +404,26 @@ func door_near(P) -> Variant:
 
 func talk() -> void:
 	talk_t = 999999.0
+	var F = arena.fame
+	if F != null: F.finc("eil")
 	if spot == "counter":
-		# TODO(step 5 · guild system): eilWork — quest report / guild notebook (FQ, FAME) / adventure notebook menu goes here.
+		if F != null:
+			F.eil_work()      # eilWork: quest report / review letter / the two books (fame.gd)
+			return
 		arena.open_dialog("eilin", POR, "에일린", "길드 접수원", [EIL_WORK_HI[randi() % EIL_WORK_HI.size()]], func():
 			talk_t = 0.0
 			greet_cd = 6000.0)
 	elif spot == "table":
+		if F != null:
+			arena.dlg.ask("eilin", POR, "에일린", "길드 접수원", ["아, 앗…! 지금은 식사 중인데…"], [
+				["길드 용건이에요", func():
+					talk_t = 0.0
+					lunch_cut = true
+					F.eil_work(["…네! 바로 볼게요.", "(에일린이 수저를 내려놓고 서류를 집어 든다)", "말씀하세요. 어떤 용건이세요?"])],
+				["나중에 올게요", func():
+					talk_t = 0.0
+					say("천천히 다녀오세요!", 1800.0)]])
+			return
 		arena.open_dialog("eilin", POR, "에일린", "길드 접수원", ["아, 앗…! 지금은 식사 중인데…"], func():
 			talk_t = 0.0
 			say("천천히 다녀오세요!", 1800.0))
@@ -425,3 +439,10 @@ func desk_away() -> String:
 		"living": return "퇴근하셨어요. 리빙 룸에 계신 것 같아요."
 		"room": return "주무시는 시간이에요."
 	return "자리를 비웠어요."
+
+## hEilUpd's rank check: at the desk she stamps and congratulates when the guild goes up a rank
+func on_rank_up() -> void:
+	if at_desk():
+		play("stamp", "stamp")
+		say("승급 축하드려요! 길드가 한 단계 컸네요.", 3600.0)
+		arena.sfx("guard", 0.4)
