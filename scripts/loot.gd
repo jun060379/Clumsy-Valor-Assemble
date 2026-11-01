@@ -253,7 +253,7 @@ func _collect(o: Dictionary) -> void:
 		"gear": runes.gearbag.append(o["v"])
 	got.append({"kind": o["kind"], "v": o["v"]})
 	runes.changed()
-	arena.sfx("step", 0.25)
+	arena.loot_tink()           # lootGet: the tink
 
 ## lootTownGate: true = the town door stays shut for now
 func town_gate() -> bool:

@@ -98,6 +98,7 @@ var sortie                    # sortie.gd: dungeon select, band sweeps, entry da
 var ult                       # ult.gd: 기력 gauges, the ult moves and their world effects
 var save                      # save_game.gd: user://save.json
 var hit_by := ""              # who a delayed hit (Luce's light) belongs to, for its element
+var last_e := {}              # the last elemDamage result, so damage_text can split a hybrid hit per element
 
 var fx_layer: Node2D
 var pfx                       # pfx.gd: the pixel-art effects (swings, hits, tells, rifts, Luce's light, dodge afterimages)
@@ -107,6 +108,8 @@ var flash_rect: ColorRect
 func _ready() -> void:
 	RenderingServer.set_default_clear_color(Color("#0d0b10"))
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	fit_view()
+	get_tree().root.size_changed.connect(fit_view)
 	setup_input()
 	cfg = SETTINGS.new(self)
 	cfg.apply_keys()
@@ -142,6 +145,9 @@ func _ready() -> void:
 	ghost.arena = self
 	ghost.visible = false
 	add_child(ghost)
+	shadow_node = Node2D.new()
+	shadow_node.draw.connect(_draw_shadow)
+	add_child(shadow_node)
 	player = Node2D.new()
 	player.set_script(PLAYER)
 	player.arena = self
@@ -154,6 +160,18 @@ func _ready() -> void:
 	fx_layer.z_index = 10
 	fx_layer.draw.connect(_draw_fx)
 	add_child(fx_layer)
+	# Aida's rift sigil: the diamonds glow additively ('lighter'), the eye, range ring, thread and landing mark draw normally
+	sigil_add = Node2D.new()
+	sigil_add.z_index = 10
+	var am := CanvasItemMaterial.new()
+	am.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	sigil_add.material = am
+	sigil_add.draw.connect(_draw_sigil_add)
+	add_child(sigil_add)
+	sigil_top = Node2D.new()
+	sigil_top.z_index = 10
+	sigil_top.draw.connect(_draw_sigil_top)
+	add_child(sigil_top)
 	pfx = Node2D.new()
 	pfx.set_script(PFX)
 	pfx.arena = self
@@ -161,8 +179,8 @@ func _ready() -> void:
 	cam = Camera2D.new()
 	cam.limit_left = 0
 	cam.limit_right = int(world_w)
-	cam.limit_top = 0
-	cam.limit_bottom = int(H)
+	cam.limit_top = -100000
+	cam.limit_bottom = 100000
 	add_child(cam)
 	cam.position = player.position
 	cam.make_current()
@@ -183,6 +201,15 @@ func _ready() -> void:
 	fade_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	fade_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	ui.add_child(fade_rect)
+	# parryWord sits over the HUD (z-index 92 over the page)
+	var pl3 := CanvasLayer.new()
+	pl3.layer = 3
+	add_child(pl3)
+	pryw_node = Control.new()
+	pryw_node.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pryw_node.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pryw_node.draw.connect(_draw_pryw)
+	pl3.add_child(pryw_node)
 	var hud := Control.new()
 	hud.set_script(HUD)
 	hud.arena = self
@@ -305,6 +332,7 @@ func ucut():
 func elem_hit(p: Vector2, base: float, defs: Array) -> float:
 	var who: String = hit_by if hit_by != "" else player.who
 	var E: Dictionary = ELEM.damage(base, who, defs)
+	last_e = E
 	ELEM.tag(self, p, E["mul"])
 	ult_gain(E["dmg"] * 0.7)
 	post_ca(0.003 + E["dmg"] * 0.0002)
@@ -414,21 +442,68 @@ func view_rect() -> Rect2:
 	var c := cam.get_screen_center_position()
 	return Rect2(c - vs / 2.0, vs)
 
+## enterScene's camera: cam = P.x - VW/2 (no lead), camY by scene (town: (P.y - GROUND) * 0.9 within -720..320)
 func snap_camera() -> void:
 	cam.limit_right = int(world_w)
-	cam.limit_top = int(ceil_y + 100.0) if level != null else 0
-	cam.limit_bottom = int(H) if level == null else 100000
-	cam.position = Vector2(player.position.x, cam_y_target())
+	cam.limit_top = -100000            # the vertical framing is the prototype's camY rule below, not a hard limit
+	cam.limit_bottom = 100000
+	var vw := get_viewport_rect().size.x
+	cam.position = Vector2(clampf(player.position.x, vw / 2.0, maxf(vw / 2.0, world_w - vw / 2.0)), cam_y_target(true))
 	cam.reset_smoothing()
 
-func cam_y_target() -> float:
-	if level == null:
-		return H / 2.0
-	if level.kind == "hall":
-		return H / 2.0 + (-90.0 if player.position.y < ground_y - 120.0 else 0.0)
-	if level.kind == "town":
-		return clampf(player.position.y - 110.0, level.TTOP - 460.0 + H / 2.0, level.LOWF + 120.0 - H / 2.0)
-	return clampf(player.position.y - 110.0, ceil_y + 100.0 + H / 2.0, ground_y + 70.0 - H / 2.0)
+func cam_x_target() -> float:
+	var vw := get_viewport_rect().size.x
+	var x: float = player.cam_focus["x"] if player.cam_focus["t"] > 0.0 else player.position.x + player.dir * 70.0
+	return clampf(x, vw / 2.0, maxf(vw / 2.0, world_w - vw / 2.0))
+
+## the ground shadow: rgba(0,0,0,.25), 34 x 6, narrowing with height (to 0.4 at 240 px up) on the floor below her
+var shadow_node: Node2D
+func shadow_y() -> float:
+	var P = player
+	var x: float = P.position.x
+	var y: float = P.position.y
+	var shy := ground_y
+	if level != null and level.kind == "town":
+		shy = level.terr_y(x)
+		for p in level.tpl:
+			if x >= p.x0 - 8.0 and x <= p.x1 + 8.0:
+				var py: float = level.plat_y(p, x)
+				if py >= y - 2.0 and py < shy: shy = py
+		return shy
+	for pl in platforms:
+		if x > pl.x - 2.0 and x < pl.x + pl.w + 2.0 and pl.y >= y - 2.0 and pl.y < shy: shy = pl.y
+	if P.on and y < shy: shy = y          # standing on something else (a ramp, the hall landing, raised rock): at her feet
+	return shy
+
+func shadow_rx(shy: float) -> float:
+	return 34.0 * maxf(0.4, 1.0 - (shy - player.position.y) / 400.0)
+
+func _draw_shadow() -> void:
+	if player == null or not player.visible: return
+	var shy := shadow_y()
+	var rx := shadow_rx(shy)
+	shadow_node.draw_set_transform(Vector2(player.position.x, shy), 0.0, Vector2(1.0, 6.0 / rx))
+	shadow_node.draw_circle(Vector2.ZERO, rx, Color(0, 0, 0, 0.25))
+	shadow_node.draw_set_transform(Vector2.ZERO)
+
+## the prototype's camY (screen top in world y; ZM() is 1 everywhere): town camTY((P.y - GROUND) x 1.05 below / 0.9 above,
+## -720..340; 320 on entry), the hall -90 when she is up on the gallery, the cave P.y - GROUND + 150 within
+## -(top + 40)..0, the training ground 0. Returned as the camera's centre.
+func cam_y_top(snap := false) -> float:
+	var P = player
+	var d: float = P.position.y - ground_y
+	if level == null: return 0.0
+	match String(level.kind):
+		"town":
+			return clampf(d * 0.9, -720.0, 320.0) if snap else clampf(d * (1.05 if d > 0.0 else 0.9), -720.0, 340.0)
+		"hall":
+			return -90.0 if P.position.y < ground_y - 120.0 else 0.0
+		"dungeon":
+			return 0.0 if snap else clampf(d + 150.0, -(float(level.tpl["top"]) + 40.0), 0.0)
+	return 0.0
+
+func cam_y_target(snap := false) -> float:
+	return cam_y_top(snap) + get_viewport_rect().size.y / 2.0
 
 ## black out, run cb, come back
 func fade_then(cb: Callable) -> void:
@@ -546,7 +621,22 @@ func platform_under(p: Vector2):
 	return null
 
 
+## setAspect / fit: the view is always 500 world px tall and as wide as the screen's shape, clamped to 1.6..2.4
+## (outside that it letterboxes); never wider or taller than the prototype's
+static func view_w(win: Vector2) -> int:
+	return roundi(H * clampf(win.x / maxf(1.0, win.y), 1.6, 2.4))
+
+func fit_view() -> void:
+	var r := get_tree().root
+	var win := Vector2(r.size)
+	if win.x < 1.0 or win.y < 1.0: return
+	r.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_KEEP
+	r.content_scale_size = Vector2i(view_w(win), int(H))
+
 func _process(delta: float) -> void:
+	if pryw_t0 >= 0.0:
+		pryw_node.queue_redraw()          # on its own real-time clock, even while the world holds
+		if Time.get_ticks_msec() - pryw_t0 > 700.0: pryw_t0 = -1.0
 	if ui_root != null and ui_root.holds():
 		return            # the world holds still under the title, a menu page or a transition
 	if fame != null and fame.holds():
@@ -636,14 +726,18 @@ func _process(delta: float) -> void:
 	if flash > 0.0: flash = maxf(0.0, flash - dt * 0.004)
 	flash_rect.color.a = flash
 	# camera: follow the feet horizontally, fixed height (the room is one screen tall)
-	var target := Vector2(player.position.x, cam_y_target())
-	if player.cam_focus["t"] > 0.0:
-		target.x = player.cam_focus["x"]
-	cam.position.x = lerpf(cam.position.x, target.x, minf(1.0, dt / 90.0))
+	# camera: a lead of 70 px in the facing direction; CAMF (a tag-in's focus) whips over at 16/45 instead of 16/90
+	var vw := get_viewport_rect().size.x
+	var camf: bool = player.cam_focus["t"] > 0.0
+	var target := Vector2(cam_x_target(), cam_y_target())
+	cam.position.x = clampf(lerpf(cam.position.x, target.x, minf(1.0, (16.0 / 45.0 if camf else 16.0 / 90.0) * (dt / 16.0))), vw / 2.0, maxf(vw / 2.0, world_w - vw / 2.0))
 	cam.position.y = lerpf(cam.position.y, target.y, minf(1.0, dt / 140.0))
 	cam.offset = Vector2(randf_range(-1, 1) * shake_amt * 0.6 + shake_dir * shake_amt * 0.3, randf_range(-1, 1) * shake_amt * 0.4)
 	queue_redraw()
 	fx_layer.queue_redraw()
+	shadow_node.queue_redraw()
+	sigil_add.queue_redraw()
+	sigil_top.queue_redraw()
 
 
 # ---------- background & ground ----------
@@ -667,8 +761,100 @@ func sfx(n: String, vol := 1.0) -> void:
 	best.pitch_scale = 0.62 if witch > 0.0 else 1.0
 	best.play()
 
-func text(p: Vector2, s: String, col: Color) -> void:
-	fx.append({"k": "say", "x": p.x, "y": p.y, "s": s, "col": col, "t": 0.0, "life": 900.0})
+## text(): floating text, 600 ms. Numbers pop as tilted condensed italics (H2.txt), words sit on a small black tag.
+## Pickup words (실링 / 기억석 / 룬 · / 장비) go to the notice feed with a GET tag instead of floating over the world.
+const PICKUP_RE := "^(실링|기억석|룬 · |장비)"
+static var _pick_re: RegEx
+func text(p: Vector2, s: String, col: Color, ic := "") -> void:
+	if _pick_re == null: _pick_re = RegEx.create_from_string(PICKUP_RE)
+	if _pick_re.search(s) != null and fame != null:
+		fame.notice(s, "GET", col)
+		return
+	fx.append({"k": "txt", "x": p.x, "y": p.y, "s": s, "col": col, "ic": ic, "t": 0.0, "life": 600.0})
+
+## H2.txt's rule: a number is anything starting with a digit (after a sign); "!" or 치명 makes it the big crit slab
+static func txt_num(s: String) -> bool:
+	var i := 1 if s.begins_with("-") or s.begins_with("+") else 0
+	return s.length() > i and s.unicode_at(i) >= 48 and s.unicode_at(i) <= 57
+
+static func txt_big(s: String) -> bool:
+	return s.contains("!") or s.contains("치명")
+
+## Anton with the browser's synthetic italic (Skia skews by 1/4)
+var _anton_i: FontVariation
+func anton_italic() -> Font:
+	if _anton_i == null:
+		_anton_i = FontVariation.new()
+		_anton_i.base_font = font_anton
+		_anton_i.fallbacks = [font_black]
+		_anton_i.variation_transform = Transform2D(Vector2(1, 0), Vector2(0.25, 1), Vector2.ZERO)
+	return _anton_i
+
+## parryWord: a huge hollow "PARRY" across the screen, cut on and off on a hard timeline (ms, visible?)
+const PRYW_CUTS := [[0, 1], [50, 0], [90, 1], [140, 0], [170, 1], [520, 0], [560, 1], [600, 0]]
+var pryw_t0 := -1.0           # real-time ms when it started (setTimeout clock: hitstop and slow time don't touch it)
+func parry_word() -> void:
+	pryw_t0 = Time.get_ticks_msec()
+	if pryw_node != null: pryw_node.queue_redraw()
+
+static func pryw_visible(ms: float) -> bool:
+	if ms < 0.0 or ms >= 620.0: return false
+	var v := 0
+	for c in PRYW_CUTS:
+		if ms >= c[0]: v = c[1]
+	return v == 1
+
+var pryw_node: Control
+func _draw_pryw() -> void:
+	var ms := Time.get_ticks_msec() - pryw_t0 if pryw_t0 >= 0.0 else -1.0
+	if not pryw_visible(ms): return
+	var vs := pryw_node.get_viewport_rect().size
+	var fs := int(floor(minf(vs.y * 0.4, vs.x * 0.9 / 5.0)))
+	var fnt: Font = font_anton             # outlines ignore a FontVariation's slant: skew the canvas instead (1/4, like Skia)
+	var sp := fs * 0.02                       # letter-spacing .02em (after every letter, the last one too)
+	var s := "PARRY"
+	var w := 0.0
+	for ch in s: w += fnt.get_string_size(ch, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + sp
+	var base := vs.y / 2.0 + (fnt.get_ascent(fs) - fnt.get_descent(fs)) / 2.0
+	var x := vs.x / 2.0 - w / 2.0
+	pryw_node.draw_set_transform_matrix(Transform2D(Vector2(1, 0), Vector2(-0.25, 1), Vector2(base * 0.25, 0)))
+	for ch in s:
+		# -webkit-text-stroke 1.5px #fff over a transparent fill: only the outline
+		pryw_node.draw_string_outline(fnt, Vector2(x, base), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 2, Color.WHITE)
+		x += fnt.get_string_size(ch, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + sp
+	pryw_node.draw_set_transform_matrix(Transform2D.IDENTITY)
+
+## lootGet's tink: a triangle at 1.4-1.9 kHz, 5 ms up to 0.06, gone by 120 ms
+static var _tinks: Array = []
+func loot_tink() -> void:
+	if _tinks.is_empty():
+		var rate := 22050
+		for v in 6:
+			var f0 := 1400.0 + v * 100.0
+			var n := int(rate * 0.14)
+			var data := PackedByteArray()
+			data.resize(n * 2)
+			var ph := 0.0
+			for i in n:
+				var tt := float(i) / rate
+				ph += f0 / rate
+				var tri := 4.0 * absf(fmod(ph, 1.0) - 0.5) - 1.0
+				var env := 0.0001 * pow(600.0, tt / 0.005) if tt < 0.005 else (0.06 * pow(0.0001 / 0.06, (tt - 0.005) / 0.115) if tt < 0.12 else 0.0)
+				data.encode_s16(i * 2, int(clampf(tri * env, -1.0, 1.0) * 32767.0))
+			var w := AudioStreamWAV.new()
+			w.format = AudioStreamWAV.FORMAT_16_BITS
+			w.mix_rate = rate
+			w.data = data
+			_tinks.append(w)
+	var best = sfx_pool[0]
+	for ap in sfx_pool:
+		if not ap.playing:
+			best = ap
+			break
+	best.stream = _tinks[randi() % _tinks.size()]
+	best.volume_db = 0.0
+	best.pitch_scale = 1.0
+	best.play()
 
 
 # ---------- monsters ----------
@@ -732,7 +918,7 @@ func perfect_dodge() -> void:
 	witch_max = 1500.0
 	player.charges = mini(2, player.charges + 1)
 	player.inv = maxf(player.inv, 400.0)
-	big_word("극한 회피!", Color("#bfe8ff"), 900.0, Vector2(0, -170))
+	text(player.position + Vector2(0, -170.0 * player.CSCALE), "극한 회피!", Color("#bfe8ff"))
 	flash = maxf(flash, 0.16)
 	post_wave(player.position + Vector2(0, -60.0 * 1.3), 1.4, 600.0, 0.3)
 	post_ca(0.02)
@@ -749,7 +935,8 @@ func parry_fx(P, _m) -> void:
 	spark(P.position + Vector2(d * 40.0 * 1.3, -70.0 * 1.3), 18)
 	streak_fx(P.position.x + d * 20.0 * 1.3, P.position.x + d * 150.0 * 1.3, P.position.y - 70.0 * 1.3, d)
 	ring(P.position + Vector2(d * 55.0 * 1.3, -70.0 * 1.3), 30.0)
-	big_word("PARRY", Color("#ffd34d"), 700.0, Vector2(0, -150))
+	text(P.position + Vector2(0, -130.0 * P.CSCALE), "PARRY!", Color("#ffd34d"))
+	parry_word()                  # runeEv('parry') -> parryWord: every parry
 	post_wave(P.position + Vector2(d * 50.0 * 1.3, -70.0 * 1.3), 1.1, 480.0, 0.22)
 	post_ca(0.012)
 
@@ -802,8 +989,27 @@ func slash_mark(p: Vector2, ang: float, big: float) -> void:
 	fx.append({"k": "smark", "x": p.x, "y": p.y, "ang": deg_to_rad(ang) + (PI if player.dir < 0 else 0.0), "big": big, "c": player.who, "t": 0.0, "life": 220.0})
 	fx.append({"k": "burst", "x": p.x, "y": p.y, "big": big, "c": player.who, "t": 0.0, "life": 260.0})
 
-func damage_text(p: Vector2, value: int, big: bool) -> void:
-	fx.append({"k": "txt", "x": p.x + randf_range(-10, 10), "y": p.y, "s": str(value), "big": big, "t": 0.0, "life": 600.0})
+## dmgText: one number in its colour (weak #ffd34d / resist #aab / the target's own) with the element icon; a hybrid hit
+## splits into one number per element, 44 px apart, every other one 6 px lower, each in ELC (weak / resist override)
+func damage_text(p: Vector2, value: int, _big := false, col := Color("#ffd1e6")) -> void:
+	var E: Dictionary = last_e if not last_e.is_empty() and roundi(last_e["dmg"]) == value else {"dmg": value, "mul": 1.0, "parts": [{"el": "", "dmg": value, "mul": 1.0}]}
+	last_e = {}
+	damage_text_e(p, E, col)
+
+## dmgText(x, y, E, col) itself
+func damage_text_e(p: Vector2, E: Dictionary, col: Color) -> void:
+	var value := roundi(E["dmg"])
+	var parts: Array = E["parts"]
+	if parts.size() < 2:
+		var m: float = E["mul"]
+		text(p, "-%d" % value, Color("#ffd34d") if m >= 1.3 else (Color("#aaaabb") if m <= 0.6 else col), String(parts[0]["el"]))
+		return
+	var n := parts.size()
+	for i in n:
+		var q: Dictionary = parts[i]
+		var m2: float = q["mul"]
+		var c2: Color = Color("#ffd34d") if m2 >= 1.3 else (Color("#8f97a8") if m2 <= 0.6 else ELEM.ELC.get(q["el"], col))
+		text(p + Vector2((i - (n - 1) / 2.0) * 44.0, (i % 2) * 6.0), "-%d" % roundi(q["dmg"]), c2, String(q["el"]))
 
 func charge_fx(_p: Vector2, _t: float, _col := Color.WHITE) -> void:
 	pfx.charge(player)          # pfxCharge: motes streak in to the hilt, the glint grows
@@ -902,12 +1108,116 @@ func _draw_luce() -> void:
 			var ang := atan2(f["vy"], f["vx"]) if Vector2(f["vx"], f["vy"]).length() > 0.01 else (0.0 if f["d"] > 0 else PI)
 			PFX.luce_bolt(fx_layer, f["t"], f["x"], f["y"], ang, f["sz"], null if hold > 0.0 else f["tr"], ap)
 		# the pillar and the lightning are pfx.gd's (pfxPillar / pfxBolt)
-	# Aida's rift sigil while aiming
-	if mark_pos != Vector2.INF:
-		var tt := Time.get_ticks_msec() / 1000.0
-		fx_layer.draw_arc(mark_pos + Vector2(0, -40), 26.0, tt * 3.0, tt * 3.0 + TAU * 0.8, 24, Color(0.75, 0.55, 1.0, 0.9), 3.0)
-		fx_layer.draw_arc(mark_pos + Vector2(0, -40), 16.0, -tt * 4.0, -tt * 4.0 + TAU * 0.6, 18, Color(0.95, 0.85, 1.0, 0.9), 2.0)
-		fx_layer.draw_line(player.position + Vector2(0, -60), mark_pos + Vector2(0, -40), Color(0.75, 0.55, 1.0, 0.35), 2.0)
+
+## the sigil shows while she aims (P.anim mark / amark); t = P.t / 1000, k = (P.t / 500) % 1
+var sigil_add: Node2D
+var sigil_top: Node2D
+func sigil_on() -> bool:
+	return mark_pos != Vector2.INF and player != null and player.anim in ["mark", "amark"]
+
+static func _dia(ci: CanvasItem, c: Vector2, r: float, rot: float, col: Color, w: float) -> void:
+	var pts := PackedVector2Array()
+	for v in [Vector2(0, -r), Vector2(r, 0), Vector2(0, r), Vector2(-r, 0), Vector2(0, -r)]:
+		pts.append(c + v.rotated(rot))
+	ci.draw_polyline(pts, col, w, true)
+
+## a dashed path along points (closed or not), pattern [on, off] in px
+static func _dashed(ci: CanvasItem, pts: PackedVector2Array, on: float, off: float, col: Color, w: float) -> void:
+	var acc := 0.0
+	var draw_on := true
+	var seg := PackedVector2Array([pts[0]])
+	for i in range(1, pts.size()):
+		var a := pts[i - 1]
+		var b := pts[i]
+		var L := a.distance_to(b)
+		var u := 0.0
+		while u < L:
+			var lim := (on if draw_on else off) - acc
+			var step := minf(lim, L - u)
+			u += step
+			acc += step
+			var p := a.lerp(b, u / L)
+			if draw_on: seg.append(p)
+			if acc >= (on if draw_on else off) - 0.001:
+				if draw_on and seg.size() > 1: ci.draw_polyline(seg, col, w, true)
+				draw_on = not draw_on
+				acc = 0.0
+				seg = PackedVector2Array([p])
+	if draw_on and seg.size() > 1: ci.draw_polyline(seg, col, w, true)
+
+static func _ellipse_pts(c: Vector2, rx: float, ry: float, n: int) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	for i in n + 1:
+		var a := TAU * i / n
+		pts.append(c + Vector2(cos(a) * rx, sin(a) * ry))
+	return pts
+
+func _draw_sigil_add() -> void:
+	if not sigil_on(): return
+	var t: float = player.t / 1000.0
+	var k: float = fmod(player.t / 500.0, 1.0)
+	var g := mark_pos + Vector2(0, -30)
+	var ds := [[22.0, t * 2.2, Color8(201, 166, 255), 0.9, 2.0], [14.0, -t * 3.1 + 0.78, Color8(230, 210, 255), 0.9, 1.5], [30.0 + k * 10.0, t * 0.8, Color8(150, 90, 255), 0.5 - k * 0.5, 1.5]]
+	# shadowBlur 14 in rgba(140,80,255): soft wide passes under each stroke
+	for d in ds:
+		for gw in [[12.0, 0.04], [7.0, 0.07], [3.5, 0.11]]:
+			_dia(sigil_add, g, d[0], d[1], Color(Color8(140, 80, 255), gw[1] * d[3] / 0.9), d[4] + gw[0])
+	for d in ds:
+		_dia(sigil_add, g, d[0], d[1], Color(d[2], d[3]), d[4])
+
+func _draw_sigil_top() -> void:
+	if not sigil_on(): return
+	var P = player
+	var t: float = P.t / 1000.0
+	# the 400 px reach, dashed 6 / 8
+	_dashed(sigil_top, _ellipse_pts(P.position, 400.0, 400.0, 180), 6.0, 8.0, Color(Color8(201, 166, 255), 0.25), 1.5)
+	# the thread from her chest to the sigil
+	sigil_top.draw_line(P.position + Vector2(0, -60.0 * P.CSCALE), mark_pos + Vector2(0, -30), Color(Color8(201, 166, 255), 0.35), 1.0, true)
+	# the dark eye and its pulsing pupil
+	var g := mark_pos + Vector2(0, -30)
+	sigil_top.draw_circle(g, 6.0, Color("#190f23"))
+	sigil_top.draw_circle(g, 2.2 + sin(t * 9.0) * 0.8, Color("#e6d2ff"))
+	# the landing mark on the floor, dashed 4 / 5 at 0.6
+	_dashed(sigil_top, _ellipse_pts(mark_pos, 26.0, 8.0, 48), 4.0, 5.0, Color(Color("#c9a6ff"), 0.6), 1.5)
+
+func _draw_txt(e: Dictionary, k: float) -> void:
+	var ci := fx_layer
+	var s: String = e["s"]
+	var y: float = e["y"] - k * 28.0
+	var al := 1.0 - (k - 0.7) / 0.3 if k > 0.7 else 1.0
+	var col: Color = e["col"]
+	if txt_num(s):
+		var big := txt_big(s)
+		var sc := 1.0 + (0.12 - k) / 0.12 * (0.9 if big else 0.5) if k < 0.12 else 1.0
+		if not e.has("rot"): e["rot"] = (randf() - 0.5) * 0.22
+		var fnt := anton_italic()
+		var fs := 32 if big else 21
+		var w := fnt.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		ci.draw_set_transform(Vector2(e["x"], y), e["rot"], Vector2(sc, sc))
+		if big:
+			# the crit slab: a red copy 4 px down-right, the black slab over it
+			var sw := w + 30.0
+			var q := PackedVector2Array([Vector2(-sw / 2.0 + 6.0, -30.0), Vector2(sw / 2.0, -28.0), Vector2(sw / 2.0 - 6.0, 8.0), Vector2(-sw / 2.0, 6.0)])
+			var qr := PackedVector2Array()
+			for v in q: qr.append(v + Vector2(4, 4))
+			ci.draw_colored_polygon(qr, Color(Color("#e8243c"), al))
+			ci.draw_colored_polygon(q, Color(0, 0, 0, al))
+		ci.draw_string(fnt, Vector2(-w / 2.0 + 2.0, 2.0), s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0, 0, 0, al))
+		ci.draw_string(fnt, Vector2(-w / 2.0, 0.0), s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(col, col.a * al))
+		var ic: String = e.get("ic", "")
+		if ic != "":
+			var t := ELEM.icon(ic)
+			if t != null: ci.draw_texture_rect(t, Rect2(-w / 2.0 - 18.0, -17.0, 15.0, 15.0), false, Color(1, 1, 1, al))
+		ci.draw_set_transform(Vector2.ZERO)
+	else:
+		# a word: 700 12px on a black tag (rgba 0,0,0,.75, skewed 5), a 3 px bar in its colour, white letters
+		var fb := font_bold
+		var tw := fb.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
+		var w2 := tw + 18.0
+		var x0: float = e["x"] - w2 / 2.0
+		ci.draw_colored_polygon(PackedVector2Array([Vector2(x0 + 5.0, y - 15.0), Vector2(x0 + w2 + 5.0, y - 15.0), Vector2(x0 + w2, y + 5.0), Vector2(x0, y + 5.0)]), Color(0, 0, 0, 0.75 * al))
+		ci.draw_rect(Rect2(x0 + 2.0, y - 12.0, 3.0, 14.0), Color(col, col.a * al))
+		ci.draw_string(fb, Vector2(e["x"] + 3.0 - tw / 2.0, y), s, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1, 1, 1, al))
 
 func _draw_fx() -> void:
 	_draw_luce()
@@ -939,17 +1249,7 @@ func _draw_fx() -> void:
 				var rb: float = (26.0 if e["big"] > 1 else 16.0) + k * (90.0 if e["big"] > 1 else 55.0)
 				fx_layer.draw_arc(Vector2(e["x"], e["y"]), rb, 0, TAU, 40, Color(BUC[e["c"]], (1.0 - k) * 0.9), 2.5 * (1.0 - k) + 0.5)
 			"txt":
-				var y: float = e["y"] - 40.0 * (1.0 - pow(1.0 - minf(1.0, k * 2.0), 3))
-				var fs := 26 if e["big"] else 20
-				var col := Color(1, 0.82, 0.9, 1.0 - maxf(0.0, (k - 0.6) / 0.4))
-				fx_layer.draw_string_outline(font_anton, Vector2(e["x"] - 12, y), e["s"], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 6, Color(0.1, 0.02, 0.08, col.a))
-				fx_layer.draw_string(font_anton, Vector2(e["x"] - 12, y), e["s"], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
-			"say":
-				var a: float = 1.0 - maxf(0.0, (k - 0.7) / 0.3)
-				var yy: float = e["y"] - 24.0 * minf(1.0, k * 3.0)
-				var w2 := font_black.get_string_size(e["s"], HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
-				fx_layer.draw_string_outline(font_black, Vector2(e["x"] - w2 / 2.0, yy), e["s"], HORIZONTAL_ALIGNMENT_LEFT, -1, 16, 5, Color(0.08, 0.03, 0.07, a))
-				fx_layer.draw_string(font_black, Vector2(e["x"] - w2 / 2.0, yy), e["s"], HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(e["col"], a))
+				_draw_txt(e, k)
 	# attack tells, dodge afterimages and the parry clash are pfx.gd's (drawCombatFx)
 	# projectiles (8-frame strip, 48x48)
 	for p in proj:

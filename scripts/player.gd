@@ -567,7 +567,7 @@ func step(dt: float) -> void:
 		vx = 0.0
 	elif a == "tag_in" or a == "swap_in":
 		vx = 0.0
-	elif a in ["charge", "acharge", "lgather"]:
+	elif a in ["charge", "acharge", "lgather", "gcharge"]:
 		if move != 0 and a != "lgather": dir = move
 		vx = 0.0
 		charge_t += dt
@@ -579,7 +579,8 @@ func step(dt: float) -> void:
 		if not keys["attack"]:
 			var r := minf(1.0, (charge_t - 200.0) / 450.0)
 			if charge_t < 200.0:
-				set_anim("attack1", 2)
+				if a == "gcharge": set_anim("guard", 1)      # a tap under the shield: back to guard
+				else: set_anim("attack1", 2)
 			elif a == "lgather":
 				set_anim("lfinisher")
 				cw_r = r
@@ -753,6 +754,12 @@ func step(dt: float) -> void:
 		if move != 0 and bash_t <= 0.0: dir = move
 		if a == "guard" and not ghit and not keys["guard"]:
 			set_anim("idle")
+		if a == "guard" and not ghit and on and want("attack"):
+			# gcharge: attack while holding the shield charges the thrust (released >= 200 ms: cthrust, else guard)
+			take("attack")
+			set_anim("gcharge")
+			charge_t = 0.0
+			cfull = false
 		elif a == "guard" and on and want("jump"):
 			take("jump")
 			set_anim("backstep")
@@ -1500,7 +1507,8 @@ func counter_swap(m, nx: String) -> void:
 	arena.shake(10, dir)
 	arena.sfx("parry", 1.0)
 	arena.sfx("slam", 0.8)
-	arena.big_word("PARRY", Color("#ffffff"), 800.0, Vector2(0, 0), Vector2(tag_to, position.y - 190.0 * CSCALE))
+	arena.text(Vector2(tag_to, position.y - 190.0 * CSCALE), "PARRY!", Color("#ffffff"))
+	arena.parry_word()
 
 func qte_offer(reason: String, data = null) -> void:
 	var cands: Array = CH.QTE_WHO.get(reason, []).filter(func(c): return party.has(c) and c != who and hpm[c] > 0.0)

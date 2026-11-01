@@ -29,7 +29,7 @@ const QTE_WHO := {"hit": ["estelle"], "low": ["luce"], "finisher": ["aida"], "ba
 const QTE_LBL := {"estelle": "수호", "aida": "기습", "luce": "구원"}
 
 const COMMON := {
-	"charge": [-1, [110, 1000000000]], "acharge": [-1, [110, 1000000000]], "cthrust": [-1, [45, 60, 220, 170]],
+	"charge": [-1, [110, 1000000000]], "acharge": [-1, [110, 1000000000]], "gcharge": [-1, [1000000000]], "cthrust": [-1, [45, 60, 220, 170]],
 	"airdash": [-1, [40, 55, 60, 60, 60, 90]], "backstep": [-1, [60, 110, 120]], "swap_in": [-1, [55, 55, 55, 55, 60, 70]],
 	"teeter": [28, [150, 140, 150, 190]], "teeterL": [-1, [300, 300, 340, 300]],
 }
@@ -77,6 +77,7 @@ const TABLE := {"estelle": A_EST, "aida": A_AIDA, "luce": A_LUCE}
 ## composite moves made of frames from other rows
 const VIRT := {
 	"charge": [["attack3", 0], ["attack3", 1]], "acharge": [["attack1", 0], ["attack1", 1]],
+	"gcharge": [["guard", 1]],                                                          # guard held, attack charging
 	"cthrust": [["attack3", 2], ["attack3", 3], ["attack3", 3], ["attack3", 4]],
 	"backstep": [["hurt", 0], ["hurt", 0], ["stop", 1]],
 	"swap_in": [["run", 1], ["run", 2], ["run", 3], ["run", 5], ["run", 6], ["run", 7]],

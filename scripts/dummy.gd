@@ -55,9 +55,11 @@ func hit(dmg: float, kb: float, mul := 1.0) -> void:
 	flash = 120.0
 	kx = kb * 0.6
 	wob = 1.0
-	arena.damage_text(p, roundi(d), dmg > 1.0)
 	if inv:
+		arena.last_e = {}
+		arena.text(p, "-%d" % roundi(d), Color("#ffe9a8"))     # the unbreakable row: a plain number, no element split
 		return
+	arena.damage_text(p, roundi(d), dmg > 1.0)
 	hp -= d
 	arena.spark(position + Vector2(-signf(kb) * 10.0, -60), 14 if dmg > 1 else 8)
 	if arena.get("pfx") != null: arena.pfx.hit(position.x - signf(kb) * 10.0, position.y - 60.0, 1 if kb >= 0.0 else -1, 1.25 if dmg >= 2 else 1.0)

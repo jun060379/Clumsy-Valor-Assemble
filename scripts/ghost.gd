@@ -95,7 +95,7 @@ func hit(dmg: float, _kb: float, mul := 1.0) -> void:
 	var d: float = arena.elem_hit(p, dmg * 10.0 * mul, M["defEl"])
 	hp -= d
 	if R != null: hp -= R.after_hit(self)
-	arena.damage_text(p, roundi(d), dmg > 1.0)
+	arena.damage_text(p, roundi(d), dmg > 1.0, Color("#cfe8ff"))
 	var hd := signf(position.x - P.position.x)
 	arena.spark(position + Vector2(-hd * 10.0, -60.0), 14 if dmg > 1.0 else 8)
 	hurt_t = maxf(hurt_t, 350.0)
