@@ -4,7 +4,7 @@ extends CanvasLayer
 ## Bloom as the prototype builds it: a bright pass (bright AND saturated colours only) at a quarter of the screen, blurred,
 ## then again at a sixteenth, added back as b * 0.9 + b2 * 1.3. Here the quarter-res world is a SubViewport sharing the
 ## game's World2D (the world canvas only: the HUD never blooms; the pixel effects live on it, so slashes, sparks and Luce's
-## light do), and the blur chain is small SubViewports. Refreshed every other frame, every fourth on phones (as POST.fr).
+## light do), and the blur chain is small SubViewports. Refreshed every frame (no stale halo trailing a running sprite).
 ## The perfect-dodge slow time also draws its overlay here (drawWitchTint: vignette, drifting streaks, the sweeping ring,
 ## the frame) under the pass, and the heroine on top of the grade (drawWitchHero), so she keeps her colours.
 ## Off (arena.screen_fx false): nothing is drawn and the dodge falls back to the plain blue tint.
@@ -22,7 +22,6 @@ uniform float hit = 0.0;
 uniform float wd = 0.0;
 uniform vec4 w[4];
 uniform vec2 asp = vec2(1.8, 1.0);
-uniform vec2 boff = vec2(0.0);    // camera travel since the bloom was last rendered, in screen uv
 void fragment() {
 	vec2 u = SCREEN_UV;
 	for (int i = 0; i < 4; i++) {
@@ -39,7 +38,7 @@ void fragment() {
 	vec3 col = vec3(texture(scr, u + dir * cc).r, texture(scr, u).g, texture(scr, u - dir * cc).b);
 	col = mix(col, vec3(dot(col, vec3(0.299, 0.587, 0.114))), 0.62 * wd);
 	col *= mix(vec3(1.0), vec3(0.47, 0.63, 0.92), 0.55 * wd);
-	vec3 bloom = texture(b, u - boff).rgb * 0.9 + texture(b2, u - boff).rgb * 1.3;
+	vec3 bloom = texture(b, u).rgb * 0.9 + texture(b2, u).rgb * 1.3;
 	col += bloom * bl;
 	col = (col - 0.5) * 1.03 + 0.5;
 	col += vec3(1.0, 0.85, 0.95) * hit * 0.18 * (1.0 - vg0);
@@ -110,7 +109,6 @@ var witch_vig: ColorRect
 var hero: Node2D               # drawWitchHero
 var bsv: Array = []            # [world full-res, bright 1/4, h, v (b), h 1/16, h, v (b2)]
 var fr := 0
-var b_xf := Transform2D.IDENTITY   # the canvas transform the bloom was last rendered with
 var bq := Vector2i.ZERO
 var bpx := Vector2i.ZERO       # the screen in device pixels the chain was built for
 
@@ -230,23 +228,26 @@ func _bloom_step(run: bool) -> void:
 	if bsv.is_empty(): return
 	if run and _dev_px() != bpx: _bloom_setup()
 	fr += 1
-	# every other frame, as POST.fr (every 4th only on the prototype's lowest quality tier, which the port never uses)
-	var every := 2
-	var go := run and fr % every == 0
-	var xf_now: Transform2D = get_viewport().get_canvas_transform()
-	var base_now: Vector2 = get_viewport().get_visible_rect().size
-	# between refreshes the halo is pinned to the world: shift its lookup by how far the camera moved since, so it
-	# doesn't trail behind lamps and sparks while she runs (the prototype's 1-frame lag at 60 fps is invisible; a
-	# skipped frame on a slower phone is not)
-	if go: b_xf = xf_now
-	mat.set_shader_parameter("boff", (xf_now.origin - b_xf.origin) / base_now)
+	# every frame. The prototype refreshes every other frame and lives with a one-frame-stale halo; here a stale halo
+	# shows as a trail of pink copies behind her bright hair while she runs (the camera follows her, the world doesn't),
+	# and pinning it to the world only moves the trail onto her. Fresh each frame, nothing can trail.
+	var go := run
 	for sv in bsv:
 		sv.render_target_update_mode = SubViewport.UPDATE_ONCE if go else SubViewport.UPDATE_DISABLED
-	if go:
-		var xf: Transform2D = get_viewport().get_canvas_transform()
-		var base: Vector2 = get_viewport().get_visible_rect().size
-		bsv[0].canvas_transform = Transform2D.IDENTITY.scaled(Vector2(bsv[0].size) / base) * xf
-		_bloom_bg(Transform2D.IDENTITY.scaled(Vector2(bsv[0].size) / base))
+	if go and not _pre_hooked:
+		_pre_hooked = true
+		RenderingServer.frame_pre_draw.connect(_bloom_xf, CONNECT_ONE_SHOT)
+
+## the source's camera is copied just before drawing, after every node (and the Camera2D) has moved this frame, so the
+## halo sits exactly on what the screen shows
+var _pre_hooked := false
+func _bloom_xf() -> void:
+	_pre_hooked = false
+	if bsv.is_empty() or not is_inside_tree(): return
+	var xf: Transform2D = get_viewport().get_canvas_transform()
+	var base: Vector2 = get_viewport().get_visible_rect().size
+	bsv[0].canvas_transform = Transform2D.IDENTITY.scaled(Vector2(bsv[0].size) / base) * xf
+	_bloom_bg(Transform2D.IDENTITY.scaled(Vector2(bsv[0].size) / base))
 
 ## the prototype's bloom reads the whole canvas, sky and mountains included: attach the background CanvasLayers
 ## (layer < 0) to the source viewport too, so bright, thin things (the damage numbers, sparks) average against the
