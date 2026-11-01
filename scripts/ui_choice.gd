@@ -45,7 +45,7 @@ func joined() -> bool:
 	return v == null or bool(v)
 
 func setup(back: bool, ln: String) -> void:
-	sel = 0
+	sel = -1
 	if not joined():
 		line = ln if ln != "" else "접수대의 에일린한테 먼저 인사부터 하고 오쇼. 일 하나 끝내고 오면, 그때 얘기합시다. 흐흐."
 		choices = [["leave", "알겠어요", func(): _leave()]]
@@ -82,15 +82,27 @@ func back() -> void:
 
 func _key(k: int) -> void:
 	if k == KEY_ESCAPE: back()
-	elif k in [KEY_UP, KEY_W]: sel = (sel + choices.size() - 1) % choices.size()
-	elif k in [KEY_DOWN, KEY_S]: sel = (sel + 1) % choices.size()
+	elif k in [KEY_UP, KEY_W]: sel = choices.size() - 1 if sel < 0 else (sel + choices.size() - 1) % choices.size()
+	elif k in [KEY_DOWN, KEY_S]: sel = 0 if sel < 0 else (sel + 1) % choices.size()
+	elif k >= KEY_1 and k <= KEY_9 and k - KEY_1 < choices.size():
+		sel = k - KEY_1
+		sfx("ready", 0.3)
+		choices[sel][2].call()
 	elif k in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_X, KEY_Z]:
+		if sel < 0:
+			sel = 0
+			sfx("ready", 0.15)
+			return
 		sfx("ready", 0.3)
 		choices[sel][2].call()
 	else:
 		# the attack key as bound
 		for e in InputMap.action_get_events("attack"):
 			if e is InputEventKey and (e.physical_keycode == k or e.keycode == k):
+				if sel < 0:
+					sel = 0
+					sfx("ready", 0.15)
+					return
 				sfx("ready", 0.3)
 				choices[sel][2].call()
 				return
@@ -103,10 +115,8 @@ func _paint(vs: Vector2) -> void:
 		var ii: int = i
 		if talk.ch_polys[i].size() > 2:
 			hit(talk.ch_polys[i], func():
-				if sel != ii:
-					sel = ii
-					sfx("ready", 0.15)
 				sfx("ready", 0.3)
+				sel = ii
 				choices[ii][2].call())
 
 func _draw_layer(k: int, c: Control) -> void:
@@ -117,6 +127,10 @@ func _draw_layer(k: int, c: Control) -> void:
 		1: talk.draw_sil(c, vs)
 		2:
 			talk.show(line, int(t / 32.0))
+			var hv: int = talk.choice_at(hover)
+			if hv >= 0 and hv != sel:
+				sel = hv
+				sfx("ready", 0.15)
 			talk.set_choices(choices.map(func(x): return String(x[1])), sel)
 			talk.draw_front(c, vs)
 

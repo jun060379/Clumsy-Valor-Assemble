@@ -5,9 +5,14 @@ extends RefCounted
 ## Drawn into the ui_char page (p); its hit areas go through p.hit(). Keys: see key().
 
 const UI := preload("res://scripts/ui_kit.gd")
+const UIA := preload("res://scripts/ui_anim.gd")
 const MD := preload("res://scripts/memory_data.gd")
 const ST := "res://assets/ui/st/"
 const SPEC := {
+	"attr": {"shard": [[-6, -12, 66, 130], -7, [[18, 0], [100, 6], [84, 38], [96, 52], [70, 100], [0, 92], [10, 60], [0, 40]]], "edge": [[4, -8, 56, 120], -7, [[30, 0], [36, 0], [14, 100], [8, 100]]],
+		"slash": [[44, 31, 70], -14], "bigen": [56, 68, -8], "burst": [30, 58]},
+	"gear": {"shard": [[46, -15, 64, 135], 6, [[8, 0], [100, 0], [100, 100], [22, 100], [0, 64], [14, 48], [2, 30]]], "edge": [[50, -10, 30, 125], 6, [[0, 0], [6, 0], [-2, 64], [4, 100], [-2, 100], [-8, 64]]],
+		"slash": [[-10, 84, 60], -8], "bigen": [-2, -4, -6], "burst": [76, 50]},
 	# CSS: [rect %, rotation, clip-path %] for shard (black) / edge (col2) / slash (white, 20 px); bigen spot and turn; burst centre
 	"skill": {"shard": [[-10, 30, 120, 46], -14, [[0, 18], [30, 0], [100, 8], [100, 76], [64, 100], [0, 86]]], "edge": [[-10, 26, 120, 8], -14, [[0, 60], [100, 0], [100, 30], [0, 100]]],
 		"slash": [[-5, 78, 110], -14], "bigen": [38, -6, -14], "burst": [22, 62]},
@@ -364,20 +369,29 @@ func cutout(path: String, sil: String, box: Rect2, deg: float, sh := Vector2(14,
 ## the ground of a tab: theme colour, rays, dots, the black shard, the light edge, the white slash, the big outlined name
 func ground(vs: Vector2, col: Color, k: String) -> void:
 	var S: Dictionary = SPEC[k]
+	var T = p.trn
+	# every piece glides to the tab's place (.shard / .edge / .slash .7s --mv, .bigen .8s, the burst centre .7s); clip-paths
+	# with the same number of points morph, others snap (as CSS does)
 	p.draw_rect(Rect2(Vector2.ZERO, vs), col)
-	UI.burst(p, Vector2(vs.x * S["burst"][0] / 100.0, vs.y * S["burst"][1] / 100.0), maxf(vs.x, vs.y) * 1.3, 0.15, p.t / 70000.0 * TAU)
+	var bu: Array = T.get_v("g_burst", [float(S["burst"][0]), float(S["burst"][1])], 700.0, "mv")
+	UI.burst(p, Vector2(vs.x * bu[0] / 100.0, vs.y * bu[1] / 100.0), maxf(vs.x, vs.y) * 1.3, 0.15, p.t / 70000.0 * TAU)
 	UI.dots(p, Rect2(0, 0, vs.x * 0.45, vs.y), 0.3, 1.0)
 	_dots_in(Rect2(vs.x * 0.7, 0, vs.x * 0.3, vs.y))
-	var sd: Array = S["shard"]
-	var r := pct(vs, sd[0])
-	p.draw_colored_polygon(UI.rot(UI.clip(r, sd[2]), r.get_center(), deg_to_rad(sd[1])), Color.BLACK)
-	var ed: Array = S["edge"]
-	r = pct(vs, ed[0])
-	p.draw_colored_polygon(UI.rot(UI.clip(r, ed[2]), r.get_center(), deg_to_rad(ed[1])), UI.col2(p.c))
+	for part in [["shard", Color.BLACK], ["edge", UI.col2(p.c)]]:
+		var sd: Array = S[part[0]]
+		var rr: Array = T.get_v("g_" + part[0], (sd[0] as Array).map(func(v): return float(v)) + [float(sd[1])], 700.0, "mv")
+		var cl: Array = []
+		for q in sd[2]: cl += [float(q[0]), float(q[1])]
+		var cv: Array = T.get_v("g_%s_clip%d" % [part[0], cl.size()], cl, 700.0, "mv")
+		var pts: Array = []
+		for i in range(0, cv.size(), 2): pts.append([cv[i], cv[i + 1]])
+		var r := pct(vs, [rr[0], rr[1], rr[2], rr[3]])
+		p.draw_colored_polygon(UI.rot(UI.clip(r, pts), r.get_center(), deg_to_rad(rr[4])), part[1])
 	var sl: Array = S["slash"]
-	r = pct(vs, sl[0])
-	p.draw_colored_polygon(UI.rot(UI.clip(r, [[0, 40], [100, 0], [100, 30], [3, 100]]), r.get_center(), deg_to_rad(sl[1])), Color.WHITE)
-	var bg: Array = S["bigen"]
+	var sv: Array = T.get_v("g_slash", (sl[0] as Array).map(func(v): return float(v)) + [float(sl[1])], 700.0, "mv")
+	var r2 := pct(vs, [sv[0], sv[1], sv[2]])
+	p.draw_colored_polygon(UI.rot(UI.clip(r2, [[0, 40], [100, 0], [100, 30], [3, 100]]), r2.get_center(), deg_to_rad(sv[3])), Color.WHITE)
+	var bg: Array = T.get_v("g_bigen", (S["bigen"] as Array).map(func(v): return float(v)), 800.0, "mv")
 	var fs := int(vs.y * 0.34)
 	use(Transform2D(deg_to_rad(bg[2]), Vector2(vs.x * bg[0] / 100.0, vs.y * bg[1] / 100.0)))
 	p.draw_string_outline(UI.anton(), Vector2(0, fs * 0.8), UI.EN[p.c], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 3, Color(0, 0, 0, 0.26))
@@ -393,7 +407,8 @@ func _dots_in(r: Rect2) -> void:
 
 ## enter ease of the panes' items (.it, staggered)
 func ease_in(i: int) -> float:
-	return UI.bk(clampf((p.tab_t - i * 40.0) / 320.0, 0.0, 1.0))
+	# .pane.in .it: translateX(60px) rotate(6deg), opacity 0 → .5s --bk, 40 ms apart
+	return UI.bk(clampf((p.tab_t - i * 40.0) / 500.0, 0.0, 1.0))
 
 
 # ---------- the three tabs ----------
@@ -832,11 +847,32 @@ func _stand(vs: Vector2) -> void:
 	var e := UI.bk(clampf(minf(p.slam_t, p.tab_t) / 600.0, 0.0, 1.0))
 	var br := sin(p.t / 4200.0 * TAU) * 0.5 + 0.5
 	var j := Vector2(0, -6.0 * br)
-	if jolt_t < 550.0 and jolt == "hop": j.y -= 16.0 * sin(clampf(jolt_t / 550.0, 0.0, 1.0) * PI)
-	if jolt_t < 420.0 and jolt == "shake": j.x += 6.0 * sin(jolt_t / 420.0 * TAU * 4.0) * (1.0 - jolt_t / 420.0)
-	var xx := Transform2D(0.0, j + Vector2(0.2 * box.size.x * (1.0 - e), 0))
+	var jr := 0.0
+	if jolt_t < 550.0 and jolt == "hop":
+		# cx_hop: 30 % up 16 px turned −1.5°, 65 % down 3 px (.55s --bk)
+		var k: Array = UIA.kf(jolt_t, [[0.0, [0.0, 0.0]], [0.3, [-16.0, -1.5]], [0.65, [3.0, 0.0]], [1.0, [0.0, 0.0]]], 550.0, 0.0, "bk")
+		j.y += k[0]
+		jr = k[1]
+	if jolt_t < 420.0 and jolt == "shake":
+		# cx_shake: −9 / 8 / −5 / 3 px with ∓2° (linear .42s)
+		var k2: Array = UIA.kf(jolt_t, [[0.0, [0.0, 0.0]], [0.2, [-9.0, -2.0]], [0.4, [8.0, 2.0]], [0.6, [-5.0, 0.0]], [0.8, [3.0, 0.0]], [1.0, [0.0, 0.0]]], 420.0)
+		j.x += k2[0]
+		jr = k2[1]
+	var xx := Transform2D(0.0, j + Vector2(0.2 * box.size.x * (1.0 - e), 0)) * UIA.xf(box.get_center() + Vector2(0, box.size.y / 2.0), Vector2.ZERO, deg_to_rad(jr))
 	var r := cutout(ST + c + "_old_" + face + ".webp", ST + c + "_old_base_sil.webp", box, 2.0 + 8.0 * (1.0 - e), Vector2(18, 10), clampf(e, 0.0, 1.0), xx)
 	p.hit(Rect2(r.position.x + r.size.x * 0.15, r.position.y, r.size.x * 0.7, r.size.y), func(): talk())
+	# cx_emo: a white star with ♪ (or !! after three quick taps) pops off her head (1.2s --bk)
+	if jolt_t < 1200.0:
+		var hd := r.position + Vector2(r.size.x * 0.55, r.size.y * 0.12)
+		var ek: Array = UIA.kf(jolt_t, [[0.0, [0.0, 10.0, 10.0, 0.2, -30.0]], [0.22, [1.0, 40.0, -40.0, 1.15, 10.0]], [0.75, [1.0, 44.0, -46.0, 1.0, 4.0]], [1.0, [0.0, 46.0, -56.0, 0.9, 4.0]]], 1200.0, 0.0, "bk")
+		var ec := hd + Vector2(ek[1] + 26.0, ek[2])
+		use(UIA.xf(ec, Vector2.ZERO, deg_to_rad(ek[4]), Vector2.ONE * ek[3]))
+		var er := Rect2(ec - Vector2(36, 30), Vector2(72, 60))
+		p.draw_colored_polygon(UI.clip(er, [[50, 0], [62, 26], [96, 12], [76, 42], [100, 60], [70, 66], [74, 100], [50, 76], [24, 98], [28, 66], [0, 58], [24, 42], [6, 12], [38, 26]]), Color(1, 1, 1, clampf(ek[0], 0.0, 1.0)))
+		var es := "!!" if jolt == "shake" else "♪"
+		var ef: Font = UI.bhs()
+		p.draw_string(ef, ec + Vector2(-tw(ef, es, 30) / 2.0, 11), es, HORIZONTAL_ALIGNMENT_LEFT, -1, 30, Color(0, 0, 0, clampf(ek[0], 0.0, 1.0)))
+		reset_xf()
 
 ## the memorial: the mem art over the whole page (zoom-in on arrival, slow drift, stars, a blink now and then)
 func _memo_art(vs: Vector2, col: Color) -> void:

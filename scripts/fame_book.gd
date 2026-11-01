@@ -49,6 +49,11 @@ var slide_t := 1e9              # pageSlide clock
 var slide_dir := 1
 var slide_n := 0
 var slide_old := Rect2()        # where the old sheet lay
+var slide_tab := ""             # the tab that was on it (its rows ride on the old sheet)
+var rowsig := {}                # tab -> {row key -> signature}: per-row identity for the in-place morphs
+var row_fx := {}                # row key -> [kind (swap / new), ms]
+var claim_r := Rect2()          # the last 받기 / 복구 button drawn (test hook)
+var claims: Array = []          # deferred claims: [Callable, ms left] (claimFx applies when the first chip lands)
 var lead_t := 1e9               # .bgl.lead (the slash leads a tab change)
 var bump_t := 1e9               # .wal.bump / .bm.bump
 var wipe_t := -1.0              # book switch fan, -1 = none
@@ -95,6 +100,7 @@ func _js(cmd: String) -> void:
 		"tab": _go_tab(w[1])
 		"switch": _switch_book()
 		"close": close_fx()
+		"claim": if claim_r.size.x > 0.0: _click(claim_r.get_center())
 
 func book() -> String:
 	return menu.page if menu.page in ["gbk", "abk"] else ""
@@ -131,6 +137,18 @@ func _process(delta: float) -> void:
 	hdr_t += dt
 	slide_t += dt
 	jolt_t += dt
+	for k in row_fx.keys():
+		row_fx[k][1] += dt
+		if row_fx[k][1] > 900.0: row_fx.erase(k)
+	if not claims.is_empty():
+		var due: Array = []
+		for cl in claims:
+			cl[1] -= dt
+			if cl[1] <= 0.0: due.append(cl)
+		for cl in due:
+			claims.erase(cl)
+			cl[0].call()
+			fame.poll(true)
 	for i in 3: hot_t[i] += dt
 	for st in stamps: st["t"] += dt
 	stamps = stamps.filter(func(st): return st["t"] < 1200.0)
@@ -297,6 +315,7 @@ func _page_slide(dir: int, steps: int) -> void:
 	slide_dir = dir
 	slide_n = mini(3, maxi(0, steps - 1))
 	slide_old = paper_r
+	slide_tab = cur_tab()
 	lead_t = 0.0
 	bump_t = 0.0
 	tab_t = -float(slide_n * 90 + 120) if dir > 0 else 0.0
@@ -364,31 +383,21 @@ func _draw() -> void:
 	if slide_t < 520.0 + slide_n * 90.0 and slide_dir > 0:
 		var oa: float = 1.0 - UIA.kf(slide_t, [[0.0, 0.0], [0.6, 0.0], [1.0, 1.0]], 520.0, slide_n * 90.0)
 		pen.group(Transform2D.IDENTITY, oa)
-		_draw_paper(slide_old, 1.0)
+		_old_sheet()
 		for i in slide_n:
 			pen.group(_sl_in(slide_old, slide_t, i * 90.0, 360.0), 1.0)
 			_draw_paper(slide_old, 1.0)
 	var jo: Vector2 = UIA.kf(jolt_t, [[0.0, Vector2.ZERO], [0.33, Vector2(0, 3)], [0.66, Vector2(-1, -2)], [1.0, Vector2.ZERO]], 200.0)
 	pen.group(Transform2D(0.0, jo) * ps[0], ps[1])
 	_draw_paper(paper_r, 1.0)
-	var cr := Rect2(paper_r.position + Vector2(34, 12), paper_r.size - Vector2(48, 20))
-	match tb:
-		"quest": _p_quest(cr)
-		"fac": _p_fac(cr)
-		"people": _p_people(Rect2(paper_r.position + Vector2(18, 12), paper_r.size - Vector2(30, 20)))
-		"dun": _p_dun(cr)
-		"rune": _p_rune(cr)
-		"home": _p_home(cr)
-		"lv": _p_lv(cr)
-		"ch": _p_ch(cr)
-		"day": _p_day(cr)
+	_content(tb, paper_r)
 	if going_out:
 		# the old sheet slides off to the lower right first, then the blank ones in between
 		for i in range(slide_n - 1, -1, -1):
 			pen.group(_sl_out(slide_old, slide_t, 140.0 + i * 90.0, 340.0), 1.0)
 			_draw_paper(slide_old, 1.0)
 		pen.group(_sl_out(slide_old, slide_t, 0.0, 380.0), 1.0)
-		_draw_paper(slide_old, 1.0)
+		_old_sheet()
 	# the left column: files in from the side (fm_in), leaves left on close
 	var lc := Rect2(pane.position.x, pane.position.y, left_w, pane.size.y)
 	var lu := UIA.p(tab_t, 0.0, 500.0, FMIN)
@@ -425,9 +434,44 @@ func _draw() -> void:
 	_draw_wipe(vs)
 
 
+## what is written on a sheet for tab tb
+func _content(tb: String, pr: Rect2) -> void:
+	var cr := Rect2(pr.position + Vector2(34, 12), pr.size - Vector2(48, 20))
+	match tb:
+		"quest": _p_quest(cr)
+		"fac": _p_fac(cr)
+		"people": _p_people(Rect2(pr.position + Vector2(18, 12), pr.size - Vector2(30, 20)))
+		"dun": _p_dun(cr)
+		"rune": _p_rune(cr)
+		"home": _p_home(cr)
+		"lv": _p_lv(cr)
+		"ch": _p_ch(cr)
+		"day": _p_day(cr)
+
+## the old sheet with its rows still on it (pageSlide keeps the old page until it is covered or has slid away);
+## nothing on it can be clicked
+func _old_sheet() -> void:
+	_draw_paper(slide_old, 1.0)
+	if slide_tab == "" or slide_tab == cur_tab(): return
+	var b := book()
+	var keep_tab: String = tab[b]
+	var keep_t := tab_t
+	var keep_h := content_h
+	var keep_s := slide_t
+	var nh := hits.size()
+	tab[b] = slide_tab
+	tab_t = 1e6
+	slide_t = 1e6
+	_content(slide_tab, slide_old)
+	tab[b] = keep_tab
+	tab_t = keep_t
+	slide_t = keep_s
+	content_h = keep_h
+	hits.resize(nh)
+
 # ---------- claim choreography (stampFx · moveEl) ----------
 ## the stamp slams onto the row (the paper jolts at 160 ms), then the row's reward labels fly to the purse
-func _claim_fx(r: Rect2, rw: Array, text: String, rx: float) -> void:
+func _claim_fx(r: Rect2, rw: Array, text: String, rx: float) -> int:
 	stamps.append({"p": Vector2(r.position.x + r.size.x * (0.8 if r.size.x > 300.0 else 0.5), r.get_center().y), "text": text, "t": 0.0})
 	jolt_t = -160.0
 	var k := 0
@@ -436,8 +480,9 @@ func _claim_fx(r: Rect2, rw: Array, text: String, rx: float) -> void:
 		if L == "": continue
 		var ti := 0 if L.contains("실링") else (1 if L.contains("기억석") else (2 if L.contains("룬") else -1))
 		var to: Vector2 = purse_at[ti] if ti >= 0 else hero_last.position + Vector2(60, 40)
-		flies.append({"from": Vector2(rx - S.tw(S.anton(), L, 14) / 2.0, r.position.y + 50.0 + k * 15.0), "to": to, "text": L, "t": -260.0, "d": 120.0 + k * 80.0, "k": ti})
+		flies.append({"from": Vector2(rx - S.tw(S.anton(), L, 14) / 2.0, r.position.y + 50.0 + k * 15.0), "to": to, "text": L, "t": -160.0, "d": 120.0 + k * 80.0, "k": ti})
 		k += 1
+	return k
 
 func _draw_claims() -> void:
 	for st in stamps:
@@ -1057,9 +1102,12 @@ func _row(r: Rect2, o: Dictionary) -> void:
 			var rr := r
 			var rw: Array = [o.get("r1", ""), o.get("r2", "")]
 			var stp := "복구" if bl.begins_with("복구") else "완료"
+			claim_r = brr
 			_hit(brr.grow(3), func():
-				_claim_fx(rr, rw, stp, rx)
-				cb.call())
+				if claims.size() > 0: return
+				# the claim applies when the first chip lands (or 260 ms after the stamp if nothing flies)
+				var n := _claim_fx(rr, rw, stp, rx)
+				claims.append([cb, 160.0 + (120.0 + 520.0 if n > 0 else 260.0)]))
 		ry = brr.end.y + 14.0
 	var r1: String = o.get("r1", "")
 	if r1 != "":
@@ -1135,7 +1183,7 @@ func _block(B: Array, r: Rect2, cr: Rect2) -> void:
 	# only what fits wholly on the sheet is written (the sheet scrolls under its edges)
 	if r.position.y < cr.position.y - 2.0 or r.end.y > cr.end.y + 6.0: return
 	match String(B[0]):
-		"row": _row(r, B[1])
+		"row": _row_morph(r, B[1])
 		"sec": _sec(r.position, B[1])
 		"note": _ci.draw_multiline_string(S.noto(), r.position + Vector2(0, 14), B[1], HORIZONTAL_ALIGNMENT_LEFT, r.size.x, 12, -1, INK2)
 		"log":
@@ -1143,6 +1191,41 @@ func _block(B: Array, r: Rect2, cr: Rect2) -> void:
 			_ci.draw_string(S.noto(), r.position + Vector2(78, 15), B[2], HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 80.0, 12, INK)
 			_ci.draw_rect(Rect2(r.position.x, r.end.y + 1.0, r.size.x, 1.0), Color(0, 0, 0, 0.06))
 		"goal": _goal(Rect2(r.position, Vector2(r.size.x, 42.0)), B[1], B[2], B[3], B[4], B[5], true)
+
+## per-row identity: a row whose state changed in place flashes (fm_swap: from .94×, brightness 1.6 → 1.15 at 60 % → none,
+## .5s); a row that was not there before drops in (fm_new: from 14 px up, .96×, transparent, .55s); both --bk-ish (.2,1.5,.4,1)
+func _row_morph(r: Rect2, o: Dictionary) -> void:
+	var tb := cur_tab()
+	var key := String(o.get("k", "")) + "|" + String(o.get("title", ""))
+	var sig := "%s|%s|%s|%s|%s" % [o.get("st", ""), o.get("r1", ""), o.get("r2", ""), o.get("tag", ""), str(o.get("bar", -1.0)).left(5)]
+	if not rowsig.has(tb): rowsig[tb] = {}
+	var D: Dictionary = rowsig[tb]
+	var settled := tab_t > 700.0 and slide_t > 2000.0 and t > 1200.0
+	if D.has(key):
+		if D[key] != sig and settled: row_fx[key] = ["swap", 0.0]
+	elif settled and D.has("_init"):
+		row_fx[key] = ["new", 0.0]
+	D[key] = sig
+	D["_init"] = true
+	if not row_fx.has(key):
+		_row(r, o)
+		return
+	var fx: Array = row_fx[key]
+	var keep: Transform2D = pen.xf
+	var ka: float = pen.a
+	var c := r.get_center()
+	var EZM := [0.2, 1.5, 0.4, 1.0]
+	if fx[0] == "swap":
+		var u := UIA.p(fx[1], 0.0, 500.0, EZM)
+		pen.group(keep * UIA.xf(c, Vector2.ZERO, 0.0, Vector2.ONE * lerpf(0.94, 1.0, u)), ka)
+		_row(r, o)
+		var lit: float = UIA.kf(fx[1], [[0.0, 1.6], [0.6, 1.15], [1.0, 1.0]], 500.0, 0.0, EZM)
+		if lit > 1.0: _ci.draw_rect(r, Color(1, 1, 1, (lit - 1.0) * 0.9))
+	else:
+		var u2 := UIA.p(fx[1], 0.0, 550.0, EZM)
+		pen.group(keep * UIA.xf(c, Vector2(0, -14.0 * (1.0 - u2)), 0.0, Vector2.ONE * lerpf(0.96, 1.0, u2)), ka * clampf(fx[1] / 250.0, 0.0, 1.0))
+		_row(r, o)
+	pen.group(keep, ka)
 
 # =========================== 길드 수첩 ===========================
 func _p_quest(cr: Rect2) -> void:

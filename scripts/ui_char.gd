@@ -5,6 +5,7 @@ extends "res://scripts/ui_page.gd"
 ## 스킬 · 기억 · 기록 are drawn by ui_char_mem.gd (mx): the moves, the memory tree and levels (memory.gd), the record and memorial.
 
 const MEMUI := preload("res://scripts/ui_char_mem.gd")
+const UIA := preload("res://scripts/ui_anim.gd")
 const ST := {"estelle": "res://assets/ui/st/estelle_base.webp", "aida": "res://assets/ui/st/aida_base.webp", "luce": "res://assets/ui/st/luce_base.webp"}
 const GEAR_ART := {"estelle": "res://assets/ui/st/estelle_gear.webp", "aida": "res://assets/ui/st/aida_gear.webp", "luce": "res://assets/ui/st/luce_gear.webp"}
 const FACE := {"estelle": preload("res://assets/ui/faces/estelle.png"), "aida": preload("res://assets/ui/faces/aida.png"), "luce": preload("res://assets/ui/faces/luce.png")}
@@ -21,6 +22,18 @@ var picking := false
 var slam_t := 0.0
 var tab_t := 0.0
 var mx                           # ui_char_mem.gd: the 스킬 · 기억 · 기록 tabs
+# ---- motion (status.js cx v2: .wipe, cx_mn / cx_cd, cx_slam, cx_drop, cx_flash, .menu / .cur transitions, .nm and the
+# per-tab ground gliding .7s --mv, cx_xgear, cx_flb, cx_gdpop) ----
+var trn := UIA.Tr.new()
+var name_t := 0.0                # cx_drop clock (letters fall in on open and on a member change)
+var flash_t := 1e9               # cx_flash: the white slash across on a tab change
+var wipe_t := -1.0               # .wipe: black with a col2 edge; -1 = none
+var wipe_kind := ""              # open: leaves from -8 % / member: comes in, the member changes under it, leaves
+var pend_c := ""
+var prev_tab := ""
+var gi_t := 1e9                  # cx_flb on the picked blade
+var gd_t := 1e9                  # cx_gdpop on the gear card
+var open_t := 0.0
 
 
 func _ready() -> void:
@@ -38,11 +51,37 @@ func _opened() -> void:
 	picking = false
 	slam_t = 0.0
 	tab_t = 0.0
+	open_t = 0.0
+	name_t = 0.0
+	flash_t = 1e9
+	wipe_t = 0.0
+	wipe_kind = "open"
+	pend_c = ""
+	prev_tab = ""
+	gi_t = 1e9
+	gd_t = 1e9
+	trn.clear()
 	mx.opened()
 
 func _tick(dt: float) -> void:
 	slam_t += dt
 	tab_t += dt
+	open_t += dt
+	name_t += dt
+	flash_t += dt
+	gi_t += dt
+	gd_t += dt
+	trn.step(dt)
+	if wipe_t >= 0.0:
+		wipe_t += dt
+		if wipe_kind == "member" and pend_c != "" and wipe_t >= 190.0:
+			c = pend_c
+			pend_c = ""
+			slam_t = 0.0
+			name_t = 0.0
+			picking = false
+			mx.member_changed()
+		if wipe_t >= (540.0 if wipe_kind == "open" else 490.0): wipe_t = -1.0
 	mx.tick(dt)
 
 func _key(k: int) -> void:
@@ -55,26 +94,36 @@ func _key(k: int) -> void:
 		for j in TABS.size(): if TABS[j][0] == tab: i = j
 		_tab(TABS[(i + (TABS.size() - 1 if k in [KEY_LEFT, KEY_Q] else 1)) % TABS.size()][0])
 	elif tab == "gear" and k in [KEY_UP, KEY_DOWN]:
-		gi = clampi(gi + (-1 if k == KEY_UP else 1), 0, GSL.size() - 1)
-		picking = false
+		_pick_gi(clampi(gi + (-1 if k == KEY_UP else 1), 0, GSL.size() - 1))
 	elif tab == "gear" and k in [KEY_ENTER, KEY_SPACE]:
 		picking = not picking
+		gd_t = 0.0
+
+## a blade picked: it flashes (cx_flb) and the card pops (cx_gdpop)
+func _pick_gi(i: int) -> void:
+	if i == gi and gi_t < 1e8: return
+	gi = i
+	picking = false
+	gi_t = 0.0
+	gd_t = 0.0
 
 func _tab(k: String) -> void:
 	if k == tab: return
+	prev_tab = tab
 	tab = k
 	tab_t = 0.0
+	flash_t = 0.0
 	picking = false
 	mx.tab_changed()
 	sfx("ready", 0.2)
 
 func _member(cc: String) -> void:
-	if cc == c: return
-	c = cc
-	slam_t = 0.0
-	picking = false
-	mx.member_changed()
-	sfx("ready", 0.2)
+	if cc == c or wipe_t >= 0.0: return
+	# setChar: the wipe comes in (190 ms), the member changes under it, the wipe goes on out (300 ms)
+	pend_c = cc
+	wipe_t = 0.0
+	wipe_kind = "member"
+	sfx("ready", 0.3)
 
 func roster() -> Array:
 	var L: Array = arena.player.party.duplicate()
@@ -90,43 +139,113 @@ func _paint(vs: Vector2) -> void:
 	else:
 		mx.paint(vs, col)
 		if mx.clean: return          # 감상: only the memorial art and its ✕
+		if prev_tab == "attr" and tab_t < 350.0: _attr_art(vs, tab_t)
 	_tabs(vs, col)
-	# faces, top right
-	var fx := vs.x - 64.0 - roster().size() * 48.0
-	for cc in roster():
-		var on: bool = cc == c
-		var r := Rect2(fx, 14, 40, 40)
-		draw_set_transform(r.get_center(), deg_to_rad(-6.0), Vector2.ONE * (1.08 if on else 0.86))
-		var lr := Rect2(-20, -20, 40, 40)
-		if on: draw_rect(Rect2(lr.position + Vector2(4, 4), lr.size), UI.col(cc))
-		draw_rect(lr.grow(2), Color.WHITE)
-		draw_texture_rect(FACE[cc], lr, false, Color.WHITE if on else Color(0.45, 0.45, 0.45))
-		draw_set_transform(Vector2.ZERO)
-		var c2: String = cc
-		hit(r, func(): _member(c2))
-		fx += 48.0
+	_faces(vs)
 	close_x(vs, func():
 		if picking: picking = false
 		else: back())
+	_flash(vs)
+	_wipe(vs)
 
+## .chars: the roster's faces top right (cx_cd on open; .on turns and grows .3s --bk)
+func _faces(vs: Vector2) -> void:
+	var L := roster()
+	var fx := vs.x - 60.0 - L.size() * 50.0
+	for i in L.size():
+		var cc: String = L[i]
+		var on: bool = cc == c
+		var r := Rect2(fx, 12, 44, 44)
+		var rot: float = trn.get_v("fr%d" % i, -8.0 if on else (5.0 if i == 1 else -6.0), 300.0, "bk")
+		var sc: float = trn.get_v("fs%d" % i, 1.1 if on else 0.84, 300.0, "bk")
+		var u := UIA.p(open_t, 300.0 + i * 60.0, 500.0, "bk")
+		var a := clampf((open_t - 300.0 - i * 60.0) / 150.0, 0.0, 1.0)
+		if a > 0.0:
+			draw_set_transform_matrix(Transform2D(0.0, Vector2(0, -60.0 * (1.0 - u))) * Transform2D(deg_to_rad(rot + 30.0 * (1.0 - u)), Vector2(sc, sc), 0.0, r.get_center()))
+			var lr := Rect2(-22, -22, 44, 44)
+			if on: draw_rect(Rect2(lr.position + Vector2(5, 5), lr.size), Color(1, 1, 1, a))
+			draw_rect(lr, Color(Color.BLACK if on else Color.WHITE, a))
+			var g := 1.0 if on else 0.45
+			draw_texture_rect(FACE[cc], lr.grow(-3), false, Color(g, g, g, a))
+			draw_set_transform(Vector2.ZERO)
+		var c2: String = cc
+		hit(r, func(): _member(c2))
+		fx += 50.0
+
+## cx_flash: a white slash sweeps across the screen as a tab opens
+func _flash(vs: Vector2) -> void:
+	if flash_t > 380.0: return
+	var u := UIA.p(flash_t, 0.0, 380.0, "mv")
+	var r := Rect2(-0.2 * vs.x, vs.y * 0.5, vs.x * 1.4, 26.0)
+	var m := UIA.xf(r.get_center(), Vector2(lerpf(-1.2, 1.2, u) * r.size.x, 0), deg_to_rad(-12.0))
+	draw_colored_polygon(m * UI.clip(r, [[0, 45], [100, 0], [100, 25], [0, 100]]), Color.WHITE)
+
+## .wipe (inset -10% -30%): black with a col2 lightning edge; open: leaves from -8 % to -140 % (480 ms after 60);
+## member: comes in from 130 % (190 ms), then leaves (300 ms)
+func _wipe(vs: Vector2) -> void:
+	if wipe_t < 0.0: return
+	var x := 0.0
+	if wipe_kind == "open":
+		x = lerpf(-0.08, -1.4, UIA.p(wipe_t, 60.0, 480.0, [0.2, 0.7, 0.3, 1.0]))
+	elif wipe_t < 190.0:
+		x = lerpf(1.3, -0.08, UIA.p(wipe_t, 0.0, 190.0, [0.6, 0.0, 0.9, 0.5]))
+	else:
+		x = lerpf(-0.08, -1.4, UIA.p(wipe_t, 190.0, 300.0, [0.2, 0.7, 0.3, 1.0]))
+	var r := Rect2(-0.3 * vs.x, -0.1 * vs.y, vs.x * 1.6, vs.y * 1.2)
+	r.position.x += x * r.size.x
+	draw_colored_polygon(UI.clip(r, [[18, 0], [100, 0], [100, 100], [0, 100], [10, 62], [4, 58]]), Color.BLACK)
+	draw_colored_polygon(UI.clip(r, [[14, 0], [18, 0], [4, 58], [10, 62], [0, 100], [-4, 100], [6, 64], [0, 60]]), UI.col2(c))
+
+## .menu: left 14, top 22, turned −3°; BHS 20 with a 5 px black stroke, the English line over it; the even ones sit lower and
+## lean the other way; the chosen one is black and 1.3× on the white cursor, the colour cursor lagging under it (.36s --bk);
+## on open each drops in (cx_mn, 55 ms apart after 200)
 func _tabs(vs: Vector2, col: Color) -> void:
-	var x := 22.0
+	var base := Transform2D(deg_to_rad(-3.0), Vector2(14, 22 + 40))
+	var x := 0.0
+	var fs := 20
+	var R: Array = []
 	for tb in TABS:
-		var on: bool = tb[0] == tab
-		var fs := 26 if on else 20
-		var w := tw(UI.bhs(), tb[1], fs) + 16.0
-		draw_set_transform(Vector2(x, 40), deg_to_rad(-5.0))
-		draw_string(UI.spaced(UI.anton(), 2), Vector2(2, -16), tb[2], HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(col, 0.9) if on else Color(1, 1, 1, 0.3))
-		if on:
-			UI.para(self, -4, -fs + 2, w, fs + 8, 4.0, Color.WHITE)
-		draw_string(UI.bhs(), Vector2(4, 4), tb[1], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color.BLACK if on else Color.WHITE)
-		draw_set_transform(Vector2.ZERO)
-		var k: String = tb[0]
-		hit(Rect2(x - 4, 10, w + 4, 40), func(): _tab(k))
-		x += w + 8.0
+		var w := tw(UI.bhs(), tb[1], fs) + 10.0
+		R.append([x, w])
+		x += w + 14.0
+	var oi := 0
+	for i in TABS.size(): if TABS[i][0] == tab: oi = i
+	var ob: Array = R[oi]
+	var cw: float = ob[1] * 1.3 + 20.0
+	for k in [["c2", col, 3.0, [[0, 30], [100, 10], [94, 100], [6, 86]], 50.0], ["c1", Color.WHITE, -4.0, [[4, 18], [96, 0], [100, 72], [8, 100]], 0.0]]:
+		var cx: float = trn.get_v(k[0] + "x", ob[0] - ob[1] * 0.15 - 10.0, 360.0, "bk")
+		var ww: float = trn.get_v(k[0] + "w", cw, 300.0, "ease")
+		var ua := clampf((open_t - 200.0 - oi * 55.0) / 200.0, 0.0, 1.0)
+		draw_set_transform_matrix(base * Transform2D(deg_to_rad(k[2]), Vector2(cx, -36.0)))
+		draw_colored_polygon(UI.clip(Rect2(0, 0, ww, 40), k[3]), Color(k[1], ua))
+	for i in TABS.size():
+		var tb: Array = TABS[i]
+		var on: bool = i == oi
+		var w: float = R[i][1]
+		var bx: float = R[i][0]
+		var sc: float = trn.get_v("ts%d" % i, 1.3 if on else 1.0, 320.0, "bk")
+		var rot: float = trn.get_v("tr%d" % i, -3.0 if on else (3.0 if i % 2 == 1 else 0.0), 320.0, "bk")
+		var dy: float = trn.get_v("ty%d" % i, 0.0 if on else (5.0 if i % 2 == 1 else 0.0), 320.0, "bk")
+		var ink: float = trn.get_v("tc%d" % i, 1.0 if on else 0.0, 200.0, "ease")
+		var u := UIA.p(open_t, 200.0 + i * 55.0, 500.0, "bk")
+		var a := clampf((open_t - 200.0 - i * 55.0) / 150.0, 0.0, 1.0)
+		if a <= 0.0: continue
+		var piv := Vector2(bx + w / 2.0, 0)
+		var m := base * Transform2D(0.0, Vector2(0, -40.0 * (1.0 - u) + dy)) * UIA.xf(piv, Vector2.ZERO, deg_to_rad(rot - 20.0 * (1.0 - u)), Vector2(sc, sc))
+		draw_set_transform_matrix(m)
+		var en: String = tb[2]
+		var ef := UI.spaced(UI.anton(), 2)
+		draw_string(ef, Vector2(bx + w / 2.0 - tw(ef, en, 9) / 2.0, -fs - 2.0), en, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0, 0, 0, 0.6 * a).lerp(Color(col, a), ink))
+		if ink < 1.0: draw_string_outline(UI.bhs(), Vector2(bx + 2, -2), tb[1], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 10, Color(0, 0, 0, a * (1.0 - ink)))
+		draw_string(UI.bhs(), Vector2(bx + 2, -2), tb[1], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1.0 - ink, 1.0 - ink, 1.0 - ink, a))
+		var k2: String = tb[0]
+		hit(PackedVector2Array([m * Vector2(bx - 4, -fs - 14), m * Vector2(bx + w + 4, -fs - 14), m * Vector2(bx + w + 4, 8), m * Vector2(bx - 4, 8)]), func(): _tab(k2))
+	draw_set_transform(Vector2.ZERO)
 
 ## the name in loose stamped letters, and the role under it
-func _name(at: Vector2) -> void:
+func _name(at0: Vector2) -> void:
+	# .nm glides to its place for the tab (.75s --mv); the letters drop in (cx_drop, 35 ms apart)
+	var at: Vector2 = trn.get_v("nm", at0, 750.0, "mv")
 	var nm: String = SHEET[c][0]
 	var seed := 0
 	for ch in c: seed += ch.unicode_at(0)
@@ -146,10 +265,15 @@ func _name(at: Vector2) -> void:
 		var sz := 20 + int(rnd.call() * 8.0)
 		var dy: float = rnd.call() * 8.0 - 4.0
 		var w := tw(UI.bhs(), ch, sz) + 8.0
-		draw_set_transform(Vector2(x, at.y + dy), deg_to_rad(r))
-		draw_rect(Rect2(0, -sz, w, sz + 6.0), s[0])
-		draw_string(UI.bhs(), Vector2(4, 0), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, sz, s[1])
-		draw_set_transform(Vector2.ZERO)
+		var u := UIA.p(name_t, i * 35.0, 500.0, "bk")
+		var la := clampf((name_t - i * 35.0) / 150.0, 0.0, 1.0)
+		if la > 0.0:
+			var pc := Vector2(x + w / 2.0, at.y + dy - sz / 2.0)
+			draw_set_transform_matrix(UIA.xf(pc, Vector2(0, -40.0 * (1.0 - u)), deg_to_rad(lerpf(-3.0 * r, r, u)), Vector2.ONE * lerpf(1.6, 1.0, u)) * Transform2D(0.0, Vector2(x, at.y + dy)))
+			draw_rect(Rect2(3, -sz + 3, w, sz + 6.0), Color(0, 0, 0, la))
+			draw_rect(Rect2(0, -sz, w, sz + 6.0), Color(s[0], la))
+			draw_string(UI.bhs(), Vector2(4, 0), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, sz, Color(s[1], la))
+			draw_set_transform(Vector2.ZERO)
 		x += w + 3.0
 	var role: String = SHEET[c][1] + (" · 조작 중" if c == arena.player.who else (" · 파티" if arena.player.party.has(c) else " · 마을"))
 	draw_set_transform(at + Vector2(0, 30), deg_to_rad(-4.0))
@@ -157,25 +281,52 @@ func _name(at: Vector2) -> void:
 	draw_string(UI.noto_k(), Vector2(10, 2), role, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color.WHITE)
 	draw_set_transform(Vector2.ZERO)
 
-func _art(vs: Vector2, p: String, r: Rect2) -> void:
+## the standing art: cx_slam on open and on a member change (from 40 % right, turned −14°, 1.15×, black until 45 %, lit by
+## 60 %, .62s --bk), then breathing (cx_breath 4.2 s); xgear on the gear tab (from (8 %, 45 %), 14°, 1.15×, black to 40 %,
+## 1.6× bright at 55 %, .7s --bk, settling at 3°)
+func _art(vs: Vector2, p: String, r: Rect2, kind := "slam", out := 0.0) -> void:
 	var tt := tx(p)
-	var e := UI.bk(clampf(slam_t / 600.0, 0.0, 1.0))
-	draw_set_transform(Vector2(r.get_center().x + 0.2 * r.size.x * (1.0 - e), r.end.y), deg_to_rad(8.0 * (1.0 - e)), Vector2.ONE * (1.0 + 0.08 * (1.0 - e)))
+	var T := minf(slam_t, tab_t) if kind == "gear" else slam_t
+	var br := 0.5 - 0.5 * cos(t / (4600.0 if kind == "gear" else 4200.0) * TAU)
+	var tr := Vector2.ZERO
+	var rot := 0.0
+	var sc := 1.0 + 0.006 * br
+	var lit := 1.0
+	var a := 1.0
+	if kind == "gear":
+		var u := UIA.p(T, 0.0, 700.0, "bk")
+		tr = Vector2(0.08 * r.size.x, 0.45 * r.size.y) * (1.0 - u)
+		rot = lerpf(14.0, 3.0, u)
+		sc *= lerpf(1.15, 1.0, u)
+		lit = UIA.kf(T, [[0.0, 0.0], [0.4, 0.0], [0.55, 1.6], [1.0, 1.0]], 700.0)
+	else:
+		var u := UIA.p(T, 0.0, 620.0, "bk")
+		tr = Vector2(0.4 * r.size.x, 0) * (1.0 - u)
+		rot = -14.0 * (1.0 - u)
+		sc *= lerpf(1.15, 1.0, u)
+		lit = UIA.kf(T, [[0.0, 0.0], [0.45, 0.0], [0.6, 1.0], [1.0, 1.0]], 620.0)
+		a = clampf(T / 620.0 / 0.3, 0.0, 1.0)
+	if out > 0.0:
+		# leaving 상세: opacity .2s, translateX(−30 %) rotate(−10°) scale(.95) .35s --mv
+		var v := UIA.p(out, 0.0, 350.0, "mv")
+		tr = Vector2(-0.3 * r.size.x * v, 0)
+		rot = -10.0 * v
+		sc = lerpf(1.0, 0.95, v)
+		a = 1.0 - clampf(out / 200.0, 0.0, 1.0)
+		lit = 1.0
+	tr.y -= 6.0 * br
+	draw_set_transform(Vector2(r.get_center().x, r.end.y) + tr, deg_to_rad(rot), Vector2(sc, sc))
 	var lr := Rect2(-r.size.x / 2.0, -r.size.y, r.size.x, r.size.y)
-	draw_texture_rect(tt, lr, false, Color(1, 1, 1, clampf(e, 0.0, 1.0)))
+	var k := minf(lit, 1.0)
+	draw_texture_rect(tt, lr, false, Color(k, k, k, a))
+	if lit > 1.0:
+		draw_texture_rect(tt, lr, false, Color(1, 1, 1, a * (lit - 1.0) * 0.6))
 	draw_set_transform(Vector2.ZERO)
 
 func _attr(vs: Vector2, col: Color) -> void:
-	# her art on the left over black; her colour on the right with rays
-	var right := PackedVector2Array([Vector2(vs.x * 0.53, 0), Vector2(vs.x, 0), Vector2(vs.x, vs.y), Vector2(vs.x * 0.44, vs.y)])
-	draw_colored_polygon(right, col)
-	UI.burst(self, Vector2(vs.x * 0.75, vs.y * 0.35), vs.x, 0.12, t / 90000.0 * TAU)
-	UI.dots(self, Rect2(vs.x * 0.45, 0, vs.x * 0.55, vs.y), 0.25, 1.0)
-	draw_colored_polygon(PackedVector2Array([Vector2(vs.x * 0.45, vs.y * 0.47), Vector2(vs.x, vs.y * 0.22), Vector2(vs.x, vs.y * 0.25), Vector2(vs.x * 0.47, vs.y * 0.49)]), Color.WHITE)
-	var t0 := tx(ST[c])
-	var h := vs.y * 1.02
-	var w := h * t0.get_width() / t0.get_height()
-	_art(vs, ST[c], Rect2(vs.x * 0.02, vs.y * 1.03 - h, w, h))
+	# the attr ground (#cx[data-tab=attr]: the black shard on the left, its col2 edge, the slash, ESTELLE low right)
+	mx.ground(vs, col, "attr")
+	_attr_art(vs, 0.0)
 	_name(Vector2(vs.x * 0.54, vs.y * 0.2))
 	# the rows
 	var S: Dictionary = R().stats(c)
@@ -191,8 +342,8 @@ func _attr(vs: Vector2, col: Color) -> void:
 	var rh := minf(30.0, (vs.y - y - 10.0) / (rows.size() + 1.0))
 	var i := 0
 	for row in [["현재 체력", str(roundi(hp)), 0, "", hp / maxf(1.0, S["hp"])]] + rows:
-		var e := UI.bk(clampf((tab_t - i * 40.0) / 320.0, 0.0, 1.0))
-		var x := vs.x * 0.53 + (i % 2) * 14.0 + 40.0 * (1.0 - e) - i * 4.0
+		var e := UI.bk(clampf((tab_t - i * 40.0) / 500.0, 0.0, 1.0))
+		var x := vs.x * 0.53 + (i % 2) * 14.0 + 60.0 * (1.0 - e) - i * 4.0
 		var bw := vs.x * 0.42
 		draw_colored_polygon(PackedVector2Array([Vector2(x, y), Vector2(x + bw, y - 4.0), Vector2(x + bw - 6.0, y + rh - 4.0), Vector2(x - 4.0, y + rh)]), Color(0, 0, 0, 0.92 * e))
 		draw_string(UI.noto_k(), Vector2(x + 12, y + rh * 0.68), row[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1, 1, 1, e))
@@ -219,18 +370,13 @@ func _attr(vs: Vector2, col: Color) -> void:
 	draw_set_transform(Vector2.ZERO)
 
 func _gear(vs: Vector2, col: Color) -> void:
-	# her colour on the left, the gear art on black to the right
-	var left := PackedVector2Array([Vector2(0, 0), Vector2(vs.x * 0.56, 0), Vector2(vs.x * 0.47, vs.y), Vector2(0, vs.y)])
-	draw_colored_polygon(left, col)
-	UI.dots(self, Rect2(0, 0, vs.x * 0.56, vs.y), 0.25, 1.0)
-	draw_set_transform(Vector2(vs.x * 0.02, vs.y * 0.38), deg_to_rad(-8.0))
-	draw_string_outline(UI.anton(), Vector2.ZERO, UI.EN[c], HORIZONTAL_ALIGNMENT_LEFT, -1, int(vs.y * 0.3), 2, Color(0, 0, 0, 0.2))
-	draw_set_transform(Vector2.ZERO)
+	# the gear ground (#cx[data-tab=gear]: her colour on the left, the black shard on the right), the gear art (cx_xgear)
+	mx.ground(vs, col, "gear")
+	if prev_tab == "attr" and tab_t < 350.0: _attr_art(vs, tab_t)
 	var art := tx(GEAR_ART[c])
 	var h := vs.y * 1.05
 	var w := h * art.get_width() / art.get_height()
-	_art(vs, GEAR_ART[c], Rect2(vs.x * 0.98 - w, vs.y * 1.02 - h, w, h))
-	draw_colored_polygon(PackedVector2Array([Vector2(vs.x * 0.05, vs.y * 0.82), Vector2(vs.x * 0.5, vs.y * 0.74), Vector2(vs.x * 0.5, vs.y * 0.755), Vector2(vs.x * 0.05, vs.y * 0.835)]), Color.WHITE)
+	_art(vs, GEAR_ART[c], Rect2(vs.x * 0.98 - w, vs.y * 1.02 - h, w, h), "gear")
 	_name(Vector2(vs.x * 0.05, vs.y * 0.83))
 	var G: Dictionary = R().gear[c]
 	var y := vs.y * 0.21
@@ -238,14 +384,21 @@ func _gear(vs: Vector2, col: Color) -> void:
 		var s: String = GSL[i][0]
 		var it = G[s]
 		var on := i == gi
-		var e := UI.bk(clampf((tab_t - i * 40.0) / 320.0, 0.0, 1.0))
-		var x := vs.x * 0.06 + (i % 2) * -10.0 + (12.0 if on else 0.0) - 40.0 * (1.0 - e)
+		var e := UI.bk(clampf((tab_t - i * 40.0) / 500.0, 0.0, 1.0))
+		var x := vs.x * 0.06 + (i % 2) * -10.0 + (12.0 if on else 0.0) + 60.0 * (1.0 - e)
+		var fb := 0.0
+		if on and gi_t < 450.0:
+			# cx_flb: from brightness(3), turned (k − 3)·2.2°, 40 px right, 1.12×
+			var fu := UIA.p(gi_t, 0.0, 450.0, "bk")
+			x += 40.0 * (1.0 - fu)
+			fb = 1.0 - fu
 		var bw := vs.x * 0.27
 		var bh := 30.0
 		var g: Color = RN.gcol(it["g"]) if it != null else Color(0.33, 0.33, 0.33)
 		var poly := PackedVector2Array([Vector2(x, y), Vector2(x + bw, y - 3.0), Vector2(x + bw - 8.0, y + bh - 3.0), Vector2(x - 6.0, y + bh)])
 		if on: draw_colored_polygon(PackedVector2Array([poly[0] + Vector2(4, 4), poly[1] + Vector2(4, 4), poly[2] + Vector2(4, 4), poly[3] + Vector2(4, 4)]), Color.BLACK)
 		draw_colored_polygon(poly, Color(1, 1, 1, e) if on else Color(0, 0, 0, 0.92 * e))
+		if fb > 0.0: draw_colored_polygon(poly, Color(1, 1, 1, 0.8 * fb))
 		draw_rect(Rect2(x - 2, y, 5, bh - 2), Color(g, e))
 		draw_string(UI.spaced(UI.anton(), 1), Vector2(x + 12, y + 20), GSL[i][1], HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(g.darkened(0.3) if on else g, e))
 		var nm: String = it["n"] if it != null else "— 비어 있음"
@@ -257,8 +410,7 @@ func _gear(vs: Vector2, col: Color) -> void:
 		var ii := i
 		hit(poly, func():
 			if gi != ii:
-				gi = ii
-				picking = false
+				_pick_gi(ii)
 				sfx("ready", 0.15))
 		y += bh + 7.0
 	_gear_card(vs, col)
@@ -337,8 +489,16 @@ func _gear_card(vs: Vector2, col: Color) -> void:
 	else:
 		ps.append([RN.SLOTN[s] + " 칸이 비어 있습니다.", 12, Color(0.3, 0.3, 0.3)])
 	var h2 := 66.0 + paras_h(w - 24.0, ps) + 44.0
-	var e := UI.bk(clampf(tab_t / 360.0, 0.0, 1.0))
-	draw_set_transform(Vector2(x + 30.0 * (1.0 - e), y), deg_to_rad(-3.0))
+	# cx_gdpop: from opacity 0, rotate(12°) scale(.6) translateX(−30 px), .42s --bk (with the pane's entrance)
+	var gc0 := Vector2(x + w / 2.0, y + 60.0)
+	if gd_t < tab_t:
+		var e := UIA.p(gd_t, 0.0, 420.0, "bk")
+		draw_set_transform_matrix(UIA.xf(gc0, Vector2(-30.0 * (1.0 - e), 0), deg_to_rad(12.0 * (1.0 - e)), Vector2.ONE * lerpf(0.6, 1.0, e)) * Transform2D(deg_to_rad(-3.0), Vector2(x, y)))
+	else:
+		# as the pane's eighth .it: from 60 px right, turned 6°, after the seven blades
+		var e2 := UIA.p(tab_t, 7 * 40.0, 500.0, "bk")
+		if tab_t < 7 * 40.0: return
+		draw_set_transform_matrix(UIA.xf(gc0, Vector2(60.0 * (1.0 - e2), 0), deg_to_rad(6.0 * (1.0 - e2))) * Transform2D(deg_to_rad(-3.0), Vector2(x, y)))
 	draw_rect(Rect2(6, 6, w, h2), Color(0, 0, 0, 0.5))
 	draw_rect(Rect2(0, 0, w, h2), Color.WHITE)
 	var g2: Color = RN.gcol(it["g"]) if it != null else Color(0.5, 0.5, 0.5)
@@ -356,6 +516,13 @@ func _gear_card(vs: Vector2, col: Color) -> void:
 	hit(_xr(Transform2D(deg_to_rad(-3.0), Vector2(x, y)), btn), func():
 		picking = true
 		sfx("ready", 0.3))
+
+## the 상세 art (left 4 %, top 4 %, full height); out > 0 = leaving the tab
+func _attr_art(vs: Vector2, out: float) -> void:
+	var t0 := tx(ST[c])
+	var h := vs.y
+	var w := h * t0.get_width() / t0.get_height()
+	_art(vs, ST[c], Rect2(vs.x * 0.04, vs.y * 0.04, w, h), "slam", out)
 
 static func _xr(xf: Transform2D, r: Rect2) -> PackedVector2Array:
 	return PackedVector2Array([xf * r.position, xf * Vector2(r.end.x, r.position.y), xf * r.end, xf * Vector2(r.position.x, r.end.y)])

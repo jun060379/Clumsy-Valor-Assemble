@@ -4,6 +4,7 @@ extends Control
 ## 설정 and 조작 안내 are real (options.gd). Hub ↔ page changes go through the sweep (sortie.js txSweep2).
 
 const UI := preload("res://scripts/ui_kit.gd")
+const UIA := preload("res://scripts/ui_anim.gd")
 const OPTIONS := preload("res://scripts/options.gd")
 ## step 5-2 pages: 대장간, 가방, 캐릭터, the 도감 books, Bran's choices
 const FORGE := preload("res://scripts/ui_forge.gd")
@@ -281,6 +282,23 @@ func _input_bar(ev: InputEvent) -> void:
 				get_viewport().set_input_as_handled()      # keep the touch stick / buttons off it
 				return
 
+## the top bar's dots: 모험 수첩 = level rewards + log tasks + daily steps ready; 길드 수첩 = requests done + the bureau's letter
+var _dot_c := {}
+var _dot_at := -1e9
+func _dot_n(id: String) -> int:
+	if id != "abk" and id != "gbk": return 0
+	if clock - _dot_at > 500.0:
+		_dot_at = clock
+		var F = arena.get("fame")
+		_dot_c = {"abk": 0, "gbk": 0}
+		if F != null:
+			_dot_c["abk"] = F.lv_can().size() + F.ch_badges() + F.d_ready()
+			_dot_c["gbk"] = F.ready_n() + (1 if F.f_letter() else 0)
+	return int(_dot_c.get(id, 0))
+
+func _dots_on() -> bool:
+	return _bar_visible() and (_dot_n("abk") > 0 or _dot_n("gbk") > 0)
+
 func _bar_click(id: String) -> void:
 	match id:
 		"fs": ui_root.toggle_fullscreen()
@@ -357,7 +375,7 @@ func _process(delta: float) -> void:
 	# in play only the top bar shows: redraw it when something about it changes (or a few times a second),
 	# and the hub's art layers once more to clear them — not four full layers every frame on a phone
 	var st := [page, _bar_visible(), hover, tb_press, get_viewport_rect().size]
-	if page == "" and st == idle_st and clock - idle_draw < 250.0:
+	if page == "" and st == idle_st and clock - idle_draw < 250.0 and not _dots_on():
 		return
 	idle_st = st
 	idle_draw = clock
@@ -393,7 +411,8 @@ func _draw_bar(vs: Vector2) -> void:
 		var c := r.get_center()
 		var d := hover.distance_to(c)
 		var k := maxf(0.0, 1.0 - d / 90.0)
-		var a := maxf(0.36, k) if tbx else 1.0
+		var nd := _dot_n(id)
+		var a := maxf(0.8 if nd > 0 else 0.36, k) if tbx else 1.0
 		var off := Vector2.ZERO
 		if tbx and d > 0.0 and d < 90.0:
 			off = Vector2((hover.x - c.x) / d * 4.0 * k, (hover.y - c.y) / d * 3.0 * k)
@@ -407,6 +426,12 @@ func _draw_bar(vs: Vector2) -> void:
 			draw_colored_polygon(PackedVector2Array([poly[0] + Vector2(1, 1), poly[0] + Vector2(5, 1), poly[3] + Vector2(5, -1), poly[3] + Vector2(1, -1)]), tc)
 		var ic: Texture2D = ICON[id]
 		draw_texture_rect(ic, Rect2(c + off - Vector2(9, 9), Vector2(18, 18)), false, Color(0, 0, 0, a) if down else Color(1, 1, 1, a))
+		if nd > 0:
+			# i.dot: something to claim in that book (fm_dot: 1.4× with a red glow, 1.6 s)
+			var dp := UIA.pulse(clock, 1600.0)
+			var dc := r.position + off + Vector2(r.size.x - 5.0 - 4.0, 3.0 + 4.0)
+			if dp > 0.0: draw_circle(dc, 4.0 * (1.0 + 0.4 * dp) + 4.0 * dp, Color(1.0, 0.24, 0.35, 0.35 * dp))
+			draw_circle(dc, 4.0 * (1.0 + 0.4 * dp), Color("#ff3d5a"))
 		x -= 3.0
 
 

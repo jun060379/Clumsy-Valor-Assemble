@@ -161,7 +161,7 @@ func _draw_layer(k: int, c: Control) -> void:
 func ask(w: String, p: Texture2D, n: String, r: String, L: Array, C: Array) -> void:
 	open(w, p, n, r, L, null)
 	choices = C
-	ch_i = 0
+	ch_i = -1                    # nothing chosen until a key, a hover or a tap picks one (붕스 style)
 
 func _pick(k: int) -> void:
 	var C: Array = choices
@@ -176,13 +176,17 @@ func _pick(k: int) -> void:
 func _step_choices() -> void:
 	if t <= 150.0: return
 	if Input.is_action_just_pressed("down"):
-		ch_i = (ch_i + 1) % choices.size()
+		ch_i = 0 if ch_i < 0 else (ch_i + 1) % choices.size()
 		arena.sfx("step", 0.2)
 	elif Input.is_action_just_pressed("up"):
-		ch_i = (ch_i + choices.size() - 1) % choices.size()
+		ch_i = choices.size() - 1 if ch_i < 0 else (ch_i + choices.size() - 1) % choices.size()
 		arena.sfx("step", 0.2)
 	elif Input.is_action_just_pressed("attack") or Input.is_action_just_pressed("jump"):
-		_pick(ch_i)
+		# the first press only picks the top one; a press on a chosen one confirms
+		if ch_i < 0:
+			ch_i = 0
+			arena.sfx("ready", 0.15)
+		else: _pick(ch_i)
 
 var box := Rect2()
 func _input(ev: InputEvent) -> void:
@@ -203,6 +207,11 @@ func _input(ev: InputEvent) -> void:
 		var k1: int = talk.choice_at(ev.position)
 		if k1 >= 0:
 			get_viewport().set_input_as_handled()
+			# a tap picks, a second tap on the picked one confirms; the mouse already picked it by hovering
+			if k1 != ch_i and ev.device == InputEvent.DEVICE_ID_EMULATION:
+				ch_i = k1
+				arena.sfx("ready", 0.15)
+				return
 			_pick(k1)
 			return
 	elif ev is InputEventKey and ev.pressed and not ev.echo and ev.keycode >= KEY_1 and ev.keycode <= KEY_9 and ev.keycode - KEY_1 < choices.size():
