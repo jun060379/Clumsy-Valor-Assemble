@@ -207,7 +207,7 @@ func world(dt: float) -> void:
 		wait = s["wait"]
 		hide = true
 		path.pop_front()
-		if here(): arena.sfx("ready", 0.12)
+		if here() and arena.level.kind == "hall": arena.sfx("ready", 0.12)     # hDoorBump: only indoors
 		return
 	if s["t"] == "arrive":
 		spot = s["spot"]

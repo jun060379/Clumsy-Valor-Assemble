@@ -8,6 +8,7 @@ extends Node2D
 
 const LITS := preload("res://scripts/lit.gd")
 const HD := preload("res://scripts/hall_data.gd")
+const TLIFE := preload("res://scripts/town_life.gd")
 const PLASTER := Color(186 / 255.0, 162 / 255.0, 135 / 255.0)
 ## the sky behind the windows: day / dusk / night pictures cross-fade with the hour
 const HSKY := [[0.0, "night"], [4.6, "night"], [5.9, "dusk"], [7.6, "day"], [16.2, "day"], [17.6, "dusk"], [18.9, "dusk"], [20.3, "night"], [24.0, "night"]]
@@ -50,6 +51,17 @@ var hatch := false
 var snd_f := -1
 var snd_on := true
 var snd_vy := 0.0
+## hall life (hallLifeUpd / hallLifeDraw / hcat)
+const HJIG := ["barrel", "chairA", "chairB", "chS", "chF", "chB", "armS", "stool", "plant", "ivy", "kettle", "coat", "catbed", "pot", "bread", "candle", "candela", "armchair", "libladder", "desk", "table", "sofa"]
+var jig := {}                 # prop index -> 0..1 (struck: it rocks and hops)
+var jcd := {}
+var jx := Transform2D.IDENTITY   # the jig transform hi() draws under
+var drops: Array = []         # bread rolled off the table: {x, y, vx, vy, t}
+var moths: Array = []         # {l (light dict), ph, r, t, life}
+var mouse = null              # the attic mouse: {x, dir, st: run|sniff|flee, t, stop}
+var mouse_t := 3000.0
+var cat := {"st": "sleep", "t": 0.0, "dir": 1.0, "z": 0.0}
+var dust_f := -1
 
 
 func _ready() -> void:
@@ -136,9 +148,9 @@ func hi(ci: CanvasItem, k: String, x: float, yb: float, flip := false, clip := R
 	if x + w < vr.position.x - 60.0 or x > vr.end.x + 60.0: return
 	var dst := Rect2(roundf(x), roundf(yb - h), w, h)
 	if flip:
-		ci.draw_set_transform(Vector2(dst.position.x + w, dst.position.y), 0.0, Vector2(-1, 1))
+		ci.draw_set_transform_matrix(jx * Transform2D(0.0, Vector2(-1, 1), 0.0, Vector2(dst.position.x + w, dst.position.y)))
 		ci.draw_texture_rect(t, Rect2(0, 0, w, h), false, mod)
-		ci.draw_set_transform(Vector2.ZERO)
+		ci.draw_set_transform_matrix(jx)
 		return
 	if clip.has_area():
 		var c := dst.intersection(clip)
@@ -413,6 +425,7 @@ func step(dt: float) -> void:
 		var o2: float = arch_o.get(i, 0.0)
 		if wnt and o2 == 0.0: arena.sfx("ready", 0.15)
 		arch_o[i] = clampf(o2 + (1.0 if wnt else -1.0) * dt / 260.0, 0.0, 1.0)
+	_life(dt, P, AM)
 	# doors
 	near_door = null
 	if P.on and not P.attacking():
@@ -429,6 +442,115 @@ func step(dt: float) -> void:
 	glow.queue_redraw()
 	front.queue_redraw()
 	labels.queue_redraw()
+
+## hallLifeUpd: struck props jump (a pot clinks), the bread can roll off, footstep dust, moths at the lamps after dark,
+## the attic mouse, the cat on its cushion
+func _life(dt: float, P, AM) -> void:
+	var t := float(Time.get_ticks_msec())
+	if P.on and P.anim == "run" and P.f != dust_f and (P.f == 1 or P.f == 5): TLIFE.puff(arena, P.position.x - P.dir * 8.0, P.position.y, 2)
+	dust_f = P.f
+	var at = P.cur_atk() if P.attacking() else null
+	if at != null and P.f >= at["hit"][0] and P.f <= at["hit"][1]:
+		var b: Array = at["box"]
+		var bw: float = b[2] * P.CSCALE * P.MELEE_K
+		var bx: float = P.position.x + b[0] * P.CSCALE * P.MELEE_K if P.dir > 0 else P.position.x - b[0] * P.CSCALE * P.MELEE_K - bw
+		var by: float = P.position.y + b[1] * P.CSCALE
+		var bh: float = b[3] * P.CSCALE
+		for i in F["props"].size():
+			var p: Array = F["props"][i]
+			var k: String = p[0]
+			if not HJIG.has(k) or jcd.get(i, 0.0) > t: continue
+			var x0: float = p[1]
+			var w := HW(k)
+			var yb := HD.prop_y(p)
+			var y0 := yb - HH(k)
+			if bx < x0 + w and bx + bw > x0 and by < yb and by + bh > y0:
+				strike(i, P.dir)
+	for i in jig.keys():
+		jig[i] = jig[i] * pow(0.99, dt) if jig[i] > 0.02 else 0.0
+		if jig[i] <= 0.0: jig.erase(i)
+	for a in drops:
+		a["t"] += dt
+		a["vy"] += 0.0016 * dt
+		a["x"] += a["vx"] * dt
+		a["y"] += a["vy"] * dt
+		if a["y"] > G - 3.0:
+			a["y"] = G - 3.0
+			a["vy"] = -a["vy"] * 0.3
+			a["vx"] *= 0.9
+			if absf(a["vy"]) < 0.03: a["vy"] = 0.0
+	drops = drops.filter(func(a): return a["t"] < 7000.0)
+	# moths find the soft lamps after dark
+	var nk: float = night_k()
+	var vr: Rect2 = arena.view_rect()
+	if nk > 0.4 and moths.size() < 5 and randf() < dt / 1500.0:
+		var Ls: Array = lit.L.filter(func(l): return l["k"] == "soft" and l["x"] > vr.position.x - 100.0 and l["x"] < vr.end.x + 100.0)
+		if Ls.size() > 0:
+			moths.append({"l": Ls[randi() % Ls.size()], "ph": randf() * 9.0, "r": 12.0 + randf() * 14.0, "t": 0.0, "life": 9000.0 + randf() * 9000.0})
+	for m in moths: m["t"] += dt
+	moths = moths.filter(func(m): return m["t"] < m["life"] and nk > 0.3)
+	# the attic mouse: runs along the floor, may stop to sniff, flees with a squeak when you come within 150 px
+	if F.get("gable", false):
+		var x0: float = F["rooms"][0][0]
+		var x1: float = F["rooms"][0][1]
+		if mouse == null:
+			mouse_t -= dt
+			if mouse_t <= 0.0:
+				var dir := 1.0 if randf() < 0.5 else -1.0
+				mouse = {"x": x0 + 10.0 if dir > 0.0 else x1 - 10.0, "dir": dir, "st": "run", "t": 0.0, "stop": x0 + 150.0 + randf() * (x1 - x0 - 300.0) if randf() < 0.6 else null}
+				mouse_t = 7000.0 + randf() * 9000.0
+		else:
+			var ms: Dictionary = mouse
+			ms["t"] += dt
+			if absf(P.position.x - ms["x"]) < 150.0 and ms["st"] != "flee":
+				ms["st"] = "flee"
+				ms["dir"] = 1.0 if P.position.x < ms["x"] else -1.0
+				if AM != null: AM.hsnd(3200.0, 2600.0, 0.06, 0.012, "square", 5.0)
+			if ms["st"] == "run" and ms["stop"] != null and absf(ms["x"] - ms["stop"]) < 6.0:
+				ms["st"] = "sniff"
+				ms["t"] = 0.0
+				ms["stop"] = null
+			if ms["st"] == "sniff":
+				if ms["t"] > 1200.0 + randf() * 30.0: ms["st"] = "run"
+			else:
+				ms["x"] += ms["dir"] * (0.42 if ms["st"] == "flee" else 0.22) * dt
+			if ms["x"] < x0 - 20.0 or ms["x"] > x1 + 20.0: mouse = null
+	# the cat on its cushion: sits up and watches within 130 px, curls up again once you are 200 px off
+	for p in F["props"]:
+		if p[0] != "catbed": continue
+		var cx: float = p[1] + 28.0
+		var d := absf(P.position.x - cx)
+		cat["t"] += dt
+		cat["z"] += dt
+		if d < 130.0 and cat["st"] == "sleep":
+			cat["st"] = "sit"
+			cat["t"] = 0.0
+		elif d > 200.0 and cat["st"] == "sit" and cat["t"] > 2500.0:
+			cat["st"] = "sleep"
+			cat["t"] = 0.0
+		cat["dir"] = -1.0 if P.position.x < cx else 1.0
+
+## a struck prop jumps; a pot clinks; the bread (or something off the table) may roll off
+func strike(i: int, dir: int) -> void:
+	var p: Array = F["props"][i]
+	var k: String = p[0]
+	var x0: float = p[1]
+	var w := HW(k)
+	var yb := HD.prop_y(p)
+	jig[i] = 1.0
+	jcd[i] = Time.get_ticks_msec() + 380.0
+	arena.sfx("guard", 0.35 if k == "pot" else 0.22)
+	var AM = arena.get("amb")
+	if k == "pot" and AM != null: AM.hsnd(900.0, 880.0, 0.4, 0.03, "triangle", 2.0)
+	TLIFE.puff(arena, x0 + w / 2.0, yb, 3)
+	if (k == "bread" or k == "table") and randf() < 0.45:
+		drops.append({"x": x0 + w / 2.0, "y": yb - HH(k) + 4.0, "vx": dir * (0.08 + randf() * 0.1), "vy": -0.32 - randf() * 0.15, "t": 0.0})
+
+## nightK: 0 by day .. 1 at night (the world sky's alpha)
+func night_k() -> float:
+	var T: Dictionary = arena.tod_now()
+	var sky: Color = T["sky"]
+	return clampf((sky.a - 0.33) / 0.33, 0.0, 1.0)
 
 ## where the fires are on this floor (ambience.gd crackle)
 func fire_xs() -> Array:
@@ -594,10 +716,48 @@ func _draw() -> void:
 			var s: float = maxf(2.0, roundf(f["s"] * (0.5 + k2 * 1.4) / 2.0) * 2.0)
 			var a: float = (k2 / 0.15 if k2 < 0.15 else 1.0 - (k2 - 0.15) / 0.85) * 0.35
 			draw_rect(Rect2(roundf((f["x"] - s / 2.0) / 2.0) * 2.0, roundf((f["y"] - s / 2.0) / 2.0) * 2.0, s, s), Color(0.84, 0.8, 0.75, a))
-	if F.get("gable", false):
-		for d in adust:
-			draw_rect(Rect2(roundf(d["x"] / 2.0) * 2.0, roundf(d["y"] / 2.0) * 2.0, 2, 2), Color(200 / 255.0, 186 / 255.0, 160 / 255.0, 0.55))
-		_cobwebs()
+	_life_draw()
+
+## hallLifeDraw: the dropped bread, moths, attic dust, cobwebs and the mouse
+func _life_draw() -> void:
+	var t := float(Time.get_ticks_msec())
+	var q := func(x: float, y: float, w: float, h: float, c: Color) -> void: draw_rect(Rect2(roundf(x / 2.0) * 2.0, roundf(y / 2.0) * 2.0, w, h), c)
+	for a in drops:
+		var al: float = 1.0 - (a["t"] - 6000.0) / 1000.0 if a["t"] > 6000.0 else 1.0
+		q.call(a["x"] - 5.0, a["y"] - 5.0, 10.0, 6.0, Color(Color("#b07434"), al))
+		q.call(a["x"] - 3.0, a["y"] - 5.0, 6.0, 2.0, Color(Color("#d9a35c"), al))
+		q.call(a["x"] - 5.0, a["y"] - 1.0, 10.0, 2.0, Color(Color("#7a4a22"), al))
+	for m in moths:
+		var s: float = m["t"] / 1000.0
+		var a: float = minf(1.0, minf(m["t"] / 600.0, (m["life"] - m["t"]) / 600.0))
+		var l: Dictionary = m["l"]
+		var x: float = l["x"] + cos(s * 2.3 + m["ph"]) * m["r"] + sin(s * 7.1 + m["ph"]) * 4.0
+		var y: float = l["y"] + sin(s * 1.7 + m["ph"] * 2.0) * m["r"] * 0.6 + sin(s * 9.0) * 3.0
+		q.call(x, y, 2.0, 2.0, Color(Color("#5a4a3a"), a))
+		if int((t + m["ph"] * 100.0) / 70.0) % 2 == 1:
+			q.call(x - 4.0, y - 2.0, 4.0, 2.0, Color(Color("#e8dcc0"), a))
+			q.call(x + 2.0, y - 2.0, 4.0, 2.0, Color(Color("#e8dcc0"), a))
+		else:
+			q.call(x - 2.0, y - 4.0, 2.0, 2.0, Color(Color("#cfc2a4"), a))
+			q.call(x + 2.0, y - 4.0, 2.0, 2.0, Color(Color("#cfc2a4"), a))
+	if not F.get("gable", false): return
+	for d in adust:
+		draw_rect(Rect2(roundf(d["x"] / 2.0) * 2.0, roundf(d["y"] / 2.0) * 2.0, 2, 2), Color(200 / 255.0, 186 / 255.0, 160 / 255.0, 0.55))
+	_cobwebs()
+	if mouse != null:
+		var ms: Dictionary = mouse
+		var b := float(int(t / 150.0) % 2) if ms["st"] == "sniff" else float(int(t / 60.0) % 2)
+		draw_set_transform(Vector2(roundf(ms["x"]), G), 0.0, Vector2(ms["dir"], 1.0))
+		draw_rect(Rect2(-6, -6, 10, 6), Color("#6e6460"))
+		draw_rect(Rect2(-4, -8, 6, 2), Color("#6e6460"))
+		draw_rect(Rect2(4, -6 + b, 4, 4), Color("#6e6460"))
+		draw_rect(Rect2(6, -4 + b, 2, 2), Color("#2a1a1a"))
+		draw_rect(Rect2(2, -10, 2, 2), Color("#8a7f7a"))
+		draw_rect(Rect2(-12, -4, 6, 2), Color("#9a7a7a"))
+		draw_rect(Rect2(-14, -6, 2, 2), Color("#9a7a7a"))
+		draw_rect(Rect2(-4, -2 + b, 2, 2), Color("#4a403c"))
+		draw_rect(Rect2(2, -2 + (1.0 - b), 2, 2), Color("#4a403c"))
+		draw_set_transform(Vector2.ZERO)
 
 ## the back wall of one room, bay by bay
 func _wall() -> void:
@@ -616,6 +776,7 @@ func _wall() -> void:
 		for m in M:
 			if m[1] <= 0.01: continue
 			hfill(self, "sky_" + m[0], x0, G - LOW, x1 - x0, LOW, cx * 0.65, G - 80.0 - 300.0, Color(1, 1, 1, m[1]))
+		_hwx(maxf(x0, VX0), minf(x1, VX1), G - LOW, LOW)
 	var post: Texture2D = tex["post"]
 	for b in bays:
 		var x: float = b[0]
@@ -632,6 +793,40 @@ func _wall() -> void:
 		if x1 < VX0 or x0 > VX1: continue
 		draw_texture_rect_region(post, Rect2(x1 - post.get_width() * 2.0, C, post.get_width() * 2.0, HD.RH), Rect2(0, 0, post.get_width(), 1))
 		hfill(self, "under", x0, C, x1 - x0, 52.0, x0, C)
+
+## hwx: the weather outside the windows: rain streaks / snow flakes on the sky band (the wall art covers all but the glass)
+func _hwx(x0: float, x1: float, y0: float, h: float) -> void:
+	var k: String = arena.weather
+	if k != "rain" and k != "snow": return
+	var band := Rect2(x0, y0, x1 - x0, h)
+	draw_rect(band, Color(60 / 255.0, 70 / 255.0, 90 / 255.0, 0.28))
+	var t := float(Time.get_ticks_msec())
+	if k == "rain":
+		var c := Color(210 / 255.0, 225 / 255.0, 245 / 255.0, 0.7)
+		var x := floorf(x0 / 6.0) * 6.0
+		while x < x1:
+			for j in 2:
+				var r := sin(x * 12.99 + j * 71.3) * 43758.5
+				var u := r - floorf(r)
+				var yy := y0 + fmod(t * (0.7 + u * 0.3) + u * 1900.0, h + 60.0) - 30.0
+				var xx := x + roundf(((yy - y0) * 0.12) / 2.0) * 2.0
+				var ry := roundf(yy / 2.0) * 2.0
+				for rc in [Rect2(xx, ry, 2, 14), Rect2(xx + 2.0, ry + 14.0, 2, 6)]:
+					var q: Rect2 = rc.intersection(band)
+					if q.has_area(): draw_rect(q, c)
+			x += 6.0
+	else:
+		var c2 := Color(245 / 255.0, 248 / 255.0, 1.0, 0.85)
+		var x := floorf(x0 / 18.0) * 18.0
+		while x < x1:
+			var r := sin(x * 7.31) * 43758.5
+			var u := r - floorf(r)
+			var yy := y0 + fmod(t * (0.03 + u * 0.03) + u * 900.0, h + 20.0) - 10.0
+			var xx := x + sin(t / 900.0 + u * 9.0) * 6.0
+			var s := 4.0 if u > 0.7 else 2.0
+			var q2 := Rect2(roundf(xx / 2.0) * 2.0, roundf(yy / 2.0) * 2.0, s, s).intersection(band)
+			if q2.has_area(): draw_rect(q2, c2)
+			x += 18.0
 
 ## the attic: a gabled room under the rafters
 func _gable() -> void:
@@ -750,16 +945,30 @@ func _prop(ci: CanvasItem, p: Array) -> void:
 		_arch_door(ci, p, x, y)
 		return
 	if k == "ladder" and fl == 2: _ladder_up(ci, x, y)
+	var j: float = jig.get(F["props"].find(p), 0.0)
+	if j > 0.02:
+		# struck: it rocks and hops
+		var tms := float(Time.get_ticks_msec())
+		var c := Vector2(x + HW(k) / 2.0, y)
+		jx = Transform2D(sin(tms / 28.0) * 0.08 * j, c) * Transform2D(0.0, -c - Vector2(0, absf(sin(tms / 60.0)) * 6.0 * j))
+		ci.draw_set_transform_matrix(jx)
 	if k == "banner":
 		hi(ci, "banN" if _rank() >= 3 else "banO", x, y)       # the banner over the door is replaced from rank 3
+		_unjig(ci)
 		return
 	if k == "herbs":
 		ci.draw_rect(Rect2(roundf(x + HW(k) / 2.0 - 1.0), G - 256.0, 2.0, y - HH(k) - (G - 256.0) + 4.0), Color("#5a4028"))
 	if k == "counter" and fl == 0 and E.here() and E.layer() == "counter": E.draw_on(ci, E.x, G - 1.0)
 	if k == "table" and fl == 0 and E.here() and E.layer() == "table": E.draw_on(ci, E.x, G - 1.0)
+	if jx != Transform2D.IDENTITY: ci.draw_set_transform_matrix(jx)     # Eilin's drawing above resets the transform
 	hi(ci, k, x, y, fg.contains("m"))
+	_unjig(ci)
 	match k:
 		"board": _board(ci, x, y)
+		"catbed": _cat(ci, x, y)
+		"shelf":
+			# the library's shelves stay dark until it is restored
+			if not hfac("library"): ci.draw_rect(Rect2(x, y - HH(k), HW(k), HH(k)), Color(20 / 255.0, 14 / 255.0, 10 / 255.0, 0.55))
 		"clock": _pendulum(ci, x, y)
 		"tboard": _trophies(ci, x, y)
 		"fire":
@@ -771,6 +980,22 @@ func _prop(ci: CanvasItem, p: Array) -> void:
 			if not hfac("hearth"): return
 			_flame(ci, x + 79.0, y - 17.0, 0.4, 1.0)
 			_flame(ci, x + 99.0, y - 17.0, 0.36, 3.0)
+
+func _unjig(ci: CanvasItem) -> void:
+	if jx == Transform2D.IDENTITY: return
+	jx = Transform2D.IDENTITY
+	ci.draw_set_transform(Vector2.ZERO)
+
+## hcat: the cat asleep on its cushion by the fire (z's), sitting up to watch you when you are near
+func _cat(ci: CanvasItem, x: float, y: float) -> void:
+	var t := float(Time.get_ticks_msec())
+	var sit: bool = cat["st"] == "sit"
+	ci.draw_set_transform(Vector2(roundf(x + 28.0), roundf(y - 12.0)), 0.0, Vector2(2.0 * (cat["dir"] if sit else 1.0), 2.0))
+	if sit: TLIFE.cat_sit(ci, t, false, false)
+	else: TLIFE.cat_sleep(ci, t)
+	ci.draw_set_transform(Vector2.ZERO)
+	if not sit and int(cat["z"] / 900.0) % 3 == 0:
+		ci.draw_string(arena.font_black, Vector2(x + 40.0, y - 26.0 - fmod(cat["z"], 900.0) / 60.0), "z", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1, 1, 1, 0.75))
 
 ## stair-landing archway with its double door: the leaves swing in as you step onto the landing
 func _arch_door(ci: CanvasItem, p: Array, x: float, y: float) -> void:
@@ -807,6 +1032,21 @@ func _board(ci: CanvasItem, x: float, yb: float) -> void:
 	for q in P4:
 		var k: String = q[3]
 		hi(ci, k, roundf(x + w * (q[0] + q[1]) / 2.0 - HW(k) / 2.0), roundf(yb - h + h * q[2]) + 2.0)
+	# hboardFlap: the notices lift and flap in a door's draft, and flutter now and then on their own
+	var v := 0.0
+	if draft != null: v = draft["v"] * maxf(0.0, 1.0 - absf(x + w / 2.0 - draft["x"]) / 700.0)
+	var t := Time.get_ticks_msec() / 1000.0
+	for i in P4.size():
+		var q: Array = P4[i]
+		var kk := maxf(0.08 * maxf(0.0, sin(t * 0.7 + i * 2.0) - 0.8) * 5.0, v) * (0.6 + 0.4 * sin(t * (14.0 + i * 3.0) + i))
+		if kk < 0.05: continue
+		var lift := roundf(kk * 6.0 / 2.0) * 2.0
+		var x0 := roundf((x + w * q[0]) / 2.0) * 2.0
+		var x1 := roundf((x + w * q[1]) / 2.0) * 2.0
+		var y := roundf((yb - h + h * q[2]) / 2.0) * 2.0
+		ci.draw_rect(Rect2(x0, y - 2.0, x1 - x0, 2.0), Color(40 / 255.0, 24 / 255.0, 14 / 255.0, 0.45))
+		ci.draw_rect(Rect2(x0, y - 2.0 - lift, x1 - x0, lift), Color("#d8cbaa"))
+		ci.draw_rect(Rect2(x0, y - 2.0 - lift, x1 - x0, 2.0), Color("#efe4c8"))
 
 ## grandfather clock: the pendulum swings in the case (2 s period)
 func _pendulum(ci: CanvasItem, x: float, y: float) -> void:
