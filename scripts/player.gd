@@ -93,6 +93,11 @@ var air_y := 0.0
 var last_hp := 70.0
 var party_down := false
 var cam_focus := {"x": 0.0, "t": 0.0}
+var pd_back := false         # neutral dodge: a quicker, longer backstep that can be cancelled into an attack
+var teeter_q := false
+var teeter_t := 0.0
+var edge_idle := 0.0
+var xs := 0.0                # x at the start of the frame (edge hold)
 
 
 func _ready() -> void:
@@ -312,10 +317,7 @@ func check_hits() -> void:
 	for e in foes_alive():
 		var ex: float = e.position.x
 		var ey: float = e.position.y
-		var vert := ey > by and ey - 95.0 < by + bh
-		var front := (ex - position.x) * dir
-		var point_blank := vert and front > -28.0 * CSCALE and front < 50.0 * CSCALE
-		if point_blank or (ex + 22.0 > bx - 20.0 and ex - 22.0 < bx + bw and vert):
+		if in_arc(atk, ex, ey, 95.0, bx, by, bw, bh):
 			e.hit(atk["dmg"], dir * atk["kb"], atk_mul())
 			hit_any = true
 	if hit_any:
@@ -328,6 +330,33 @@ func check_hits() -> void:
 			arena.flash = 0.2
 		if anim in ["attack3", "cthrust", "attack_high"] or (anim == "air_combo" and f >= 6):
 			qte_offer("finisher")
+
+
+## the foe as a vertical segment (ey-eh .. ey) tested against the swing: point-blank always counts,
+## arcs test sample points against the crescent sector, thrusts use the box
+func in_arc(atk, ex: float, ey: float, eh: float, bx: float, by: float, bw: float, bh: float) -> bool:
+	var vert := ey > by and ey - eh < by + bh
+	var front := (ex - position.x) * dir
+	if vert and front > -28.0 * CSCALE and front < 50.0 * CSCALE:
+		return true
+	if not atk.has("arc"):
+		return ex + 22.0 > bx - 20.0 and ex - 22.0 < bx + bw and vert
+	var c: Array = atk["arc"]
+	var cx: float = position.x + dir * c[0] * CSCALE
+	var cy: float = position.y + c[1] * CSCALE
+	var R: float = c[2] * CSCALE * MELEE_K * 1.12
+	var lo := minf(c[3], c[4])
+	var hi := maxf(c[3], c[4])
+	for i in 6:
+		var py := ey - eh * i * 0.2
+		var dx := (ex - cx) * dir
+		var dy := py - cy
+		if Vector2(dx, dy).length() > R * 1.08:
+			continue
+		var ang := rad_to_deg(atan2(dy, dx))
+		if ang >= lo and ang <= hi:
+			return true
+	return false
 
 
 # ---------- Aida's rift ----------
@@ -426,6 +455,7 @@ func add_ghost(life: float, ox := 0.0) -> void:
 
 # ---------- main step ----------
 func step(dt: float) -> void:
+	xs = position.x
 	read_input()
 	t += dt
 	if inv > 0.0: inv -= dt
@@ -457,7 +487,9 @@ func step(dt: float) -> void:
 			recharge = 0.0
 			charges += 1
 	var dash_ok := charges > 0 and dash_cd <= 0.0 and not anim in ["hurt", "death", "dive", "dash", "airdash", "backstep", "tag_in", "swap_in"] and not busy_rift()
-	if want("dash") and dash_ok:
+	if want("dash") and dash_ok and neutral_dodge():
+		take("dash")
+	elif want("dash") and dash_ok:
 		take("dash")
 		var dd := move_axis()
 		dir = dd if dd != 0 else dir
@@ -543,12 +575,13 @@ func step(dt: float) -> void:
 			vx = dir * (sp2[f] if f < sp2.size() else 0.0)
 		else:
 			var sp3: Array = [0.55, 0.45, 0.1]
-			vx = -dir * (sp3[f] if f < sp3.size() else 0.0)
+			vx = -dir * (sp3[f] if f < sp3.size() else 0.0) * (1.75 if pd_back else 1.0)
 		ghost_t += dt
 		if ghost_t > 28.0 and absf(vx) > 0.4:
 			ghost_t = 0.0
 			add_ghost(200.0)
-		if a != "backstep" and f >= 1 and want("attack"):
+		if (a != "backstep" or pd_back) and f >= 1 and want("attack"):
+			pd_back = false
 			take("attack")
 			start_attack()
 			if on: slide = vx
@@ -808,6 +841,49 @@ func locomotion(dt: float, move: int, a: String) -> void:
 			use_skill(move)
 
 
+## neutral dash (no direction) while an attack is coming = a quick backstep away from it, still facing the attacker
+func neutral_dodge() -> bool:
+	if not on or keys["left"] or keys["right"]:
+		return false
+	var m = arena.threatened()
+	if m == null:
+		return false
+	dir = 1 if m.position.x > position.x else -1
+	charges -= 1
+	set_anim("backstep")
+	pd_back = true
+	arena.sfx("dash", 0.9)
+	arena.dust(position + Vector2(dir * 10.0 * CSCALE, 0), dir, false)
+	dash_cd = 200.0
+	return true
+
+## what is under her feet as an x-span, or null
+func support_span(x: float, y: float) -> Variant:
+	if absf(y - arena.ground_y) < 1.0:
+		return [-1e9, 1e9]
+	for pl in arena.platforms:
+		if absf(y - pl.y) < 1.0 and x > pl.x - 2.0 and x < pl.x + pl.w + 2.0:
+			return [pl.x - 2.0, pl.x + pl.w + 2.0]
+	return null
+
+## edge gravity: attacks, lunges, guard pushes and hurt knockback stop at the lip of what she stands on;
+## a plain dash does too unless the stick is held that way (then it's on purpose)
+func edge_hold(x0: float) -> void:
+	if not on:
+		return
+	var s0 = support_span(x0, position.y)
+	if s0 == null or support_span(position.x, position.y) != null:
+		return
+	var nx := clampf(position.x, s0[0] + 1.0, s0[1] - 1.0)
+	if nx == position.x:
+		return
+	position.x = nx
+	vx = 0.0
+	teeter_q = true
+	if teeter_t <= 0.0:
+		teeter_t = 260.0
+		arena.dust(position, 0, false)
+
 func physics(dt: float, a: String) -> void:
 	if not on and not air_tag:
 		var g := GRAV
@@ -825,10 +901,34 @@ func physics(dt: float, a: String) -> void:
 		else:
 			lunge = 0.0
 	var prev_y := position.y
+	var prev_x := position.x
 	position.x = clampf(position.x + vx * dt, 30.0, arena.world_w - 30.0)
 	position.y += vy * dt
 	if air_tag:
 		return
+	if on:
+		var mv := move_axis()
+		if teeter_t > 0.0: teeter_t -= dt
+		if attacking() or a in ["hurt", "guard", "parry", "backstep"] or (a == "dash" and mv != dir):
+			edge_hold(xs if absf(xs - position.x) < 300.0 else prev_x)
+		# teeter: once after being stopped at the lip, and on loop while standing idle with toes over it
+		if anim == "idle" and mv == 0 and not keys["down"]:
+			if teeter_q:
+				teeter_q = false
+				set_anim("teeter")
+			else:
+				var sp = support_span(position.x, position.y)
+				if sp != null and sp[0] > -1e8:
+					var gap: float = sp[1] - position.x if dir > 0 else position.x - sp[0]
+					if gap < 14.0:
+						edge_idle += dt
+						if edge_idle > 380.0: set_anim("teeterL")
+					else:
+						edge_idle = 0.0
+				else:
+					edge_idle = 0.0
+		elif anim != "teeter" and anim != "teeterL":
+			edge_idle = 0.0
 	var landed := false
 	if vy >= 0.0:
 		if position.y >= arena.ground_y:
@@ -921,12 +1021,17 @@ func advance(dt: float, move: int) -> void:
 				set_anim("idle")
 			elif n == "dash":
 				set_anim("run" if move == dir else "idle")
+			elif n == "teeter":
+				set_anim("idle")
+			elif n == "teeterL":
+				f = 0
 			elif n == "tag_in":
 				set_anim("idle")
 			elif n == "swap_in":
 				position.x = swap_to
 				set_anim("run" if move == dir else "stop")
 			elif n == "backstep":
+				pd_back = false
 				set_anim("guard" if keys["guard"] else "idle", 1 if keys["guard"] else 0)
 			elif n == "death":
 				f = 3

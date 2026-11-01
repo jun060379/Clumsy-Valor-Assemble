@@ -23,7 +23,7 @@ const QTE_LBL := {"estelle": "수호", "aida": "기습", "luce": "구원"}
 const COMMON := {
 	"charge": [-1, [110, 1000000000]], "acharge": [-1, [110, 1000000000]], "cthrust": [-1, [45, 60, 220, 170]],
 	"airdash": [-1, [40, 55, 60, 60, 60, 90]], "backstep": [-1, [60, 110, 120]], "swap_in": [-1, [55, 55, 55, 55, 60, 70]],
-	"teeter": [28, [150, 140, 150, 190]],
+	"teeter": [28, [150, 140, 150, 190]], "teeterL": [-1, [300, 300, 340, 300]],
 }
 
 const A_EST := {
@@ -77,6 +77,7 @@ const VIRT := {
 	"dig_out_q": [["dash", 3], ["dash", 4], ["dash", 5], ["dash", 5]],
 	"dig_out_air": [["dash", 3], ["jump", 4], ["jump", 4], ["jump", 5]],
 	"lgather": [["kneel", 0], ["kneel", 1]], "heal": [["idle", 0], ["idle", 1]],
+	"teeterL": [["teeter", 0], ["teeter", 1], ["teeter", 2], ["teeter", 1]],
 }
 
 ## attack hit data (relative to the feet, facing right; before character scale)
