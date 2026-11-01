@@ -1428,6 +1428,7 @@ func tag_strike() -> void:
 	tag_mul = 1.0
 	if R0 != null and is_instance_valid(R0) and R0.alive():
 		R0.hit(2.0 * M, dir * 8.0, atk_mul())
+		if R0.get("daze") != null: R0.daze = maxf(R0.daze, 500.0)     # the training ghost loses her for a moment
 	arena.hitstop = 80.0
 	arena.shake(7, dir)
 	arena.post_wave(position + Vector2(dir * 60.0, -50.0), 1.1, 460.0, 0.22)

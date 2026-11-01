@@ -158,7 +158,7 @@ func _ult_show() -> float:
 func _ult_full() -> bool:
 	return arena.ult != null and arena.ult.ready_now()
 
-## what the objective line says: the cave's name and foes left, the training dummies; town objectives come later
+## what the objective line says: the cave's name and foes left, the training ground's ghost / dummies; town objectives come later
 func _objective() -> String:
 	if objective != "": return objective
 	var lk: String = arena.level_kind()
@@ -168,7 +168,7 @@ func _objective() -> String:
 			if not m.is_dead(): n += 1
 		return "버섯 동굴 · 남은 적 %d" % n
 	if lk == "":
-		return "허수아비 부수기"
+		return "유령 퇴치 0 / 1" if arena.ghost != null and arena.ghost.alive() else "허수아비 부수기"
 	if arena.fame != null: return arena.fame.fame_obj()     # fameObj: letters, reports, the trial
 	return ""
 
@@ -267,14 +267,6 @@ func _draw_front() -> void:
 	if lk == "dungeon":
 		_draw_dungeon_ui(ci, vs, live)
 	var fa: Font = arena.font_anton
-	# wave counter, under the top-right buttons
-	if live and arena.wave > 0 and arena.level == null:
-		var alive := 0
-		for m in arena.mobs:
-			if not m.is_dead(): alive += 1
-		var s := "WAVE %d" % arena.wave
-		ci.draw_string(fa, Vector2(vs.x - 236, 76), s, HORIZONTAL_ALIGNMENT_RIGHT, 136, 22, Color.WHITE)
-		ci.draw_string(arena.font_bold, Vector2(vs.x - 236, 94), "남은 적 %d" % alive, HORIZONTAL_ALIGNMENT_RIGHT, 136, 11, Color(1, 1, 1, 0.6))
 	# slow motion: thin frame lines at the edge
 	if arena.witch > 0.0:
 		var k: float = minf(1.0, arena.witch / 300.0)
