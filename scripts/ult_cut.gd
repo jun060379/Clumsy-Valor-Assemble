@@ -1,8 +1,10 @@
 extends Control
 ## Ult cut-in (prototype ultCutStart / drawUltCut2, Honkai: Star Rail style): a white "쨍" flash, then the splash — a dim
 ## in the member's colour, a slanted colour panel slides in, the splash art (ult_art_*.png) pops in, the skill name
-## strikes in with its underline — holds a beat, a white cut, the clip (ult_*.ogv, letterboxed), a white cut back.
+## strikes in with its underline — holds a beat, a white cut, the clip (letterboxed), a white cut back.
 ## Without a clip the splash goes straight to the closing white cut.
+## The clips are JPEG frame packs (ult_*.useq, tools/make_ult_seq.py): the web export has no Theora decoder, so the
+## game decodes one frame at a time itself — one texture alive, nothing preloaded.
 
 const UI := preload("res://scripts/ui_kit.gd")
 const ULT := preload("res://scripts/ult.gd")
@@ -17,10 +19,11 @@ var sortie
 var on := false
 var who := "estelle"
 var arts := {}
-var vids := {}
-var vp: VideoStreamPlayer
+var vids := {}                  # member -> {"fps", "w", "h", "buf": PackedByteArray, "off": [[start, size]...]}
+var vp: TextureRect             # the clip's current frame
 var started := false
-var bad := {}                   # members whose clip never produced a frame here (falls back to the splash only)
+var bad := {}                   # members whose clip failed to decode here (falls back to the splash only)
+var _fi := -1                   # the frame on screen
 var art_node: Control
 var front: Control
 var art_sil: Control
@@ -33,15 +36,13 @@ func _ready() -> void:
 	visible = false
 	for c in ["estelle", "aida", "luce"]:
 		arts[c] = load("res://assets/ult/ult_art_%s.png" % c)
-		var p := "res://assets/ult/ult_%s.ogv" % c
-		if ResourceLoader.exists(p):
-			var s = load(p)
-			if s is VideoStream: vids[c] = s
+		var pk := read_pack("res://assets/ult/ult_%s.useq" % c)
+		if not pk.is_empty(): vids[c] = pk
 	art_node = _layer(_draw_art)
-	vp = VideoStreamPlayer.new()
-	vp.expand = true
+	vp = TextureRect.new()
+	vp.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	vp.stretch_mode = TextureRect.STRETCH_SCALE
 	vp.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vp.volume_db = -80.0
 	vp.visible = false
 	add_child(vp)
 	front = _layer(_draw_front)
@@ -55,6 +56,33 @@ func _layer(fn: Callable) -> Control:
 	add_child(c)
 	return c
 
+## a frame pack: "USEQ", u16 fps, w, h, count, then count x (u32 size, JPEG)
+static func read_pack(p: String) -> Dictionary:
+	if not FileAccess.file_exists(p): return {}
+	var b := FileAccess.get_file_as_bytes(p)
+	if b.size() < 12 or b.slice(0, 4).get_string_from_ascii() != "USEQ": return {}
+	var n := b.decode_u16(10)
+	var off: Array = []
+	var at := 12
+	for i in n:
+		if at + 4 > b.size(): return {}
+		var sz := b.decode_u32(at)
+		off.append([at + 4, sz])
+		at += 4 + sz
+	if at > b.size() or n == 0: return {}
+	return {"fps": float(b.decode_u16(4)), "w": b.decode_u16(6), "h": b.decode_u16(8), "buf": b, "off": off}
+
+## decode frame i of member c's clip (null when it won't decode)
+func frame_img(c: String, i: int) -> Image:
+	var V: Dictionary = vids[c]
+	var o: Array = V["off"][clampi(i, 0, V["off"].size() - 1)]
+	var im := Image.new()
+	if im.load_jpg_from_buffer(V["buf"].slice(o[0], o[0] + o[1])) != OK: return null
+	return im
+
+func clip_frames(c: String) -> int:
+	return vids[c]["off"].size() if vids.has(c) else 0
+
 func has_video(c: String) -> bool:
 	return vids.has(c) and not bad.has(c)
 
@@ -67,15 +95,15 @@ func start(c: String) -> void:
 	visible = true
 	started = false
 	vp.visible = false
-	vp.stop()
-	if has_video(c):
-		vp.stream = vids[c]
+	vp.texture = null
+	_fi = -1
 
 func stop() -> void:
 	on = false
 	visible = false
-	vp.stop()
 	vp.visible = false
+	vp.texture = null
+	_fi = -1
 
 func _t() -> float:
 	return arena.ult.t
@@ -89,13 +117,18 @@ func _process(_delta: float) -> void:
 		if not started:
 			started = true
 			vp.visible = true
-			vp.play()
-		elif t >= t2 + 250.0:
-			var tex := vp.get_video_texture()
-			if not vp.is_playing() or tex == null or tex.get_width() < 2:
-				bad[who] = true          # no decoder output: skip to the closing white cut
-				vp.stop()
+		var fi := mini(int((t - t2) / 1000.0 * vids[who]["fps"]), clip_frames(who) - 1)
+		if fi != _fi:
+			_fi = fi
+			var im := frame_img(who, fi)
+			if im == null:
+				bad[who] = true          # the frame won't decode: skip to the closing white cut
 				vp.visible = false
+				vp.texture = null
+			elif vp.texture is ImageTexture and Vector2i(vp.texture.get_size()) == im.get_size():
+				vp.texture.update(im)    # one texture for the whole clip
+			else:
+				vp.texture = ImageTexture.create_from_image(im)
 		# object-fit: cover
 		var k := maxf(vs.x / 16.0, vs.y / 9.0)
 		var sz := Vector2(16.0 * k, 9.0 * k)
