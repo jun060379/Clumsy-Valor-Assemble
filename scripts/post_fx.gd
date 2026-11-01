@@ -22,6 +22,7 @@ uniform float hit = 0.0;
 uniform float wd = 0.0;
 uniform vec4 w[4];
 uniform vec2 asp = vec2(1.8, 1.0);
+uniform vec2 boff = vec2(0.0);    // camera travel since the bloom was last rendered, in screen uv
 void fragment() {
 	vec2 u = SCREEN_UV;
 	for (int i = 0; i < 4; i++) {
@@ -38,7 +39,7 @@ void fragment() {
 	vec3 col = vec3(texture(scr, u + dir * cc).r, texture(scr, u).g, texture(scr, u - dir * cc).b);
 	col = mix(col, vec3(dot(col, vec3(0.299, 0.587, 0.114))), 0.62 * wd);
 	col *= mix(vec3(1.0), vec3(0.47, 0.63, 0.92), 0.55 * wd);
-	vec3 bloom = texture(b, u).rgb * 0.9 + texture(b2, u).rgb * 1.3;
+	vec3 bloom = texture(b, u - boff).rgb * 0.9 + texture(b2, u - boff).rgb * 1.3;
 	col += bloom * bl;
 	col = (col - 0.5) * 1.03 + 0.5;
 	col += vec3(1.0, 0.85, 0.95) * hit * 0.18 * (1.0 - vg0);
@@ -109,6 +110,7 @@ var witch_vig: ColorRect
 var hero: Node2D               # drawWitchHero
 var bsv: Array = []            # [world full-res, bright 1/4, h, v (b), h 1/16, h, v (b2)]
 var fr := 0
+var b_xf := Transform2D.IDENTITY   # the canvas transform the bloom was last rendered with
 var bq := Vector2i.ZERO
 var bpx := Vector2i.ZERO       # the screen in device pixels the chain was built for
 
@@ -228,8 +230,16 @@ func _bloom_step(run: bool) -> void:
 	if bsv.is_empty(): return
 	if run and _dev_px() != bpx: _bloom_setup()
 	fr += 1
-	var every := 4 if arena.get("low_end") else 2
+	# every other frame, as POST.fr (every 4th only on the prototype's lowest quality tier, which the port never uses)
+	var every := 2
 	var go := run and fr % every == 0
+	var xf_now: Transform2D = get_viewport().get_canvas_transform()
+	var base_now: Vector2 = get_viewport().get_visible_rect().size
+	# between refreshes the halo is pinned to the world: shift its lookup by how far the camera moved since, so it
+	# doesn't trail behind lamps and sparks while she runs (the prototype's 1-frame lag at 60 fps is invisible; a
+	# skipped frame on a slower phone is not)
+	if go: b_xf = xf_now
+	mat.set_shader_parameter("boff", (xf_now.origin - b_xf.origin) / base_now)
 	for sv in bsv:
 		sv.render_target_update_mode = SubViewport.UPDATE_ONCE if go else SubViewport.UPDATE_DISABLED
 	if go:
