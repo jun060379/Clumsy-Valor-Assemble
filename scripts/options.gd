@@ -104,7 +104,7 @@ func _rows() -> Array:
 	if d == "pad":
 		var on := Input.get_connected_joypads().size() > 0
 		for r in [["패드", "연결됨" if on else "감지 안 됨 · 버튼을 한 번 눌러 주세요"], ["이동", "왼쪽 스틱 · 방향키"], ["계단 · 문", "위"], ["점프 · 결정", "A"], ["공격 · 상호작용", "X"],
-				["가드", "RB"], ["대시 · 뒤로", "B"], ["궁극기", "RT"], ["동료 전환", "Y"], ["메뉴", "Start"], ["설정", "Back"]]:
+				["가드", "Y · LT"], ["대시 · 뒤로", "B"], ["궁극기", "RT"], ["동료 전환", "LB · RB"], ["메뉴", "Start"], ["설정", "Back"]]:
 			R.append({"k": "okb", "lab": r[0], "v": r[1]})
 	elif d == "touch":
 		for r in [["이동", "왼쪽 스틱"], ["점프 · 공격 · 가드", "오른쪽 버튼"], ["상호작용", "공격 버튼이 바뀜"], ["동료 전환", "초상화 누르기"]]:
@@ -126,7 +126,7 @@ func _input(ev: InputEvent) -> void:
 		return
 	# waiting for a key: it goes into the slot
 	if cap.size() > 0 and ev is InputEventKey and ev.pressed and not ev.echo:
-		var k: int = ev.physical_keycode if ev.physical_keycode != 0 else ev.keycode
+		var k: int = CFG.code_of(ev)
 		var a: String = cap[0]
 		var i: int = cap[1]
 		cap = []

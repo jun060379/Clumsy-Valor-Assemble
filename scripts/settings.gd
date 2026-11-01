@@ -6,10 +6,17 @@ extends RefCounted
 const PATH := "user://settings.cfg"
 ## KB_ACT
 const ACTS := [["left", "왼쪽"], ["right", "오른쪽"], ["up", "위 · 계단 · 문"], ["down", "아래"], ["jump", "점프"], ["attack", "공격 · 상호작용"], ["guard", "스킬"], ["dash", "대시"], ["ult", "궁극기"], ["swap", "동료 교대"]]
-## KB_PRE (each action two slots; 0 = empty). Godot can't tell left/right modifiers apart, so Shift / Ctrl are one key each.
+## a binding is a keycode, plus the side for a modifier (e.code ShiftLeft / ControlRight…): code | side << SIDE_SH
+const SIDE_SH := 32
+const L_SHIFT := KEY_SHIFT | (KEY_LOCATION_LEFT << SIDE_SH)
+const R_SHIFT := KEY_SHIFT | (KEY_LOCATION_RIGHT << SIDE_SH)
+const L_CTRL := KEY_CTRL | (KEY_LOCATION_LEFT << SIDE_SH)
+const R_CTRL := KEY_CTRL | (KEY_LOCATION_RIGHT << SIDE_SH)
+const MODS := [KEY_SHIFT, KEY_CTRL, KEY_ALT, KEY_META]
+## KB_PRE (each action two slots; 0 = empty)
 const PRE := {
-	"arrow": {"n": "방향키형", "left": [KEY_LEFT, 0], "right": [KEY_RIGHT, 0], "up": [KEY_UP, 0], "down": [KEY_DOWN, 0], "jump": [KEY_Z, 0], "attack": [KEY_X, 0], "guard": [KEY_A, 0], "dash": [KEY_SHIFT, 0], "ult": [KEY_D, 0], "swap": [KEY_CTRL, KEY_C], "rmb": "guard"},
-	"wasd": {"n": "WASD + 마우스형", "left": [KEY_A, 0], "right": [KEY_D, 0], "up": [KEY_W, 0], "down": [KEY_S, 0], "jump": [KEY_SPACE, 0], "attack": [KEY_J, 0], "guard": [KEY_E, 0], "dash": [KEY_SHIFT, 0], "ult": [KEY_Q, 0], "swap": [KEY_R, 0], "rmb": "dash"},
+	"arrow": {"n": "방향키형", "left": [KEY_LEFT, 0], "right": [KEY_RIGHT, 0], "up": [KEY_UP, 0], "down": [KEY_DOWN, 0], "jump": [KEY_Z, 0], "attack": [KEY_X, 0], "guard": [KEY_A, 0], "dash": [L_SHIFT, 0], "ult": [KEY_D, 0], "swap": [L_CTRL, R_CTRL], "rmb": "guard"},
+	"wasd": {"n": "WASD + 마우스형", "left": [KEY_A, 0], "right": [KEY_D, 0], "up": [KEY_W, 0], "down": [KEY_S, 0], "jump": [KEY_SPACE, 0], "attack": [KEY_J, 0], "guard": [KEY_E, 0], "dash": [L_SHIFT, 0], "ult": [KEY_Q, 0], "swap": [KEY_R, 0], "rmb": "dash"},
 }
 const ARROWS := [[KEY_LEFT, "left"], [KEY_RIGHT, "right"], [KEY_UP, "up"], [KEY_DOWN, "down"]]
 
@@ -24,6 +31,7 @@ var rmb := "guard"
 var _touch_auto = null
 var qk := 1.0              # QK: render quality (1 → .8 → .6), lowered by qWatch when frames run long; saved
 var qw := {"n": 0, "s": 0.0, "cool": 0.0}
+var sides := true          # the platform tells left from right modifiers (false once one arrives without a side)
 
 
 func _init(a) -> void:
@@ -97,12 +105,24 @@ func apply_keys() -> void:
 	save()
 
 func _add_key(act: String, k: int) -> void:
+	var code := k & 0xFFFFFFFF
+	var side: int = (k >> SIDE_SH) if sides else 0
 	var e := InputEventKey.new()
-	e.physical_keycode = k
+	e.physical_keycode = code
+	e.location = side
 	InputMap.action_add_event(act, e)
+	if side != 0:
+		return      # a label-only match would ignore the side (a browser that sends no code sends no side either: see note())
 	var e2 := InputEventKey.new()   # some browsers report modifier keys only by key label
-	e2.keycode = k
+	e2.keycode = code
 	InputMap.action_add_event(act, e2)
+
+## the binding a real key press stands for (what the key screen stores): a modifier keeps its side
+static func code_of(ev: InputEventKey) -> int:
+	var k: int = ev.physical_keycode if ev.physical_keycode != 0 else ev.keycode
+	if MODS.has(k) and ev.location != KEY_LOCATION_UNSPECIFIED:
+		k |= ev.location << SIDE_SH
+	return k
 
 ## put key k into slot i of action a; it leaves wherever else it was. k = 0 clears the slot.
 func bind(a: String, i: int, k: int) -> void:
@@ -122,6 +142,10 @@ func kb_uses(k: int) -> bool:
 ## kbName
 static func key_name(k: int) -> String:
 	if k == 0: return "—"
+	var side: int = k >> SIDE_SH
+	k &= 0xFFFFFFFF
+	if side != 0 and MODS.has(k):
+		return ("L-" if side == KEY_LOCATION_LEFT else "R-") + {KEY_SHIFT: "Shift", KEY_CTRL: "Ctrl", KEY_ALT: "Alt", KEY_META: "Meta"}[k]
 	match k:
 		KEY_LEFT: return "←"
 		KEY_RIGHT: return "→"
@@ -202,6 +226,9 @@ func apply_qk() -> void:
 func note(ev: InputEvent) -> void:
 	var now := Time.get_ticks_msec()
 	if ev is InputEventKey and ev.pressed:
+		if sides and ev.location == KEY_LOCATION_UNSPECIFIED and MODS.has(ev.keycode if ev.keycode != 0 else ev.physical_keycode):
+			sides = false            # this platform doesn't say which Shift / Ctrl: bind both sides from now on
+			apply_keys()
 		kbm_seen = true
 		kbm_t = now
 		last = "kbm"

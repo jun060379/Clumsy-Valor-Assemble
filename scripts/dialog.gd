@@ -320,9 +320,13 @@ func _input(ev: InputEvent) -> void:
 		if key == KEY_F: return
 		get_viewport().set_input_as_handled()      # game keys never leak through while talking
 	var echo: bool = ev is InputEventKey and ev.echo
-	var go: bool = (key in GO_KEYS and not echo) or (ev.is_action_pressed("attack") and not echo) or (ev is InputEventJoypadButton and ev.is_action_pressed("jump"))
-	if key < 0 and not go and not (ev is InputEventJoypadButton or ev is InputEventJoypadMotion): return
+	# keyboard: a fixed set of keys (Enter Space X J E) whatever the binding; the pad's buttons stand for keys too:
+	# A = Enter, X = KeyX, B = Escape, the d-pad (and the stick, through ui_root) = arrows
+	var jb: bool = ev is InputEventJoypadButton and ev.pressed
+	var go: bool = (key in GO_KEYS and not echo) or (jb and ev.button_index in [JOY_BUTTON_A, JOY_BUTTON_X])
+	var esc: bool = (key == KEY_ESCAPE and not echo) or (jb and ev.button_index == JOY_BUTTON_B)
 	if ev is InputEventJoypadButton or ev is InputEventJoypadMotion: get_viewport().set_input_as_handled()
+	if key < 0 and not go and not jb: return
 	if choosing():
 		var n := choices.size()
 		var num := -1
@@ -331,17 +335,17 @@ func _input(ev: InputEvent) -> void:
 		if num >= 0 and num < n:
 			ch_i = num
 			_pick(num)
-		elif key in [KEY_DOWN, KEY_S] or (key < 0 and ev.is_action_pressed("down")):
+		elif key in [KEY_DOWN, KEY_S] or (jb and ev.button_index == JOY_BUTTON_DPAD_DOWN):
 			_select(0 if ch_i < 0 else (ch_i + 1) % n)
-		elif key in [KEY_UP, KEY_W] or (key < 0 and ev.is_action_pressed("up")):
+		elif key in [KEY_UP, KEY_W] or (jb and ev.button_index == JOY_BUTTON_DPAD_UP):
 			_select(n - 1 if ch_i < 0 else (ch_i + n - 1) % n)
 		elif go and t > 150.0:
 			if ch_i >= 0: _pick(ch_i)
 			else: _select(0)
-		elif key == KEY_ESCAPE or (ev is InputEventJoypadButton and ev.pressed and ev.button_index == JOY_BUTTON_B):
+		elif esc:
 			var li := leave_index()
 			if li >= 0:
 				ch_i = li
 				_pick(li)
 		return
-	if (go or (key == KEY_ESCAPE and not echo)) and t > 150.0: advance()
+	if (go or esc) and t > 150.0: advance()

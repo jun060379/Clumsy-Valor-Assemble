@@ -60,7 +60,8 @@ func _input(ev: InputEvent) -> void:
 		return
 	if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 		for sl in slots:
-			if sl["rect"].grow(6).has_point(ev.position):
+			var rr: Rect2 = sl["rect"]
+			if ev.position.distance_to(rr.get_center()) <= rr.size.x * 0.5:      # the round face (.ps, 48 px) takes the tap
 				arena.player.party_input(sl["c"])
 				get_viewport().set_input_as_handled()
 				return
