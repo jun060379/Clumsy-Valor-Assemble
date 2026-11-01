@@ -610,7 +610,8 @@ func _attr_art(vs: Vector2, out: float) -> void:
 	hit(Rect2(ab.position.x + ab.size.x * 0.15, ab.position.y, ab.size.x * 0.7, ab.size.y), func(): react_tap())
 	_emo(ab)
 
-## the face on show (face / artSrc): a reaction, else a blink (sblink: the cl picture), else base
+## the face on show (face / artSrc): a reaction, else a blink (sblink: the cl picture), else base; a face the worn
+## costume lacks resolves to its own base picture (skins.gd "alt")
 func face_path() -> String:
 	if react != "": return SK.path(c, "st_" + react)
 	if blk > 0.0: return SK.path(c, "st_cl")
@@ -637,7 +638,8 @@ func _sblink(dt: float) -> void:
 	blk_next -= dt
 	if blk_next <= 0.0:
 		blk_next = 2400.0 + randf() * 2800.0
-		if tab == "attr" and react == "":
+		# no blink picture in the worn costume: no blink (the reactions keep their hop and ♪ on its base face)
+		if tab == "attr" and react == "" and SK.has_face(c, "st_cl"):
 			blk = 130.0
 			if randf() < 0.2: blk2 = 280.0
 

@@ -222,7 +222,7 @@ func _ground(vs: Vector2, col: Color) -> void:
 	while k < 70.0:
 		var o := o0 + gd * (k * 28.0 + shift)
 		var band := PackedVector2Array([o - along, o + along, o + gd * 9.0 + along, o + gd * 9.0 - along])
-		for piece in Geometry2D.intersect_polygons(band, shp): draw_colored_polygon(piece, Color(1, 1, 1, 0.035))
+		for piece in Geometry2D.intersect_polygons(band, shp): _poly(piece, Color(1, 1, 1, 0.035))
 		k += 1.0
 	var sl := Rect2(-vs.x * 0.06, vs.y * 0.9, vs.x * 0.62, 20.0)
 	draw_colored_polygon(UI.rot(UI.clip(sl, [[0, 40], [100, 0], [100, 30], [3, 100]]), sl.get_center(), deg_to_rad(-5.0)), Color.WHITE)
@@ -305,7 +305,7 @@ func _mirror(vs: Vector2, col: Color, id: String) -> void:
 		var ph := fmod(t / (5200.0 + j * 1700.0) + j * 0.43, 1.0)
 		var sx := lerpf(-0.4, 1.3, ph) * mw
 		var band := PackedVector2Array([r.position + Vector2(sx, 0), r.position + Vector2(sx + 26.0 + j * 18.0, 0), r.position + Vector2(sx - 70.0 + j * 18.0, mh), r.position + Vector2(sx - 96.0, mh)])
-		for piece in Geometry2D.intersect_polygons(band, glass): draw_colored_polygon(piece, Color(1, 1, 1, 0.05 * a))
+		for piece in Geometry2D.intersect_polygons(band, glass): _poly(piece, Color(1, 1, 1, 0.05 * a))
 	# not hers yet: a band across the glass
 	var st2 := WEAR.status(S(), id)
 	if st2 == "locked":
@@ -327,6 +327,12 @@ func _mirror(vs: Vector2, col: Color, id: String) -> void:
 	draw_set_transform(Vector2.ZERO)
 	hit(m * glass, func(): _move(1))
 
+## a clipped sliver: skip it when it has next to no area (the triangulator refuses those)
+func _poly(pts: PackedVector2Array, col: Color) -> void:
+	var ar := 0.0
+	for i in pts.size(): ar += pts[i].cross(pts[(i + 1) % pts.size()])
+	if absf(ar) > 4.0 and not Geometry2D.triangulate_polygon(pts).is_empty(): draw_colored_polygon(pts, col)
+
 func _figure(id: String, an: String, feet: Vector2, s: float, col: Color, m: Transform2D, rot := 0.0) -> void:
 	# sprite() draws in screen space: carry the mirror's transform by placing the feet through it (turn kept small)
 	var w := m * Transform2D(rot, feet)
@@ -339,9 +345,13 @@ func _card(vs: Vector2, col: Color, id: String) -> void:
 	if sk.is_empty(): return
 	var st := WEAR.status(S(), id)
 	var x := vs.x * 0.515
-	var y := vs.y * 0.155
+	var y := vs.y * 0.14
 	var w := minf(vs.x * 0.44, vs.x - x - 70.0)
-	var h := vs.y * 0.4
+	# the card grows with its text: description (+ the 부분 완성 line), then 얻는 법, then the button
+	var ps: Array = [[String(sk["d"]), 12, Color(0.18, 0.16, 0.2)]]
+	if WEAR.partial_line(id) != "": ps.append([WEAR.partial_line(id), 10, Color(0.75, 0.35, 0.1)])
+	var ph: float = paras_h(w - 28.0, ps)
+	var h := maxf(vs.y * 0.4, 82.0 + ph + 76.0)
 	var T := minf(open_t - 250.0, pick_t)
 	var e := UIA.p(T, 0.0, 420.0, "bk")
 	var a := clampf(T / 140.0, 0.0, 1.0)
@@ -366,7 +376,7 @@ func _card(vs: Vector2, col: Color, id: String) -> void:
 	var nfs := 28
 	draw_string(UI.bhs(), Vector2(14, 64), String(sk["n"]), HORIZONTAL_ALIGNMENT_LEFT, w - 28.0, nfs, Color(0, 0, 0, a))
 	draw_rect(Rect2(14, 72, minf(w - 28.0, UI.text_w(UI.bhs(), String(sk["n"]), nfs)), 4), Color(col, a))
-	var ps: Array = [[String(sk["d"]), 12, Color(0.18, 0.16, 0.2, a)]]
+	for q in ps: q[2] = Color(q[2], a)
 	paras(self, 14, 82, w - 28.0, ps)
 	# how to get it
 	var hy := h - 72.0
@@ -402,7 +412,7 @@ func _card(vs: Vector2, col: Color, id: String) -> void:
 
 ## the rail: a brass rod across the shard, the costumes hanging from it as slanted tags that sway
 func _rail(vs: Vector2, col: Color, L: Array) -> void:
-	var y := vs.y * 0.64
+	var y := vs.y * 0.665
 	var x0 := vs.x * 0.5
 	var x1 := vs.x - 14.0
 	var ru := UIA.p(open_t, 200.0, 520.0, "bk")

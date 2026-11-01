@@ -305,6 +305,10 @@ func _initialize() -> void:
 	BK.road_sp = null
 
 	# ---------- WP14: 상세 presence ----------
+	# with the original art (미숙한 결의: every face there) ...
+	var SKN = arena.skins
+	SKN.grant("estelle_misuk", "dev", true)
+	SKN.equip("estelle_misuk")
 	var CH = arena.ui_root.menu.ext["char"]
 	CH.c = "estelle"
 	CH.tab = "attr"
@@ -321,6 +325,26 @@ func _initialize() -> void:
 	CH.blk_next = 1.0
 	CH._tick(2.0)
 	check(CH.blk > 0.0 and CH.face_path().ends_with("estelle_cl.webp"), "the art blinks on its base face")
+	# ... and with 초심, which has no smile / surprise / blink pictures yet: the hop and ♪ stay, the face stays its base,
+	# the blink is skipped
+	SKN.equip("estelle_base")
+	CH._tick(400.0)
+	CH.blk = 0.0
+	CH.blk2 = 0.0
+	CH.t += 3000.0
+	CH.taps.clear()
+	CH.react_tap()
+	check(CH.react == "smile" and CH.jolt == "hop" and CH.jolt_t == 0.0, "초심: a tap still smiles and hops (♪)")
+	check(CH.face_path() == CH.SK.path("estelle", "st_base") and CH.face_path().begins_with("res://assets/skins/estelle_base/"), "초심: its base picture stands in for the smile")
+	CH._tick(1800.0)
+	CH.blk_next = 1.0
+	CH._tick(2.0)
+	check(CH.blk <= 0.0 and CH.face_path() == CH.SK.path("estelle", "st_base"), "초심: no blink picture, no blink")
+	CH.taps.clear()
+	CH.react_tap()
+	CH.react_tap()
+	CH.react_tap()
+	check(CH.react == "sup" and CH.jolt == "shake" and CH.face_path() == CH.SK.path("estelle", "st_base"), "초심: three taps still shake (!!) on its base picture")
 	for f in ["estelle", "aida", "luce"]:
 		check(ResourceLoader.exists("res://assets/ui/st/%s_smile.webp" % f) and ResourceLoader.exists("res://assets/ui/st/%s_ser.webp" % f), "%s has smile / ser faces" % f)
 	CH.hover = Vector2(-999, -999)
