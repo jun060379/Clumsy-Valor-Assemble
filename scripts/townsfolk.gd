@@ -55,7 +55,7 @@ func npc(c: String) -> Dictionary:
 
 func folk() -> Array:
 	var P = arena.player
-	return ROSTER.filter(func(c): return not P.party.has(c) and c != P.who)
+	return P.roster().filter(func(c): return not P.party.has(c) and c != P.who)     # ROSTER: only who has joined
 
 func route_y(r: String, x: float) -> float:
 	return town.floor_at(x) if r == "top" else town.terr_y(x)

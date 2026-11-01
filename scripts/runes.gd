@@ -67,7 +67,7 @@ const SUBN := {"atk": ["공격력", "%"], "crit": ["치명", "%"], "hp": ["체�
 const GMAIN := {"weapon": 3.7, "천옷": 1.6, "경갑": 3.2, "중갑": 5.3}
 const GSUBMAX := {"atk": 5.8, "crit": 3.9, "hp": 7.0, "ms": 2.4, "heal": 5.8, "ult": 6.5}
 const NSUB := {"common": 1, "uncommon": 1, "rare": 2, "elite": 2, "epic": 3, "legend": 3, "unique": 4}
-## base move speed per member (prototype STATS.ms; the port's run speed stays its own, only gear and 바람 걸음 scale it)
+## base move speed per member (prototype STATS.ms): RUN = 0.36 × this × gear × 바람 걸음 (runeTick / switchChar)
 const BASE_MS := {"estelle": 0.95, "aida": 1.1, "luce": 1.0}
 ## the dungeon caps what can drop (DUNGEONS[0] = 버섯 동굴)
 const DUN := {"id": "cave", "name": "버섯 동굴", "cap": "rare", "chest_cap": 2, "bonus": "elite", "mul": 1.0, "glv": [1, 6], "rank": 1}
@@ -138,6 +138,7 @@ func reset() -> void:
 	gear = _default_gear()
 	runebag = {"oath": 1, "temper": 1, "thorn": 1, "giant": 1, "wall": 2, "surge": 1, "backshadow": 1, "wise": 1, "ember": 2, "tagbell": 1, "shieldthrow": 1, "clone": 1, "aura": 1, "stone": 1, "firstaid": 1, "breeze": 1}
 	gearbag = []
+	iron = 12            # IRON = 12
 	mem = 0
 	mats = {"lamp": 0}
 	seen_r = {}
@@ -531,7 +532,7 @@ func pay(rw: String) -> void:
 	arena.text(p + Vector2(0, -190), "보상 · " + REWARD[rw][0], REWARD[rw][1])
 	arena.ring(p + Vector2(0, -60), 40.0, Color("#ffd34d"))
 	if rw == "heal":
-		for c in P.party:
+		for c in P.roster():
 			P.hpm[c] = minf(max_hp(c), P.hpm[c] + max_hp(c) * 0.35)
 		P.hp = minf(P.MAX_HP, P.hp + P.MAX_HP * 0.35)
 	elif rw == "iron":
@@ -759,7 +760,7 @@ func tick(dt: float) -> void:
 			if b["t"] <= 0.0: b["n"] = 0
 	var P = arena.player
 	var T := gear_tot(P.who)
-	P.RUN = 0.36 * (1.0 + T["ms"] / 100.0 - 0.02 * T["heavy"]) * ((1.0 + 0.15 * RV("breeze")) if rbn("breeze") > 0 else 1.0)
+	P.RUN = 0.36 * BASE_MS.get(P.who, 1.0) * (1.0 + T["ms"] / 100.0 - 0.02 * T["heavy"]) * ((1.0 + 0.15 * RV("breeze")) if rbn("breeze") > 0 else 1.0)
 	if memory != null:
 		memory.tick(dt)
 		P.RUN *= memory.spd()

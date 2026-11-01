@@ -86,8 +86,8 @@ var gclip = null             # {x, keep}: keep < 0 = only what is left of x show
 var heal_cd := 0.0
 var heal_t := 0.0
 var cw_r := 0.0
-# party
-var party: Array = ["estelle", "aida", "luce"]
+# party (prototype PARTY): the leader picked at the start screen; the others live in town until taken along
+var party: Array = ["estelle"]
 var hpm := {}
 var swap_cd := 0.0
 var swap_to := 0.0
@@ -1302,13 +1302,21 @@ func party_step(dt: float) -> void:
 			if nx != null:
 				swap(true, nx)
 		if dead_t > 2200.0 and party_down and anim == "death":
-			for c in party:
+			# partyDeath: in the cave the party falls back to town; everyone who has joined is healed
+			var dun: bool = arena.level_kind() == "dungeon"
+			if dun: arena.text(position + Vector2(0, -150.0), "파티 전멸… 마을로 후퇴", Color("#ff9d9d"))
+			for c in roster():
 				hpm[c] = _mhp(c)
 			hp = MAX_HP
 			last_hp = hp
+			if not dun:
+				var L = arena.level
+				position = Vector2(380.0, L.floor_at(380.0) if L != null and L.has_method("floor_at") else arena.ground_y)
+				vx = 0.0
+				vy = 0.0
+				plat = null
 			inv = 1500.0
 			set_anim("idle")
-			arena.text(position + Vector2(0, -150.0), "파티 전멸… 재정비", Color("#ff9d9d"))
 			arena.party_wiped()
 	else:
 		party_down = false
@@ -1320,6 +1328,11 @@ func party_step(dt: float) -> void:
 		if tag_timer <= 0.0 and not tag_hit:
 			tag_hit = true
 			tag_strike()
+
+## ROSTER: the members who have joined the guild (fame.rec), plus whoever is in control, in the prototype's order
+func roster() -> Array:
+	var F = arena.get("fame") if arena != null else null
+	return ["estelle", "aida", "luce"].filter(func(c): return c == who or party.has(c) or F == null or F.recruited(c))
 
 func party_next():
 	var al: Array = party.filter(func(c): return c == who or hpm[c] > 0.0)

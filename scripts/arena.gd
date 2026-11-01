@@ -76,7 +76,7 @@ var tod_auto := true
 var weather := "clear"         # "clear" / "rain" / "snow" (town sky, rain and snow; F10 cycles it)
 var eil                       # Eilin lives across maps
 var dlg                       # talk box
-var shilling := 0
+var shilling := 12              # prototype IRON = 12 at the start
 var fade_rect: ColorRect
 var fade := 0.0
 var fade_dir := 0
@@ -435,6 +435,7 @@ func toggle_member(c: String) -> void:
 		P.party.erase(c)
 		FOLK.of(self).leave_party(c)
 	else:
+		if not P.roster().has(c): return     # not in the guild yet (Eilin introduces Aida and Luce)
 		P.party.append(c)
 		FOLK.of(self).join_party(c)
 

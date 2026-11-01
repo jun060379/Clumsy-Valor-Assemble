@@ -81,6 +81,7 @@ func test_cmd(cmd: String) -> void:
 			arena.ult.cd[P.who] = float(w[2]) if w.size() > 2 else 0.0
 		"qte":
 			for c in ["aida", "luce"]:
+				if arena.fame != null and not arena.fame.rec.has(c): arena.fame.rec.append(c)
 				if not P.party.has(c): arena.toggle_member(c)
 			if P.who == "estelle": P.switch_char("aida")
 			arena.ult.v["luce"] = arena.ult.ULTMAX["luce"]

@@ -56,10 +56,14 @@ func holds() -> bool:
 
 func start_game(c: String) -> void:
 	var P = arena.player
-	if c != P.who:
-		P.party.erase(c)
+	# go(): a fresh game starts with the chosen one alone (PARTY=[]); a saved party takes her in front if she is not along
+	if arena.save == null or not arena.save.loaded: P.party = []
+	if not P.party.has(c):
 		P.party.push_front(c)
-		P.switch_char(c)
+		if P.party.size() > 3:
+			var out: String = P.party.pop_back()
+			arena.FOLK.of(arena).leave_party(out)
+	if c != P.who: P.switch_char(c)
 	P.hp = P.MAX_HP
 	P.hpm[c] = P.MAX_HP
 	P.last_hp = P.hp

@@ -78,6 +78,7 @@ func _initialize() -> void:
 	check(P.hp == hp0 and G.hp < gh and G.hurt_t >= 900.0 and arena.score >= sc + 3, "Estelle's parry on the ghost: no damage, it recoils, +3 (hp %.1f->%.1f ghost %.0f->%.0f hurt %.0f score %d->%d)" % [hp0, P.hp, gh, G.hp, G.hurt_t, sc, arena.score])
 
 	# ---- Aida's backstab ----
+	arena.fame.join()     # Eilin's introduction: Aida and Luce join the guild (a fresh game is solo)
 	P.party = ["estelle", "aida", "luce"]
 	P.swap_cd = 0.0
 	P.swap(false, "aida")

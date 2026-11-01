@@ -8,8 +8,7 @@ func _initialize() -> void:
 	var T = arena.level
 	var t0 := Time.get_ticks_msec()
 	print("tpl ", T.tpl.size(), " climb ", T.tpl.filter(func(p): return p.has("climb")).size())
-	arena.toggle_member("luce")
-	arena.toggle_member("aida")
+	arena.fame.join()     # Eilin's introduction: Aida and Luce join the guild (a fresh game is solo) — they live in town
 	print("party ", arena.player.party, " who ", arena.player.who)
 	arena.weather = "rain"
 	var F = T.folk

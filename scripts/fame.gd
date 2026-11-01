@@ -171,7 +171,7 @@ func mem_now() -> int:
 	return int(arena.runes.mem) if arena.get("runes") != null else mem_held
 
 func runes_now() -> int:
-	if arena.has_method("rune_count"): return int(arena.rune_count())
+	if arena.get("runes") != null: return int(arena.runes.rune_count())
 	return runes_held.size()
 
 
@@ -664,6 +664,19 @@ func join() -> void:
 	log_add("대장간 개방", "fac")
 	pts += 9
 	notice("아이다 · 루체 합류 · 대장간 개방 · 명성 +9", "길드", Color("#57d3c2"), true, 3800.0)
+
+## the fame init (after a load): nobody recruited means the leader alone; whoever is in the saved party has joined (a save
+## from before recruiting was gated had all three along); the seniors count as introduced once either of them has joined
+## or the first request is done, and then Bran is in too
+func settle_rec(party: Array) -> void:
+	if rec.is_empty(): rec = [arena.player.who]
+	for ch in party:
+		if not rec.has(ch): rec.append(ch)
+	if not intro and (rec.has("aida") or rec.has("luce") or got.has("r1a") or got.has("r1b")):
+		intro = 1
+		bran = 1
+		for ch in ["aida", "luce"]:
+			if not rec.has(ch): rec.append(ch)
 
 ## fameRankUp → rankCut
 func rank_up() -> void:

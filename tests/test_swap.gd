@@ -6,6 +6,9 @@ func _initialize() -> void:
 	root.add_child(arena)
 	await process_frame
 	var P = arena.player
+	arena.fame.join()     # Eilin's introduction: Aida and Luce join the guild (a fresh game is solo)
+	for c in ["aida", "luce"]: arena.toggle_member(c)
+	print("party ", P.party)
 	var m = arena.spawn("goblin", P.position.x + 120.0, 0.0)
 	m.spawn_t = 0.0
 	m.aw = true

@@ -105,6 +105,8 @@ func _initialize() -> void:
 	check(pb.y < dc.y - TC.btn_r(TC.BTN[0]) and absf(pb.x + 8.0 - dc.x) < 1.0, "dash pips sit above the dash button")
 
 	# ---- WP11: bench ult-ready mark, QTE card, HP-rune notch ----
+	check(P.party == ["estelle"], "a fresh game is solo")
+	arena.fame.join()     # Eilin's introduction: Aida and Luce join the guild (a fresh game is solo)
 	for c in ["aida", "luce"]:
 		if not P.party.has(c): arena.toggle_member(c)
 	check(P.party.size() == 3, "three in the party")
