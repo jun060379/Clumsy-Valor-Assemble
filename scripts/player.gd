@@ -16,6 +16,8 @@ const MELEE_K := 0.86
 const CW := 224.0            # drawn cell size before CSCALE (half the 448x352 source)
 const CH := 176.0
 const BASE := 170.0          # feet line inside a drawn cell
+const MAX_HP := 70.0
+const ATK_SPEED := 0.95      # Estelle's attack speed stat: attack frames last 1/0.95 as long
 
 var arena                    # the room: ground, platforms, foes, fx
 var sheets: Array[Texture2D] = []
@@ -49,6 +51,10 @@ var buf := {"attack": 0.0, "jump": 0.0, "guard": 0.0, "dash": 0.0}
 var keys := {}
 var pressed := {}
 var ghosts: Array = []       # afterimages: {anim,f,x,y,dir,t,life}
+var hp := MAX_HP
+var inv := 0.0               # invulnerable time after a hit (ms)
+var bash_t := 0.0            # a landed parry drives her forward with the shield
+var dead_t := 0.0
 
 
 func _ready() -> void:
@@ -71,7 +77,10 @@ func set_anim(n: String, frame := -1) -> void:
 
 func dur() -> float:
 	var a: Array = AN.A[anim][1]
-	return float(a[f] if f < a.size() else a[a.size() - 1])
+	var d := float(a[f] if f < a.size() else a[a.size() - 1])
+	if anim.begins_with("attack") or anim in ["air_combo", "kneel_attack", "cthrust"]:
+		d /= ATK_SPEED
+	return d
 
 func frames() -> int:
 	return AN.A[anim][1].size()
@@ -196,6 +205,12 @@ func add_ghost(life: float, ox := 0.0) -> void:
 func step(dt: float) -> void:
 	read_input()
 	t += dt
+	if inv > 0.0: inv -= dt
+	if bash_t > 0.0: bash_t -= dt
+	if anim == "death":
+		dead_t += dt
+		if dead_t > 2200.0:
+			respawn()
 	if combo_win > 0.0: combo_win -= dt
 	if coyote > 0.0: coyote -= dt
 	if drop_t > 0.0: drop_t -= dt
@@ -245,7 +260,7 @@ func step(dt: float) -> void:
 
 	# ---- state machine ----
 	if a == "hurt" or a == "death":
-		pass
+		vx = 0.0
 	elif a == "charge":
 		if move != 0: dir = move
 		vx = 0.0
@@ -352,9 +367,10 @@ func step(dt: float) -> void:
 				ghit = false
 		check_hits()
 	elif a == "guard" or a == "parry":
-		if on: vx = 0.0
+		if bash_t > 0.0: vx = dir * 0.75 * minf(1.0, bash_t / 320.0)
+		elif on: vx = 0.0
 		else: vx *= pow(0.992, dt)
-		if move != 0: dir = move
+		if move != 0 and bash_t <= 0.0: dir = move
 		if a == "guard" and not ghit and not keys["guard"]:
 			set_anim("idle")
 		elif a == "guard" and on and want("jump"):
@@ -380,7 +396,7 @@ func step(dt: float) -> void:
 	else:
 		locomotion(dt, move, a)
 
-	if anim == "parry" and f >= 2:
+	if anim == "parry" and f >= 2 and bash_t <= 0.0:
 		if keys["guard"]:
 			set_anim("guard", 1)
 			ghit = false
@@ -618,6 +634,69 @@ func advance(dt: float, move: int) -> void:
 		hit_done = false
 
 
+# ---------- getting hit ----------
+func dash_inv() -> bool:
+	return (anim == "dash" and f <= 2) or (anim == "airdash" and f <= 3)
+
+## A monster's blow (or projectile) reaches her. Same rules as the prototype: parry window, shield, hurt.
+func take_hit(m, raw: float) -> String:
+	if inv > 0.0 or dash_inv() or anim == "death" or hp <= 0.0:
+		return "miss"
+	var facing: bool = (m.position.x - position.x) * dir > 0.0
+	if anim == "parry" and f <= 1 and facing:
+		bash_t = 420.0
+		f = 2
+		ft = 0.0
+		position.x += dir * 16.0
+		arena.parry_fx(self, m)
+		m.hit(2, dir * 8)
+		m.hurt_t = 950.0
+		m.set_a("hurt")
+		m.st = "hurt"
+		if m.flared:
+			arena.perfect_parry(m)
+		return "parry"
+	if (anim == "guard" or anim == "parry" or anim == "backstep") and facing:
+		var tk := raw * 0.5 * 0.75
+		hp -= tk
+		arena.sfx("guard", 0.9)
+		arena.hitstop = 60.0
+		arena.shake(4, -dir)
+		arena.spark(position + Vector2(dir * 34.0 * CSCALE, -60.0 * CSCALE), 8)
+		inv = 450.0
+		position.x -= dir * 10.0
+		set_anim("guard", 2)
+		ghit = true
+		arena.text(position + Vector2(0, -120.0 * CSCALE), "-" + str(roundi(tk)), Color("#cfe3ff"))
+		if hp <= 0.0: die()
+		return "guard"
+	var tk2 := raw * 0.75          # Estelle's passive: 25% less damage taken
+	hp -= tk2
+	inv = 1200.0
+	arena.sfx("hurt", 0.8)
+	arena.shake(8, -dir)
+	arena.flash = 0.25
+	vx = 0.0
+	arena.text(position + Vector2(0, -130.0 * CSCALE), "-" + str(roundi(tk2)), Color("#ff9d9d"))
+	position.x -= (1.0 if m.position.x > position.x else -1.0) * 18.0
+	if hp <= 0.0:
+		die()
+	else:
+		set_anim("hurt")
+	return "hit"
+
+func die() -> void:
+	hp = 0.0
+	set_anim("death")
+	dead_t = 0.0
+
+func respawn() -> void:
+	hp = MAX_HP
+	inv = 1500.0
+	set_anim("idle")
+	arena.text(position + Vector2(0, -150.0), "재정비", Color("#ffe9a8"))
+
+
 # ---------- drawing ----------
 func _draw() -> void:
 	for g in ghosts:
@@ -625,12 +704,15 @@ func _draw() -> void:
 		draw_frame(g["anim"], g["f"], Vector2(g["x"], g["y"]) - position, g["dir"], Color(1.0, 0.55, 0.85, 0.45 * k))
 	var an := anim
 	var fr := f
-	if an == "parry":            # the shield bash only shows on a landed parry; otherwise the raised shield
+	if an == "parry" and bash_t <= 0.0:   # the shield bash only shows on a landed parry; otherwise the raised shield
 		an = "guard"
 		fr = 1
-	if not on and an == "guard":
-		an = "air_guard"
-	draw_frame(an, fr, Vector2.ZERO, dir, Color.WHITE)
+	if not on and (an == "guard" or an == "parry"):
+		an = "air_" + an
+	var col := Color.WHITE
+	if inv > 0.0 and anim != "death" and int(t / 70.0) % 2 == 0:
+		col = Color(1, 1, 1, 0.45)
+	draw_frame(an, fr, Vector2.ZERO, dir, col)
 
 func draw_frame(an: String, fr: int, at: Vector2, d: int, col: Color) -> void:
 	var rf: Array = AN.resolve(an, fr)
