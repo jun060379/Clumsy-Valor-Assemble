@@ -50,6 +50,7 @@ var drop_t := 0.0
 var tap_dir := 0
 var tap_t := 999.0
 var buf := {"attack": 0.0, "jump": 0.0, "guard": 0.0, "dash": 0.0, "swap": 0.0}
+var mark_mouse := false    # mouse.moved: a real mouse has moved since the sigil came up (it then follows the pointer)
 var keys := {}
 var pressed := {}
 var ghosts: Array = []
@@ -211,6 +212,19 @@ func target(rng: float):
 
 
 # ---------- input ----------
+func _input(ev: InputEvent) -> void:
+	if ev is InputEventMouseMotion and ev.device != InputEvent.DEVICE_ID_EMULATION and ev.relative.length() > 2.0:
+		mark_mouse = true
+
+## how high / low the sigil may go: the town reaches up the hill and down to the lower street, a cave room up to its
+## ceiling, everywhere else 60 .. the ground
+func mark_y_range() -> Vector2:
+	var L = arena.level
+	match arena.level_kind():
+		"town": return Vector2(-600.0, float(L.LOWF))
+		"dungeon": return Vector2(arena.ground_y - float(L.tpl.get("top", 300.0)) - 60.0, arena.ground_y)
+	return Vector2(60.0, arena.ground_y)
+
 func read_input() -> void:
 	for k in ["left", "right", "up", "down", "jump", "attack", "guard", "dash", "swap"]:
 		keys[k] = Input.is_action_pressed(k)
@@ -402,7 +416,8 @@ func in_arc(atk, ex: float, ey: float, eh: float, bx: float, by: float, bw: floa
 
 
 # ---------- Aida's rift ----------
-func rift_enter(to_x: float, to_y: float, quick: bool) -> void:
+## snd: the 'dig' volume (the backstab blink .9, the tap hop .8, the aimed rift 1; the rift strike only has its thrust)
+func rift_enter(to_x: float, to_y: float, quick: bool, snd := 0.0) -> void:
 	rift_q = quick
 	dig_to = clampf(to_x, 30.0, arena.world_w - 30.0)
 	dig_y = to_y
@@ -411,7 +426,7 @@ func rift_enter(to_x: float, to_y: float, quick: bool) -> void:
 	gate_in = position + Vector2(dir * (30.0 if quick else 42.0) * CSCALE, 0)
 	gate_out = Vector2.INF
 	gate_t = 0.0
-	arena.sfx("dash" if quick else "dig", 0.8)
+	if snd > 0.0: arena.sfx("dig", snd)
 
 func rift_exit() -> void:
 	position.x = dig_to
@@ -495,7 +510,7 @@ func aida_blink() -> bool:
 		return false
 	var back: int = -best.dir if best.get("dir") != null else dir
 	blink_face = -back
-	rift_enter(best.position.x + back * 125.0 * CSCALE, best.position.y if not is_fly(best) else NAN, true)
+	rift_enter(best.position.x + back * 125.0 * CSCALE, best.position.y if not is_fly(best) else NAN, true, 0.9)
 	if best.has_method("daze"):
 		best.daze(700.0)
 	return true
@@ -607,20 +622,27 @@ func step(dt: float) -> void:
 		vx = 0.0
 		if dig_air: vy = 0.0
 		mark_t += dt
+		# keys / the stick steer the sigil; on PC the mouse drags it once it has moved
 		var sp := 0.55 * dt
-		mx += float(move) * sp
-		my += ((1.0 if keys["down"] else 0.0) - (1.0 if keys["up"] else 0.0)) * sp
+		if mark_mouse:
+			var mw := get_global_mouse_position()
+			mx += (mw.x - mx) * minf(1.0, dt / 60.0)
+			my += (mw.y - my) * minf(1.0, dt / 60.0)
+		else:
+			mx += float(move) * sp
+			my += ((1.0 if keys["down"] else 0.0) - (1.0 if keys["up"] else 0.0)) * sp
 		var off := Vector2(mx - position.x, my - position.y).limit_length(400.0)
 		mx = clampf(position.x + off.x, 30.0, arena.world_w - 30.0)
-		my = clampf(position.y + off.y, 60.0, arena.ground_y)
+		var yr := mark_y_range()
+		my = clampf(position.y + off.y, yr.x, yr.y)
 		if absf(off.x) > 12.0: dir = int(signf(off.x))
 		arena.mark_pos = Vector2(mx, my)
 		if not keys["guard"]:
 			arena.mark_pos = Vector2.INF
 			if mark_t < 150.0 or Vector2(mx, my).distance_to(position) < 16.0:
-				rift_enter(position.x - dir * 90.0 * CSCALE, NAN, false)    # tap = short hop backwards through a hole
+				rift_enter(position.x - dir * 90.0 * CSCALE, NAN, false, 0.8)    # tap = short hop backwards through a hole
 			else:
-				rift_enter(mx, my, false)
+				rift_enter(mx, my, false, 1.0)
 				dig_air = true
 				tp_cd = 3000.0 * _cdk()
 				_rev("skill")
@@ -828,7 +850,8 @@ func use_skill(move: int) -> void:
 			dig_air = not on
 			mx = position.x
 			my = position.y
-			arena.sfx("swing", 0.3)
+			mark_mouse = false
+			if on: arena.sfx("swing", 0.3)      # the air sigil comes up silently
 	elif who == "luce":
 		if heal_cd <= 0.0 and on:
 			set_anim("heal")
@@ -1345,6 +1368,10 @@ func party_next():
 func party_input(to = null) -> void:
 	if anim in ["tag_in", "swap_in"]:
 		return
+	if (arena.ult != null and arena.ult.state != "") or arena.fade_dir == 1:
+		return      # partyInput: not during an ultimate or a door's fade-out
+	if to != null and (to == who or hpm[to] <= 0.0):
+		return      # a portrait of someone down does nothing
 	var m = flared_mob()
 	if m != null:
 		var nx = to if to != null and to != who and hpm[to] > 0.0 else _qte_member()
@@ -1353,7 +1380,8 @@ func party_input(to = null) -> void:
 			counter_swap(m, nx)
 			return
 	if qte["t"] > 0.0:
-		var c = to if to != null and qte["who"].has(to) else _qte_member()
+		# the swap key tags in whoever has the chance; a tapped portrait tags in only if that face has it
+		var c = (to if qte["who"].has(to) else null) if to != null else _qte_member()
 		if c != null:
 			swap(true, c)
 			return

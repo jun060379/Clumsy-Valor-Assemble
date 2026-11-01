@@ -18,8 +18,14 @@ extends Control
 
 const UI := preload("res://scripts/ui_kit.gd")
 const CH := preload("res://scripts/chars.gd")
-const DEAD := 18.0
-const STICK_R := 60.0
+## #stick: 124 px across (R 62); left / right count past 25 % of the radius, up / down past 45 % (stickSet)
+const STICK_R := 62.0
+const DEAD_X := 0.25
+const DEAD_Y := 0.45
+## #padL: the touch zone is the lower-left 46 % x 78 %; the fixed stick only answers within .8 of its width of its centre
+const ZONE := Vector2(0.46, 0.78)
+## #stick rests at left 300, bottom 14 (centre 362 / 76 from the bottom-left corner)
+const HOME := Vector2(362.0, 76.0)
 ## CSS layout of #padR (right 18, bottom 10): centre measured from the bottom-right corner, radius, icon size
 const BTN := [
 	{"a": "dash", "label": "대시", "c": Vector2(135, 119), "r": 31.0, "ic": 24.0},
@@ -224,7 +230,7 @@ static func pip_base(vp: Viewport) -> Vector2:
 ## where the stick rests (and stays, in fixed mode)
 func _home() -> Vector2:
 	var s := get_viewport_rect().size
-	return Vector2(110.0, s.y - 110.0)
+	return Vector2(HOME.x * K(), s.y - HOME.y * K())
 
 
 # ---------- state ----------
@@ -265,19 +271,20 @@ func inter_label() -> String:
 
 
 # ---------- input ----------
+## the round .btn takes the touch only inside its circle (the browser hit-tests the border-radius)
 func _hit_button(p: Vector2) -> Variant:
 	var best = null
 	var bd := 1e9
 	for b in BTN:
 		var d := p.distance_to(btn_center(b))
-		if d < btn_r(b) + 12.0 and d < bd:
+		if d <= btn_r(b) and d < bd:
 			bd = d
 			best = b
 	return best
 
 func hit_ult(p: Vector2) -> bool:
 	var q := (p - ult_center()).rotated(deg_to_rad(6.0)) / K()
-	return absf(q.x) <= ULT_W / 2.0 + 8.0 and absf(q.y) <= ULT_H / 2.0 + 8.0
+	return absf(q.x) <= ULT_W / 2.0 and absf(q.y) <= ULT_H / 2.0
 
 func _input(ev: InputEvent) -> void:
 	if ev is InputEventScreenTouch or ev is InputEventKey or ev is InputEventMouseButton or ev is InputEventJoypadButton:
@@ -300,11 +307,14 @@ func _input(ev: InputEvent) -> void:
 				Input.action_press(b["a"])
 				queue_redraw()
 				return
-			if ev.position.x < get_viewport_rect().size.x * 0.5 and stick_id < 0:
-				stick_id = ev.index
-				stick_o = ev.position if arena.cfg.stick == "float" else _home()
-				stick_p = ev.position
-				_apply_stick()
+			# padL: a new finger in the zone takes the stick over (the old one is let go)
+			if in_zone(ev.position):
+				var fl: bool = arena.cfg.stick == "float"
+				if fl or ev.position.distance_to(_home()) <= 2.0 * STICK_R * K() * 0.8:
+					stick_id = ev.index
+					stick_o = ev.position if fl else _home()
+					stick_p = ev.position
+					_apply_stick()
 		else:
 			if held.has(ev.index):
 				var a: String = held[ev.index]
@@ -317,19 +327,21 @@ func _input(ev: InputEvent) -> void:
 		queue_redraw()
 	elif ev is InputEventScreenDrag and ev.index == stick_id:
 		stick_p = ev.position
-		var d := stick_p - stick_o
-		if d.length() > STICK_R and arena.cfg.stick == "float":   # the base follows the thumb when it drags too far
-			stick_o = stick_p - d.normalized() * STICK_R
 		_apply_stick()
 		queue_redraw()
 
 
 func _apply_stick() -> void:
-	var d := stick_p - stick_o if stick_id >= 0 else Vector2.ZERO
-	set_act("left", d.x < -DEAD)
-	set_act("right", d.x > DEAD)
-	set_act("up", d.y < -DEAD * 1.6)
-	set_act("down", d.y > DEAD * 1.6)
+	var R := STICK_R * K()
+	var d := (stick_p - stick_o).limit_length(R) if stick_id >= 0 else Vector2.ZERO
+	set_act("left", d.x < -R * DEAD_X)
+	set_act("right", d.x > R * DEAD_X)
+	set_act("up", d.y < -R * DEAD_Y)
+	set_act("down", d.y > R * DEAD_Y)
+
+func in_zone(p: Vector2) -> bool:
+	var s := get_viewport_rect().size
+	return p.x < s.x * ZONE.x and p.y > s.y * (1.0 - ZONE.y)
 
 
 func set_act(a: String, on: bool) -> void:
@@ -351,13 +363,15 @@ func _draw() -> void:
 		_draw_button(b, k, tc, inter, P.who)
 	_draw_ult(k, tc)
 	# stick
+	# the floating stick is hidden until a thumb lands (#stick.idle); the fixed one always shows where it waits
+	var sr := STICK_R * k
 	if stick_id >= 0:
-		draw_arc(stick_o, STICK_R, 0, TAU, 40, Color(1, 1, 1, 0.35), 2.0)
-		draw_circle(stick_o + (stick_p - stick_o).limit_length(STICK_R), 24.0, Color(1, 1, 1, 0.35))
-	else:
-		var a := (0.35 if arena.cfg.stick == "fixed" else 0.15) * dim
-		draw_arc(_home(), STICK_R, 0, TAU, 40, Color(1, 1, 1, a), 2.0)
-		draw_circle(_home(), 24.0, Color(1, 1, 1, a))
+		draw_arc(stick_o, sr, 0, TAU, 40, Color(1, 1, 1, 0.35), 2.0)
+		draw_circle(stick_o + (stick_p - stick_o).limit_length(sr), 27.0 * k, Color(1, 1, 1, 0.35))
+	elif arena.cfg.stick == "fixed":
+		var a := 0.35 * dim
+		draw_arc(_home(), sr, 0, TAU, 40, Color(1, 1, 1, a), 2.0)
+		draw_circle(_home(), 27.0 * k, Color(1, 1, 1, a))
 
 func _draw_button(b: Dictionary, k: float, tc: Color, inter: String, who: String) -> void:
 	var a: String = b["a"]

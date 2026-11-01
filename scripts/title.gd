@@ -85,13 +85,15 @@ func _input(ev: InputEvent) -> void:
 	if mode == "title":
 		if outro >= 0.0:
 			return
-		var ok := tap != Vector2.INF or key in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE] or padb in [JOY_BUTTON_A, JOY_BUTTON_START]
-		if not ok:
+		# Enter / Space (the pad's A sends Enter; Start is the in-game menu button and does nothing here)
+		var kb_ok := key in [KEY_ENTER, KEY_SPACE] or padb == JOY_BUTTON_A
+		if tap == Vector2.INF and not kb_ok:
 			return
 		if not intro_done:
 			intro_done = true
 			t = 99999.0
-			return
+			if tap != Vector2.INF:
+				return         # a click only finishes the logo; a key finishes it and starts at once (two keydown listeners)
 		outro = 0.0
 		arena.sfx("parry", 1.0)
 		return
@@ -100,7 +102,7 @@ func _input(ev: InputEvent) -> void:
 		_set_sel(sel - 1)
 	elif key in [KEY_RIGHT, KEY_D] or padb == JOY_BUTTON_DPAD_RIGHT:
 		_set_sel(sel + 1)
-	elif key in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE] or padb in [JOY_BUTTON_A, JOY_BUTTON_START]:
+	elif key in [KEY_ENTER, KEY_SPACE] or padb == JOY_BUTTON_A:
 		_go()
 	elif tap != Vector2.INF:
 		if go_rect.has_point(tap):

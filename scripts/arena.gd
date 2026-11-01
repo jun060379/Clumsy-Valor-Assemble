@@ -366,35 +366,31 @@ func _stamp() -> String:
 
 ## Arrow-key preset from the prototype: arrows move, Z jump, X attack, A guard, Shift dash. Pads too.
 func setup_input() -> void:
-	var map := {
-		"left": [KEY_LEFT], "right": [KEY_RIGHT], "up": [KEY_UP], "down": [KEY_DOWN],
-		"jump": [KEY_Z], "attack": [KEY_X], "guard": [KEY_A], "dash": [KEY_SHIFT], "swap": [KEY_CTRL, KEY_C],
-	}
-	var pad := {"jump": JOY_BUTTON_A, "attack": JOY_BUTTON_X, "dash": JOY_BUTTON_B, "guard": JOY_BUTTON_RIGHT_SHOULDER, "swap": JOY_BUTTON_Y,
-		"left": JOY_BUTTON_DPAD_LEFT, "right": JOY_BUTTON_DPAD_RIGHT, "up": JOY_BUTTON_DPAD_UP, "down": JOY_BUTTON_DPAD_DOWN}
-	for a in map:
+	# the keyboard keys come from settings.gd (apply_keys: KB_PRE / the player's own binding); this is the pad.
+	# PADBTN (standard mapping): A = jump (+Enter), B = dash (+Esc), X = attack, Y and LT = skill (KeyC → guard),
+	# LB and RB = swap (Tab → partyInput), RT = ult (KeyQ), the d-pad = arrows. Start / Back (menu / 설정) are read by menu.gd.
+	# padPoll: a button counts once it is pressed or past .5; the left stick moves past .45 across and .6 up / down.
+	var dz := {"left": 0.45, "right": 0.45, "up": 0.6, "down": 0.6, "jump": 0.5, "attack": 0.5, "guard": 0.5, "dash": 0.5, "ult": 0.5, "swap": 0.5}
+	var pad := {"jump": [JOY_BUTTON_A], "attack": [JOY_BUTTON_X], "dash": [JOY_BUTTON_B], "guard": [JOY_BUTTON_Y], "ult": [],
+		"swap": [JOY_BUTTON_LEFT_SHOULDER, JOY_BUTTON_RIGHT_SHOULDER],
+		"left": [JOY_BUTTON_DPAD_LEFT], "right": [JOY_BUTTON_DPAD_RIGHT], "up": [JOY_BUTTON_DPAD_UP], "down": [JOY_BUTTON_DPAD_DOWN]}
+	for a in pad:
 		if not InputMap.has_action(a):
-			InputMap.add_action(a, 0.3)
-		for k in map[a]:
-			var e := InputEventKey.new()
-			e.physical_keycode = k
-			InputMap.action_add_event(a, e)
-			var e2 := InputEventKey.new()   # some browsers report modifier keys only by key label
-			e2.keycode = k
-			InputMap.action_add_event(a, e2)
-		var j := InputEventJoypadButton.new()
-		j.button_index = pad[a]
-		InputMap.action_add_event(a, j)
-	for ax in [["left", JOY_AXIS_LEFT_X, -1.0], ["right", JOY_AXIS_LEFT_X, 1.0], ["up", JOY_AXIS_LEFT_Y, -1.0], ["down", JOY_AXIS_LEFT_Y, 1.0]]:
+			InputMap.add_action(a, dz[a])
+		InputMap.action_set_deadzone(a, dz[a])
+		for e in InputMap.action_get_events(a):
+			if e is InputEventJoypadButton or e is InputEventJoypadMotion:
+				InputMap.action_erase_event(a, e)
+		for b in pad[a]:
+			var j := InputEventJoypadButton.new()
+			j.button_index = b
+			InputMap.action_add_event(a, j)
+	for ax in [["left", JOY_AXIS_LEFT_X, -1.0], ["right", JOY_AXIS_LEFT_X, 1.0], ["up", JOY_AXIS_LEFT_Y, -1.0], ["down", JOY_AXIS_LEFT_Y, 1.0],
+			["guard", JOY_AXIS_TRIGGER_LEFT, 1.0], ["ult", JOY_AXIS_TRIGGER_RIGHT, 1.0]]:
 		var m := InputEventJoypadMotion.new()
 		m.axis = ax[1]
 		m.axis_value = ax[2]
 		InputMap.action_add_event(ax[0], m)
-	if not InputMap.has_action("ult"): InputMap.add_action("ult", 0.3)   # 궁극기: D (settings.gd binds the keys) / RT; no ult yet
-	var rt := InputEventJoypadMotion.new()
-	rt.axis = JOY_AXIS_TRIGGER_RIGHT
-	rt.axis_value = 1.0
-	InputMap.action_add_event("ult", rt)
 
 
 ## "town" / "hall" / "dungeon", or "" on the training ground
