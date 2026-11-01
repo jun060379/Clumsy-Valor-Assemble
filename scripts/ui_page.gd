@@ -65,6 +65,7 @@ func _input(ev: InputEvent) -> void:
 		return
 	if ev is InputEventMouseMotion:
 		hover = ev.position
+		if ev.button_mask & MOUSE_BUTTON_MASK_LEFT: _drag(ev.relative, ev.position)     # a finger (or held mouse) drags
 		return
 	var handled := false
 	if ev is InputEventMouseButton and ev.pressed:
@@ -109,6 +110,10 @@ func _key(k: int) -> void:
 	if k == KEY_ESCAPE: back()
 
 func _wheel(_d: int, _p: Vector2) -> void:
+	pass
+
+## a drag with the finger or the held mouse (pages that scroll override it)
+func _drag(_rel: Vector2, _p: Vector2) -> void:
 	pass
 
 func back() -> void:

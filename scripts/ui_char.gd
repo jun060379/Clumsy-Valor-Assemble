@@ -125,6 +125,8 @@ func _key(k: int) -> void:
 		var i := 0
 		for j in TABS.size(): if TABS[j][0] == tab: i = j
 		_tab(TABS[(i + (TABS.size() - 1 if k in [KEY_LEFT, KEY_Q] else 1)) % TABS.size()][0])
+	elif tab == "attr" and k in [KEY_UP, KEY_DOWN]:
+		stat_scroll = clampf(stat_scroll + (-40.0 if k == KEY_UP else 40.0), 0.0, stat_max)
 	elif tab == "gear" and k in [KEY_UP, KEY_DOWN]:
 		_pick_gi(clampi(gi + (-1 if k == KEY_UP else 1), 0, GSL.size() - 1))
 	elif tab == "gear" and k in [KEY_ENTER, KEY_SPACE]:
@@ -674,6 +676,10 @@ func _emo(ab: Rect2) -> void:
 
 static func _xr(xf: Transform2D, r: Rect2) -> PackedVector2Array:
 	return PackedVector2Array([xf * r.position, xf * Vector2(r.end.x, r.position.y), xf * r.end, xf * Vector2(r.position.x, r.end.y)])
+
+func _drag(rel: Vector2, _p: Vector2) -> void:
+	if tab == "attr":
+		stat_scroll = clampf(stat_scroll - rel.y, 0.0, stat_max)
 
 func _wheel(d: int, _p: Vector2) -> void:
 	if tab == "attr":
