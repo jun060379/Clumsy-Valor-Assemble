@@ -254,8 +254,9 @@ func _draw_front() -> void:
 	var tt := Time.get_ticks_msec() / 1000.0
 	if near_door != null:
 		var d = near_door
-		var s2: String = d["name"] + "  ·  공격 키"
-		var tw := fnt.get_string_size(s2, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x + 20.0
-		var y2: float = d["y"] - 230.0 + sin(tt * 4.0) * 3.0
-		front.draw_rect(Rect2(d["x"] - tw / 2.0, y2 - 16.0, tw, 24.0), Color(0, 0, 0, 0.6))
-		front.draw_string(fnt, Vector2(d["x"] - tw / 2.0 + 10.0, y2 + 1.0), s2, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#ffe9a8"))
+		var s2: String = arena.cfg.kh() + String(d["name"]) + " 입장"
+		var tw := maxf(140.0, fnt.get_string_size(s2, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x + 24.0)
+		var y2: float = d["y"] - 150.0 + sin(tt * 4.0) * 3.0
+		front.draw_rect(Rect2(d["x"] - tw / 2.0, y2 - 16.0, tw, 24.0), Color(0, 0, 0, 0.55))
+		var sw2 := fnt.get_string_size(s2, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
+		front.draw_string(fnt, Vector2(d["x"] - sw2 / 2.0, y2), s2, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#ffe9a8"))

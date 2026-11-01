@@ -664,11 +664,12 @@ func step(dt: float) -> void:
 				break
 		if near_door == null:
 			near_door = arena.eil.door_near(P)
-		if near_door == null:
+		var tl: bool = arena.dlg.locked()       # TALKLOCK: no new talk with the townsfolk or Bran yet
+		if near_door == null and not tl:
 			var n = folk.near(P)
 			if n != null:
 				near_door = {"x": n["x"], "y": n["y"], "name": TF.CH.NAME[n["c"]], "act": "npc", "c": n["c"], "hide": n["say_t"] > 0.0}
-		if near_door == null and bran.is_near(P):
+		if near_door == null and not tl and bran.is_near(P):
 			near_door = {"x": bran.x + bran.MID, "y": bran.y, "name": "브랜", "act": "bran"}
 		if near_door == null and absf(P.position.x - HDOOR) < 120.0 and absf(P.position.y - LOWF) < 30.0:
 			near_door = {"x": HDOOR, "y": LOWF - 20.0, "name": "파티 편성", "act": "party"}     # the fountain (nearFountain)
@@ -954,11 +955,13 @@ func _draw_front() -> void:
 	var tt := Time.get_ticks_msec() / 1000.0
 	if near_door != null and not near_door.get("hide", false):
 		var d = near_door
-		var s2: String = d["name"] + "  ·  공격 키" + (" 대화" if d.get("act", "") in ["eilin", "npc", "bran"] else "")
-		var tw := fnt.get_string_size(s2, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x + 20.0
-		var y2: float = d["y"] - 230.0 + sin(tt * 4.0) * 3.0
-		front.draw_rect(Rect2(d["x"] - tw / 2.0, y2 - 16.0, tw, 24.0), Color(0, 0, 0, 0.6))
-		front.draw_string(fnt, Vector2(d["x"] - tw / 2.0 + 10.0, y2 + 1.0), s2, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#ffe9a8"))
+		# KH() + the name (+ 입장 for a way in): "X " on keyboard, "Ⓧ " on a pad, nothing on touch
+		var s2: String = arena.cfg.kh() + String(d["name"]) + (" 입장" if String(d.get("to", "")) != "" else "")
+		var tw := maxf(140.0, fnt.get_string_size(s2, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x + 24.0)
+		var y2: float = d["y"] - 150.0 + sin(tt * 4.0) * 3.0
+		front.draw_rect(Rect2(d["x"] - tw / 2.0, y2 - 16.0, tw, 24.0), Color(0, 0, 0, 0.55))
+		var sw2 := fnt.get_string_size(s2, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
+		front.draw_string(fnt, Vector2(d["x"] - sw2 / 2.0, y2), s2, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#ffe9a8") if String(d.get("to", "")) != "" else Color("#cfd6e6"))
 
 func _front_shear(x0: float, x1: float, f: Callable) -> void:
 	var vr: Rect2 = arena.view_rect()

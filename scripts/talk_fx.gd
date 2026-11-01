@@ -33,6 +33,12 @@ var sel := -1
 var tr := UIA.Tr.new()
 var box := Rect2()
 var ch_polys: Array = []         # hit polygons (screen) per choice
+var scroll := 0.0                # .dch scrollTop (px): the choices scroll when they outgrow their box (drag / wheel / keys)
+var ch_view := Rect2()           # the .dch box on screen (padding 8 18 8 48)
+var ch_max := 0.0                # how far it can scroll
+var ch_rows: Array = []          # [top, bottom] of each row in the scrolled content (unscrolled y)
+var auto_on := false             # 자동 lit
+var top_rects: Array = []        # .dtop: [자동, 건너뛰기] on screen
 
 
 func reset(w: String, p: Texture2D, n: String, r: String, col: Color) -> void:
@@ -47,6 +53,7 @@ func reset(w: String, p: Texture2D, n: String, r: String, col: Color) -> void:
 	choices = []
 	ch_t = 0.0
 	sel = -1
+	scroll = 0.0
 	tr.clear()
 
 func step(dt: float) -> void:
@@ -69,6 +76,7 @@ func set_choices(L: Array, s: int) -> void:
 	if L != choices:
 		choices = L.duplicate()
 		ch_t = 0.0
+		scroll = 0.0
 	sel = s
 
 static func dk(vs: Vector2) -> float:
@@ -87,6 +95,10 @@ func box_rect(vs: Vector2) -> Rect2:
 
 # ---------- behind the art: the cut-in shards ----------
 func draw_back(ci: CanvasItem, vs: Vector2) -> void:
+	# #dlg: the screen darkens toward the foot (transparent at 45 %, .55 black at the bottom)
+	var ga := clampf(open_t / 200.0, 0.0, 1.0)
+	ci.draw_polygon(PackedVector2Array([Vector2(0, vs.y * 0.45), Vector2(vs.x, vs.y * 0.45), vs, Vector2(0, vs.y)]),
+		PackedColorArray([Color(0, 0, 0, 0), Color(0, 0, 0, 0), Color(0, 0, 0, 0.55 * ga), Color(0, 0, 0, 0.55 * ga)]))
 	var cr := Rect2(-0.04 * vs.x, vs.y * 0.02, vs.x * 0.4, vs.y * 1.04)      # left -4%, bottom -6%, 40% x 104%
 	var shards := [[Rect2(cr.position.x, cr.position.y + cr.size.y * 0.08, cr.size.x * 0.96, cr.size.y * 0.92), dc(), 0.0,
 		[[8, 18], [40, 2], [52, 14], [88, 6], [76, 34], [100, 52], [80, 66], [92, 100], [0, 100], [4, 60], [0, 40]]],
@@ -248,7 +260,18 @@ func _draw_choices(ci: CanvasItem, vs: Vector2, k: float) -> void:
 	var gap := 10.0
 	var right := vs.x * 0.98 - 18.0
 	var bottom := vs.y - (vs.y * 0.38 + 10.0) - 8.0
-	var top := bottom - n * h - (n - 1) * gap
+	# .dch: max-height min(191px·dk, 62% − 64px) of content, overflow scrolls (no scrollbar), a 34 px fade at the foot
+	# while there is more below
+	var content := n * h + (n - 1) * gap
+	var view_h := minf(content, minf(191.0 * k, vs.y * 0.62 - 64.0))
+	view_h = maxf(view_h, h)
+	ch_max = maxf(0.0, content - view_h)
+	scroll = clampf(scroll, 0.0, ch_max)
+	var top := bottom - view_h
+	ch_view = Rect2(right - vs.x * 0.62 + 18.0, top - 8.0, vs.x * 0.62, view_h + 16.0)
+	var more := ch_max > 2.0 and scroll < ch_max - 4.0
+	ch_rows.clear()
+	for i in n: ch_rows.append([i * (h + gap), i * (h + gap) + h])
 	for i in n:
 		var C: Array = CHS[i % CHS.size()]
 		var on := i == sel
@@ -256,14 +279,19 @@ func _draw_choices(ci: CanvasItem, vs: Vector2, k: float) -> void:
 		var ts := int(round((18.0 if on else 16.0) * k))
 		var ts_v: float = tr.get_v("fs%d" % i, 18.0 if on else 16.0, 200.0, "ease") * k
 		var w := 12.0 + 22.0 * k + 10.0 + bf.get_string_size(lab, HORIZONTAL_ALIGNMENT_LEFT, -1, ts).x + 24.0
-		var r := Rect2(right - w, top + i * (h + gap), w, h)
+		var r := Rect2(right - w, top + i * (h + gap) - scroll, w, h)
+		# outside the box: hidden; the foot fades while more is below (mask-image)
+		var vis := 1.0
+		if r.end.y < ch_view.position.y + 2.0 or r.position.y > ch_view.end.y - 2.0: vis = 0.0
+		elif r.position.y < ch_view.position.y: vis = clampf((r.end.y - ch_view.position.y) / h, 0.0, 1.0)
+		if more and vis > 0.0: vis *= clampf((ch_view.end.y - r.get_center().y) / 34.0, 0.0, 1.0)
 		var onk: float = tr.get_v("on%d" % i, 1.0 if on else 0.0, 250.0, BK6)
 		var rot: float = lerpf(-2.0, C[0], onk)
 		var tx: float = C[1] - 22.0 * onk
 		var sc := lerpf(1.0, 1.1, onk)
 		var age := ch_t - i * 80.0
 		var u := UIA.p(age, 0.0, 450.0, BK6)
-		var a := clampf(age / 200.0, 0.0, 1.0)
+		var a := clampf(age / 200.0, 0.0, 1.0) * vis
 		if a <= 0.0:
 			ch_polys.append(PackedVector2Array())
 			continue
@@ -285,7 +313,7 @@ func _draw_choices(ci: CanvasItem, vs: Vector2, k: float) -> void:
 		ci.draw_colored_polygon(PackedVector2Array([dcn + Vector2(0, -ds), dcn + Vector2(ds, 0), dcn + Vector2(0, ds), dcn + Vector2(-ds, 0)]), Color(nb, nb.a * a))
 		var ns := "0%d" % (i + 1)
 		var af := UI.anton(true)
-		var nfs := int(round(13.0 * k))
+		var nfs := int(round(15.0 * k))
 		var nw := af.get_string_size(ns, HORIZONTAL_ALIGNMENT_LEFT, -1, nfs).x
 		ci.draw_string(af, dcn + Vector2(-nw / 2.0, nfs * 0.36), ns, HORIZONTAL_ALIGNMENT_LEFT, -1, nfs, Color(Color.BLACK.lerp(Color.WHITE, onk), a))
 		var tcx := Color.WHITE.lerp(Color.BLACK, onk)
@@ -295,6 +323,54 @@ func _draw_choices(ci: CanvasItem, vs: Vector2, k: float) -> void:
 
 ## which choice is under p (screen), -1 if none
 func choice_at(p: Vector2) -> int:
+	if ch_max > 0.0 and (p.y < ch_view.position.y or p.y > ch_view.end.y): return -1
 	for i in ch_polys.size():
 		if ch_polys[i].size() > 2 and Geometry2D.is_point_in_polygon(p, ch_polys[i]): return i
+	return -1
+
+## the choices' box holds p (a press there scrolls or picks; elsewhere the screen turns the page)
+func in_choices(p: Vector2) -> bool:
+	return not choices.is_empty() and (ch_view.has_point(p) or choice_at(p) >= 0)
+
+func set_scroll(v: float) -> void:
+	scroll = clampf(v, 0.0, ch_max)
+
+## scrollIntoView({block:'nearest'}) for row k
+func reveal(k: int) -> void:
+	if k < 0 or k >= ch_rows.size(): return
+	var vh := ch_view.size.y - 16.0
+	var r: Array = ch_rows[k]
+	if r[0] < scroll: scroll = r[0]
+	elif r[1] > scroll + vh: scroll = r[1] - vh
+	scroll = clampf(scroll, 0.0, ch_max)
+
+
+# ---------- .dtop: 자동 · 건너뛰기 ≫ (top right, skewed black pills at 55 %) ----------
+func draw_top(ci: CanvasItem, vs: Vector2) -> void:
+	var k := dk(vs)
+	var f := UI.noto()
+	var fs := int(round(12.0 * k))
+	var hh := 28.0 * k
+	var labs := ["자동", "건너뛰기 ≫"]
+	var ws: Array = []
+	for L in labs: ws.append(f.get_string_size(L, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 28.0 + 4.0)
+	var x: float = vs.x - 18.0 - ws[1]
+	var rr := [Rect2(x - 8.0 - ws[0], 12.0, ws[0], hh), Rect2(x, 12.0, ws[1], hh)]
+	top_rects = rr
+	var a := 0.55 * clampf(open_t / 200.0, 0.0, 1.0)
+	var sk := tan(deg_to_rad(12.0)) * hh / 2.0
+	for i in 2:
+		var r: Rect2 = rr[i]
+		var poly := PackedVector2Array([r.position + Vector2(sk, 0), Vector2(r.end.x + sk, r.position.y), Vector2(r.end.x - sk, r.end.y), Vector2(r.position.x - sk, r.end.y)])
+		ci.draw_colored_polygon(poly, Color(0, 0, 0, a))
+		var pl := poly.duplicate()
+		pl.append(poly[0])
+		ci.draw_polyline(pl, Color(1, 1, 1, a), 2.0)
+		var tw := f.get_string_size(labs[i], HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		ci.draw_string(f, Vector2(r.get_center().x - tw / 2.0, r.get_center().y + fs * 0.36), labs[i], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, a))
+
+## 0 = 자동, 1 = 건너뛰기, -1 = neither
+func top_at(p: Vector2) -> int:
+	for i in top_rects.size():
+		if (top_rects[i] as Rect2).grow(3.0).has_point(p): return i
 	return -1

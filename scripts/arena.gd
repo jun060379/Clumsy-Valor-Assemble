@@ -111,6 +111,8 @@ func _ready() -> void:
 	cfg = SETTINGS.new(self)
 	cfg.apply_keys()
 	PLAYER.set_pix(pix)
+	cfg.apply_qk()
+	get_tree().root.size_changed.connect(func(): cfg.apply_qk())
 	low_end = OS.has_feature("mobile") or (OS.has_feature("web") and cfg.touch_auto())
 	fatigue = FATIGUE.new()
 	platforms = [
@@ -547,6 +549,8 @@ func platform_under(p: Vector2):
 
 
 func _process(delta: float) -> void:
+	# qWatch: long frames lower the render quality (menus and the title don't count)
+	cfg.qwatch(minf(delta * 1000.0, 50.0), ui_root == null or ui_root.holds() or DisplayServer.get_name() == "headless")
 	if ui_root != null and ui_root.holds():
 		return            # the world holds still under the title, a menu page or a transition
 	if fame != null and fame.holds():
@@ -578,6 +582,7 @@ func _process(delta: float) -> void:
 	elif hitstop > 0.0:
 		hitstop -= dt
 	else:
+		dlg.hold_keys()
 		player.step(dt)
 		if sortie != null: sortie.post_player(dt)
 		if ult != null:

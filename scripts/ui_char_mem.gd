@@ -48,6 +48,7 @@ var mi := -1
 var hold := 0.0             # the memorial blink held (smile line / tap)
 var blink := 0.0            # ms left of a blink
 var blink_next := 2600.0
+var blink2 := 0.0           # ms until the double blink's second shut
 var xf := Transform2D.IDENTITY
 
 
@@ -114,6 +115,10 @@ func tick(dt: float) -> void:
 	if blink_next <= 0.0:
 		blink_next = 2600.0 + randf() * 2600.0
 		blink = 130.0
+		if randf() < 0.25: blink2 = 260.0          # one time in four a second blink 260 ms on (110 ms)
+	if blink2 > 0.0:
+		blink2 -= dt
+		if blink2 <= 0.0: blink = 110.0
 
 
 # ---------- input ----------
@@ -375,8 +380,12 @@ func ground(vs: Vector2, col: Color, k: String) -> void:
 	p.draw_rect(Rect2(Vector2.ZERO, vs), col)
 	var bu: Array = T.get_v("g_burst", [float(S["burst"][0]), float(S["burst"][1])], 700.0, "mv")
 	UI.burst(p, Vector2(vs.x * bu[0] / 100.0, vs.y * bu[1] / 100.0), maxf(vs.x, vs.y) * 1.3, 0.15, p.t / 70000.0 * TAU)
-	UI.dots(p, Rect2(0, 0, vs.x * 0.45, vs.y), 0.3, 1.0)
-	_dots_in(Rect2(vs.x * 0.7, 0, vs.x * 0.3, vs.y))
+	# .dots follow the pointer a little (translate(--px·6px, --py·4px))
+	var pp: Vector2 = p.ptr(vs)
+	use(Transform2D(0.0, Vector2(pp.x * 6.0, pp.y * 4.0)))
+	UI.dots(p, Rect2(-8, -6, vs.x * 0.45 + 8.0, vs.y + 12.0), 0.3, 1.0)
+	_dots_in(Rect2(vs.x * 0.7, -6, vs.x * 0.3 + 8.0, vs.y + 12.0))
+	reset_xf()
 	for part in [["shard", Color.BLACK], ["edge", UI.col2(p.c)]]:
 		var sd: Array = S[part[0]]
 		var rr: Array = T.get_v("g_" + part[0], (sd[0] as Array).map(func(v): return float(v)) + [float(sd[1])], 700.0, "mv")
@@ -884,7 +893,8 @@ func _memo_art(vs: Vector2, col: Color) -> void:
 	var sc := lerpf(1.18, 1.0, e) * (1.0 + 0.05 * dr) * 1.08
 	var s: float = maxf(vs.x / t.get_width(), vs.y / t.get_height()) * sc
 	var sz := Vector2(t.get_width(), t.get_height()) * s
-	var pos := Vector2((vs.x - sz.x) * 0.6, (vs.y - sz.y) * 0.4) - Vector2(vs.x * 0.01 * dr, -vs.y * 0.005 * dr)
+	var pp: Vector2 = p.ptr(vs)
+	var pos := Vector2((vs.x - sz.x) * 0.6, (vs.y - sz.y) * 0.4) - Vector2(vs.x * 0.01 * dr, -vs.y * 0.005 * dr) + Vector2(pp.x * -8.0, pp.y * -5.0)
 	p.draw_rect(Rect2(Vector2.ZERO, vs), Color.BLACK)
 	p.draw_texture_rect(t, Rect2(pos, sz), false)
 	if (blink > 0.0 or hold > 0.0) and u >= 1.0:

@@ -19,6 +19,7 @@ extends RefCounted
 ##   fame       any     fame.get_state() when that system exists (restored with fame.set_state(...))
 ##   inventory  any     inventory.get_state() when that system exists (restored with inventory.set_state(...))
 ##   memory     any     runes.memory.get_state(): character levels and memory trees (restored with set_state, before HP)
+##   bran_met   bool    Bran has introduced himself (branGreet's localStorage bran_met): his first-meeting lines play once
 
 const VERSION := 1
 
@@ -48,6 +49,7 @@ func snapshot() -> Dictionary:
 		"party": P.party.duplicate(), "who": P.who, "hp": P.hp, "hpm": P.hpm.duplicate(),
 		"scene": scene, "x": at.x, "y": at.y, "dir": P.dir, "fl": fl,
 		"tod_h": arena.tod_h, "shilling": arena.shilling,
+		"bran_met": arena.has_meta("bran_met"),
 	}
 	if arena.ult != null:
 		d["ult"] = {"v": arena.ult.v.duplicate(), "cd": arena.ult.cd.duplicate()}
@@ -98,6 +100,7 @@ func apply(d: Dictionary) -> Array:
 	P.last_hp = P.hp
 	arena.tod_h = fposmod(float(d.get("tod_h", arena.tod_h)), 24.0)
 	arena.shilling = int(d.get("shilling", arena.shilling))
+	if bool(d.get("bran_met", false)): arena.set_meta("bran_met", true)
 	if arena.ult != null and d.has("ult"):
 		var U: Dictionary = d["ult"]
 		for c in roster:

@@ -127,6 +127,31 @@ func prop_w(k: String) -> float:
 	return 96.0 if k == "arch" else HW(k)
 
 ## a hall sprite at 2x, bottom-anchored; clip = optional world rect
+## a prop's picture through CSS filter brightness(.45) saturate(.6), made once
+var _dim := {}
+func dim_tex(k: String) -> Texture2D:
+	if not _dim.has(k):
+		var im: Image = (tex[k] as Texture2D).get_image()
+		_dim[k] = ImageTexture.create_from_image(dim_image(im, 0.45, 0.6)) if im != null and not im.is_empty() else tex[k]
+	return _dim[k]
+
+static func dim_image(src: Image, br: float, sat: float) -> Image:
+	var im := src.duplicate() as Image
+	if im.is_compressed(): im.decompress()
+	im.convert(Image.FORMAT_RGBA8)
+	var s := sat
+	for y in im.get_height():
+		for x in im.get_width():
+			var c := im.get_pixel(x, y)
+			if c.a <= 0.0: continue
+			var r := c.r * br
+			var g := c.g * br
+			var b := c.b * br
+			im.set_pixel(x, y, Color(clampf((0.213 + 0.787 * s) * r + (0.715 - 0.715 * s) * g + (0.072 - 0.072 * s) * b, 0.0, 1.0),
+				clampf((0.213 - 0.213 * s) * r + (0.715 + 0.285 * s) * g + (0.072 - 0.072 * s) * b, 0.0, 1.0),
+				clampf((0.213 - 0.213 * s) * r + (0.715 - 0.715 * s) * g + (0.072 + 0.928 * s) * b, 0.0, 1.0), c.a))
+	return im
+
 func hi(ci: CanvasItem, k: String, x: float, yb: float, flip := false, clip := Rect2(), mod := Color.WHITE) -> void:
 	if not tex.has(k): return
 	var t: Texture2D = tex[k]
@@ -771,6 +796,9 @@ func _prop(ci: CanvasItem, p: Array) -> void:
 			if not hfac("hearth"): return
 			_flame(ci, x + 79.0, y - 17.0, 0.4, 1.0)
 			_flame(ci, x + 99.0, y - 17.0, 0.36, 3.0)
+		"shelf":
+			# the library is not restored yet: its shelves stand in the dark (rgba(20,14,10,.55) over each)
+			if not hfac("library"): ci.draw_rect(Rect2(roundf(x), roundf(y - HH(k)), HW(k), HH(k)), Color8(20, 14, 10, 140))
 
 ## stair-landing archway with its double door: the leaves swing in as you step onto the landing
 func _arch_door(ci: CanvasItem, p: Array, x: float, y: float) -> void:
@@ -912,11 +940,11 @@ func _draw_front() -> void:
 		var pv := cy + HH("chain") * 0.6 - HH("chain")
 		front.draw_set_transform(Vector2(cx, pv), chand_a(), Vector2.ONE)
 		var ch_top := cy + HH("chain") * 0.6 - HH("chain") - pv
-		front.draw_texture_rect(tex["chain"], Rect2(-HW("chain") / 2.0, ch_top, HW("chain"), HH("chain")), false)
+		# not yet restored: chain and chandelier hang dark and dull (filter brightness(.45) saturate(.6)), no light
+		var lit := hfac("chand")
+		front.draw_texture_rect(tex["chain"] if lit else dim_tex("chain"), Rect2(-HW("chain") / 2.0, ch_top, HW("chain"), HH("chain")), false)
 		var cb := cy + HH("chain") * 0.6 - 8.0 + HH("chand") - pv
-		# not yet restored: hanging dark and dull (brightness .45, saturate .6), no light
-		front.draw_texture_rect(tex["chand"], Rect2(-HW("chand") / 2.0, cb - HH("chand"), HW("chand"), HH("chand")), false,
-			Color.WHITE if hfac("chand") else Color(0.45, 0.43, 0.43))
+		front.draw_texture_rect(tex["chand"] if lit else dim_tex("chand"), Rect2(-HW("chand") / 2.0, cb - HH("chand"), HW("chand"), HH("chand")), false)
 		front.draw_set_transform(Vector2.ZERO)
 
 func _draw_labels() -> void:
@@ -930,11 +958,14 @@ func _draw_labels() -> void:
 		return
 	if near_door != null:
 		var d = near_door
-		var s2: String = "%s  ·  공격 키로 %s" % [d["name"], d["k"]]
-		var tw := fnt.get_string_size(s2, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x + 20.0
-		var y2: float = d["y"] - 230.0 + sin(tt * 4.0) * 3.0
-		front.draw_rect(Rect2(d["x"] - tw / 2.0, y2 - 16.0, tw, 24.0), Color(0, 0, 0, 0.6))
-		front.draw_string(fnt, Vector2(d["x"] - tw / 2.0 + 10.0, y2 + 1.0), s2, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#ffe9a8"))
+		# KH() + the name (+ 나가기 on the way out)
+		var out: bool = d.get("act", "") == "town"
+		var s2: String = arena.cfg.kh() + String(d["name"]) + (" 나가기" if out else "")
+		var tw := maxf(140.0, fnt.get_string_size(s2, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x + 24.0)
+		var y2: float = d["y"] - 150.0 + sin(tt * 4.0) * 3.0
+		front.draw_rect(Rect2(d["x"] - tw / 2.0, y2 - 16.0, tw, 24.0), Color(0, 0, 0, 0.55))
+		var sw2 := fnt.get_string_size(s2, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
+		front.draw_string(fnt, Vector2(d["x"] - sw2 / 2.0, y2), s2, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#ffe9a8") if out else Color("#cfd6e6"))
 	elif stair_hint():
 		var s3 := "↑ 계단"
 		var w3 := fnt.get_string_size(s3, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x + 16.0

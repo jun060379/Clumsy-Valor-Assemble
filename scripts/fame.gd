@@ -508,7 +508,7 @@ func on_kill(m) -> void:
 ## the forge belongs to the guild: Bran keeps it shut until he has met the newcomer through Eilin
 func bran_gate() -> bool:
 	if not bran:
-		arena.dlg.ask("bran", BRAN_POR, "브랜", "길드 대장장이", ["…길드 쪽 사람이오? 처음 보는 얼굴인데.", "접수대의 에일린한테 먼저 인사부터 하고 오쇼. 일 하나 끝내고 오면, 그때 얘기합시다. 흐흐."], [["알겠어요", null]])
+		arena.dlg.ask("bran", BRAN_POR, "브랜", "길드 대장장이", ["…길드 쪽 사람이오? 처음 보는 얼굴인데.", "접수대의 에일린한테 먼저 인사부터 하고 오쇼. 일 하나 끝내고 오면, 그때 얘기합시다. 흐흐."], [["알겠어요", null, "leave"]])
 		return false
 	finc("bran")
 	return true
@@ -602,7 +602,7 @@ func letter() -> void:
 	_say("eilin", ["아, 잠깐만요! 길드 관리국에서 서신이 왔어요.", "(붉은 봉랍이 찍힌 두꺼운 봉투. 에일린이 조심스럽게 뜯는다)", "「귀 길드의 등급 심사를 아래 과제로 진행함. 수행 후 보고 바람.」 …등급 심사예요!", "과제는 「%s」래요. 이건 길드원 여러분께 넘길게요. 게시판에도 붙여 둘게요!" % t["d"]],
 		[["게시판 보기", func():
 			_eil_bye()
-			open_book("gbk", "quest")], ["맡겨 주세요", func(): _eil_bye()]])
+			open_book("gbk", "quest")], ["맡겨 주세요", func(): _eil_bye(), "leave"]])
 
 ## fameReport
 func report() -> void:
@@ -615,7 +615,7 @@ func report() -> void:
 		_say("eilin", ["지금 보고하실 의뢰는 없네요.", "(" + o + ")" if o != "" else "게시판에서 의뢰를 골라 보세요. 해 두시면 제가 확인해 둘게요."],
 			[["게시판 보기", func():
 				_eil_bye()
-				open_book("gbk", "quest")], ["알겠어요", func(): _eil_bye()]])
+				open_book("gbk", "quest")], ["알겠어요", func(): _eil_bye(), "leave"]])
 		return
 	var gain := 0
 	var n := 0
@@ -648,7 +648,7 @@ func intro_seniors(up: bool) -> void:
 	var s4 := func(): _say("eilin", ["아이다 씨와 루체 씨는 오늘부터 파티에 함께할 수 있어요. 분수대에서 편성해 보세요.", "대장간도 열렸으니까, 마을에 가면 브랜 씨한테 장비를 맡겨 보세요!"], [["네!", func():
 		_eil_bye()
 		join()
-		if up: rank_up()]])
+		if up: rank_up(), "leave"]])
 	var s3 := func(): _say("bran", ["브랜이오. 길드 대장간을 맡고 있지. 흐흐.", "장비든 룬이든 가져오쇼. 오늘부터 대장간 문은 열어 두겠소."], [["잘 부탁드려요", s4]])
 	var s2 := func(): _say("luce", ["안녕하세요, 루체예요! 다치면 꼭 저한테 먼저 오세요.", "…아, 물론 안 다치는 게 제일 좋지만요!"], [["잘 부탁드려요", s3]])
 	var s1 := func(): _say("aida", ["…신입이구나. 아이다. 길드 일 말고는 묘지기를 해.", "동굴의 해골 광부들, 원래는 이 마을 사람들이었어. 그건 알아 둬."], [["잘 부탁드려요", s2]])
