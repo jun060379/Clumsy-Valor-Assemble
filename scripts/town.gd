@@ -916,6 +916,7 @@ func _draw() -> void:
 		for j in hh:
 			var v := float(j) / hh
 			draw_rect(Rect2(x0, roundf((G - 9.0) / PK) * PK - (j + 1) * PK, PK, PK), cols[clampi(roundi((1.0 - v) * edge * 4.4 - 0.4), 0, 4)])
+	life.draw_cat(self)
 
 func _draw_front() -> void:
 	# grass strip in front of feet
