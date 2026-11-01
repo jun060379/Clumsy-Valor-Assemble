@@ -170,16 +170,26 @@ func _close() -> void:
 	var now := Time.get_ticks_msec()
 	lock_until = maxi(lock_until, now + 700)
 	blk_until = now + 350
+	need_release = true
 
 ## TALKLOCK: the townsfolk and Bran won't start a talk until it runs out
 func locked() -> bool:
 	return Time.get_ticks_msec() < lock_until
 
-## the key that closed the box must not reach the game (the prototype's key release block)
+## the key that closed the box must not reach the game (the prototype's key release block). Talk, next-line and
+## close all sit on the attack key (and a tap), so the press that ends a talk would start the same talk again: for
+## 350 ms after closing, and until every talk key has been let go, the game doesn't see attack / jump / up presses.
+## (Releasing the actions instead, as before, let a held touch button press them again on the next frame — a fresh
+## "just pressed" that reopened the talk.)
+var need_release := false
+func swallow() -> bool:
+	if need_release and not (Input.is_action_pressed("attack") or Input.is_action_pressed("jump") or Input.is_action_pressed("up")) \
+			and not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		need_release = false
+	return need_release or Time.get_ticks_msec() < blk_until
+
 func hold_keys() -> void:
-	if Time.get_ticks_msec() < blk_until:
-		for a in ["attack", "jump"]:
-			if InputMap.has_action(a): Input.action_release(a)
+	pass
 
 ## her portrait blinks on its own clock (eilin_por_smile is the closed-eye picture; one time in four a double blink)
 func _blink_step(dt: float) -> void:

@@ -176,6 +176,13 @@ func _initialize() -> void:
 	key(KEY_X)
 	await process_frame
 	check(not D.active and D.blk_until > Time.get_ticks_msec(), "the last line closes; the closing key is held off the game")
+	# the closing press stays with the box: held past the 350 ms window, it still doesn't reach the game
+	Input.action_press("attack")
+	D.blk_until = 0
+	D.need_release = true          # as _close() leaves it while the closing key is still down
+	check(D.swallow(), "a still-held talk key is swallowed after the window")
+	Input.action_release("attack")
+	check(not D.swallow(), "…and let go, the next press is the game's again")
 	D.queue_redraw()
 	await ask(C)
 	check(D.talk.top_rects.size() == 2, "자동 · 건너뛰기 are drawn")

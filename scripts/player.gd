@@ -236,6 +236,13 @@ func read_input() -> void:
 			keys[k] = bool(fo.get(k, false))
 			pressed[k] = false
 		return
+	# the press (or tap) that closed a talk box stays with it: no swing, jump or interact until it is let go
+	if arena.dlg != null and arena.dlg.swallow():
+		for k in ["attack", "jump", "up"]:
+			pressed[k] = false
+			if buf.has(k): buf[k] = 0.0
+		keys["attack"] = false
+		keys["jump"] = false
 	# the attack key doubles as interact: at a door it opens, and doesn't swing
 	if (pressed["attack"] or pressed["up"]) and on and not attacking() and arena.try_interact():
 		pressed["attack"] = false
