@@ -17,9 +17,12 @@ const PK := 2.0
 const CUT_SH := """
 shader_type canvas_item;
 render_mode blend_mul;
+// multiplies colour AND alpha by (1 - a): where the drawn shape is opaque the target is cleared, everywhere else in
+// its rectangle (transparent texels) it is left alone. (rgb 0 there used to black out the sprite's whole cell, which
+// put out the hall windows around the heroine at night.)
 void fragment() {
 	float a = texture(TEXTURE, UV).a * COLOR.a;
-	COLOR = vec4(0.0, 0.0, 0.0, 1.0 - a);
+	COLOR = vec4(vec3(1.0 - a), 1.0 - a);
 }
 """
 const CLOUD_SH := """
