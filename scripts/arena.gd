@@ -9,6 +9,9 @@ const MOB := preload("res://scripts/mob.gd")
 const HUD := preload("res://scripts/hud.gd")
 const DUNGEON := preload("res://scripts/dungeon.gd")
 const TOWN := preload("res://scripts/town.gd")
+const HALL := preload("res://scripts/hall.gd")
+const EILIN := preload("res://scripts/eilin.gd")
+const DIALOG := preload("res://scripts/dialog.gd")
 const WAVES := [["goblin", "goblin", "eye"], ["mush", "goblin", "goblin"], ["mush", "mush", "eye", "goblin"], ["skel", "goblin", "eye", "mush"], ["skel", "skel", "eye", "eye", "goblin"]]
 
 const H := 500.0
@@ -44,7 +47,11 @@ var luce_fx: Array = []
 var mark_pos := Vector2.INF
 var solids: Array = []        # raised rock {x,w,top}
 var ceil_y := -1.0e9
-var level = null              # the dungeon or the town; null = training ground
+var level = null              # the dungeon, the town or the hall (level.kind); null = training ground
+var tod_h := 18.5             # one clock for the whole world (town, hall, Eilin's day)
+var tod_auto := true
+var eil                       # Eilin lives across maps
+var dlg                       # talk box
 var shilling := 0
 var fade_rect: ColorRect
 var fade := 0.0
@@ -128,12 +135,21 @@ func _ready() -> void:
 	hud.set_script(HUD)
 	hud.arena = self
 	ui.add_child(hud)
+	dlg = Control.new()
+	dlg.set_script(DIALOG)
+	dlg.arena = self
+	ui.add_child(dlg)
+	ui.move_child(dlg, fade_rect.get_index())
+	eil = Node.new()
+	eil.set_script(EILIN)
+	eil.arena = self
+	add_child(eil)
 	var tc := Control.new()
 	tc.set_script(TOUCH)
 	ui.add_child(tc)
 	call_deferred("go_town", Vector2(700.0, ground_y), 1)
 	var stamp := Label.new()
-	stamp.text = "STEP 3 · 마을 · 동굴  ·  " + _stamp()
+	stamp.text = "STEP 3 · 마을 · 본관 · 동굴  ·  " + _stamp()
 	stamp.add_theme_font_override("font", font_bold)
 	stamp.add_theme_font_size_override("font_size", 11)
 	stamp.modulate = Color(1, 1, 1, 0.45)
@@ -174,6 +190,26 @@ func setup_input() -> void:
 		InputMap.action_add_event(ax[0], m)
 
 
+## "town" / "hall" / "dungeon", or "" on the training ground
+func level_kind() -> String:
+	return "" if level == null else String(level.kind)
+
+func open_dialog(who: String, por: Texture2D, nm: String, role: String, lines: Array, cb = null) -> void:
+	dlg.open(who, por, nm, role, lines, cb)
+
+## the shared clock's light: sky tint, ambient, sun and lamp strength (town.gd TODK)
+func tod_now() -> Dictionary:
+	var hh := fposmod(tod_h, 24.0)
+	var K: Array = TOWN.TODK
+	var i := 0
+	while i < K.size() - 2 and K[i + 1][0] <= hh: i += 1
+	var a: Array = K[i]
+	var b: Array = K[i + 1]
+	var k: float = (hh - a[0]) / maxf(0.001, b[0] - a[0])
+	var sky := Color(lerpf(a[1][0], b[1][0], k) / 255.0, lerpf(a[1][1], b[1][1], k) / 255.0, lerpf(a[1][2], b[1][2], k) / 255.0, lerpf(a[1][3], b[1][3], k))
+	var amb := Color(lerpf(a[2][0], b[2][0], k), lerpf(a[2][1], b[2][1], k), lerpf(a[2][2], b[2][2], k))
+	return {"sky": sky, "amb": amb, "sun": lerpf(a[3], b[3], k), "lamp": lerpf(a[4], b[4], k)}
+
 func foes() -> Array:
 	return (dummies if level == null else []) + mobs.filter(func(m): return m.alive())
 
@@ -192,7 +228,9 @@ func snap_camera() -> void:
 func cam_y_target() -> float:
 	if level == null:
 		return H / 2.0
-	if level.has_method("land"):
+	if level.kind == "hall":
+		return H / 2.0 + (-90.0 if player.position.y < ground_y - 120.0 else 0.0)
+	if level.kind == "town":
 		return clampf(player.position.y - 110.0, level.TTOP - 460.0 + H / 2.0, level.LOWF + 120.0 - H / 2.0)
 	return clampf(player.position.y - 110.0, ceil_y + 100.0 + H / 2.0, ground_y + 70.0 - H / 2.0)
 
@@ -251,6 +289,23 @@ func go_town(at: Vector2, d: int) -> void:
 	player.vy = 0.0
 	snap_camera()
 
+## into the guild hall: floor fl, standing at `at`
+func go_hall(fl: int, at: Vector2, d: int) -> void:
+	_drop_level()
+	for dm in dummies: dm.visible = false
+	platforms = []
+	player.position = at
+	player.dir = d
+	player.on = true
+	player.vy = 0.0
+	level = Node2D.new()
+	level.set_script(HALL)
+	level.arena = self
+	level.fl = fl
+	add_child(level)
+	world_w = level.W
+	snap_camera()
+
 func go_training() -> void:
 	_drop_level()
 	for dm in dummies: dm.visible = true
@@ -264,7 +319,7 @@ func go_training() -> void:
 	snap_camera()
 
 func party_wiped() -> void:
-	if level != null and not level.has_method("land"):
+	if level_kind() == "dungeon":
 		fade_then(func(): go_town(Vector2(5107.0, ground_y), -1))
 
 func try_interact() -> bool:
@@ -294,7 +349,14 @@ func _process(delta: float) -> void:
 		if witch <= 0.0:
 			sfx("witch_end", 0.8)
 	var wk := 0.22 if witch > 0.0 else 1.0   # the world slows; Estelle does not
-	if hitstop > 0.0:
+	if tod_auto and not dlg.active:
+		tod_h = fposmod(tod_h + dt / 1000.0 / 60.0, 24.0)      # one in-game hour per real minute
+	if dlg.active:
+		# a talk box holds the world still; she keeps talking (her loop runs)
+		dlg.step(dt)
+		eil.upd(dt)
+		if level != null: level.step(dt)
+	elif hitstop > 0.0:
 		hitstop -= dt
 	else:
 		player.step(dt)
@@ -306,6 +368,9 @@ func _process(delta: float) -> void:
 		step_luce(dt)
 		dodge_check()
 		step_waves(dt)
+		eil.world(dt)
+		var lk := level_kind()
+		if lk == "hall" or lk == "town": eil.upd(dt)
 		if level != null:
 			level.step(dt)
 		else:
@@ -771,7 +836,8 @@ func _draw_fx() -> void:
 
 
 
-## test keys: F2 = straight into the cave, F3 = clear the room, F4 = next room, F5 = jump around town, F6 = +3 hours
+## test keys: F2 = straight into the cave, F3 = clear the room, F4 = next room, F5 = jump around town, F6 = +3 hours,
+## F7 = straight into the guild hall, F8 = next hall floor, F9 = Eilin straight to where her day says she should be
 var tp_i := 0
 func _unhandled_input(ev: InputEvent) -> void:
 	if ev is InputEventKey and ev.pressed and not ev.echo:
@@ -780,7 +846,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 		elif ev.keycode == KEY_F3:
 			for m in mobs:
 				if not m.is_dead(): m.hit(999.0, 0.0)
-		elif ev.keycode == KEY_F5 and level != null and level.has_method("land"):
+		elif ev.keycode == KEY_F5 and level_kind() == "town":
 			var spots := [700.0, 2100.0, 3024.0, 4400.0, 5107.0, 3000.0, 7550.0, 8750.0]
 			tp_i = (tp_i + 1) % spots.size()
 			var x: float = spots[tp_i]
@@ -789,9 +855,18 @@ func _unhandled_input(ev: InputEvent) -> void:
 			player.plat = null
 			player.vy = 0.0
 			snap_camera()
-		elif ev.keycode == KEY_F6 and level != null and level.has_method("land"):
-			level.tod_h = fposmod(level.tod_h + 3.0, 24.0)
-		elif ev.keycode == KEY_F4 and level != null:
+		elif ev.keycode == KEY_F6:
+			tod_h = fposmod(tod_h + 3.0, 24.0)
+		elif ev.keycode == KEY_F7 and not dlg.active:
+			var s0: Array = HALL.HD.SPAWN[0]
+			fade_then(func(): go_hall(0, Vector2(s0[0], s0[1]), s0[2]))
+		elif ev.keycode == KEY_F8 and level_kind() == "hall" and not dlg.active:
+			var n: int = (level.fl + 1) % 4
+			var s1: Array = HALL.HD.SPAWN[n]
+			fade_then(func(): go_hall(n, Vector2(s1[0], s1[1]), s1[2]))
+		elif ev.keycode == KEY_F9:
+			eil.snap()
+		elif ev.keycode == KEY_F4 and level_kind() == "dungeon":
 			var rm = level.room()
 			for d in level.doors:
 				if d["town"]: continue

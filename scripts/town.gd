@@ -45,8 +45,7 @@ var t_solid: Texture2D
 var t_band: Texture2D
 var t_wall: Texture2D
 var near_door = null
-var tod_h := 18.5
-var tod_auto := true
+var kind := "town"
 var lights: Node2D
 var cmod: CanvasModulate
 var bg_layer: CanvasLayer
@@ -283,16 +282,9 @@ func floor_at(x: float) -> float:
 
 
 # ---------- time of day ----------
+## the world's one clock lives on the arena (shared with the hall and Eilin's day)
 func tod_now() -> Dictionary:
-	var hh := fposmod(tod_h, 24.0)
-	var i := 0
-	while i < TODK.size() - 2 and TODK[i + 1][0] <= hh: i += 1
-	var a: Array = TODK[i]
-	var b: Array = TODK[i + 1]
-	var k: float = (hh - a[0]) / maxf(0.001, b[0] - a[0])
-	var sky := Color(lerpf(a[1][0], b[1][0], k) / 255.0, lerpf(a[1][1], b[1][1], k) / 255.0, lerpf(a[1][2], b[1][2], k) / 255.0, lerpf(a[1][3], b[1][3], k))
-	var amb := Color(lerpf(a[2][0], b[2][0], k), lerpf(a[2][1], b[2][1], k), lerpf(a[2][2], b[2][2], k))
-	return {"sky": sky, "amb": amb, "sun": lerpf(a[3], b[3], k), "lamp": lerpf(a[4], b[4], k)}
+	return arena.tod_now()
 
 func lantern_at(x: float, surf: float) -> Vector2:
 	var im: Texture2D = tex["q_lamp"]
@@ -328,8 +320,6 @@ func _build_lights() -> void:
 
 # ---------- step ----------
 func step(dt: float) -> void:
-	if tod_auto:
-		tod_h = fposmod(tod_h + dt / 1000.0 / 60.0, 24.0)      # one in-game hour per real minute
 	var T := tod_now()
 	cmod.color = T["amb"]
 	var tt := Time.get_ticks_msec() / 1000.0
@@ -347,6 +337,8 @@ func step(dt: float) -> void:
 			if absf(P.position.x - d["x"]) < 46.0 and absf(P.position.y - d["y"]) < 6.0:
 				near_door = d
 				break
+		if near_door == null:
+			near_door = arena.eil.door_near(P)
 	# ambient: smoke, embers, fountain drops, leaves
 	_emit("camp", 170.0, dt, func(): tfx.append({"k": "smoke", "x": 4350.0 + 27.0 * PK + randf_range(-3, 3), "y": G - 64.0, "vx": 0.006, "vy": -0.03 - randf() * 0.012, "s": 10.0, "t": 0.0, "life": 2600.0, "dark": false}))
 	_emit("forge", 130.0, dt, func(): tfx.append({"k": "smoke", "x": 7428.0, "y": LOWF - 208.0 * BS, "vx": 0.006, "vy": -0.03 - randf() * 0.012, "s": 11.0 * BS, "t": 0.0, "life": 2600.0, "dark": true}))
@@ -376,13 +368,19 @@ func try_interact() -> bool:
 	if near_door == null:
 		return false
 	var d = near_door
-	var to: String = d["to"]
+	var to: String = d.get("to", "")
 	if to == "arena":
 		arena.sfx("ready", 0.6)
 		arena.fade_then(func(): arena.go_training())
 	elif to == "dungeon":
 		arena.sfx("ready", 0.6)
 		arena.fade_then(func(): arena.enter_dungeon())
+	elif to == "hall":
+		arena.sfx("ready", 0.6)
+		var s0: Array = arena.HALL.HD.SPAWN[0]
+		arena.fade_then(func(): arena.go_hall(0, Vector2(s0[0], s0[1]), s0[2]))
+	elif d.get("act", "") == "eilin":
+		arena.eil.talk()
 	else:
 		arena.sfx("guard", 0.4)
 		arena.text(arena.player.position + Vector2(0, -170), d["name"] + " — 준비 중", Color("#ffe9a8"))
@@ -505,6 +503,12 @@ func _draw() -> void:
 		_spr(d[0], d[1], d[2], 0.0, d.size() > 3 and d[3])
 	for lp in lamps:
 		_spr("q_lamp", lp[0] - 28.0 * PK, lp[1])
+	var E = arena.eil
+	if E.map == "town" and not E.hide:
+		var vr: Rect2 = arena.view_rect()
+		if E.x > vr.position.x - 200.0 and E.x < vr.end.x + 200.0:
+			E.y = floor_at(E.x)
+			E.draw_on(self, roundf(E.x), roundf(E.y))
 	_spr("q_bridge", RIV0 - 38.0, LOWF + 28.0)
 	_spr("g_anvil", 7790.0, LOWF)
 	# campfire on the art-pixel grid
@@ -543,12 +547,13 @@ func _draw_front() -> void:
 				front.draw_rect(Rect2(roundf(f["x"]), roundf(f["y"]), PK * 2.0 if sin(f["t"] / 180.0 + f["ph"]) > 0.0 else PK, PK), Color(f["c"], minf(1.0, (1.0 - k) * 3.0)))
 			"drop":
 				front.draw_rect(Rect2(roundf(f["x"]), roundf(f["y"]), PK, PK), Color(0.75, 0.9, 1.0, 0.95))
+	if arena.eil.map == "town": arena.eil.draw_say(front, floor_at(arena.eil.x))
 	# door labels and the prompt
 	var fnt: Font = arena.font_black
 	var tt := Time.get_ticks_msec() / 1000.0
 	if near_door != null:
 		var d = near_door
-		var s2: String = d["name"] + "  ·  공격 키"
+		var s2: String = d["name"] + "  ·  공격 키" + (" 대화" if d.get("act", "") == "eilin" else "")
 		var tw := fnt.get_string_size(s2, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x + 20.0
 		var y2: float = d["y"] - 230.0 + sin(tt * 4.0) * 3.0
 		front.draw_rect(Rect2(d["x"] - tw / 2.0, y2 - 16.0, tw, 24.0), Color(0, 0, 0, 0.6))

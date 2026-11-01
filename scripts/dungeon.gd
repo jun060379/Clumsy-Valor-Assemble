@@ -36,6 +36,7 @@ const DOORSTY := {"fight": Color8(255, 168, 58), "boss": Color8(255, 60, 50), "c
 const SIGNI := {"fight": 0, "boss": 1, "vault": 2, "camp": 3, "start": 4, "town": 4}
 const DOPEN := [30, 26, 122, 170]
 
+var kind := "dungeon"
 var arena
 var rooms := {}
 var cur := ""
