@@ -7,6 +7,7 @@ extends RefCounted
 ##   · web test hook: window.cvaTS(v) sets the time scale at once (screenshots of motion mid-way; 0 freezes)
 
 const UI := preload("res://scripts/ui_kit.gd")
+const DEV := preload("res://scripts/dev.gd")
 
 # ---------- easings ----------
 ## named curves: [x1, y1, x2, y2]
@@ -258,7 +259,7 @@ static var _cb
 static var hooked := false
 ## window.cvaTS(v): Engine.time_scale = v right away (0 = frozen); window.cvaUI = what screen is up
 static func hook_web() -> void:
-	if hooked or not OS.has_feature("web"): return
+	if hooked or not DEV.on or not OS.has_feature("web"): return
 	hooked = true
 	_cb = JavaScriptBridge.create_callback(func(a: Array):
 		Engine.time_scale = clampf(float(a[0]) if a.size() > 0 else 1.0, 0.0, 8.0))
@@ -277,7 +278,7 @@ class ClockNode extends Node:
 		if w != null: w.cvaT = ms
 
 static func clock_node() -> Node:
-	if not OS.has_feature("web"): return null
+	if not DEV.on or not OS.has_feature("web"): return null
 	var q = JavaScriptBridge.eval("location.search", true)
 	if not (q is String and q.contains("uiclock")): return null
 	return ClockNode.new()

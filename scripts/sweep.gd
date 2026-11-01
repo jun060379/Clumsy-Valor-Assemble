@@ -4,6 +4,7 @@ extends Control
 ## "NOW LOADING" only shows if the swap takes longer than 600 ms.
 
 const UI := preload("res://scripts/ui_kit.gd")
+const DEV := preload("res://scripts/dev.gd")
 const SK := 12.0                 # skewX(12deg)
 const BLACK := Color("#0d0b10")
 
@@ -24,7 +25,7 @@ var speed := 1.0                 # test hook: ?slowtx in the page URL plays it a
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	if OS.has_feature("web"):
+	if DEV.on and OS.has_feature("web"):
 		var q = JavaScriptBridge.eval("location.search", true)
 		if q is String and q.contains("slowtx"): speed = 0.1
 

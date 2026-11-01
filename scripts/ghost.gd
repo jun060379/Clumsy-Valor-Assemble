@@ -7,6 +7,7 @@ extends Node2D
 const RUNES := preload("res://scripts/runes.gd")
 const EL := preload("res://scripts/elements.gd")
 const DUMMY := preload("res://scripts/dummy.gd")
+const DEV := preload("res://scripts/dev.gd")
 const E: Dictionary = RUNES.ENEMY["ghost"]       # 유령: hp 30, atk 10, ms 0.09, dark / dark
 
 var arena
@@ -30,7 +31,7 @@ var bar_st := {}
 var _js_cb
 func _ready() -> void:
 	z_index = 0
-	if OS.has_feature("web"):
+	if DEV.on and OS.has_feature("web"):
 		_js_cb = JavaScriptBridge.create_callback(func(a: Array): test_cmd(str(a[0]) if a.size() > 0 else ""))
 		JavaScriptBridge.get_interface("window").cvaTrain = _js_cb
 
@@ -50,7 +51,7 @@ func test_cmd(cmd: String) -> void:
 		"ghost":
 			position.x = P.position.x + float(w[1])
 			hurt_t = 0.0
-	JavaScriptBridge.eval("window.__train=" + JSON.stringify({"lk": arena.level_kind(), "train": arena.train != null, "x": P.position.x, "ghost": position.x, "up": alive(), "score": arena.score}), true)
+	if DEV.on and OS.has_feature("web"): JavaScriptBridge.eval("window.__train=" + JSON.stringify({"lk": arena.level_kind(), "train": arena.train != null, "x": P.position.x, "ghost": position.x, "up": alive(), "score": arena.score}), true)
 
 func alive() -> bool:
 	return on and up

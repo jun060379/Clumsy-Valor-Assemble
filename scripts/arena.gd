@@ -18,6 +18,7 @@ const WEATHERS := ["clear", "rain", "snow"]
 const SETTINGS := preload("res://scripts/settings.gd")
 const AMBIENCE := preload("res://scripts/ambience.gd")
 const SLOWBUS := preload("res://scripts/slow_bus.gd")
+const DEV := preload("res://scripts/dev.gd")
 const POSTFX := preload("res://scripts/post_fx.gd")
 const PFX := preload("res://scripts/pfx.gd")
 const SPK := {"estelle": Color("#ffd9ea"), "aida": Color("#c9a6ff"), "luce": Color("#fff3c4")}             # PAL[].sp
@@ -270,13 +271,14 @@ func _ready() -> void:
 	if get_tree().get_script() != null:
 		save.path = "user://save_test.json"     # test runs never touch the real save
 	call_deferred("_start_world")
-	var stamp := Label.new()
-	stamp.text = "STEP 4 · UI  ·  " + _stamp()
-	stamp.add_theme_font_override("font", font_bold)
-	stamp.add_theme_font_size_override("font_size", 11)
-	stamp.modulate = Color(1, 1, 1, 0.45)
-	stamp.position = Vector2(12, 480)
-	ui.add_child(stamp)
+	if DEV.on:                            # the build stamp: debug builds only (dev.gd)
+		var stamp := Label.new()
+		stamp.text = "STEP 4 · UI  ·  " + _stamp()
+		stamp.add_theme_font_override("font", font_bold)
+		stamp.add_theme_font_size_override("font_size", 11)
+		stamp.modulate = Color(1, 1, 1, 0.45)
+		stamp.position = Vector2(12, 480)
+		ui.add_child(stamp)
 
 
 ## load silently (the title has no 이어하기): the saved scene, or the village street
@@ -1304,12 +1306,13 @@ func _draw_fx() -> void:
 
 
 
-## test keys: F2 = straight into the cave, F3 = clear the room, F4 = next room, F5 = jump around town, F6 = +3 hours,
+## test keys (debug builds only, dev.gd): F2 = straight into the cave, F3 = clear the room, F4 = next room, F5 = jump around town, F6 = +3 hours,
 ## F7 = straight into the guild hall, F8 = next hall floor, F9 = Eilin straight to where her day says she should be,
 ## F10 = weather (clear / rain / snow), F11 = Luce leaves / rejoins the party (she lives in town meanwhile), Shift+F11 = the same for Aida,
-## F12 = fill the 기력 gauge, Shift+F4 = straight to the boss room
+## Insert = fill the 기력 gauge, Shift+F4 = straight to the boss room
 var tp_i := 0
 func _unhandled_input(ev: InputEvent) -> void:
+	if not DEV.on: return
 	if ev is InputEventKey and ev.pressed and not ev.echo:
 		if ev.keycode == KEY_F2 and level == null:
 			fade_then(func(): enter_dungeon())

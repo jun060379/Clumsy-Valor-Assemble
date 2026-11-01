@@ -18,6 +18,7 @@ extends Node
 const CH := preload("res://scripts/chars.gd")
 const LOOT := preload("res://scripts/loot.gd")
 const MEMORY := preload("res://scripts/memory.gd")
+const DEV := preload("res://scripts/dev.gd")
 
 const GRADE := {"common": ["일반", Color("#b9b2a3")], "uncommon": ["고급", Color("#7fc77a")], "rare": ["레어", Color("#6aa7ff")], "elite": ["엘리트", Color("#b48cff")],
 	"epic": ["에픽", Color("#ff9d4d")], "legend": ["전설", Color("#ffd34d")], "unique": ["고유", Color("#ff6fae")]}
@@ -970,7 +971,7 @@ func test_fill() -> void:
 ## web test hook (screenshots): window.cvaTest("page forge") / ("close") / ("menu eval-free commands below")
 var _js_cb
 func _ready() -> void:
-	if OS.has_feature("web"):
+	if DEV.on and OS.has_feature("web"):
 		_js_cb = JavaScriptBridge.create_callback(func(a: Array): test_cmd(str(a[0]) if a.size() > 0 else ""))
 		JavaScriptBridge.get_interface("window").cvaTest = _js_cb
 
@@ -1010,7 +1011,8 @@ func test_cmd(cmd: String) -> void:
 					loot.hit_chest()
 
 func _unhandled_input(ev_: InputEvent) -> void:
-	# Home = test kit, End = rune book, Page Down = boss room (moved off F12, which the fame test keys use)
+	# Home = test kit, End = rune book, Page Down = boss room (moved off F12, which the fame test keys use); debug builds only
+	if not DEV.on: return
 	if ev_ is InputEventKey and ev_.pressed and not ev_.echo and ev_.keycode in [KEY_HOME, KEY_END, KEY_PAGEDOWN]:
 		if ev_.keycode == KEY_HOME:
 			test_fill()

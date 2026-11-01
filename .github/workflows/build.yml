@@ -29,6 +29,7 @@ jobs:
         run: |
           echo "$(date -u -d '+9 hours' +%m-%d\ %H:%M) · ${GITHUB_SHA::7}" > build.txt
           mkdir -p build/web build/windows
+          touch build/.gdignore    # Godot must not import its own exports (also committed)
           ./godot --headless --import || true
           ./godot --headless --export-release "Web" build/web/index.html
           ./godot --headless --export-release "Windows" build/windows/ClumsyValor.exe

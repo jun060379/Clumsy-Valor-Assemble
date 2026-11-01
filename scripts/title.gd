@@ -3,6 +3,7 @@ extends Control
 ## down; a tap / Enter rips it all away into CHOOSE YOUR HERO; 출격 drops the chosen leader into the guild town.
 
 const UI := preload("res://scripts/ui_kit.gd")
+const DEV := preload("res://scripts/dev.gd")
 const UIA := preload("res://scripts/ui_anim.gd")
 const CH := preload("res://scripts/chars.gd")
 const T_SWORD := preload("res://assets/ui/title/logo_sword.png")
@@ -225,6 +226,7 @@ func _draw_title(vs: Vector2, a: float) -> void:
 		UI.shadow_text(self, pf, Vector2(cx - pw / 2.0, py), ps, 15, Color(Color("#f3e3b6"), a))
 		UI.star4(self, Vector2(cx - pw / 2.0 - 16.0, py - 5.0), 7.0, Color(Color("#f3e3b6"), a), true)
 		UI.star4(self, Vector2(cx + pw / 2.0 + 14.0, py - 5.0), 7.0, Color(Color("#f3e3b6"), a), true)
+	if not DEV.on: return                  # the build stamp: debug builds only (dev.gd)
 	var ver: String = arena._stamp()
 	draw_string(UI.spaced(fb, 1), Vector2(vs.x - 12.0 - UI.text_w(UI.spaced(fb, 1), ver, 11), vs.y - 12.0), ver, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(GOLD, 0.45 * a))
 

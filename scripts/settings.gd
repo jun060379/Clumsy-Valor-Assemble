@@ -164,7 +164,7 @@ func touch_auto() -> bool:
 		var t := false
 		if OS.has_feature("web"):
 			var r = JavaScriptBridge.eval("(function(){try{return matchMedia('(pointer:coarse)').matches||(navigator.maxTouchPoints>0&&!matchMedia('(any-pointer:fine)').matches);}catch(e){return false;}})()", true)
-			t = r == true
+			t = bool(r) if (r is bool or r is int) else false     # the bridge hands JS booleans back as int
 		else:
 			t = DisplayServer.is_touchscreen_available()
 		_touch_auto = t

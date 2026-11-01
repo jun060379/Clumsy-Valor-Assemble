@@ -13,6 +13,7 @@ const CLEAR := preload("res://scripts/clear_screen.gd")
 const UCUT := preload("res://scripts/ult_cut.gd")
 const PARTY := preload("res://scripts/party_edit.gd")
 const CH := preload("res://scripts/chars.gd")
+const DEV := preload("res://scripts/dev.gd")
 const BLACK := Color("#0d0b10")
 const TOWN_W := 9450.0
 
@@ -63,7 +64,7 @@ func _ready() -> void:
 			var d := Vector2(x + 0.5 - 5.5, y + 0.5 - 5.5).length() / 5.5
 			im.set_pixel(x, y, Color(1, 1, 1, 0.06 * clampf((0.31 - d) / 0.03, 0.0, 1.0)))
 	dots_w = ImageTexture.create_from_image(im)
-	if OS.has_feature("web"):
+	if DEV.on and OS.has_feature("web"):    # URL test switches: debug builds only (dev.gd)
 		var q = JavaScriptBridge.eval("location.search", true)
 		if q is String and q.contains("slowtx"): speed = 0.1
 		if q is String and q.contains("tsctl"): ts_ctl = true     # test hook: the page sets window.__ts to slow the game (screenshots)

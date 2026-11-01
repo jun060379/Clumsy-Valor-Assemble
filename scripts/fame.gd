@@ -21,6 +21,7 @@ extends Node
 
 const FD := preload("res://scripts/fame_data.gd")
 const FX := preload("res://scripts/fame_fx.gd")
+const DEV := preload("res://scripts/dev.gd")
 const EIL_POR := preload("res://assets/eilin/por.png")
 const BRAN_POR := preload("res://assets/bran/por.png")
 
@@ -716,9 +717,10 @@ func set_state(d: Dictionary) -> void:
 	poll(true)
 
 
-# ---------- test keys: F12 = +100 EXP and finish one running request; Shift+F12 = guild fame +30;
+# ---------- test keys (debug builds only, dev.gd): F12 = +100 EXP and finish one running request; Shift+F12 = guild fame +30;
 # Ctrl+F12 = the current chapter's title card; Alt+F12 = the rank cut for the current rank (preview) ----------
 func _unhandled_input(ev: InputEvent) -> void:
+	if not DEV.on: return
 	if not (ev is InputEventKey) or not ev.pressed or ev.echo or ev.keycode != KEY_F12: return
 	if ev.alt_pressed:
 		fx.rank_cut()          # preview of the current rank's approval (no state change)
@@ -745,12 +747,13 @@ func test_finish_one() -> void:
 # ---------- web test hook (headless browser checks): window.cvFame("eil" | "adv" | "pick N" | "exp N" | "fame N" | "boss" | "state") ----------
 var _js_cb
 func _js_setup() -> void:
-	if not OS.has_feature("web"): return
+	if not DEV.on or not OS.has_feature("web"): return
 	_js_cb = JavaScriptBridge.create_callback(_js)
 	var w = JavaScriptBridge.get_interface("window")
 	if w != null: w.cvFame = _js_cb
 
 func _js(args: Array) -> void:
+	if not DEV.on: return
 	var cmd := String(args[0]) if args.size() > 0 else ""
 	var p := cmd.split(" ")
 	match p[0]:

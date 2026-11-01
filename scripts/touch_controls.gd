@@ -18,6 +18,7 @@ extends Control
 
 const UI := preload("res://scripts/ui_kit.gd")
 const CH := preload("res://scripts/chars.gd")
+const DEV := preload("res://scripts/dev.gd")
 ## #stick: 124 px across (R 62); left / right count past 25 % of the radius, up / down past 45 % (stickSet)
 const STICK_R := 62.0
 const DEAD_X := 0.25
@@ -70,7 +71,7 @@ func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	visible = false
 	add_to_group("touch_controls")
-	if OS.has_feature("web"):
+	if DEV.on and OS.has_feature("web"):
 		_js_cb = JavaScriptBridge.create_callback(func(a: Array): test_cmd(str(a[0]) if a.size() > 0 else ""))
 		JavaScriptBridge.get_interface("window").cvaP1 = _js_cb
 

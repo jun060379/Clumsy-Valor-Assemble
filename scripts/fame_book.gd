@@ -8,6 +8,7 @@ extends Control
 const S := preload("res://scripts/fame_skin.gd")
 const UIA := preload("res://scripts/ui_anim.gd")
 const FD := preload("res://scripts/fame_data.gd")
+const DEV := preload("res://scripts/dev.gd")
 const BOOKCOL := {"gbk": Color("#ffd34d"), "abk": Color("#7fd0ff")}
 const TABS := {"gbk": [["quest", "명성", "FAME"], ["fac", "시설", "FACILITY"], ["people", "동료", "MEMBERS"], ["dun", "던전", "DUNGEON"], ["rune", "룬 도감", "RUNES"]],
 	"abk": [["home", "개요", "OVERVIEW"], ["lv", "모험 레벨", "LEVEL"], ["ch", "모험 일지", "LOG"], ["day", "일일 훈련", "DAILY"]]}
@@ -93,7 +94,7 @@ func _ready() -> void:
 	visible = false
 	pen = UIA.Pen.new(self)
 	_ci = pen
-	if OS.has_feature("web"):
+	if DEV.on and OS.has_feature("web"):
 		_js_cb = JavaScriptBridge.create_callback(func(a: Array): _js(str(a[0]) if a.size() > 0 else ""))
 		JavaScriptBridge.get_interface("window").cvaBook = _js_cb
 
@@ -273,7 +274,7 @@ func _input(ev: InputEvent) -> void:
 		k = ev.physical_keycode if ev.physical_keycode != 0 else ev.keycode
 	var pad := -1
 	if ev is InputEventJoypadButton and ev.pressed: pad = ev.button_index
-	if k >= KEY_F1 and k <= KEY_F12: return     # test keys pass through
+	if DEV.on and k >= KEY_F1 and k <= KEY_F12: return     # debug builds: the test keys pass through
 	if k < 0 and pad < 0:
 		if ev is InputEventKey or ev is InputEventJoypadButton: get_viewport().set_input_as_handled()
 		return
