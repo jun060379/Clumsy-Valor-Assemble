@@ -149,11 +149,9 @@ func _member(cc: String) -> void:
 	wipe_kind = "member"
 	sfx("ready", 0.3)
 
+## ROSTER (cxOpen's .chars): the members who have joined, in the prototype's order
 func roster() -> Array:
-	var L: Array = arena.player.party.duplicate()
-	for cc in RN.ROSTER:
-		if not L.has(cc): L.append(cc)
-	return L
+	return arena.player.roster()
 
 func _paint(vs: Vector2) -> void:
 	var col := UI.col(c)

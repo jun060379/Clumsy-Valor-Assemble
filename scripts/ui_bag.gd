@@ -54,7 +54,7 @@ func _cat(k: String) -> void:
 
 func worn() -> Array:
 	var L: Array = []
-	for c in RN.ROSTER:
+	for c in arena.player.roster():
 		for s in RN.SLOTS:
 			var it = R().gear[c][s[0]]
 			if R().has_rune_item(it): L.append({"it": it, "c": c, "s": s[0]})
@@ -292,7 +292,7 @@ func _spot(vs: Vector2, o: Dictionary, col: Color) -> void:
 	# who can wear a bag piece, the slots with their stat diff, melt
 	if o["kind"] == "gear" and o.get("c", "") == "":
 		var it3: Dictionary = o["v"]
-		var W: Array = RN.ROSTER.filter(func(c): return it3["slot"] != "weapon" or it3.get("cls", "") == RN.CLS[c])
+		var W: Array = arena.player.roster().filter(func(c): return it3["slot"] != "weapon" or it3.get("cls", "") == RN.CLS[c])
 		if not W.has(who): who = arena.player.who if W.has(arena.player.who) else (W[0] if not W.is_empty() else "")
 		var fy := iy + h + 4.0
 		var fx := ix + 4.0

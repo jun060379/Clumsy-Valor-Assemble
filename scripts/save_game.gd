@@ -6,7 +6,8 @@ extends RefCounted
 ## Format (JSON object, "v": 1):
 ##   v          int     format version (1)
 ##   t          float   unix seconds when written
-##   party      [str]   members in the party, in order ("estelle" / "aida" / "luce")
+##   party      [str]   members in the party, in order ("estelle" / "aida" / "luce"); a save from before recruiting was
+##                      gated (all three along) loads with Aida and Luce recruited (fame.settle_rec)
 ##   who        str     the one in control
 ##   hp         float   her HP;  hpm {member: float} everyone's HP
 ##   scene      str     "town" / "hall" / "training" (a save made in the cave loads at the sortie wagon)
@@ -111,5 +112,6 @@ func apply(d: Dictionary) -> Array:
 		arena.sortie.town_x = float(d.get("town_x", arena.sortie.town_x))
 	var F = arena.get("fame")
 	if F != null and F.has_method("set_state") and d.has("fame"): F.set_state(d["fame"])
+	if F != null and F.has_method("settle_rec"): F.settle_rec(party)
 	loaded = true
 	return [String(d.get("scene", "town")), Vector2(float(d.get("x", 700.0)), float(d.get("y", arena.ground_y))), int(d.get("dir", 1)), int(d.get("fl", 0))]

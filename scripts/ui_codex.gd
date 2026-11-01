@@ -947,7 +947,7 @@ func _obs(ci: Control, x: float, y: float, w: float, k: String) -> float:
 		for d in defs: dl.append(RN.ELN[d])
 		y += _rich(ci, x, y, w, [["공격 ", true], [RN.ELN[E["atkEl"]] + " · ", false], ["내성 ", true], [" · ".join(dl), false]])
 		var xx := x
-		for c in arena.player.party:
+		for c in arena.player.roster():     # ROSTER (8382)
 			var m := 0.0
 			for e in RN.ATKEL[c]: m += RN.eff_mul(e, defs) / RN.ATKEL[c].size()
 			var rr := roundf(m * 100.0) / 100.0

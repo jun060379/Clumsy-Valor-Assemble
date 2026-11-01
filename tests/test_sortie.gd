@@ -31,6 +31,10 @@ func _initialize() -> void:
 	var P = arena.player
 	var S = arena.sortie
 	ok(arena.level_kind() == "town", "starts in town")
+	ok(P.party == ["estelle"], "a fresh game is solo")
+	arena.fame.join()     # Eilin's introduction: Aida and Luce join the guild (a fresh game is solo)
+	for c in ["aida", "luce"]: arena.toggle_member(c)
+	ok(P.party == ["estelle", "aida", "luce"], "recruited, then taken along")
 
 	print("elements")
 	ok(is_equal_approx(EL.eff_mul("holy", ["dark"]), 1.75) and is_equal_approx(EL.eff_mul("holy", ["phys"]), 0.25), "holy x1.75 on dark, x0.25 otherwise")

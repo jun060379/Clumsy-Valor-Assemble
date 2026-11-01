@@ -725,7 +725,7 @@ func _draw() -> void:
 		E.draw_on(self, roundf(E.x), roundf(E.y))
 	if fl == 0:
 		var dk := ["dollP", "dollG", "dollC"]
-		for i in 3: hi(self, dk[i], 1920.0 + i * 18.0, G - HH("counter") + 4.0)
+		for i in mini(3, arena.player.roster().size()): hi(self, dk[i], 1920.0 + i * 18.0, G - HH("counter") + 4.0)
 	hfill(self, "top", 0.0, G, W, 30.0, 0.0, G)
 	for p in F["props"]:
 		if String(p[4]).contains("r"): _prop(self, p)

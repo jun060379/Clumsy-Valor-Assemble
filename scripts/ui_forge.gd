@@ -696,7 +696,7 @@ func _pick(vs: Vector2, col: Color) -> void:
 	draw_string(UI.spaced(UI.noto_k(), 3), Vector2(off + 20, 28), "SELECT GEAR", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color("#e8b25a"))
 	draw_string(UI.noto_k(), Vector2(off + 20, 62), "모루에 올릴 장비", HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color.WHITE)
 	var L: Array = []
-	for cc in RN.ROSTER:
+	for cc in arena.player.roster():
 		for s in RN.SLOTS:
 			var it = R().gear[cc][s[0]]
 			if it != null: L.append([cc, s[0], it])

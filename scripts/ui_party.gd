@@ -56,11 +56,9 @@ func _opened() -> void:
 	focus = -1
 	tr.clear()
 
-## ROSTER: the recruited members (anyone in the party counts, so a save from before recruiting still shows them)
+## ROSTER: the recruited members (player.roster: fame.rec plus whoever is in control)
 func roster() -> Array:
-	var F = arena.get("fame")
-	var P = arena.player
-	return RN.ROSTER.filter(func(c): return P.party.has(c) or F == null or F.recruited(c))
+	return arena.player.roster()
 
 func _tick(dt: float) -> void:
 	tr.step(dt)
