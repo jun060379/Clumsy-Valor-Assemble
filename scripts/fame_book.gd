@@ -34,6 +34,11 @@ var hits: Array = []            # [Rect2, Callable]
 var paper_r := Rect2()
 var content_h := 0.0
 var drag := {}
+# the level road (roadInit): drag with rubber-banding at the ends, a flick carries on and snaps to a card, the wheel and
+# the keys step a card, it glides in on open and to a card that is claimed
+const ROAD_STEP := 128.0
+var road_sp = null               # UIA.Spring on scroll["lv"] while it glides
+var road_w := 600.0              # the road's view width (cr) as last drawn
 var hover := Vector2(-999, -999)
 var tex := {}
 var cur_book := ""
@@ -149,6 +154,11 @@ func _process(delta: float) -> void:
 			claims.erase(cl)
 			cl[0].call()
 			fame.poll(true)
+	if road_sp != null:
+		scroll["lv"] = road_sp.step(dt)
+		if absf(road_sp.x - road_sp.t) < 0.4 and absf(road_sp.v) < 6.0:
+			scroll["lv"] = road_sp.t
+			road_sp = null
 	for i in 3: hot_t[i] += dt
 	for st in stamps: st["t"] += dt
 	stamps = stamps.filter(func(st): return st["t"] < 1200.0)
@@ -224,7 +234,13 @@ func _input(ev: InputEvent) -> void:
 		if not drag.is_empty() and ev.button_mask & MOUSE_BUTTON_MASK_LEFT:
 			var d: Vector2 = ev.position - drag["p"]
 			if d.length() > 6.0: drag["moved"] = true
-			if drag["moved"]:
+			if drag["moved"] and cur_tab() == "lv" and drag.has("x0"):
+				road_sp = null
+				scroll["lv"] = road_rb(float(drag["sx0"]) - (ev.position.x - float(drag["x0"])))
+				var hs: Array = drag["hist"]
+				hs.append([float(t), ev.position.x])
+				if hs.size() > 7: hs.pop_front()
+			elif drag["moved"]:
 				_scroll_by(-(d.x if cur_tab() == "lv" else d.y))
 				drag["p"] = ev.position
 		get_viewport().set_input_as_handled()
@@ -233,12 +249,20 @@ func _input(ev: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		if ev.button_index == MOUSE_BUTTON_WHEEL_DOWN and ev.pressed: _scroll_by(48.0)
 		elif ev.button_index == MOUSE_BUTTON_WHEEL_UP and ev.pressed: _scroll_by(-48.0)
+		elif ev.button_index in [MOUSE_BUTTON_WHEEL_RIGHT, MOUSE_BUTTON_WHEEL_LEFT] and ev.pressed: _scroll_by(48.0 if ev.button_index == MOUSE_BUTTON_WHEEL_RIGHT else -48.0)
 		elif ev.button_index == MOUSE_BUTTON_LEFT:
 			if ev.pressed:
 				drag = {"p": ev.position, "moved": false, "in": paper_r.has_point(ev.position)}
+				if cur_tab() == "lv":
+					drag["x0"] = ev.position.x
+					drag["sx0"] = float(scroll.get("lv", 0.0))
+					drag["hist"] = [[float(t), ev.position.x]]
+					road_sp = null
 			else:
 				var moved: bool = drag.get("moved", false)
+				var dr := drag
 				drag = {}
+				if moved and cur_tab() == "lv" and dr.has("hist"): road_fling(dr["hist"])
 				if not moved: _click(ev.position)
 		return
 	if ev is InputEventScreenTouch or ev is InputEventScreenDrag:
@@ -334,8 +358,46 @@ func _goto(b: String, tb: String) -> void:
 
 func _scroll_by(d: float) -> void:
 	var tb := cur_tab()
+	if tb == "lv":
+		# a wheel notch or a key: one card along (it springs there)
+		var from: float = road_sp.t if road_sp != null else float(scroll.get("lv", 0.0))
+		road_go(roundf((from + signf(d) * ROAD_STEP) / ROAD_STEP) * ROAD_STEP, 0.0, 0.42, 1.0)
+		return
 	var mx := _scroll_max()
 	scroll[tb] = clampf(float(scroll.get(tb, 0.0)) + d, 0.0, mx)
+
+## the road's rubber band: past an end it gives way less and less (overshoot^0.72)
+func road_rb(sx: float) -> float:
+	var mx := _road_max()
+	if sx < 0.0: return -pow(-sx, 0.72)
+	if sx > mx: return mx + pow(sx - mx, 0.72)
+	return sx
+
+func _road_max() -> float:
+	return maxf(0.0, (FD.AMAX - 1) * 128.0 - (paper_r.size.x - 60.0))
+
+## spring to a place on the road (clamped to its ends), with a starting speed (px/s along the scroll)
+func road_go(target: float, v: float, resp: float, damp: float) -> void:
+	var x: float = float(scroll.get("lv", 0.0))
+	road_sp = UIA.Spring.new(x, resp, damp)
+	road_sp.v = v
+	road_sp.t = clampf(target, 0.0, _road_max())
+
+## a release after a drag: the flick's speed over the last few moves carries it on (decay .998), then it snaps to a card
+func road_fling(h: Array) -> void:
+	if h.size() < 1: return
+	var dtm := maxf(16.0, float(h[h.size() - 1][0]) - float(h[0][0]))
+	var v: float = (float(h[h.size() - 1][1]) - float(h[0][1])) / dtm * 1000.0     # px/s, the road's way (left = negative)
+	var sx: float = float(scroll.get("lv", 0.0))
+	var proj := sx - (v / 1000.0) * 0.998 / (1.0 - 0.998) * 0.35
+	road_go(roundf(proj / ROAD_STEP) * ROAD_STEP, -v * 0.9, 0.6, 0.86)
+
+## where the road sits with level lv's card in the middle
+func road_center(lv: int) -> float:
+	return (lv - 2) * ROAD_STEP + 59.0 - road_w / 2.0
+
+func road_to(lv: int, resp := 0.5) -> void:
+	road_go(roundf(road_center(lv) / ROAD_STEP) * ROAD_STEP, 0.0, resp, 0.85)
 
 func _scroll_max() -> float:
 	if cur_tab() == "lv":
@@ -1537,24 +1599,33 @@ func _p_lv(cr: Rect2) -> void:
 		var nt := "끌어서 넘기기 · 휠로 넘기기"
 		_ci.draw_string(S.noto(), Vector2(cr.end.x - S.tw(S.noto(), nt, 11), cr.position.y + 15.0), nt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, INK3)
 	# the road: one card per level, scrolled sideways (wheel / drag); opens at the current level
-	if not scroll.has("lv"): scroll["lv"] = clampf(maxi(0, L - 3) * 128.0, 0.0, maxf(0.0, (FD.AMAX - 1) * 128.0 - (paper_r.size.x - 60.0)))
+	road_w = cr.size.x
+	if not scroll.has("lv"):
+		# it opens 260 px short of the first level to claim (or the current one) and glides there
+		var first: int = fame.lv_can()[0] if fame.lv_can().size() else L
+		var to := clampf(roundf(road_center(first) / ROAD_STEP) * ROAD_STEP, 0.0, _road_max())
+		scroll["lv"] = to - 260.0
+		road_go(to, 0.0, 0.7, 0.8)
 	var sx: float = scroll["lv"]
 	var y0 := cr.position.y + 40.0
 	var hh := cr.size.y - 50.0
 	var x := cr.position.x - sx
 	for i in range(2, FD.AMAX + 1):
 		var cw := 118.0
-		if x >= cr.position.x - 2.0 and x + cw <= cr.end.x + 4.0:
+		# the road's viewport: a card half out of it fades with what is left in view
+		var vis := clampf((minf(x + cw, cr.end.x + 4.0) - maxf(x, cr.position.x - 2.0)) / cw, 0.0, 1.0)
+		if vis > 0.02:
 			var R := FD.a_reward(i)
 			var gotit: bool = fame.lvc.has(str(i))
 			var can := i <= L and not gotit
 			var nxt := i == L + 1
 			var r := Rect2(x, y0 + (0.0 if i % 2 else 10.0), cw, hh - 14.0)
 			var bg := Color(1, 1, 1, 0.65) if can else (Color(1, 1, 1, 0.35) if gotit else Color(0, 0, 0, 0.05))
+			bg.a *= vis
 			_ci.draw_colored_polygon(S.clip(r, [[0, 0], [100, 0], [96, 100], [3, 97]]), bg)
-			if i == L: _ci.draw_rect(Rect2(r.position, Vector2(r.size.x, 4)), Color("#7fd0ff"))
-			if can: _ci.draw_rect(Rect2(r.position, Vector2(4, r.size.y)), Color("#7fd0ff"))
-			var a := 0.5 if gotit else 1.0
+			if i == L: _ci.draw_rect(Rect2(r.position, Vector2(r.size.x, 4)), Color("#7fd0ff", vis))
+			if can: _ci.draw_rect(Rect2(r.position, Vector2(4, r.size.y)), Color("#7fd0ff", vis))
+			var a := (0.5 if gotit else 1.0) * vis
 			_ci.draw_string(S.anton(true), r.position + Vector2(10, 44), str(i), HORIZONTAL_ALIGNMENT_LEFT, -1, 40, Color(INK if (can or nxt or i == L) else INK3, a))
 			var stt := "받음" if gotit else ("받을 수 있음" if can else ("다음 레벨" if nxt else ("지금" if i == L else "")))
 			_ci.draw_string(S.noto(), r.position + Vector2(12, 62), stt, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(Color("#2f6d94"), a))
@@ -1562,17 +1633,18 @@ func _p_lv(cr: Rect2) -> void:
 			for line in FD.rw_txt(R).split(" · "):
 				_ci.draw_string(S.noto(), Vector2(r.position.x + 12.0, ry), line, HORIZONTAL_ALIGNMENT_LEFT, cw - 18.0, 12, Color(INK, a))
 				ry += 18.0
-			if gotit:
+			if gotit and vis > 0.9:
 				_ci.draw_set_transform(r.get_center() + Vector2(0, 30), deg_to_rad(-12.0))
 				_ci.draw_rect(Rect2(-26, -13, 52, 26), Color(0.84, 0.16, 0.21, 0.7), false, 2.0)
 				_ci.draw_string(S.bhs(), Vector2(-17, 7), "수령", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.84, 0.16, 0.21, 0.75))
 				_ci.draw_set_transform(Vector2.ZERO)
-			if can:
+			if can and vis > 0.9:
 				var br := Rect2(r.position.x + 12.0, r.end.y - 36.0, 62.0, 24.0)
 				_ci.draw_colored_polygon(S.clip(br, [[7, 0], [100, 0], [93, 100], [0, 100]]), Color("#ffd34d"))
 				_ci.draw_string(S.bhs(), br.position + Vector2(17, 17), "받기", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color.BLACK)
 				var ii := i
 				_hit(br.grow(4), func():
+					road_to(ii)
 					fame.lv_claim(ii)
 					arena.sfx("heavy", 0.5))
 		x += 128.0

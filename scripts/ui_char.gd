@@ -34,6 +34,17 @@ var prev_tab := ""
 var gi_t := 1e9                  # cx_flb on the picked blade
 var gd_t := 1e9                  # cx_gdpop on the gear card
 var open_t := 0.0
+# ---- presence on 상세 (react / sblink / --px --py): a tap smiles (♪, hop), three quick taps surprise (!!, shake);
+# the art blinks while it rests on its base face; the ground's dots follow the pointer
+const HXY := {"estelle": Vector2(0.58, 0.20), "aida": Vector2(0.58, 0.21), "luce": Vector2(0.58, 0.24)}
+var react := ""                  # "" / "smile" / "sup"
+var react_t := 0.0               # ms left on that face
+var taps: Array = []             # tap times (ms) in the last 1.3 s
+var jolt := ""                   # "hop" / "shake"
+var jolt_t := 1e9
+var blk := 0.0                   # ms left of a blink (the cl face)
+var blk_next := 2400.0
+var blk2 := 0.0
 
 
 func _ready() -> void:
@@ -60,6 +71,10 @@ func _opened() -> void:
 	prev_tab = ""
 	gi_t = 1e9
 	gd_t = 1e9
+	react = ""
+	react_t = 0.0
+	taps.clear()
+	jolt_t = 1e9
 	trn.clear()
 	mx.opened()
 
@@ -71,6 +86,11 @@ func _tick(dt: float) -> void:
 	flash_t += dt
 	gi_t += dt
 	gd_t += dt
+	jolt_t += dt
+	if react_t > 0.0:
+		react_t -= dt
+		if react_t <= 0.0: react = ""
+	_sblink(dt)
 	trn.step(dt)
 	if wipe_t >= 0.0:
 		wipe_t += dt
@@ -80,6 +100,8 @@ func _tick(dt: float) -> void:
 			slam_t = 0.0
 			name_t = 0.0
 			picking = false
+			react = ""
+			react_t = 0.0
 			mx.member_changed()
 		if wipe_t >= (540.0 if wipe_kind == "open" else 490.0): wipe_t = -1.0
 	mx.tick(dt)
@@ -114,6 +136,8 @@ func _tab(k: String) -> void:
 	tab_t = 0.0
 	flash_t = 0.0
 	picking = false
+	react = ""
+	react_t = 0.0
 	mx.tab_changed()
 	sfx("ready", 0.2)
 
@@ -315,6 +339,10 @@ func _art(vs: Vector2, p: String, r: Rect2, kind := "slam", out := 0.0) -> void:
 		a = 1.0 - clampf(out / 200.0, 0.0, 1.0)
 		lit = 1.0
 	tr.y -= 6.0 * br
+	if kind == "slam" and out <= 0.0:
+		var J := _jolt()
+		tr += J[0]
+		rot += J[1]
 	draw_set_transform(Vector2(r.get_center().x, r.end.y) + tr, deg_to_rad(rot), Vector2(sc, sc))
 	var lr := Rect2(-r.size.x / 2.0, -r.size.y, r.size.x, r.size.y)
 	var k := minf(lit, 1.0)
@@ -522,7 +550,75 @@ func _attr_art(vs: Vector2, out: float) -> void:
 	var t0 := tx(ST[c])
 	var h := vs.y
 	var w := h * t0.get_width() / t0.get_height()
-	_art(vs, ST[c], Rect2(vs.x * 0.04, vs.y * 0.04, w, h), "slam", out)
+	var r := Rect2(vs.x * 0.04, vs.y * 0.04, w, h)
+	_art(vs, face_path(), r, "slam", out)
+	if out > 0.0: return
+	# .art: aspect 2/3 box at left 4 %, top 4 %, full height (the picture sits at its foot, centred)
+	var ab := Rect2(r.get_center().x - h / 3.0, r.position.y, h * 2.0 / 3.0, h)
+	hit(Rect2(ab.position.x + ab.size.x * 0.15, ab.position.y, ab.size.x * 0.7, ab.size.y), func(): react_tap())
+	_emo(ab)
+
+## the face on show (face / artSrc): a reaction, else a blink (sblink: the cl picture), else base
+func face_path() -> String:
+	if react != "": return "res://assets/ui/st/%s_%s.webp" % [c, react]
+	if blk > 0.0: return "res://assets/ui/st/%s_cl.webp" % c
+	return ST[c]
+
+## react(): a tap smiles for 1.7 s with a hop and ♪; the third tap within 1.3 s is a surprise (sup, 1.5 s, shake, !!)
+func react_tap() -> void:
+	var now := t
+	taps = taps.filter(func(x): return now - x < 1300.0)
+	taps.append(now)
+	var sup := taps.size() >= 3
+	if sup: taps.clear()
+	react = "sup" if sup else "smile"
+	react_t = 1500.0 if sup else 1700.0
+	jolt = "shake" if sup else "hop"
+	jolt_t = 0.0
+
+## sblink: every 2.4–5.2 s while she rests on her base face (no reaction), 130 ms, one time in five a second one
+func _sblink(dt: float) -> void:
+	if blk > 0.0: blk -= dt
+	if blk2 > 0.0:
+		blk2 -= dt
+		if blk2 <= 0.0: blk = 110.0
+	blk_next -= dt
+	if blk_next <= 0.0:
+		blk_next = 2400.0 + randf() * 2800.0
+		if tab == "attr" and react == "":
+			blk = 130.0
+			if randf() < 0.2: blk2 = 280.0
+
+## the pointer over the page, −1…1 on each axis (--px / --py); 0 until it has moved
+func ptr(vs: Vector2) -> Vector2:
+	if hover.x < -900.0: return Vector2.ZERO
+	return Vector2(clampf(hover.x / vs.x * 2.0 - 1.0, -1.0, 1.0), clampf(hover.y / vs.y * 2.0 - 1.0, -1.0, 1.0))
+
+## cx_hop / cx_shake on .artj: [offset, degrees]
+func _jolt() -> Array:
+	if jolt == "hop" and jolt_t < 550.0:
+		var k: Array = UIA.kf(jolt_t, [[0.0, [0.0, 0.0]], [0.3, [-16.0, -1.5]], [0.65, [3.0, 0.0]], [1.0, [0.0, 0.0]]], 550.0, 0.0, "bk")
+		return [Vector2(0, k[0]), k[1]]
+	if jolt == "shake" and jolt_t < 420.0:
+		var k2: Array = UIA.kf(jolt_t, [[0.0, [0.0, 0.0]], [0.2, [-9.0, -2.0]], [0.4, [8.0, 2.0]], [0.6, [-5.0, 0.0]], [0.8, [3.0, 0.0]], [1.0, [0.0, 0.0]]], 420.0)
+		return [Vector2(k2[0], 0), k2[1]]
+	return [Vector2.ZERO, 0.0]
+
+## cx_emo: the white star with ♪ (!! after three quick taps) at --hx / --hy of the art (1.2 s --bk)
+func _emo(ab: Rect2) -> void:
+	if jolt_t >= 1200.0: return
+	var hp: Vector2 = HXY.get(c, Vector2(0.58, 0.2))
+	var at := ab.position + ab.size * hp + Vector2(-10.0, -30.0)
+	var ek: Array = UIA.kf(jolt_t, [[0.0, [0.0, 10.0, 10.0, 0.2, -30.0]], [0.22, [1.0, 40.0, -40.0, 1.15, 10.0]], [0.75, [1.0, 44.0, -46.0, 1.0, 4.0]], [1.0, [0.0, 46.0, -56.0, 0.9, 0.0]]], 1200.0, 0.0, "bk")
+	var ec := at + Vector2(36, 30)
+	draw_set_transform_matrix(UIA.xf(ec, Vector2(ek[1], ek[2]), deg_to_rad(ek[4]), Vector2.ONE * ek[3]))
+	var a := clampf(ek[0], 0.0, 1.0)
+	var er := Rect2(at, Vector2(72, 60))
+	draw_colored_polygon(UI.clip(er, [[50, 0], [62, 26], [96, 12], [76, 42], [100, 60], [70, 66], [74, 100], [50, 76], [24, 98], [28, 66], [0, 58], [24, 42], [6, 12], [38, 26]]), Color(1, 1, 1, a))
+	var es := "!!" if jolt == "shake" else "♪"
+	var ef: Font = UI.bhs()
+	draw_string(ef, ec + Vector2(-tw(ef, es, 30) / 2.0, 11), es, HORIZONTAL_ALIGNMENT_LEFT, -1, 30, Color(0, 0, 0, a))
+	draw_set_transform(Vector2.ZERO)
 
 static func _xr(xf: Transform2D, r: Rect2) -> PackedVector2Array:
 	return PackedVector2Array([xf * r.position, xf * Vector2(r.end.x, r.position.y), xf * r.end, xf * Vector2(r.position.x, r.end.y)])

@@ -33,6 +33,13 @@ func _opened() -> void:
 	talk.reset("bran", POR, "브랜", "길드 대장장이", tcol())
 	talk.open_t = 5000.0
 
+var tap_touch := false
+
+func _input(ev: InputEvent) -> void:
+	if ev is InputEventMouseButton and ev.pressed: tap_touch = ev.device == InputEvent.DEVICE_ID_EMULATION
+	if ev is InputEventMouseMotion and ev.device == InputEvent.DEVICE_ID_EMULATION: return     # a finger doesn't hover
+	super(ev)
+
 func _tick(dt: float) -> void:
 	talk.step(dt)
 
@@ -63,14 +70,20 @@ func setup(back: bool, ln: String) -> void:
 			_bran_talk()
 			arena.open_dialog("bran", POR, "브랜", "길드 대장장이", L, func(): menu.open_bran(false, L[L.size() - 1]))],
 		["leave", "그만 가볼게요", func():
+			_bye()
 			menu.page = ""
 			_bran_talk()
 			arena.open_dialog("bran", POR, "브랜", "길드 대장장이", ["또 오십쇼. 필요하면요. 흐흐."], null)],
 	]
 
 func _leave() -> void:
+	_bye()
 	menu.page = ""
 	sfx("ready", 0.25)
+
+## a goodbye: 5 s before he (or the townsfolk) can be talked to again (TALKLOCK)
+func _bye() -> void:
+	arena.dlg.lock_until = Time.get_ticks_msec() + 5000
 
 func _bran_talk() -> void:
 	if arena.level_kind() == "town" and arena.level.get("bran") != null:
@@ -88,7 +101,7 @@ func _key(k: int) -> void:
 		sel = k - KEY_1
 		sfx("ready", 0.3)
 		choices[sel][2].call()
-	elif k in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_X, KEY_Z]:
+	elif k in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_X, KEY_Z, KEY_J, KEY_E]:
 		if sel < 0:
 			sel = 0
 			sfx("ready", 0.15)
@@ -109,15 +122,22 @@ func _key(k: int) -> void:
 
 func _paint(vs: Vector2) -> void:
 	# the talk scene of dialog.gd (talk_fx.gd), his line held, the choices on the right
-	draw_rect(Rect2(Vector2.ZERO, vs), Color(0, 0, 0, 0.25 * clampf(t / 200.0, 0.0, 1.0)))
 	for c in _lay: c.queue_redraw()
 	for i in talk.ch_polys.size():
 		var ii: int = i
 		if talk.ch_polys[i].size() > 2:
 			hit(talk.ch_polys[i], func():
+				# a finger: the first tap selects, a second on the selected one confirms (the mouse picked it by hovering)
+				if tap_touch and ii != sel:
+					sel = ii
+					sfx("ready", 0.15)
+					return
 				sfx("ready", 0.3)
 				sel = ii
 				choices[ii][2].call())
+	for i in talk.top_rects.size():
+		if i == 0: hit(talk.top_rects[0], func(): arena.dlg.auto = not arena.dlg.auto)
+		else: hit(talk.top_rects[1], func(): pass)
 
 func _draw_layer(k: int, c: Control) -> void:
 	if not live(): return
@@ -132,7 +152,9 @@ func _draw_layer(k: int, c: Control) -> void:
 				sel = hv
 				sfx("ready", 0.15)
 			talk.set_choices(choices.map(func(x): return String(x[1])), sel)
+			talk.auto_on = arena.dlg.auto
 			talk.draw_front(c, vs)
+			talk.draw_top(c, vs)
 
 func _icon(k: String, c: Vector2, col: Color) -> void:
 	match k:

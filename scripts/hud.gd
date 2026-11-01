@@ -172,8 +172,9 @@ func _objective() -> String:
 		return "버섯 동굴 · 남은 적 %d" % n
 	if lk == "":
 		return "유령 퇴치 0 / 1" if arena.ghost != null and arena.ghost.alive() else "허수아비 부수기"
-	if arena.fame != null: return arena.fame.fame_obj()     # fameObj: letters, reports, the trial
-	return ""
+	var o: String = arena.fame.fame_obj() if arena.fame != null else ""     # fameObj: letters, reports, the trial
+	if o == "" and arena.player.party.size() < 2: o = "분수대에서 파티를 꾸리자"    # alone: go form a party
+	return o
 
 func _tc() -> Color:
 	return UI.col(arena.player.who)

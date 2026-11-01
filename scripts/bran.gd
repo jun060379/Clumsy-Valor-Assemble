@@ -165,6 +165,7 @@ func greet() -> Array:
 	return pool[randi() % pool.size()]
 
 func talk() -> void:
+	if arena.dlg != null and arena.dlg.locked(): return     # branTalk: TALKLOCK
 	talk_t = 2000.0
 	play("talk")
 	var M = arena.ui_root.menu if arena.ui_root != null else null
