@@ -504,15 +504,17 @@ func _build_lights() -> void:
 	lights.get_child(lights.get_child_count() - 1).set_meta("player", true)
 
 func _flicker(tt: float) -> void:
-	var vr: Rect2 = arena.view_rect().grow(320.0)
+	var vr: Rect2 = arena.view_rect()
 	for l in lights.get_children():
-		l.visible = l.has_meta("player") or vr.has_point(l.position)
+		# a light renders only when its circle reaches the screen (each one is another pass over what it touches)
+		l.visible = l.has_meta("player") or vr.grow(l.texture_scale * 32.0).has_point(l.position)
 		if l.has_meta("player"):
 			l.position = arena.player.position + Vector2(0, -70)
 		elif l.has_meta("door"):
 			var d: Dictionary = l.get_meta("door")
 			var open: bool = (gate_open or d["town"]) and not (d["boss"] and not gate_open)
 			l.energy = (1.0 if d["town"] and not d["boss"] else open_k) * (0.9 if open else 0.0)
+			if l.energy <= 0.01: l.visible = false     # a shut door's light costs a pass for nothing
 		elif l.get_meta("flick"):
 			var ph: float = l.get_meta("ph")
 			l.energy = l.get_meta("e0") * (0.85 + 0.1 * sin(tt * 7.0 + ph) + 0.05 * sin(tt * 19.0 + ph * 3.0))

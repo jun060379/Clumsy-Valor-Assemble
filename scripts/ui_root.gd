@@ -53,8 +53,35 @@ func start_game(c: String) -> void:
 	arena.fade_dir = -1
 	arena.sfx("ready", 0.6)
 
+## padPoll: the left stick steers every menu as the d-pad does (only while a screen covers the world; in play the
+## stick is bound to the move actions)
+var stick_dir := {0: 0, 1: 0}
+func _stick_nav(ev: InputEventJoypadMotion) -> void:
+	if ev.axis != JOY_AXIS_LEFT_X and ev.axis != JOY_AXIS_LEFT_Y: return
+	var menus: bool = holds() or (arena.sortie != null and arena.sortie.covers()) or (arena.fame != null and arena.fame.holds())
+	var th := 0.45 if ev.axis == JOY_AXIS_LEFT_X else 0.6
+	var d := 0
+	if ev.axis_value < -th: d = -1
+	elif ev.axis_value > th: d = 1
+	elif absf(ev.axis_value) > th * 0.7: d = stick_dir[ev.axis]    # a little hysteresis
+	var was: int = stick_dir[ev.axis]
+	if d == was: return
+	stick_dir[ev.axis] = d
+	if not menus: return
+	var btn := {0: {-1: JOY_BUTTON_DPAD_LEFT, 1: JOY_BUTTON_DPAD_RIGHT}, 1: {-1: JOY_BUTTON_DPAD_UP, 1: JOY_BUTTON_DPAD_DOWN}}
+	if was != 0: _pad_btn(btn[ev.axis][was], false, ev.device)
+	if d != 0: _pad_btn(btn[ev.axis][d], true, ev.device)
+
+func _pad_btn(b: int, down: bool, dev: int) -> void:
+	var e := InputEventJoypadButton.new()
+	e.button_index = b
+	e.pressed = down
+	e.device = dev
+	Input.parse_input_event(e)
+
 func _input(ev: InputEvent) -> void:
 	arena.cfg.note(ev)
+	if ev is InputEventJoypadMotion: _stick_nav(ev)
 	if ev is InputEventKey and ev.pressed and not ev.echo and not title.active and not menu.capturing():
 		var k: int = ev.physical_keycode if ev.physical_keycode != 0 else ev.keycode
 		if k == KEY_F and not arena.cfg.kb_uses(KEY_F):

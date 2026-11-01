@@ -6,6 +6,7 @@ const UI := preload("res://scripts/ui_kit.gd")
 const RN := preload("res://scripts/runes.gd")
 const CH := preload("res://scripts/chars.gd")
 const SYM := preload("res://assets/fonts/NotoSansKR-sym.otf")      # − Ⅰ Ⅱ Ⅲ Ⅳ ★ … the UI fonts lack
+const SYM2 := preload("res://assets/fonts/DejaVuSans-env.ttf")     # ✉ (Eilin's "관리국 서신 받기 ✉")
 static var _sym_done := false
 
 var arena
@@ -23,9 +24,9 @@ func _ready() -> void:
 		_sym_done = true
 		for f in [UI.noto(), UI.noto_k()]:
 			var a: Array[Font] = f.fallbacks
-			if not a.has(SYM):
-				a.append(SYM)
-				f.fallbacks = a
+			for sf in [SYM, SYM2]:
+				if not a.has(sf): a.append(sf)
+			f.fallbacks = a
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR

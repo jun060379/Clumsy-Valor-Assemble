@@ -22,6 +22,9 @@ var sil: Control
 var art: Control
 var fg: Control
 var clock := 0.0
+var sel := -1                    # keyboard / pad cursor: index into _rows() (-1 = none until a key is used)
+var sel_j := 0                   # …and which button in that row (key slots, presets)
+const LIVE := ["tog", "sld", "kb", "pre", "rmb"]
 
 
 func _ready() -> void:
@@ -51,6 +54,8 @@ func open(m: String) -> void:
 	t = 0.0
 	scroll = 0.0
 	cap = []
+	sel = -1
+	sel_j = 0
 	visible = true
 
 func col() -> Color:
@@ -72,6 +77,10 @@ func _rows() -> Array:
 	var C = arena.cfg
 	var R: Array = []
 	if mode == "opts":
+		R.append({"k": "tog", "lab": "캐릭터 도트화", "o": ["끄기", "도트", "도트+셰이딩"], "on": ["off", "dot", "shade"].find(arena.pix),
+			"set": func(i):
+				arena.pix = ["off", "dot", "shade"][i]
+				arena.player.set_pix(arena.pix)})
 		R.append({"k": "tog", "lab": "조작 기기", "o": ["자동", "키보드·마우스", "패드", "터치"], "on": ["auto", "kbm", "pad", "touch"].find(C.dev),
 			"set": func(i): C.dev = ["auto", "kbm", "pad", "touch"][i]})
 		R.append({"k": "tog", "lab": "이동 스틱", "o": ["따라오는 스틱", "고정 스틱"], "on": 0 if C.stick == "float" else 1,
@@ -127,14 +136,26 @@ func _input(ev: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if ev is InputEventKey:
-		if ev.pressed and not ev.echo and (ev.physical_keycode == KEY_ESCAPE or ev.keycode == KEY_ESCAPE):
-			menu.close_page()
-		elif ev.pressed and not ev.echo and ev.keycode in [KEY_DOWN, KEY_UP]:
-			scroll += 40.0 if ev.keycode == KEY_DOWN else -40.0
+		if ev.pressed and (ev.physical_keycode == KEY_ESCAPE or ev.keycode == KEY_ESCAPE):
+			if not ev.echo: menu.close_page()
+		elif ev.pressed:
+			var k: int = ev.keycode
+			if k in [KEY_DOWN, KEY_S]: _nav(1)
+			elif k in [KEY_UP, KEY_W]: _nav(-1)
+			elif k in [KEY_LEFT, KEY_A]: _side(-1)
+			elif k in [KEY_RIGHT, KEY_D]: _side(1)
+			elif k in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE] and not ev.echo: _activate()
 		get_viewport().set_input_as_handled()
 		return
 	if ev is InputEventJoypadButton:
-		if ev.pressed and ev.button_index == JOY_BUTTON_B: menu.close_page()
+		if ev.pressed:
+			match ev.button_index:
+				JOY_BUTTON_B: menu.close_page()
+				JOY_BUTTON_DPAD_DOWN: _nav(1)
+				JOY_BUTTON_DPAD_UP: _nav(-1)
+				JOY_BUTTON_DPAD_LEFT: _side(-1)
+				JOY_BUTTON_DPAD_RIGHT: _side(1)
+				JOY_BUTTON_A: _activate()
 		get_viewport().set_input_as_handled()
 		return
 	if ev is InputEventMouseButton:
@@ -161,6 +182,69 @@ func _input(ev: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 	elif ev is InputEventScreenTouch or ev is InputEventScreenDrag:
 		get_viewport().set_input_as_handled()
+
+# ---------- keyboard / pad cursor ----------
+func _nav(d: int) -> void:
+	var rows := _rows()
+	var i := sel
+	for n in rows.size():
+		i = (i + d + rows.size()) % rows.size() if i >= 0 else (0 if d > 0 else rows.size() - 1)
+		if LIVE.has(rows[i]["k"]): break
+	if not LIVE.has(rows[i]["k"]): return
+	sel = i
+	sel_j = 0
+	arena.sfx("step", 0.15)
+	# keep the row in the box
+	var rh := 33.0 if get_viewport_rect().size.y <= 420.0 else 38.0
+	var y := 0.0
+	for k in sel: y += 30.0 if rows[k]["k"] == "oh" else rh + 4.0
+	var bh := _box(get_viewport_rect().size).size.y
+	if y < scroll: scroll = y
+	elif y + rh + 4.0 > scroll + bh: scroll = y + rh + 4.0 - bh
+	_clamp_scroll()
+
+func _side(d: int) -> void:
+	var rows := _rows()
+	if sel < 0 or sel >= rows.size():
+		_nav(1)
+		return
+	var R: Dictionary = rows[sel]
+	match R["k"]:
+		"tog":
+			var n: int = R["o"].size()
+			R["set"].call(clampi(int(R["on"]) + d, 0, n - 1))
+			arena.cfg.save()
+		"sld":
+			R["set"].call(clampi(int(R["on"]) + d, 0, int(R["n"]) - 1))
+		"kb", "pre":
+			sel_j = clampi(sel_j + d, 0, 1)
+		"rmb":
+			_activate()
+			return
+	arena.sfx("ready", 0.2)
+
+func _activate() -> void:
+	var rows := _rows()
+	if sel < 0 or sel >= rows.size():
+		_nav(1)
+		return
+	var R: Dictionary = rows[sel]
+	match R["k"]:
+		"tog":
+			var n: int = R["o"].size()
+			R["set"].call((int(R["on"]) + 1) % n)
+			arena.cfg.save()
+		"sld":
+			R["set"].call((int(R["on"]) + 1) % int(R["n"]))
+		"kb":
+			cap = [R["a"], sel_j]
+		"pre":
+			cap = []
+			arena.cfg.use_preset(["arrow", "wasd"][sel_j])
+		"rmb":
+			arena.cfg.rmb = "guard" if arena.cfg.rmb == "dash" else "dash"
+			arena.cfg.save()
+	arena.sfx("ready", 0.2)
 
 func _click(p: Vector2) -> void:
 	if close_rect.grow(6).has_point(p):
@@ -249,6 +333,15 @@ func _draw_fg() -> void:
 		var rx := xf * Transform2D(deg_to_rad(6.0) * (1.0 - e), Vector2(50.0 * (1.0 - e), ry))
 		ci.draw_set_transform_matrix(rx)
 		_row(ci, rx, R, box.size.x, rh, a, c)
+		if i == sel:
+			# the keyboard / pad cursor: a theme-colour rim round the row, a mark on the chosen slot
+			var rim := UI.clip(Rect2(0, 0, box.size.x, rh), [[1, 0], [100, 0], [99, 100], [0, 100]])
+			rim.append(rim[0])
+			ci.draw_polyline(rim, Color(c, a), 2.0)
+			if R["k"] in ["kb", "pre"]:
+				ci.draw_colored_polygon(PackedVector2Array([Vector2(-10, rh / 2.0 - 6.0), Vector2(-2, rh / 2.0), Vector2(-10, rh / 2.0 + 6.0)]), Color(c, a))
+				var lab: String = ["첫째 칸", "둘째 칸"][sel_j] if R["k"] == "kb" else String(CFG.PRE[["arrow", "wasd"][sel_j]]["n"])   # PLACEHOLDER: cursor slot label
+				ci.draw_string(UI.noto(), Vector2(box.size.x * 0.32, rh / 2.0 + 4.0), "◀ " + lab + " ▶", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(c, a))
 	ci.draw_set_transform(Vector2.ZERO)
 	content_h = total + 10.0
 

@@ -172,6 +172,12 @@ func enter(i: int) -> void:
 	var k: String = PHM[i][0]
 	ui_root.sweep.run(func(): _open_page(k, true), UI.col(ph_c))
 
+## cxOpen(c): the character screen on member c (the hall's library and the members' rooms)
+func open_char(c: String) -> void:
+	if page != "": return
+	ext["char"].want_c = c
+	open_page("char")
+
 ## a page straight from the top bar (m2Open: no sweep)
 func open_page(k: String) -> void:
 	if page != "": return
@@ -194,6 +200,7 @@ func _open_page(k: String, via_hub: bool) -> void:
 ## m2Close: back to the hub through the sweep when it came from there
 func close_page() -> void:
 	arena.sfx("ready", 0.25)
+	arena.save_now()          # gear, runes, the forge's work: kept the moment the page closes
 	if from_hub:
 		ui_root.sweep.run(func():
 			opts.visible = false
@@ -336,6 +343,8 @@ func _sel(i: int, quiet := false) -> void:
 
 
 # ---------- per frame ----------
+var idle_st: Array = []
+var idle_draw := -1e9
 func _process(delta: float) -> void:
 	var dt := minf(delta * 1000.0, 250.0)   # real time, like the prototype's CSS / rAF clocks
 	clock += dt
@@ -345,6 +354,13 @@ func _process(delta: float) -> void:
 	cur_t += dt
 	blink -= dt
 	if blink < -130.0: blink = 2400.0 + randf() * 2600.0
+	# in play only the top bar shows: redraw it when something about it changes (or a few times a second),
+	# and the hub's art layers once more to clear them — not four full layers every frame on a phone
+	var st := [page, _bar_visible(), hover, tb_press, get_viewport_rect().size]
+	if page == "" and st == idle_st and clock - idle_draw < 250.0:
+		return
+	idle_st = st
+	idle_draw = clock
 	queue_redraw()
 	art_sil.queue_redraw()
 	art.queue_redraw()

@@ -118,6 +118,12 @@ func hit(dmg: float, kb: float, mul := 1.0) -> void:
 		set_a("die")
 		arena.sfx("break", 0.8)
 		arena.spark(position + Vector2(0, -40), 16)
+		if M.has("boss"):
+			# mobDie: the boss goes down hard
+			arena.shake(14, 1)
+			arena.flash = 0.5
+			arena.hitstop = 160.0
+			arena.text(position + Vector2(0, -200), "격파!", Color("#ffd34d"))
 		if R != null: R.on_kill(self)
 
 

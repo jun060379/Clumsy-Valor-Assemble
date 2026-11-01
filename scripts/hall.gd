@@ -46,6 +46,9 @@ var adust: Array = []
 var emit_t := {}
 var arch_o := {}
 var hatch := false
+var snd_f := -1
+var snd_on := true
+var snd_vy := 0.0
 
 
 func _ready() -> void:
@@ -382,6 +385,19 @@ func step(dt: float) -> void:
 				P.position.x = wx + 16.0
 				P.vx = 0.0
 	px = P.position.x
+	# boards creak under your feet; the stairs thud (환경음)
+	var AM = arena.get("amb")
+	if AM != null:
+		var stp: bool = P.on and P.anim == "run" and P.f != snd_f and (P.f == 1 or P.f == 5)
+		snd_f = P.f
+		if stp:
+			if P.plat != null and P.plat.has("ramp"): AM.hsnd(95.0, 55.0, 0.12, 0.06, "sine", 0.7)
+			elif randf() < 0.14: AM.creak()
+		if P.on and not snd_on and snd_vy > 0.5:
+			AM.hsnd(80.0, 45.0, 0.18, 0.08, "sine", 0.7)
+			if randf() < 0.5: AM.creak()
+		snd_on = P.on
+		snd_vy = P.vy
 	if draft != null:
 		draft["v"] *= pow(0.9982, dt)
 		if draft["v"] < 0.02: draft = null
@@ -411,6 +427,19 @@ func step(dt: float) -> void:
 	glow.queue_redraw()
 	front.queue_redraw()
 	labels.queue_redraw()
+
+## where the fires are on this floor (ambience.gd crackle)
+func fire_xs() -> Array:
+	var o := []
+	for p in F["props"]:
+		if p[0] == "fire" or p[0] == "hearth": o.append(float(p[1]))
+	return o
+
+## the grandfather clock's x on this floor, or null
+func clock_x() -> Variant:
+	for p in F["props"]:
+		if p[0] == "clock": return float(p[1])
+	return null
 
 func _emit(id: String, every: float, dt: float, fn: Callable) -> void:
 	emit_t[id] = emit_t.get(id, 0.0) + dt
@@ -508,8 +537,19 @@ func try_interact() -> bool:
 		"locked":
 			arena.sfx("guard", 0.4)
 			arena.text(P.position + Vector2(0, -170), "잠겨 있다… 길드장의 방", Color("#bfeee6"))
+		"board":
+			arena.fame.open_book("gbk", "quest")      # fameOpen('quest')
+		"party":
+			arena.sortie.party_ui.show_it()           # openParty
+		"library":
+			arena.ui_root.menu.open_char(P.who)       # cxOpen(CHAR)
+		"room":
+			if arena.fame != null and not arena.fame.fac_ok("rooms"):
+				arena.sfx("guard", 0.3)
+				arena.text(P.position + Vector2(0, -140.0 * 1.3), "먼지투성이 방… 시설 복구가 필요하다", Color("#bfeee6"))
+			else:
+				arena.ui_root.menu.open_char(d["c"])
 		_:
-			# TODO(step 4/5): quest board, party setup, records and the members' rooms open their screens here
 			arena.sfx("guard", 0.4)
 			arena.text(P.position + Vector2(0, -170), d["name"] + " — 준비 중", Color("#ffe9a8"))
 	return true

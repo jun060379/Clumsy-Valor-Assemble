@@ -429,7 +429,7 @@ func talk() -> void:
 			say("천천히 다녀오세요!", 1800.0))
 	else:
 		var L: Array = EIL_OFF[randi() % EIL_OFF.size()]
-		arena.open_dialog("eilin", POR, "에일린", "길드 접수원", L, func(): talk_t = 0.0)
+		arena.dlg.ask("eilin", POR, "에일린", "길드 접수원", L, [["좋은 저녁 보내요", func(): talk_t = 0.0]])
 
 ## the counter when she is not behind it
 func desk_away() -> String:

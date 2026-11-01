@@ -110,6 +110,7 @@ func _ready() -> void:
 		sheets[c] = arr
 		hpm[c] = CH.STATS[c]["hp"]
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	material = pix_mat()
 	switch_char("estelle")
 	hp = MAX_HP
 	last_hp = hp
@@ -424,6 +425,7 @@ func rift_exit() -> void:
 			qte_offer("finisher")
 		arena.sfx("heavy", 0.9)
 		arena.shake(5.0 + s["r"] * 7.0, dir)
+		arena.post_wave(Vector2((s["x0"] + position.x) / 2.0, position.y - 60.0 * CSCALE), 0.8 + s["r"] * 0.6, 520.0, 0.2)
 		arena.hitstop = maxf(arena.hitstop, 80.0 + s["r"] * 60.0 if hit else 30.0)
 	set_anim("dig_out")
 	dig_air = not on
@@ -1196,6 +1198,7 @@ func take_hit(m, raw: float) -> String:
 	var tk2 := raw * (0.75 if who == "estelle" else 1.0) * _inm()    # Estelle's passive: 25% less damage taken
 	hp -= tk2
 	arena.ult_gain(12.0)
+	arena.post_ca(0.02)
 	inv = 1200.0
 	arena.sfx("hurt", 0.8)
 	arena.shake(8, -dir)
@@ -1353,6 +1356,8 @@ func swap(tag: bool, to = null) -> void:
 		arena.flash = maxf(arena.flash, 0.22)
 		arena.hitstop = 70.0
 		arena.shake(6, dir)
+		arena.post_wave(position + Vector2(0, -60.0), 1.2, 520.0, 0.25)
+		arena.post_ca(0.012)
 		arena.sfx("heavy", 0.9)
 		var tg = target(1600.0)
 		tag_in_at(tg, keep_x)
@@ -1425,6 +1430,7 @@ func tag_strike() -> void:
 		R0.hit(2.0 * M, dir * 8.0, atk_mul())
 	arena.hitstop = 80.0
 	arena.shake(7, dir)
+	arena.post_wave(position + Vector2(dir * 60.0, -50.0), 1.1, 460.0, 0.22)
 	arena.streak_fx(position.x - dir * 30.0, position.x + dir * 170.0, position.y - 50.0 * CSCALE, dir, CH.COLOR[who])
 	arena.dust(position, dir, true)
 	for d in foes_alive():
@@ -1523,6 +1529,57 @@ func _draw() -> void:
 	if anim == "tp_in" or anim == "dig_out":
 		variant = "_air" if dig_air else ("_q" if rift_q else "")
 	draw_frame(who, an, fr2, Vector2.ZERO, dir, col, variant)
+
+## 캐릭터 도트화 (charPix): the characters drawn on a world-pixel grid with hard alpha and a 32-step palette ("dot"),
+## plus cel-shaded light from above and a dark rim ("shade", the prototype's default). One shared material.
+const PIX_SH := """
+shader_type canvas_item;
+uniform int mode = 2;
+uniform float k = 1.6;          // sheet texels per world pixel (448 px cells drawn 224 x ~1.25)
+const float TH = 100.0 / 255.0;
+void fragment() {
+	if (mode == 0) {
+		COLOR = texture(TEXTURE, UV) * COLOR;
+	} else {
+		vec2 tp = TEXTURE_PIXEL_SIZE * k;
+		vec2 su = (floor(UV / tp) + 0.5) * tp;
+		vec4 c = texture(TEXTURE, su);
+		if (c.a < TH) {
+			bool rim = mode == 2 && (texture(TEXTURE, su + vec2(tp.x, 0.0)).a >= TH || texture(TEXTURE, su - vec2(tp.x, 0.0)).a >= TH
+				|| texture(TEXTURE, su + vec2(0.0, tp.y)).a >= TH || texture(TEXTURE, su - vec2(0.0, tp.y)).a >= TH);
+			COLOR = rim ? vec4(24.0 / 255.0, 14.0 / 255.0, 36.0 / 255.0, COLOR.a) : vec4(0.0);
+		} else {
+			vec3 col = c.rgb * 255.0;
+			if (mode == 2) {
+				float vy = clamp((fract(su.y * 7.0) - 0.08) / 0.88, 0.0, 1.0);   // 7 rows a sheet: height in the cell
+				float lit = 1.08 - 0.22 * vy;
+				float L = dot(col, vec3(0.299, 0.587, 0.114)) / 255.0 * lit;
+				float q = 0.1;
+				float cel[6] = float[](0.1, 0.26, 0.44, 0.64, 0.84, 1.0);
+				for (int i = 0; i < 6; i++) { if (abs(cel[i] - L) < abs(q - L)) q = cel[i]; }
+				float kk = 1.0 + 0.4 * (clamp(q / max(0.04, L / lit), 0.55, 1.6) - 1.0);
+				float m = (col.r + col.g + col.b) / 3.0;
+				col = (vec3(m) + (col - vec3(m)) * 1.12) * kk;
+			}
+			col = (col - 128.0) * 1.06 + vec3(126.0, 120.0, 120.0);
+			col = clamp(floor(col / 8.0 + 0.5) * 8.0, 0.0, 255.0) / 255.0;
+			COLOR = vec4(col, 1.0) * COLOR;
+		}
+	}
+}
+"""
+const PIXM := {"off": 0, "dot": 1, "shade": 2}
+static var _pix: ShaderMaterial
+static func pix_mat() -> ShaderMaterial:
+	if _pix == null:
+		var sh := Shader.new()
+		sh.code = PIX_SH
+		_pix = ShaderMaterial.new()
+		_pix.shader = sh
+	return _pix
+
+static func set_pix(m: String) -> void:
+	pix_mat().set_shader_parameter("mode", PIXM.get(m, 2))
 
 ## `ci`: draw onto another canvas item (the townsfolk use the same sheets); null = the player itself
 func draw_frame(c: String, an: String, fr: int, at: Vector2, d: int, col: Color, variant := "", ci: CanvasItem = null) -> void:

@@ -578,7 +578,7 @@ func eil_work(lead: Array = []) -> void:
 	var rd := ready_n()
 	var lt := f_letter()
 	var C := [
-		["관리국 서신 받기" if lt else "의뢰 완료 보고" + (" (%d)" % rd if rd else ""), func(): report()],
+		["관리국 서신 받기 ✉" if lt else "의뢰 완료 보고" + (" (%d)" % rd if rd else ""), func(): report()],
 		["길드 수첩 (의뢰 · 시설)", func():
 			_eil_bye()
 			open_book("gbk", "quest")],

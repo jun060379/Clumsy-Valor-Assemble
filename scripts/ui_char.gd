@@ -25,8 +25,11 @@ func _ready() -> void:
 	super()
 	keys = ["char"]
 
+var want_c := ""                 # cxOpen(c): open on this member instead of the one in control
+
 func _opened() -> void:
-	c = arena.player.who
+	c = want_c if want_c != "" else arena.player.who
+	want_c = ""
 	tab = "attr"
 	gi = 0
 	picking = false

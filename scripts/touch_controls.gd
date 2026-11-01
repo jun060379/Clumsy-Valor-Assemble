@@ -33,7 +33,8 @@ func _process(_delta: float) -> void:
 		shown = on
 		visible = on
 		if not on: _release_all()
-	if shown: queue_redraw()
+		queue_redraw()
+	# nothing here moves on its own: it redraws on a touch, a drag or a resize, not every frame (phones)
 
 func _release_all() -> void:
 	for i in held:

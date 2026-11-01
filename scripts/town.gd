@@ -128,6 +128,7 @@ func _ready() -> void:
 	folk_node.z_index = -1
 	folk_node.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	folk_node.draw.connect(func(): folk.draw(folk_node))
+	folk_node.material = arena.player.pix_mat()      # 캐릭터 도트화 for the townsfolk too
 	arena.add_child(folk_node)
 	# speech bubbles and fireflies ride the camera on their own canvas, so the night ambient doesn't dim them
 	lbl_layer = CanvasLayer.new()
@@ -453,11 +454,13 @@ func _add_light(p: Vector2, r: float, col: Color, kind: String) -> void:
 func _build_lights() -> void:
 	for lp in lamps:
 		_add_light(lantern_at(lp[0], lp[1]), 150.0, Color8(255, 196, 110), "lamp")
+	# string lights: one small light per bulb; phones get three wider ones per string (each light is a pass)
+	var nb := 3 if arena.low_end else 7
 	for s in light_strings:
 		var yy: float = up_y((s[0] + s[1]) / 2.0) + BAND - 10.0
-		for i in 7:
-			var u := (i + 0.5) / 7.0
-			_add_light(Vector2(s[0] + (s[1] - s[0]) * (0.07 + u * 0.86), yy + 58.0 * (0.55 + sin(u * PI) * 0.3)), 60.0, Color8(255, 210, 130), "lamp")
+		for i in nb:
+			var u := (i + 0.5) / nb
+			_add_light(Vector2(s[0] + (s[1] - s[0]) * (0.07 + u * 0.86), yy + 58.0 * (0.55 + sin(u * PI) * 0.3)), 60.0 * (1.5 if nb < 7 else 1.0), Color8(255, 210, 130), "lamp")
 	_add_light(Vector2(4350.0 + 27.0 * PK, G - 20.0), 260.0, Color8(255, 150, 70), "fire")
 	_add_light(Vector2(7443.0, LOWF - 50.0), 200.0, Color8(255, 140, 50), "fire")
 	_add_light(Vector2(HDOOR, TTOP - 60.0), 200.0, Color8(255, 196, 120), "lamp")
@@ -469,11 +472,11 @@ func step(dt: float) -> void:
 	var T := tod_now()
 	cmod.color = T["amb"]
 	var tt := Time.get_ticks_msec() / 1000.0
-	var vr: Rect2 = arena.view_rect().grow(320.0)
+	var vr: Rect2 = arena.view_rect()
 	for l in lights.get_children():
 		var ph: float = l.get_meta("ph")
-		# only lights near the screen render: each 2D light redraws what it touches, which is costly on phones
-		l.visible = vr.has_point(l.position) and T["lamp"] > 0.15
+		# only lights whose circle reaches the screen render: each 2D light redraws what it touches, costly on phones
+		l.visible = vr.grow(l.texture_scale * 32.0).has_point(l.position) and T["lamp"] > 0.15
 		if l.get_meta("kind") == "fire":
 			l.energy = 0.6 + 0.6 * T["lamp"] + 0.1 * sin(tt * 7.0 + ph)
 		else:

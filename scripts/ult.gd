@@ -103,6 +103,9 @@ func try_ult() -> bool:
 	P.vx = 0.0
 	P.inv = 99999.0
 	arena.ucut().start(who)
+	var vr: Rect2 = arena.view_rect()
+	arena.post_wave(Vector2(vr.get_center().x, vr.position.y + 250.0 * vr.size.y / get_viewport_rect().size.y), 1.6, 700.0, 0.7)
+	arena.post_ca(0.02)
 	arena.sfx("parry", 1.0)
 	arena.sfx("slam", 0.7)
 	return true
@@ -204,6 +207,7 @@ func step(dt: float) -> void:
 	if who == "estelle":
 		pose("vow", 0 if t < 140.0 else (1 if t < 300.0 else 2))
 		if once("vow"):
+			arena.post_wave(P.position + Vector2(0, -70.0), 1.4, 650.0, 0.4)
 			auto_t = VOW
 			fx.append({"k": "oath", "x": P.position.x, "y": P.position.y, "s": S * 0.9, "t": 0.0, "life": 1000.0})
 			fx.append({"k": "rose", "t": 0.0, "life": 99999.0, "end": -1.0, "n": 30})
@@ -285,6 +289,7 @@ func _step_aida(_dt: float, P, S: float) -> void:
 		ualpha = 1.0
 		pose("ufin", 0 if u < 200.0 else (1 if u < 420.0 else (2 if u < 700.0 else 3)))
 		if u >= 420.0 and once("boom"):
+			arena.post_ca(0.025)
 			for f in fx:
 				if f["k"] != "rune": continue
 				f["life"] = f["t"] + 1.0
@@ -294,6 +299,7 @@ func _step_aida(_dt: float, P, S: float) -> void:
 				var bx: float = e.position.x if live else p["x"]
 				var by: float = (_ey(e) + 5.0) if live else p["y"]
 				fx.append({"k": "burst", "x": bx, "y": by, "r": 130.0 if live else 60.0, "t": 0.0, "life": 520.0})
+				if live: arena.post_wave(Vector2(bx, e.position.y - 50.0), 1.0, 560.0, 0.2)
 				if live: hit(e, 2.0)
 			arena.sfx("slam", 1.0)
 			arena.sfx("break", 0.8)
@@ -345,6 +351,8 @@ func _step_luce(dt: float, P, S: float) -> void:
 		star["y"] = fy0
 		star["s"] = 0.9 if t < 1100.0 else maxf(0.0, 0.9 - (t - 1100.0) / 200.0)
 		if once("punch"):
+			arena.post_wave(Vector2(fx0, fy0), 1.8, 700.0, 0.55)
+			arena.post_ca(0.03)
 			var vs: Vector2 = get_viewport_rect().size
 			fx.append({"k": "beam", "x": fx0, "y": fy0, "dir": D, "len": maxf(700.0, vs.x), "w": 96.0, "t": 0.0, "life": 820.0})
 			fx.append({"k": "burst", "x": fx0, "y": fy0, "r": 160.0, "t": 0.0, "life": 520.0})

@@ -15,6 +15,8 @@ const DIALOG := preload("res://scripts/dialog.gd")
 const FOLK := preload("res://scripts/townsfolk.gd")
 const WEATHERS := ["clear", "rain", "snow"]
 const SETTINGS := preload("res://scripts/settings.gd")
+const AMBIENCE := preload("res://scripts/ambience.gd")
+const POSTFX := preload("res://scripts/post_fx.gd")
 const FATIGUE := preload("res://scripts/fatigue.gd")
 const UIROOT := preload("res://scripts/ui_root.gd")
 const RUNES := preload("res://scripts/runes.gd")
@@ -75,8 +77,12 @@ var train_platforms: Array = []
 # front end (step 4): settings, 피로도, title / menus
 var cfg                       # settings.gd: device, stick, key bindings (saved)
 var fatigue                   # fatigue.gd: 피로도 160, +1 / 6 min (nothing spends it yet)
-var ambient := true           # 환경음 (no ambient sound yet)
-var screen_fx := true         # 화면 효과 (no post effects yet)
+var ambient := true           # 환경음 (ambience.gd)
+var post                      # post_fx.gd: shockwaves, colour fringes, vignette, the dodge grade (화면 효과)
+var low_end := false          # a phone (web + touch-first): fewer, wider lights
+var amb                       # ambience.gd: wind / rain / water loops, birds, crickets, fires, the hall's creaks and clock
+var screen_fx := true         # 화면 효과 (post_fx.gd)
+var pix := "shade"            # 캐릭터 도트화: off / dot / shade (player.gd pix_mat)
 var ui_root                   # ui_root.gd: title, top-right buttons, main menu, transitions
 var runes                     # runes.gd: runes, gear, shillings' drops, the boss chest, the bestiary record
 var fame                      # fame.gd: guild fame, quests, adventurer level, the guild / adventure books' data, cut-ins
@@ -101,6 +107,8 @@ func _ready() -> void:
 	setup_input()
 	cfg = SETTINGS.new(self)
 	cfg.apply_keys()
+	PLAYER.set_pix(pix)
+	low_end = OS.has_feature("mobile") or (OS.has_feature("web") and cfg.touch_auto())
 	fatigue = FATIGUE.new()
 	platforms = [
 		{"x": 520.0, "y": ground_y - 150.0, "w": 190.0},
@@ -201,6 +209,15 @@ func _ready() -> void:
 	sortie.set_script(SORTIE)
 	sortie.arena = self
 	ui4.add_child(sortie)
+	post = CanvasLayer.new()
+	post.set_script(POSTFX)
+	post.arena = self
+	add_child(post)
+	move_child(post, ui.get_index())      # same layer as the HUD, ahead of it: the HUD stays out of the pass
+	amb = Node.new()
+	amb.set_script(AMBIENCE)
+	amb.arena = self
+	add_child(amb)
 	save = SAVE.new(self)
 	if get_tree().get_script() != null:
 		save.path = "user://save_test.json"     # test runs never touch the real save
@@ -215,7 +232,12 @@ func _ready() -> void:
 
 
 ## load silently (the title has no 이어하기): the saved scene, or the village street
+var world_started := false
 func _start_world() -> void:
+	_start_world2()
+	world_started = true
+
+func _start_world2() -> void:
 	var d = save.read() if get_tree().get_script() == null else null
 	if d != null:
 		var s: Array = save.apply(d)
@@ -235,6 +257,13 @@ func save_now() -> void:
 
 func _autosave() -> void:
 	if save != null and player != null: save.save()
+
+## the prototype wrote localStorage on every change; here: every 30 s of play, and whenever the page is hidden,
+## the app loses focus or the window closes (a phone tab can be killed without warning)
+var save_clock := 0.0
+func _notification(what: int) -> void:
+	if what in [NOTIFICATION_WM_CLOSE_REQUEST, NOTIFICATION_APPLICATION_FOCUS_OUT, NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_WM_GO_BACK_REQUEST]:
+		if world_started: _autosave()
 
 # ---------- what the player / mobs ask (sortie, ult, elements) ----------
 ## keys forced by a scripted moment (ult move, sortie run / dash): null = her own
@@ -265,7 +294,15 @@ func elem_hit(p: Vector2, base: float, defs: Array) -> float:
 	var E: Dictionary = ELEM.damage(base, who, defs)
 	ELEM.tag(self, p, E["mul"])
 	ult_gain(E["dmg"] * 0.7)
+	post_ca(0.003 + E["dmg"] * 0.0002)
 	return E["dmg"]
+
+## 화면 효과 (post_fx.gd): a shockwave ring at a world point / colour fringes on a hit
+func post_wave(p: Vector2, strength := 1.0, life := 520.0, rad := 0.35) -> void:
+	if post != null: post.wave(p, strength, life, rad)
+
+func post_ca(v: float) -> void:
+	if post != null: post.aberr(v)
 
 ## a mob's attack element against the member's own elements (hurtAmt)
 func taken_mul(m) -> float:
@@ -494,6 +531,10 @@ func _process(delta: float) -> void:
 	if fame != null and fame.holds():
 		return            # …and under the rank cut and the guild's title cards
 	var dt := minf(delta * 1000.0, 50.0)
+	save_clock += dt
+	if save_clock > 30000.0:
+		save_clock = 0.0
+		_autosave()
 	if sortie != null and (sortie.holds() or sortie.pre_step()):
 		return            # a title card, the dungeon select, the clear screen or the party screen holds the world
 	if ult != null:
@@ -563,7 +604,7 @@ func _process(delta: float) -> void:
 	var wa := 0.0
 	if witch > 0.0:
 		wa = minf(1.0, witch / 300.0) * minf(1.0, (witch_max - witch) / 90.0 + 0.15) * 0.28
-	witch_rect.color.a = wa
+	witch_rect.color.a = 0.0 if screen_fx else wa     # with 화면 효과 on the post pass grades it instead
 	for e in fx:
 		e["t"] += dt
 		if e.has("vx"):
@@ -744,6 +785,8 @@ func perfect_dodge() -> void:
 	player.inv = maxf(player.inv, 400.0)
 	big_word("극한 회피!", Color("#bfe8ff"), 900.0, Vector2(0, -170))
 	flash = maxf(flash, 0.16)
+	post_wave(player.position + Vector2(0, -60.0 * 1.3), 1.4, 600.0, 0.3)
+	post_ca(0.02)
 	sfx("boom", 0.9)
 	sfx("dash", 0.6)
 
@@ -757,6 +800,8 @@ func parry_fx(P, _m) -> void:
 	streak_fx(P.position.x + d * 20.0 * 1.3, P.position.x + d * 150.0 * 1.3, P.position.y - 70.0 * 1.3, d)
 	ring(P.position + Vector2(d * 55.0 * 1.3, -70.0 * 1.3), 30.0)
 	big_word("PARRY", Color("#ffd34d"), 700.0, Vector2(0, -150))
+	post_wave(P.position + Vector2(d * 50.0 * 1.3, -70.0 * 1.3), 1.1, 480.0, 0.22)
+	post_ca(0.012)
 
 func perfect_parry(m) -> void:
 	witch = maxf(witch, 560.0)
@@ -765,6 +810,7 @@ func perfect_parry(m) -> void:
 	m.kx = player.dir * 2.2
 	m.flare_t = -1.0
 	sfx("heavy", 0.7)
+	post_wave(Vector2((player.position.x + player.dir * 52.0 + m.position.x) / 2.0, player.position.y - 72.0 * 1.3), 1.8, 700.0, 0.35)
 
 func big_word(s: String, col: Color, life: float, off: Vector2, at := Vector2.INF) -> void:
 	var p: Vector2 = at if at != Vector2.INF else player.position + off
@@ -817,6 +863,8 @@ func pillar(x: float, y: float, dmg: float, d: int) -> void:
 	sfx("ready", 0.4)
 
 func lightning(x: float, y: float, sz: float, dmg: float, d: int) -> void:
+	post_wave(Vector2(x, y - 20.0), 0.5 * sz, 420.0, 0.12 + 0.06 * sz)
+	post_ca(0.004 * sz)
 	var pts := PackedVector2Array()
 	var px := x + (randf() - 0.5) * 60.0
 	var py := -20.0

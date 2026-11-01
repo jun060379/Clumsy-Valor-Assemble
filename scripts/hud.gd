@@ -123,6 +123,7 @@ func _process(delta: float) -> void:
 	if bl_t < -130.0:
 		bl_t = 260.0 if randf() < 0.2 else 2400.0 + randf() * 2800.0
 	jx = (randf() - 0.5) * shk * 5.0
+	_room_feed(dt)
 	# fade the portrait when she walks behind it
 	var vs := get_viewport_rect().size
 	var sp: Vector2 = P.get_global_transform_with_canvas().origin
@@ -511,7 +512,8 @@ func _draw_pips(ci: CanvasItem, vs: Vector2) -> void:
 func _draw_dungeon_ui(ci: CanvasItem, vs: Vector2, live: bool) -> void:
 	var D = arena.level
 	var fb: Font = arena.font_black
-	if D.msg_t > 0.0:
+	if D.msg_t > 0.0 and (arena.fame == null or arena.fame.fx == null):
+		# (the feed below normally carries the room names: HUD v3 replaced this banner with one notice line)
 		var a := minf(1.0, D.msg_t / 400.0) * minf(1.0, (2600.0 - D.msg_t) / 200.0 + 0.3)
 		var tw := fb.get_string_size(D.msg, HORIZONTAL_ALIGNMENT_LEFT, -1, 22).x
 		var y := vs.y * 0.24
@@ -556,16 +558,143 @@ func _draw_dungeon_ui(ci: CanvasItem, vs: Vector2, live: bool) -> void:
 				ci.draw_circle(Vector2(px2 + cw / 2.0, py2 + chh / 2.0), 3.5, ic)
 			if r["visited"] and r["type"] == "fight" and not r["cleared"]:
 				ci.draw_rect(Rect2(px2 + cw / 2.0 - 2.0, py2 + chh / 2.0 - 2.0, 4, 4), Color("#ff6f6f"))
-	# boss bar (bottom, right of the portrait)
+	# boss (HUD v3 H2.boss): a WARNING slam the first time, then a slim quiet bar across the top
 	for m in arena.mobs:
 		if m.M.has("boss") and not m.is_dead() and m.spawn_t <= 0.0:
-			var bw2 := minf(420.0, vs.x * 0.46)
-			var bx := maxf((vs.x - bw2) / 2.0, 290.0)
-			var by := vs.y - 60.0
-			ci.draw_string(fb, Vector2(bx, by - 8.0), m.M["name"], HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#ffd1d8"))
-			ci.draw_rect(Rect2(bx - 2.0, by - 2.0, bw2 + 4.0, 12.0), Color(0.04, 0.02, 0.05, 0.85))
-			ci.draw_rect(Rect2(bx, by, bw2 * clampf(m.hp / m.max_hp, 0.0, 1.0), 8.0), Color("#ff3d5a"))
-			if m.phase == 1:
-				ci.draw_string(arena.font_bold, Vector2(bx + bw2 - 60.0, by - 8.0), "격노", HORIZONTAL_ALIGNMENT_RIGHT, 60, 12, Color("#ff9d9d"))
+			_draw_boss(ci, vs, m)
+			break
 	# shilling, under the fatigue chip
 	UI.shadow_text(ci, arena.font_bold, Vector2(14, 116), "실링 %d" % arena.shilling, 12, Color("#ffd34d"))
+
+
+## H2.boss + ghostOf: the hp trail lags white behind the bar and the bar flashes white on a hit
+var boss_st := {}
+func _draw_boss(ci: CanvasItem, vs: Vector2, b) -> void:
+	var id: int = b.get_instance_id()
+	if not boss_st.has(id): boss_st = {id: {"g": -1.0, "lf": -1.0, "gw": 0.0, "hf": 0.0, "slam": clock, "last": clock}}
+	var S: Dictionary = boss_st[id]
+	var dt: float = clampf(clock - S["last"], 0.0, 100.0)
+	S["last"] = clock
+	var f: float = clampf(b.hp / b.max_hp, 0.0, 1.0)
+	if S["g"] < 0.0 or f > S["g"]: S["g"] = f
+	if S["lf"] >= 0.0 and f < S["lf"] - 0.0005:
+		S["gw"] = 380.0
+		S["hf"] = 90.0
+	S["lf"] = f
+	if S["gw"] > 0.0: S["gw"] -= dt
+	else: S["g"] = maxf(f, S["g"] - dt / 700.0)
+	if S["hf"] > 0.0: S["hf"] -= dt
+	var g: float = S["g"]
+	var age: float = clock - S["slam"]
+	var nm: String = b.M["name"]
+	var bhs := UI.bhs()
+	var W := vs.x
+	if age < 1900.0:
+		var k := age / 1900.0
+		var in_k := minf(1.0, k / 0.18)
+		var out_k := (k - 0.78) / 0.22 if k > 0.78 else 0.0
+		var e := 1.0 - pow(1.0 - in_k, 3.0)
+		var base := Transform2D(-0.07, Vector2(W / 2.0, vs.y * 0.4))
+		ci.draw_set_transform_matrix(base * Transform2D(0.0, Vector2((1.0 - e) * W * 1.1 - out_k * W * 1.1, 0)))
+		ci.draw_colored_polygon(PackedVector2Array([Vector2(-W * 0.7, -30), Vector2(W * 0.7, -46), Vector2(W * 0.7, 30), Vector2(-W * 0.7, 46)]), Color("#e8243c"))
+		ci.draw_set_transform_matrix(base * Transform2D(0.0, Vector2(-(1.0 - e) * W * 1.1 + out_k * W * 1.1, 0)))
+		ci.draw_colored_polygon(PackedVector2Array([Vector2(-W * 0.7, -30), Vector2(W * 0.7, -36), Vector2(W * 0.7, 32), Vector2(-W * 0.7, 36)]), Color.BLACK)
+		var ta := minf(1.0, in_k * 1.4) * (1.0 - out_k)
+		var sc := 1.0 + (1.0 - in_k) * 0.8
+		var tb := base * Transform2D(0.0, Vector2(sc, sc), 0.0, Vector2.ZERO)
+		ci.draw_set_transform_matrix(tb)
+		var wf := UI.anton(true)
+		var wt := "W A R N I N G"
+		ci.draw_string(wf, Vector2(-UI.text_w(wf, wt, 13) / 2.0, -14), wt, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color("#e8243c", ta))
+		var K := [[Color.WHITE, Color.BLACK], [Color.BLACK, Color.WHITE], [Color("#e8243c"), Color.BLACK]]
+		var cws: Array = []
+		var tw := 0.0
+		for c in nm:
+			var cw: float = 12.0 if c == " " else UI.text_w(bhs, c, 28) + 8.0
+			cws.append(cw)
+			tw += cw + 2.0
+		var px2 := -tw / 2.0
+		for i in nm.length():
+			var c := nm[i]
+			var w: float = cws[i]
+			if c != " ":
+				var r := (((i * 7919) % 13) - 6) * 0.02
+				ci.draw_set_transform_matrix(tb * Transform2D(r, Vector2(px2 + w / 2.0, 10)))
+				ci.draw_rect(Rect2(-w / 2.0 + 3.0, -24, w, 32), Color(0, 0, 0, ta))
+				ci.draw_rect(Rect2(-w / 2.0, -27, w, 32), Color(K[i % 3][0], ta))
+				ci.draw_string(bhs, Vector2(-UI.text_w(bhs, c, 28) / 2.0, 0), c, HORIZONTAL_ALIGNMENT_LEFT, -1, 28, Color(K[i % 3][1], ta))
+			px2 += w + 2.0
+		ci.draw_set_transform(Vector2.ZERO)
+	var ba := clampf((age - 1500.0) / 400.0, 0.0, 1.0)
+	if ba <= 0.0: return
+	var bw := minf(420.0, W * 0.46)
+	var x := (W - bw) / 2.0
+	# keep clear of the top-right buttons (a narrow phone screen would run it under them)
+	var tbl := W
+	if arena.ui_root != null:
+		for r in arena.ui_root.menu.tb_rects.values(): tbl = minf(tbl, r.position.x)
+	if x + bw > tbl - 16.0:
+		x = maxf(150.0, tbl - 16.0 - bw)
+		bw = minf(bw, tbl - 16.0 - x)
+	var y := 30.0
+	ci.draw_string(bhs, Vector2(x + 1, y + 1), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0, 0, 0, ba))
+	ci.draw_string(bhs, Vector2(x, y), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1, 1, 1, ba))
+	var nw := UI.text_w(bhs, nm, 14)
+	ci.draw_string(UI.anton(), Vector2(x + nw + 8.0, y), "B O S S", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1, 1, 1, ba * 0.7))
+	if b.phase == 1:
+		ci.draw_set_transform_matrix(Transform2D(-0.14, Vector2(x + nw + 56.0, y - 5.0)))
+		ci.draw_rect(Rect2(-2, -8, 40, 13), Color("#e8243c", ba))
+		ci.draw_string(UI.anton(), Vector2(4, 2), "RAGE", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1, 1, 1, ba))
+		ci.draw_set_transform(Vector2.ZERO)
+	var pf := UI.anton(true)
+	var pct := "%d%%" % ceili(f * 100.0)
+	var pw := UI.text_w(pf, pct, 15)
+	ci.draw_string(pf, Vector2(x + bw - pw + 1, y + 1), pct, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(0, 0, 0, ba))
+	ci.draw_string(pf, Vector2(x + bw - pw, y), pct, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(1, 1, 1, ba))
+	var sk := 3.0
+	var by := y + 5.0
+	var bh := 7.0
+	var pg := func(x0: float, w0: float) -> PackedVector2Array:
+		return PackedVector2Array([Vector2(x0 + sk, by), Vector2(x0 + w0 + sk, by), Vector2(x0 + w0, by + bh), Vector2(x0, by + bh)])
+	ci.draw_colored_polygon(pg.call(x - 2.0, bw + 4.0), Color(0, 0, 0, 0.6 * ba))
+	if g > 0.0: ci.draw_colored_polygon(pg.call(x, bw * g), Color(1, 1, 1, ba))
+	if f > 0.0: ci.draw_colored_polygon(pg.call(x, bw * f), Color(1, 1, 1, ba) if S["hf"] > 0.0 else Color("#e8243c", ba))
+
+
+## HUD v3: room names go to the notice feed (H2.room), and the objective — "남은 적 N" on entering a room with
+## enemies, "방 정리 완료" when the last one falls
+var feed_msg_t := 0.0
+var feed_room := ""
+var feed_left := -1
+var feed_later := -1.0
+var feed_n := 0
+func _room_feed(dt: float) -> void:
+	var F = arena.fame
+	if arena.level_kind() != "dungeon" or F == null:
+		feed_room = ""
+		feed_left = -1
+		feed_msg_t = 0.0
+		return
+	var S = arena.sortie
+	if (S != null and (S.covers() or S.last_cur != arena.level.cur)) or (arena.ui_root != null and arena.ui_root.holds()) or arena.fade > 0.05:
+		return          # under a title card / the clear screen / a menu: the feed waits (the room clock waits too)
+	var D = arena.level
+	if D.msg_t > feed_msg_t + 50.0 and D.msg != "":
+		F.notice(D.msg, "AREA", _tc(), true, 3000.0)
+	feed_msg_t = D.msg_t
+	var rk: String = D.cur
+	var left: int = arena.mobs.filter(func(m): return not m.is_dead()).size()
+	if rk != feed_room:
+		feed_room = rk
+		feed_left = left
+		if left > 0:
+			feed_later = 260.0
+			feed_n = left
+	elif left == 0 and feed_left > 0:
+		feed_left = 0
+		F.notice("방 정리 완료", "CLEAR", Color("#7ae0ff"))
+	else:
+		feed_left = left
+	if feed_later > 0.0:
+		feed_later -= dt
+		if feed_later <= 0.0: F.notice("남은 적 %d" % feed_n, "", Color("#e8243c"), false, 2700.0)
