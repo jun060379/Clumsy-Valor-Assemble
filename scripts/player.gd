@@ -1533,11 +1533,13 @@ func _draw() -> void:
 		var k: float = o["t"] / 600.0
 		var ofs := Vector2(o["x"] - o["dir"] * 140.0 * k, o["y"]) - position
 		var fr := mini(int(o["t"] / 150.0), 3)
-		draw_frame(o["c"], o["anim"], fr, ofs, -o["dir"] if not o["dead"] else o["dir"], Color(1, 1, 1, 1.0 - k))
+		draw_frame(o["c"], o["anim"], fr, ofs, -o["dir"] if not o["dead"] else o["dir"], Color(1, 1, 1, 1.0 - k), "", null, NAN, 0, "out" + str(o["c"]))
+	# afterimages (ghostFx): the frame tinted with PAL[CHAR].ghost, smooth (never pixelated), 0.35 at birth
+	var gt: Array = CH.GHOST[who]
 	for g in ghosts:
 		var k2: float = 1.0 - g["t"] / g["life"]
-		var gc: Color = CH.COLOR[g["c"]]
-		draw_frame(g["c"], g["anim"], g["f"], Vector2(g["x"], g["y"]) - position, g["dir"], Color(gc.r, gc.g, gc.b, 0.45 * k2).lightened(0.3))
+		var gc: Color = gt[0]
+		draw_frame(g["c"], g["anim"], g["f"], Vector2(g["x"], g["y"]) - position, g["dir"], Color(gc.r, gc.g + (6.0 if gt[1] > 0.77 else 4.0), gc.b, 0.35 * k2))
 	var an := anim
 	var fr2 := f
 	if who == "estelle" and an == "parry" and bash_t <= 0.0:
@@ -1545,27 +1547,33 @@ func _draw() -> void:
 		fr2 = 1
 	if who == "estelle" and not on and (an == "guard" or an == "parry"):
 		an = "air_" + an
+	# invincible: she blinks out every other 60 ms (not while hurt or tagging in)
+	if inv > 0.0 and anim != "hurt" and anim != "tag_in" and int(t / 60.0) % 2 == 0 and not arena.ult_busy(): return
 	var col := Color.WHITE
-	if inv > 0.0 and anim != "death" and anim != "tag_in" and int(t / 70.0) % 2 == 0 and not arena.ult_busy():
-		col = Color(1, 1, 1, 0.45)
+	if anim == "hurt" and ft < 60.0: col.g = 3.0         # the hurt flash: white over the frame (char_pix flag 1)
 	col.a *= arena.ult_alpha()
 	var variant := ""
 	if anim == "tp_in" or anim == "dig_out":
 		variant = "_air" if dig_air else ("_q" if rift_q else "")
 	if not anim in ["tp_in", "dig_out"] and (gclip != null or gdx != 0.0 or g_in != null or g_out != null): _rift_clean()
-	if gclip != null: draw_frame(who, an, fr2, Vector2(gdx, 0), dir, col, variant, null, gclip["x"] - position.x, gclip["keep"])
-	else: draw_frame(who, an, fr2, Vector2(gdx, 0), dir, col, variant)
+	var br := t if anim == "idle" and not arena.ult_busy() else -1.0
+	var rim := col.a >= 1.0
+	if gclip != null: draw_frame(who, an, fr2, Vector2(gdx, 0), dir, col, variant, null, gclip["x"] - position.x, gclip["keep"], "P", br, rim)
+	else: draw_frame(who, an, fr2, Vector2(gdx, 0), dir, col, variant, null, NAN, 0, "P", br, rim)
 
 ## 캐릭터 도트화 (charPix): shaders/char_pix.gdshader. One shared material for the party, the townsfolk and the hero over
 ## the slow-time grade; a "marked" twin for the level nodes that draw Eilin among their props (her draws carry r + 1).
 const PIX_SH := preload("res://shaders/char_pix.gdshader")
+const CB := preload("res://scripts/char_bounds.gd")
 const PIXM := {"off": 0, "dot": 1, "shade": 2}
 static var _pix: ShaderMaterial
 static var _pixm: ShaderMaterial
+static var _mats: Array = []
 static func pix_mat() -> ShaderMaterial:
 	if _pix == null:
 		_pix = ShaderMaterial.new()
 		_pix.shader = PIX_SH
+		_mats.append(_pix)
 	return _pix
 
 static func pix_mat_marked() -> ShaderMaterial:
@@ -1574,28 +1582,153 @@ static func pix_mat_marked() -> ShaderMaterial:
 		_pixm.shader = PIX_SH
 		_pixm.set_shader_parameter("marked", true)
 		_pixm.set_shader_parameter("mode", pix_mat().get_shader_parameter("mode"))
+		_mats.append(_pixm)
 	return _pixm
 
-static func set_pix(m: String) -> void:
-	pix_mat().set_shader_parameter("mode", PIXM.get(m, 2))
-	pix_mat_marked().set_shader_parameter("mode", PIXM.get(m, 2))
+## another material drawing characters with the same slots (tests/cap_pix.gd)
+static func pix_mat_add(m: ShaderMaterial) -> void:
+	if not _mats.has(m): _mats.append(m)
 
-## per frame (pfx.gd): the screen scale and the lights near the camera for the rim
+static func is_pix(m) -> bool:
+	return m != null and _mats.has(m)
+
+static func set_pix(m: String) -> void:
+	pix_mat()
+	pix_mat_marked()
+	for mm in _mats: mm.set_shader_parameter("mode", PIXM.get(m, 2))
+
+## per frame (pfx.gd): the screen scale for draws without a slot, and rimLights() — the lights the rim reads,
+## each [world pos, r, a, colour] as the prototype lists them
+static var RIM_L: Array = []
 static func pix_frame(zoom: float, lights: Array) -> void:
-	var lp := PackedVector4Array()
-	var lc := PackedVector4Array()
-	for l in lights:
-		if lp.size() >= 8: break
-		lp.append(Vector4(l[0].x, l[0].y, l[1], l[2]))
-		lc.append(Vector4(l[3].r, l[3].g, l[3].b, 1.0))
-	while lp.size() < 8:
-		lp.append(Vector4.ZERO)
-		lc.append(Vector4.ZERO)
-	for m in [pix_mat(), pix_mat_marked()]:
-		m.set_shader_parameter("zoom", zoom)
-		m.set_shader_parameter("nl", mini(lights.size(), 8))
-		m.set_shader_parameter("lp", lp)
-		m.set_shader_parameter("lc", lc)
+	RIM_L = lights
+	pix_mat()
+	pix_mat_marked()
+	for m in _mats: m.set_shader_parameter("zoom", zoom)
+
+## ---- slots: each pixelated draw names one (the hero "P", a townsperson, ...); it carries the exact world -> texel
+## mapping, the lit ramp's rows and the rim lights of that body. Its index rides in the draw colour (b + 4 * (slot + 1)).
+const NSLOT := 16
+static var _slot := {}
+static var S_O := PackedVector4Array()
+static var S_M := PackedVector4Array()
+static var S_L := PackedVector4Array()
+static var S_B := PackedVector4Array()
+static var S_T := PackedInt32Array()
+static var R_L := PackedVector4Array()
+static var R_C := PackedVector4Array()
+
+static func _slot_of(key: String) -> int:
+	if S_O.is_empty():
+		S_O.resize(NSLOT)
+		S_M.resize(NSLOT)
+		S_L.resize(NSLOT)
+		S_B.resize(NSLOT * 3)
+		S_T.resize(NSLOT * 20)
+		R_L.resize(NSLOT * 3)
+		R_C.resize(NSLOT * 3)
+	if not _slot.has(key):
+		if _slot.size() >= NSLOT: return -1
+		_slot[key] = _slot.size()
+	return _slot[key]
+
+static func _jr(v: float) -> float:
+	return floorf(v + 0.5)
+
+## rimEntity's choice: the lights whose reach (r * 2.2) holds the body centre (cx, cy - 60), strongest three
+static func rim_near(cx: float, cy: float) -> Array:
+	var near: Array = []
+	for l in RIM_L:
+		var dv: Vector2 = l[0] - Vector2(cx, cy - 60.0)
+		var d := dv.length()
+		var R: float = l[1] * 2.2
+		if d >= R: continue
+		var u := dv / (d if d > 0.0 else 1.0)
+		near.append([pow(1.0 - d / R, 1.3) * l[2], u, l[3]])
+	near.sort_custom(func(a, b): return a[0] > b[0])
+	return near.slice(0, 3)
+
+static var _f32 := PackedFloat32Array([0.0])
+static func f32(v: float) -> float:
+	_f32[0] = v
+	return _f32[0]
+
+## charPix draws on a canvas at ox = round(cx - 200), oy = round(cy - 400); Skia maps each device pixel back into the
+## sheet in float32 (x stepped in 32.32 fixed point from the span's first pixel, y per row). Where the exact coordinate is
+## a whole 1/16 step, that mapping lands just under it or not: one bit per column / row
+static func _ties(i: int, wa: Vector2, d: int, sc: float, rows: bool) -> void:
+	for k in 20: S_T[i * 20 + k] = 0
+	var oxw := floorf(wa.x - 200.0 + 0.5)
+	var oyw := floorf(wa.y - 400.0 + 0.5)
+	var oi := Vector2(floorf(wa.x), floorf(wa.y))
+	var A := f32(f32(f32(sc) * d) * 0.5)
+	var T := f32(f32(f32(f32(sc) * d) * -112.0) + f32(wa.x - oxw))
+	var inv := f32(1.0 / A)
+	var it := f32(-T * inv)
+	var i0 := floorf(minf(T, f32(T + A * 448.0)))
+	var x0 := f32(f32(f32(i0 + 0.5) * inv) + it)
+	var F0: float = float(int(x0 * 4294967296.0)) - 2147483648.0
+	var dx: float = float(int(inv * 4294967296.0))
+	for b in 300:
+		var col := oi.x - 150.0 + b - oxw            # this world column on the charPix canvas
+		var ex := (col + 0.5 - T) / A - 0.5
+		if absf(ex * 16.0 - roundf(ex * 16.0)) >= 0.004: continue
+		if (F0 + (col - i0) * dx) / 4294967296.0 < roundf(ex * 16.0) / 16.0: S_T[i * 20 + b / 32] |= 1 << (b % 32)
+	if not rows: return
+	var Ay := f32(f32(sc) * 0.5)
+	var Ty := f32(f32(f32(sc) * -170.0) + f32(wa.y - oyw))
+	var invy := f32(1.0 / Ay)
+	var ity := f32(-Ty * invy)
+	for b in 256:
+		var row := oi.y - 240.0 + b - oyw
+		var ey := (row + 0.5 - Ty) / Ay - 0.5
+		if absf(ey * 16.0 - roundf(ey * 16.0)) >= 0.004: continue
+		var y := f32(f32(f32(row + 0.5) * invy) + ity)
+		if float(int(y * 4294967296.0)) / 4294967296.0 - 0.5 < roundf(ey * 16.0) / 16.0: S_T[i * 20 + 10 + b / 32] |= 1 << (b % 32)
+
+## fill slot `key` for one frame drawn with its feet at world `wa`; bands: [[src top, src bottom, dest top, dest height]]
+## in cell rows / local units (before scale `sc`); returns the slot (-1: none left)
+static func pix_slot(key: String, c: String, row: int, col: int, wa: Vector2, d: int, sc: float, bands: Array, rim: bool) -> int:
+	var i := _slot_of(key)
+	if i < 0: return -1
+	var oi := Vector2(floorf(wa.x), floorf(wa.y))
+	var cx0 := float(col * CH.CELL_W)
+	var cy0 := float((row % CH.ROWS_PER_SHEET) * CH.CELL_H)
+	S_O[i] = Vector4(oi.x, oi.y, wa.x - oi.x, wa.y - oi.y)
+	S_M[i] = Vector4(d * 2.0 / sc, 0.0, cx0 + CH.CELL_W / 2.0, cx0)
+	# the sprite's own top and bottom rows (alpha > 100), through the bands, for the lit-from-above ramp
+	var bi: int = (row * 9 + col) * 2
+	var BB: Array = CB.B[c]
+	var tb := Vector2(0, 0)
+	if bi + 1 < BB.size() and BB[bi] >= 0:
+		for j in 2:
+			var sr: float = BB[bi + j] + 0.5
+			for b in bands:
+				if sr >= b[0] and sr < b[1]:
+					tb[j] = floorf(wa.y + sc * (b[2] + (sr - b[0]) / (b[1] - b[0]) * b[3])) - oi.y
+					break
+	_ties(i, wa, d, sc, bands.size() == 1)
+	var near: Array = rim_near(wa.x, wa.y) if rim else []
+	S_L[i] = Vector4(tb.x, tb.y, bands.size(), near.size())
+	for j in 3:
+		if j < bands.size():
+			var b: Array = bands[j]
+			S_B[i * 3 + j] = Vector4(sc * b[2] + wa.y - oi.y - S_O[i].w, sc * b[3], cy0 + b[0], cy0 + b[1])
+		if j < near.size():
+			var n: Array = near[j]
+			var u: Vector2 = n[1]
+			R_L[i * 3 + j] = Vector4(-_jr(-u.x * 2.0), -_jr(-u.y * 2.0), minf(0.9, n[0] * 2.4), 0.0)
+			var lc: Color = n[2]
+			R_C[i * 3 + j] = Vector4(lc.r, lc.g, lc.b, 0.0)
+	for m in _mats:
+		m.set_shader_parameter("s_o", S_O)
+		m.set_shader_parameter("s_m", S_M)
+		m.set_shader_parameter("s_l", S_L)
+		m.set_shader_parameter("s_b", S_B)
+		m.set_shader_parameter("s_t", S_T)
+		m.set_shader_parameter("r_l", R_L)
+		m.set_shader_parameter("r_c", R_C)
+	return i
 
 ## `ci`: draw onto another canvas item (the townsfolk use the same sheets); null = the player itself
 func _rift_step(a: String, dt: float) -> void:
@@ -1631,28 +1764,62 @@ func _rift_clean() -> void:
 	gdx = 0.0
 
 ## `cx`/`keep`: cut the sprite at local x = cx (keep < 0: the part left of it shows, > 0: the right)
-func draw_frame(c: String, an: String, fr: int, at: Vector2, d: int, col: Color, variant := "", ci: CanvasItem = null, cx := NAN, keep := 0) -> void:
+## `sk`: the pixelation slot of this body (draws on a char_pix material); `breath` >= 0: the idle breathing at that clock;
+## `rim`: the body takes the directional rim of nearby lights
+func draw_frame(c: String, an: String, fr: int, at: Vector2, d: int, col: Color, variant := "", ci: CanvasItem = null, cx := NAN, keep := 0, sk := "", breath := -1.0, rim := false) -> void:
 	if ci == null: ci = self
 	var rf: Array = CH.resolve(c, an, fr, variant)
 	var row: int = rf[0]
 	var sheet: Texture2D = sheets[c][row / CH.ROWS_PER_SHEET]
 	var src := Rect2(rf[1] * CH.CELL_W, (row % CH.ROWS_PER_SHEET) * CH.CELL_H, CH.CELL_W, CH.CELL_H)
 	var sc: float = CH.SCALE[c] * (CH.ROWFIX_AIDA.get(row, 1.0) if c == "aida" else 1.0)
+	var bt: Array = CH.BOB[c].get(an, [])
+	if not bt.is_empty(): at.y += bt[fr % bt.size()]
 	var w := CW * sc
 	var h := CHH * sc
+	# drawFrame's idle breathing: hips and legs stay, the chest stretches by whole pixels, head and shoulders ride on top
+	var bands: Array = [[0.0, float(CH.CELL_H), -BASE, CHH]]
+	if breath >= 0.0 and row == 0:
+		var top: float = CH.BREATH_TOP[c]
+		var hg := 341.0 - top
+		var yW := roundf(341.0 - hg * 0.47)
+		var yN := roundf(341.0 - hg * 0.74)
+		var ph := fmod(breath, 2800.0) / 2800.0
+		var e := ph / 0.38 if ph < 0.38 else (1.0 if ph < 0.52 else (1.0 - (ph - 0.52) / 0.4 if ph < 0.92 else 0.0))
+		var dd := roundf(4.0 * e * e * (3.0 - 2.0 * e))
+		var k := 0.5
+		bands = [[yW, float(CH.CELL_H), -BASE + yW * k, (CH.CELL_H - yW) * k],
+			[yN, yW, -BASE + (yN - dd * 2.0) * k, (yW - yN + dd * 2.0) * k + 0.5],
+			[0.0, yN, -BASE - dd * 2.0 * k, yN * k + 0.5]]
+	var pix := sk != "" and is_pix(ci.material) and col.g < 4.0
+	if pix:
+		var wa: Vector2 = ci.get_global_transform() * at
+		var si := pix_slot(sk, c, row, rf[1], wa, d, sc, bands, rim)
+		if si >= 0: col.b += 4.0 * (si + 1)
+	var mode0: bool = pix_mat().get_shader_parameter("mode") == 0
 	ci.draw_set_transform(at, 0.0, Vector2(d, 1))
-	if not is_nan(cx):
-		var b := d * (cx - at.x)
-		var u0 := -w / 2.0
-		var u1 := w / 2.0
-		if keep * d > 0: u0 = maxf(u0, b)
-		else: u1 = minf(u1, b)
-		if u1 > u0:
-			var s0 := src.position.x + (u0 + w / 2.0) / w * src.size.x
-			var s1 := src.position.x + (u1 + w / 2.0) / w * src.size.x
-			ci.draw_texture_rect_region(sheet, Rect2(u0, -BASE * sc, u1 - u0, h), Rect2(s0, src.position.y, s1 - s0, src.size.y), col)
+	var parts: Array = []
+	if bands.size() == 1 or (pix and not mode0):
+		var y0: float = -BASE - (6.0 if bands.size() > 1 else 0.0)
+		parts.append([Rect2(-w / 2.0, y0 * sc, w, (CHH - BASE - y0) * sc), src])
 	else:
-		ci.draw_texture_rect_region(sheet, Rect2(-w / 2.0, -BASE * sc, w, h), src, col)
+		for b in bands:
+			parts.append([Rect2(-w / 2.0, b[2] * sc, w, b[3] * sc), Rect2(src.position.x, src.position.y + b[0], src.size.x, b[1] - b[0])])
+	for pt in parts:
+		var dr: Rect2 = pt[0]
+		var sr: Rect2 = pt[1]
+		if not is_nan(cx):
+			var bx := d * (cx - at.x)
+			var u0 := -w / 2.0
+			var u1 := w / 2.0
+			if keep * d > 0: u0 = maxf(u0, bx)
+			else: u1 = minf(u1, bx)
+			if u1 <= u0: continue
+			var s0 := sr.position.x + (u0 + w / 2.0) / w * sr.size.x
+			var s1 := sr.position.x + (u1 + w / 2.0) / w * sr.size.x
+			ci.draw_texture_rect_region(sheet, Rect2(u0, dr.position.y, u1 - u0, dr.size.y), Rect2(s0, sr.position.y, s1 - s0, sr.size.y), col)
+		else:
+			ci.draw_texture_rect_region(sheet, dr, sr, col)
 	ci.draw_set_transform(Vector2.ZERO)
 
 

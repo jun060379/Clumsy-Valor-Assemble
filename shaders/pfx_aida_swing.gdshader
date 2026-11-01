@@ -34,10 +34,10 @@ void fragment() {
 				float v = (u - LO[si]) / (HI[si] - LO[si]);
 				if (v < st.y || v > st.x || v < 0.0 || v > 1.0) continue;
 				float fs = float(si);
-				float wob = (hn3(u, 40.0, seed, fs) - 0.5) * 1.4, rc = ro * (RC[si] + DR[si] * v) + wob;
-				float hw = WW[si] * sc * 1.2 * tear_prof(v) * tear_ov(tt, v) * (0.6 + 0.8 * hn3(u, 26.0, seed, fs + 9.0));
+				float wob = (hT(u, 40.0, si) - 0.5) * 1.4, rc = ro * (RC[si] + DR[si] * v) + wob;
+				float hw = WW[si] * sc * 1.2 * tear_prof(v) * tear_ov(tt, v) * (0.6 + 0.8 * hT(u, 26.0, si + 4));
 				if (abs(rr - rc) > hw + 3.0) continue;
-				vec4 c = tear_px(xx, yy, rr - rc, hw, st, hn3(u, 64.0, seed, fs + 3.0));
+				vec4 c = tear_px(xx, yy, rr - rc, hw, st, hT(u, 64.0, si + 8));
 				if (c.a > 0.0) { o = c; break; }
 			}
 		}

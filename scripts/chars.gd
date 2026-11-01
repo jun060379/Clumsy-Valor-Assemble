@@ -14,6 +14,14 @@ const SCALE := {"estelle": 1.3, "aida": 1.25, "luce": 1.2}
 const STATS := {"estelle": {"hp": 70.0, "atk": 1.0, "as": 0.95}, "aida": {"hp": 50.0, "atk": 1.2, "as": 1.1}, "luce": {"hp": 40.0, "atk": 0.9, "as": 1.0}}
 ## Aida's sheet rows were drawn at slightly different sizes: scale each row to match her idle pose
 const ROWFIX_AIDA := {8: 1 / 1.04, 9: 1 / 1.12, 14: 1 / 1.1, 15: 1 / 1.08, 16: 1 / 1.08, 17: 1 / 1.05, 18: 1 / 1.03, 19: 1 / 1.03, 20: 1 / 1.07}
+## CHARS[c].bob: the body bobs with the stride (world px per frame of run / walk)
+const BOB := {"estelle": {"run": [0, 2, -3, -1, 0, 2, -3, -1], "walk": [0, 2, -3, -1, 0, 2, -3, -1]},
+	"aida": {"run": [0, 3, -4, -1, 0, 3, -4, -1], "walk": [0, 3, -4, -1, 0, 3, -4, -1]},
+	"luce": {"run": [0, 3, -4, -1, 0, 3, -4, -1], "walk": [0, 3, -4, -1, 0, 3, -4, -1]}}
+## drawFrame's idle breathing: the top of the head in the source cell (legs stay, the torso stretches by whole pixels)
+const BREATH_TOP := {"estelle": 162, "aida": 155, "luce": 147}
+## PAL[CHAR].ghost: the afterimage tint (colour, how much of it over the sprite)
+const GHOST := {"estelle": [Color8(255, 170, 220), 0.75], "aida": [Color8(255, 170, 220), 0.75], "luce": [Color8(255, 225, 140), 0.8]}
 ## guard key = each member's skill; Estelle has the only shield
 const SKILL := {"estelle": "방패", "aida": "균열", "luce": "치유"}
 ## who can answer which moment (QTE): Estelle covers a hit ally, Aida a finisher/parry, Luce someone in danger or a parry
@@ -87,7 +95,7 @@ const VIRT := {
 ## attack hit data (relative to the feet, facing right; before character scale)
 const ATK := {
 	"attack1": {"hit": [2, 3], "box": [10, -120, 120, 110], "dmg": 1, "kb": 4, "arc": [10, -75, 80, -100, 30]},
-	"attack2": {"hit": [2, 3], "box": [10, -150, 120, 130], "dmg": 1, "kb": 4, "arc": [4, -62, 100, 205, -12]},
+	"attack2": {"hit": [2, 3], "box": [10, -150, 120, 130], "dmg": 1, "kb": 4, "arc": [4, -62, 100, 205, -12, 0.4]},    # 2nd hit: a flat, wide horizontal sweep (sy 0.4), not the 1st flipped
 	"attack3": {"hit": [2, 3], "box": [20, -85, 150, 60], "dmg": 2, "kb": 10, "heavy": true, "stop": 90, "shake": 7, "streak": true},
 	"cthrust": {"hit": [0, 1], "box": [10, -95, 230, 80], "dmg": 3, "kb": 16, "heavy": true, "stop": 130, "shake": 11, "streak": true},
 	"attack_high": {"hit": [2, 3], "box": [-70, -230, 150, 130], "dmg": 2, "kb": 3, "arc": [-3, -95, 66, 10, -190]},

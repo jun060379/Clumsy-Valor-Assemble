@@ -21,6 +21,19 @@ const SH_TEAR := preload("res://shaders/pfx_tear.gdshader")
 const SH_HOL := preload("res://shaders/pfx_hollow.gdshader")
 const SH_PIL := preload("res://shaders/pfx_pillar.gdshader")
 const SH_AFX := preload("res://shaders/afx.gdshader")
+const SPARK := preload("res://assets/fx/tear_spark.png")
+
+## the prototype's stepped hashes fract(sin(n * 12.9898 + seed * m + o2) * 43758.5453), in double precision, as a float
+## texture the effect shaders read (pfx_common hT): groups of o2 offsets, one row each, column n + 16 (n = -16 .. 239)
+static func _hash_tex(m: float, seed: float, groups: Array) -> ImageTexture:
+	var rows: Array = []
+	for g in groups: rows.append_array(g)
+	var im := Image.create(256, rows.size(), false, Image.FORMAT_RF)
+	for r in rows.size():
+		for c in 256:
+			var v: float = sin((c - 16) * 12.9898 + seed * m + rows[r]) * 43758.5453
+			im.set_pixel(c, r, Color(v - floorf(v), 0, 0))
+	return ImageTexture.create_from_image(im)
 
 static func _p(a: Array) -> Array:
 	var o: Array = []
@@ -160,10 +173,12 @@ class Rng:
 	func _init(seed: float) -> void:
 		s = int(seed) & 0xffffffff
 		if s == 0: s = 1
+	## pfxRng's xorshift exactly as JS runs it: s>>17 is a SIGNED 32-bit shift (s is unsigned only after each >>>0)
 	func r() -> float:
-		s ^= (s << 13) & 0xffffffff
-		s ^= s >> 17
-		s ^= (s << 5) & 0xffffffff
+		s = (s ^ (s << 13)) & 0xffffffff
+		var t := s - 0x100000000 if s >= 0x80000000 else s
+		t ^= t >> 17
+		s = (t ^ (t << 5)) & 0xffffffff
 		return float(s % 10000) / 10000.0
 
 static func fr(t: float) -> int:
@@ -213,31 +228,57 @@ func _process(delta: float) -> void:
 	_pix_frame()
 	cpu.queue_redraw()
 
-## the character shader's per-frame inputs: screen px per world px, the lights near her for the rim (rimLights)
+## the character shader's per-frame inputs: screen px per world px, and rimLights() — the lights the directional rim
+## reads, as the prototype lists them [pos, r, a, colour]: the dungeon's (no player light, no small glows), the hall's
+## (its lamps), elsewhere the lamps and fires (faint by day) plus the sky — the sun by day, the moon by night, from where
+## it sits in the sky
 func _pix_frame() -> void:
 	var vp := get_viewport()
 	var z: float = (vp.get_final_transform() * vp.get_canvas_transform()).x.length()
+	CH_PLAYER.pix_frame(z, rim_lights())
+
+func rim_lights() -> Array:
 	var Ls: Array = []
 	var lv = arena.level if arena.level != null else arena.get("train")
 	var P = arena.player
-	if lv != null and lv.has_method("rim_lights") and P != null:
-		# levels drawn by lit.gd hand over their light list: [pos, r, strength, colour]
-		# rimEntity: the three strongest within reach (k = (1 - d/R)^1.3 x a)
-		for l in lv.rim_lights():
-			var d2: float = l[0].distance_to(P.position + Vector2(0, -60))
-			if d2 >= l[1] * 2.2: continue
-			Ls.append([l[0], l[1], l[2], l[3], -pow(1.0 - d2 / (l[1] * 2.2), 1.3) * l[2]])
-		Ls.sort_custom(func(a, b): return a[4] < b[4])
-		Ls.resize(mini(Ls.size(), 3))
-	elif lv != null and lv.get("lights") != null and P != null:
+	if P == null: return Ls
+	if lv != null and lv.has_method("rim_lights"):
+		# levels drawn by lit.gd hand over their whole light list [pos, r, strength, colour] (town / training add the
+		# sky); the shader picks the strongest per body, as rimEntity does
+		return lv.rim_lights()
+	var kind := "" if lv == null else String(lv.kind)
+	var tt := Time.get_ticks_msec() / 1000.0
+	var nk := 0.0
+	if kind != "dungeon" and kind != "hall":
+		var sky: Color = arena.tod_now()["sky"]
+		nk = clampf((sky.a - 0.33) / 0.33, 0.0, 1.0)
+	if lv != null and lv.get("lights") != null:
 		for l in lv.lights.get_children():
-			if not (l is PointLight2D) or not l.visible or l.energy <= 0.01 or l.has_meta("player"): continue
-			var r: float = l.texture_scale * 64.0 / 2.2
-			var d: float = l.position.distance_to(P.position + Vector2(0, -60))
-			if d > r * 2.2 + 200.0: continue
-			Ls.append([l.position, r, minf(1.2, l.energy), l.color, d])
-		Ls.sort_custom(func(a, b): return a[4] < b[4])
-	CH_PLAYER.pix_frame(z, Ls)
+			if not (l is PointLight2D) or l.has_meta("player"): continue
+			var r: float = l.texture_scale * float(l.texture.get_width() if l.texture != null else 64) / 2.2
+			var a: float = l.energy
+			if kind == "dungeon":
+				if r <= 100.5 and l.energy < 1.0: continue        # the small mushroom / crystal glows
+				if l.has_meta("flick") and l.get_meta("flick"): a *= 1.25 / 1.15
+			elif kind == "hall":
+				var kd: String = l.get_meta("kind", "soft")
+				var ph: float = l.get_meta("ph", 0.0)
+				a = l.get_meta("a", 0.8)
+				if kd == "fire" or kd == "chand": a *= 0.85 + 0.1 * sin(tt * 7.0 + ph) + 0.05 * sin(tt * 19.0 + ph * 3.0)
+			else:
+				if not l.visible or l.energy <= 0.01: continue
+				a = minf(1.1, l.energy) * (0.12 + 0.88 * nk)
+			if a <= 0.0: continue
+			Ls.append([l.position, r, a, l.color])
+	if kind != "dungeon" and kind != "hall":
+		var h := fposmod(arena.tod_h, 24.0)
+		var day := h >= 6.0 and h < 18.0
+		var u := (h - 6.0) / 12.0 if day else fposmod(h - 18.0 + 24.0, 24.0) / 12.0
+		var ang := PI * (1.0 - u)
+		var warm := day and (h < 8.5 or h > 16.0)
+		var col := (Color8(255, 165, 105) if warm else Color8(255, 238, 210)) if day else Color8(150, 175, 255)
+		Ls.append([Vector2(P.position.x + cos(ang) * 1600.0, P.position.y - 200.0 - sin(ang) * 1400.0), 4000.0, (0.95 if warm else 0.75) if day else 0.6, col])
+	return Ls
 
 
 # ---------- spawners ----------
@@ -622,6 +663,7 @@ func _slash(e: Dictionary) -> bool:
 			m.set_shader_parameter("sc", e["r"] / 100.0)
 			m.set_shader_parameter("dir", float(e["d"]))
 			m.set_shader_parameter("seed", e["seed"])
+			m.set_shader_parameter("hsh", _hash_tex(3.3, e["seed"], [[0, 1, 2, 3], [9, 10, 11, 12], [3, 4, 5, 6]]))
 		# glass shards breaking off along the swing
 		var a0 := deg_to_rad(e["a0"])
 		var span := deg_to_rad(e["a1"]) - a0
@@ -657,6 +699,7 @@ func _slash(e: Dictionary) -> bool:
 		m2.set_shader_parameter("sy", e["sy"])
 		m2.set_shader_parameter("dir", float(e["d"]))
 		m2.set_shader_parameter("seed", e["seed"])
+		m2.set_shader_parameter("hsh", _hash_tex(7.1, e["seed"], [[1, 2, 3]]))
 		m2.set_shader_parameter("jag", 0.0)
 		var P: Array = _pal(e["ch"])
 		var pv := PackedVector4Array()
@@ -678,7 +721,7 @@ func _thrust(g: CanvasItem, e: Dictionary) -> bool:
 		var back := 26.0 / S
 		var Ll := maxf(90.0, absf(x1 - x0) * 1.6) / S + back
 		var o := Vector2(x0 - dir * back * S, y)
-		_tear_quad(e, o, Vector2(dir, 0.0), Ll, F, [[0.0, -1.0, 0.0, 1.0, 7.0, 0.0, 0], [-9.0, -15.0, 0.22, 0.96, 3.6, 0.7, 0], [8.0, 12.0, 0.12, 0.82, 2.4, 1.1, 0], [-4.0, -6.0, 0.4, 1.04, 1.0, 0.4, 0]], Vector3(36, 24, 60), 24.0, Vector2(-2.0 / Ll, 1.06))
+		_tear_quad(e, o, Vector2(dir, 0.0), Ll, F, [[0.0, -1.0, 0.0, 1.0, 7.0, 0.0, 0], [-9.0, -15.0, 0.22, 0.96, 3.6, 0.7, 0], [8.0, 12.0, 0.12, 0.82, 2.4, 1.1, 0], [-4.0, -6.0, 0.4, 1.04, 1.0, 0.4, 0]], Vector3(36, 24, 60), 24.0, Vector2(-2.0 / Ll, 1.06), "q", Vector2(0.0, 1.0))
 		var sh: Array = []
 		for i in 10:
 			var v := 0.25 + i * 0.07
@@ -752,6 +795,7 @@ func _quad(e: Dictionary, sh: Shader, at: Vector2, r: Rect2) -> Node2D:
 			q = pool.pop_back()
 		var m := ShaderMaterial.new()
 		m.shader = sh
+		m.set_shader_parameter("spk", SPARK)
 		q.material = m
 		e["q"] = q
 	q.visible = true
@@ -781,7 +825,7 @@ func _sync_quads() -> void:
 	pass
 
 ## one straight cut of eye-tears: strokes [o0, o1, lo, hi, W, dl, prof]
-func _tear_quad(e: Dictionary, a: Vector2, ud: Vector2, Ll: float, tt: float, st: Array, nf := Vector3(30, 22, 56), Wm := 14.0, ur := Vector2(-0.02, 1.02), key := "q") -> void:
+func _tear_quad(e: Dictionary, a: Vector2, ud: Vector2, Ll: float, tt: float, st: Array, nf := Vector3(30, 22, 56), Wm := 14.0, ur := Vector2(-0.02, 1.02), key := "q", nrm := Vector2.ZERO) -> void:
 	var ex := ud * Ll
 	var x0 := minf(0.0, ex.x) - Wm
 	var x1 := maxf(0.0, ex.x) + Wm
@@ -798,8 +842,10 @@ func _tear_quad(e: Dictionary, a: Vector2, ud: Vector2, Ll: float, tt: float, st
 	if not q.has_meta("tset") or q.get_meta("tset") != e:
 		q.set_meta("tset", e)
 		m.set_shader_parameter("ud", ud)
+		m.set_shader_parameter("nrm", nrm)
 		m.set_shader_parameter("L", Ll)
 		m.set_shader_parameter("seed", e["seed"])
+		m.set_shader_parameter("hsh", _hash_tex(3.3, e["seed"], [[0, 1, 2, 3], [9, 10, 11, 12], [3, 4, 5, 6]]))
 		m.set_shader_parameter("nf", nf)
 		m.set_shader_parameter("ur", ur)
 		m.set_shader_parameter("n", st.size())

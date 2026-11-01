@@ -15,7 +15,7 @@ uniform vec4 K = vec4(1.0, 0.0, 1.0, 0.0);    // h, tl, w, dk
 uniform vec4 pal[5];
 void vertex() { lp = VERTEX; }
 vec4 col(int n) { return pal[min(4, n + int(K.w))]; }
-float hn(float u, float k, float o2) { return fract(sin(floor(u * k) * 12.9898 + seed * 7.1 + o2) * 43758.5453); }
+float hn(float u, float k, float o2) { return hT(u, k, int(o2) - 1); }    // rows: (24, 1), (16, 2), (90, 3)
 float prof(float u) {
 	float v = u < 0.8 ? 0.04 + 0.96 * pow(u / 0.8, 1.7) : pow(max(0.0, 1.0 - (u - 0.8) / 0.2), 0.55);
 	float w = thick * v * K.z;
