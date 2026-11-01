@@ -341,6 +341,7 @@ func check_hits() -> void:
 			var heavy0: bool = anim in ["attack3", "cthrust", "cwave"]
 			arena.pfx.dust(position.x + dir * 18.0 * CSCALE, position.y, dir, heavy0)
 			if heavy0: arena.pfx.dust(position.x - dir * 10.0 * CSCALE, position.y, -dir, false)
+		arena.swing_air(self)
 		if atk.get("streak", false):
 			arena.streak_fx(position.x + dir * 20.0 * CSCALE, position.x + dir * (170.0 if anim == "cthrust" else 105.0) * CSCALE, position.y - 50.0 * CSCALE, dir)
 	var b: Array = atk["box"]

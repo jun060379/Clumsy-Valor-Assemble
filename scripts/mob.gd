@@ -18,6 +18,7 @@ const DEF := {
 }
 static var TEX := {}
 const EL := preload("res://scripts/elements.gd")
+const DUMMY := preload("res://scripts/dummy.gd")
 
 var arena
 var kind := "goblin"
@@ -57,6 +58,7 @@ var pl = null                 # platform it patrols on
 var elite := false
 var phase := 0
 var tier := 1
+var bar_st := {}              # H2.mob ghost trail / hit flash state
 
 
 static func tex(key: String) -> Texture2D:
@@ -69,6 +71,7 @@ func setup(k: String, at: Vector2, delay: float, is_elite := false, room_tier :=
 	kind = k
 	M = DEF[k]
 	elite = is_elite or M.has("boss")
+	# spawnMob: M.hp*(elite?1.6:1)*(1+0.12*tier); the boss room is always tier 4 (918). Tier 0 = outside a room (raw hp).
 	hp = round(M["hp"] * (1.6 if is_elite else 1.0) * (1.0 + 0.12 * room_tier)) if room_tier > 0 else M["hp"]
 	max_hp = hp
 	base_y = at.y - M.get("fly", 0)
@@ -115,6 +118,12 @@ func hit(dmg: float, kb: float, mul := 1.0) -> void:
 	arena.spark(position + Vector2(-hd * 10.0, -20.0 if M.has("fly") else -62.0 * M["s"] / 3.0), 14 if dmg > 1.0 else 8)
 	if arena.get("pfx") != null: arena.pfx.hit(position.x - hd * 10.0, position.y - (20.0 if M.has("fly") else 62.0 * M["s"] / 3.0), int(hd) if hd != 0.0 else 1, 1.25 if dmg >= 2.0 else 1.0)
 	if hp <= 0.0:
+		# hitDummy on hp<=0: break, a jolt of shake, sparks and dust ...
+		arena.sfx("break", 1.0)
+		arena.shake_amt = maxf(arena.shake_amt, 8.0)
+		arena.spark(position + Vector2(0, -40), 20)
+		arena.dust(position, 0, true)
+		# ... then mobDie
 		dead = 1.0
 		set_a("die")
 		arena.sfx("break", 0.8)
@@ -178,7 +187,9 @@ func step(dt: float) -> void:
 		if absf(kx) < 0.05: kx = 0.0
 	position.x = clampf(position.x, 40.0, arena.world_w - 40.0)
 	if M.has("fly"):
-		var ty := minf(arena.ground_y - M["fly"], maxf(arena.ground_y - 330.0 - 40.0, P.position.y - 95.0))
+		var top := 330.0           # the flight ceiling follows the room's height (GROUND - tpl.top - 40)
+		if arena.level != null and String(arena.level.kind) == "dungeon": top = float(arena.level.tpl.get("top", 330.0))
+		var ty := minf(arena.ground_y - M["fly"], maxf(arena.ground_y - top - 40.0, P.position.y - 95.0))
 		base_y += (ty - base_y) * minf(1.0, dt / 900.0)
 		position.y = base_y + sin(ph) * 8.0
 	if pl != null:
@@ -405,8 +416,7 @@ func _draw() -> void:
 		# small HP bar over the head
 		var bw := 36.0 if M.has("fly") else 44.0
 		var by := -(40.0 if M.has("fly") else (150.0 if kind == "skel" else 115.0))
-		draw_rect(Rect2(-bw / 2.0 - 1.0, by - 1.0, bw + 2.0, 6.0), Color(0.05, 0.03, 0.07, 0.8))
-		draw_rect(Rect2(-bw / 2.0, by, bw * clampf(hp / max_hp, 0.0, 1.0), 4.0), Color("#ff4d6a"))
+		DUMMY.bar(self, bar_st, 0.0, by, bw, maxf(0.0, hp) / max_hp, elite)    # H2.mob: slanted, ghost trail, hit flash
 		EL.draw_tag(self, 0.0, by - 5.0, M["defEl"])          # elTag: its own elements over the bar
 		if mark != "":
 			var k := minf(1.0, mark_t / 90.0)

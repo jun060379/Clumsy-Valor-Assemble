@@ -690,8 +690,8 @@ func _draw_dungeon_ui(ci: CanvasItem, vs: Vector2, live: bool) -> void:
 		var gap := 5.0
 		var bw := (gx1 - gx0 + 1) * (cw + gap) + 8.0
 		var bh := (gy1 - gy0 + 1) * (chh + gap) + 8.0
-		var x0 := vs.x - 96.0 - bw
-		var y0 := 58.0
+		var x0 := vs.x - 112.0 - bw     # drawMinimap: top right, x0 = W-118-bw+6, ry = 16
+		var y0 := 16.0
 		ci.draw_rect(Rect2(x0 - 6.0, y0 - 6.0, bw, bh), Color(0.04, 0.03, 0.06, 0.55))
 		ci.draw_rect(Rect2(x0 - 6.0, y0 - 6.0, bw, bh), Color(0.91, 0.83, 0.63, 0.35), false, 1.0)
 		for r in seen:
@@ -718,8 +718,6 @@ func _draw_dungeon_ui(ci: CanvasItem, vs: Vector2, live: bool) -> void:
 		if m.M.has("boss") and not m.is_dead() and m.spawn_t <= 0.0:
 			_draw_boss(ci, vs, m)
 			break
-	# shilling, under the fatigue chip
-	UI.shadow_text(ci, arena.font_bold, Vector2(14, 116), "실링 %d" % arena.shilling, 12, Color("#ffd34d"))
 
 
 ## H2.boss + ghostOf: the hp trail lags white behind the bar and the bar flashes white on a hit

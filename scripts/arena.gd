@@ -983,6 +983,18 @@ func slash_fx(c: Vector2, r: float, a0: float, a1: float, d: int, _col := Color.
 func streak_fx(x0: float, x1: float, y: float, _d: int, _col := Color.WHITE) -> void:
 	pfx.thrust(x0, x1, y, player.who)
 	if player.on: pfx.dust(player.position.x - player.dir * 6.0 * player.CSCALE, player.position.y, -player.dir, true)
+	air_push((x0 + x1) / 2.0, y, signf(x1 - x0) if x1 != x0 else float(player.dir), 360.0, 0.6)
+
+## airPush: blown air moves the cave spores (only the dungeon has any)
+func air_push(x: float, y: float, d: float, R: float, F: float) -> void:
+	if level != null and level.has_method("air_push"): level.air_push(x, y, d, R, F)
+
+## swingWorld's air: every swing on the ground (and the air / high swings) pushes the motes ahead of it
+func swing_air(P) -> void:
+	var a: String = P.anim
+	if not P.on and not ("attack_high" in a or "air" in a): return
+	var heavy: bool = "attack3" in a or "cthrust" in a or "cwave" in a
+	air_push(P.position.x + P.dir * 60.0 * P.CSCALE, P.position.y - 70.0 * P.CSCALE, P.dir, 320.0 if heavy else 220.0, 0.5 if heavy else 0.3)
 
 ## pfxDust: pixel puffs kicked along the floor (d = 0: both ways, as on a landing)
 func dust(p: Vector2, d: int, heavy: bool) -> void:

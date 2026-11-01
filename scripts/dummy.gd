@@ -139,6 +139,7 @@ static func bar(ci: CanvasItem, st: Dictionary, x: float, y: float, w: float, f:
 	ci.draw_colored_polygon(body, Color(1, 1, 1, 0.08))
 	if g > f: _clip_fill(ci, body, x0 + (w + sk) * f, x0 + (w + sk) * g, y, h, Color.WHITE)
 	if f > 0.0: _clip_fill(ci, body, x0, x0 + (w + sk) * f, y, h, col)
+	_clip_fill(ci, body, x0, x0 + w + sk, y, maxf(1.0, h * 0.28), Color(1, 1, 1, 0.22))    # bar(): the top sheen strip
 
 static func _para(x: float, y: float, w: float, h: float, sk: float) -> PackedVector2Array:
 	return PackedVector2Array([Vector2(x + sk, y), Vector2(x + w + sk, y), Vector2(x + w, y + h), Vector2(x, y + h)])

@@ -329,6 +329,9 @@ func slam(x: float, y: float, ch: String) -> void:
 	_push({"k": "slam", "ch": ch, "C": _pal(ch), "x": x, "y": y})
 	dust(x + 14.0, y, 1, true)
 	dust(x - 14.0, y, -1, true)
+	if arena != null:
+		arena.air_push(x, y - 20.0, 1.0, 300.0, 0.5)
+		arena.air_push(x, y - 20.0, -1.0, 300.0, 0.5)
 
 func charge(P) -> void:
 	for e in L:

@@ -253,7 +253,7 @@ func spawn_wave() -> void:
 		var delay: float = (350.0 + j * 220.0) if wave > 0 else (120.0 + j * 120.0)
 		var m = _spawn_at(k, where, e.size() > 1, delay)
 		if wave > 0:
-			m.notice(false)
+			m.aw = true            # dunWave: reinforcements come in already aware, silently (no !!, no beep, no react pause)
 			m.home = m.position.x
 	if wave > 0:
 		msg = "증원!"
@@ -279,7 +279,7 @@ func _spawn_at(k: String, where: String, elite: bool, delay: float):
 			x = 300.0 + randf() * (tpl["w"] - 600.0)
 			if absf(x - arena.player.position.x) > 260.0 and not arena.solids.any(func(so): return x > so.x - 40.0 and x < so.x + so.w + 40.0):
 				break
-	return arena.spawn(k, x, delay, y, pl, elite, room()["tier"] if room()["type"] != "boss" else 0)
+	return arena.spawn(k, x, delay, y, pl, elite, maxi(1, int(room().get("tier", 1))))   # room.tier||1 (boss room: 4)
 
 
 func step(dt: float) -> void:
@@ -307,7 +307,8 @@ func step(dt: float) -> void:
 	# camp fire / vault chest
 	if rm["type"] == "camp" and not rm.get("rest_used", false) and absf(P.position.x - tpl["w"] * 0.75) < 90.0 and P.position.y > G - 10.0:
 		rm["rest_used"] = true
-		for c in P.party:
+		for c in P.hpm:            # every ROSTER member, not just the party
+			if arena.fame != null and not arena.fame.recruited(c): continue
 			P.hpm[c] = minf(arena.runes.max_hp(c), P.hpm[c] + arena.runes.max_hp(c) * 0.5)
 		P.hp = minf(P.MAX_HP, P.hp + P.MAX_HP * 0.5)
 		arena.ring(P.position + Vector2(0, -60), 30.0, Color("#bff0c0"))
@@ -339,7 +340,14 @@ func step(dt: float) -> void:
 		spores.append({"x": cam_r.position.x + randf() * cam_r.size.x, "y": cam_r.position.y + cam_r.size.y * (0.2 + randf()), "v": 0.008 + randf() * 0.02, "ph": randf() * 6.0, "s": 4 if randf() < 0.3 else 2, "c": Color8(150, 255, 215) if randf() < 0.75 else Color8(220, 170, 255)})
 	var tt := Time.get_ticks_msec() / 1000.0
 	for s in spores:
-		s["y"] -= s["v"] * dt * (0.2 if arena.witch > 0.0 else 1.0)
+		var sk: float = 0.2 if arena.witch > 0.0 else 1.0
+		s["y"] -= s["v"] * dt * sk
+		if s.has("vx"):
+			s["x"] += s["vx"] * dt * sk
+			s["vx"] *= pow(0.992, dt)
+		if s.has("vy2"):
+			s["y"] += s["vy2"] * dt * sk
+			s["vy2"] *= pow(0.99, dt)
 		s["x"] += sin(tt * 0.8 + s["ph"]) * 0.15
 		if s["y"] < cam_r.position.y - 20.0 or s["x"] < cam_r.position.x - 40.0 or s["x"] > cam_r.end.x + 40.0:
 			s["x"] = cam_r.position.x + randf() * cam_r.size.x
@@ -348,6 +356,15 @@ func step(dt: float) -> void:
 	queue_redraw()
 	front.queue_redraw()
 	bg_node.queue_redraw()
+
+## airPush: a swing, a thrust or a slam blows the spores near it along
+func air_push(x: float, y: float, d: float, R: float, F: float) -> void:
+	for s in spores:
+		var dd := Vector2(s["x"] - x, s["y"] - y).length()
+		if dd < R:
+			var k := 1.0 - dd / R
+			s["vx"] = s.get("vx", 0.0) + d * F * k
+			s["vy2"] = s.get("vy2", 0.0) - F * 0.35 * k * randf()
 
 ## the attack key at a door: move on
 func try_interact() -> bool:
