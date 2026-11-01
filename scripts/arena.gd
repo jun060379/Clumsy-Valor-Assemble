@@ -634,10 +634,12 @@ func platform_under(p: Vector2):
 	return null
 
 
-## setAspect / fit: the view is always 500 world px tall and as wide as the screen's shape, clamped to 1.6..2.4
-## (outside that it letterboxes); never wider or taller than the prototype's
+## setAspect / fit: the view is always 500 world px tall and as wide as the screen's shape, clamped to 1.6..2.8
+## (outside that it letterboxes). The prototype caps at 2.4; phone browsers in landscape (address bar showing) run
+## past that, so the cap is raised to 2.8 = the narrowest dungeon room (1400 px) and the phone fills edge to edge.
+const ASPECT_MAX := 2.8
 static func view_w(win: Vector2) -> int:
-	return roundi(H * clampf(win.x / maxf(1.0, win.y), 1.6, 2.4))
+	return roundi(H * clampf(win.x / maxf(1.0, win.y), 1.6, ASPECT_MAX))
 
 func fit_view() -> void:
 	var r := get_tree().root

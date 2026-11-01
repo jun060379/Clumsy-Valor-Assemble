@@ -124,7 +124,7 @@ func _initialize() -> void:
 	check(absf(step2 - 70.0 * 16.0 / 45.0) < 0.5, "CAMF whip: 16/45 per 16 ms (%.2f)" % step2)
 	P.cam_focus = {"x": 0.0, "t": 0.0}
 	check(arena.cam_y_top() == 0.0, "training ground: camY 0")
-	check(arena.view_w(Vector2(1920, 1080)) == 889 and arena.view_w(Vector2(3000, 1000)) == 1200 and arena.view_w(Vector2(1000, 1000)) == 800, "view: 500 tall, aspect clamped 1.6..2.4")
+	check(arena.view_w(Vector2(1920, 1080)) == 889 and arena.view_w(Vector2(3000, 1000)) == 1400 and arena.view_w(Vector2(1000, 1000)) == 800, "view: 500 tall, aspect clamped 1.6..2.8")
 	arena.go_town(Vector2(640, arena.ground_y), 1)
 	check(arena.cam_y_top() == 0.0 and arena.cam.position.y == arena.get_viewport_rect().size.y / 2.0, "town spawn: camY 0")
 	P.position.y = arena.ground_y - 195.0
