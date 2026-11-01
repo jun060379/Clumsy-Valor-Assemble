@@ -86,7 +86,7 @@ var post                      # post_fx.gd: shockwaves, colour fringes, vignette
 var low_end := false          # a phone (web + touch-first): fewer, wider lights
 var amb                       # ambience.gd: wind / rain / water loops, birds, crickets, fires, the hall's creaks and clock
 var screen_fx := true         # 화면 효과 (post_fx.gd)
-var pix := "shade"            # 캐릭터 도트화: off / dot / shade (player.gd pix_mat)
+var pix := "off"              # 캐릭터 도트화 (off until the faithful charPix port lands): off / dot / shade (player.gd pix_mat)
 var ui_root                   # ui_root.gd: title, top-right buttons, main menu, transitions
 var runes                     # runes.gd: runes, gear, shillings' drops, the boss chest, the bestiary record
 var fame                      # fame.gd: guild fame, quests, adventurer level, the guild / adventure books' data, cut-ins
