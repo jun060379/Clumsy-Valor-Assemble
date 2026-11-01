@@ -323,8 +323,11 @@ func step(dt: float) -> void:
 	var T := tod_now()
 	cmod.color = T["amb"]
 	var tt := Time.get_ticks_msec() / 1000.0
+	var vr: Rect2 = arena.view_rect().grow(320.0)
 	for l in lights.get_children():
 		var ph: float = l.get_meta("ph")
+		# only lights near the screen render: each 2D light redraws what it touches, which is costly on phones
+		l.visible = vr.has_point(l.position) and T["lamp"] > 0.15
 		if l.get_meta("kind") == "fire":
 			l.energy = 0.6 + 0.6 * T["lamp"] + 0.1 * sin(tt * 7.0 + ph)
 		else:

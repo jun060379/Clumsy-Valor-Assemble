@@ -494,7 +494,9 @@ func _build_lights() -> void:
 	lights.get_child(lights.get_child_count() - 1).set_meta("player", true)
 
 func _flicker(tt: float) -> void:
+	var vr: Rect2 = arena.view_rect().grow(320.0)
 	for l in lights.get_children():
+		l.visible = l.has_meta("player") or vr.has_point(l.position)
 		if l.has_meta("player"):
 			l.position = arena.player.position + Vector2(0, -70)
 		elif l.has_meta("door"):
