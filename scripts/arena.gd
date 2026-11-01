@@ -12,6 +12,8 @@ const TOWN := preload("res://scripts/town.gd")
 const HALL := preload("res://scripts/hall.gd")
 const EILIN := preload("res://scripts/eilin.gd")
 const DIALOG := preload("res://scripts/dialog.gd")
+const FOLK := preload("res://scripts/townsfolk.gd")
+const WEATHERS := ["clear", "rain", "snow"]
 const WAVES := [["goblin", "goblin", "eye"], ["mush", "goblin", "goblin"], ["mush", "mush", "eye", "goblin"], ["skel", "goblin", "eye", "mush"], ["skel", "skel", "eye", "eye", "goblin"]]
 
 const H := 500.0
@@ -50,6 +52,7 @@ var ceil_y := -1.0e9
 var level = null              # the dungeon, the town or the hall (level.kind); null = training ground
 var tod_h := 18.5             # one clock for the whole world (town, hall, Eilin's day)
 var tod_auto := true
+var weather := "clear"         # "clear" / "rain" / "snow" (town sky, rain and snow; F10 cycles it)
 var eil                       # Eilin lives across maps
 var dlg                       # talk box
 var shilling := 0
@@ -208,7 +211,28 @@ func tod_now() -> Dictionary:
 	var k: float = (hh - a[0]) / maxf(0.001, b[0] - a[0])
 	var sky := Color(lerpf(a[1][0], b[1][0], k) / 255.0, lerpf(a[1][1], b[1][1], k) / 255.0, lerpf(a[1][2], b[1][2], k) / 255.0, lerpf(a[1][3], b[1][3], k))
 	var amb := Color(lerpf(a[2][0], b[2][0], k), lerpf(a[2][1], b[2][1], k), lerpf(a[2][2], b[2][2], k))
+	if weather != "clear":
+		# overcast: the sky greys over, the light drops, lamps stay lit
+		var r := weather == "rain"
+		sky = Color(sky.r * 0.5 + 110.0 / 255.0 * 0.5, sky.g * 0.5 + 118.0 / 255.0 * 0.5, sky.b * 0.5 + 132.0 / 255.0 * 0.5, maxf(sky.a, 0.42 if r else 0.3))
+		amb = Color(amb.r * (0.78 if r else 0.92), amb.g * (0.78 if r else 0.92), amb.b * (0.78 if r else 0.92))
+		if not r: amb.b = minf(1.0, amb.b * 1.06)
+		return {"sky": sky, "amb": amb, "sun": lerpf(a[3], b[3], k) * 0.25, "lamp": maxf(lerpf(a[4], b[4], k), 0.5)}
 	return {"sky": sky, "amb": amb, "sun": lerpf(a[3], b[3], k), "lamp": lerpf(a[4], b[4], k)}
+
+## a member leaves the party for town (or comes back); the townsfolk take over whoever is not along
+func toggle_member(c: String) -> void:
+	var P = player
+	if P.party.has(c):
+		if P.party.size() < 2: return
+		if P.who == c:
+			P.swap_cd = 0.0
+			P.swap(false, P.party.filter(func(x): return x != c)[0])
+		P.party.erase(c)
+		FOLK.of(self).leave_party(c)
+	else:
+		P.party.append(c)
+		FOLK.of(self).join_party(c)
 
 func foes() -> Array:
 	return (dummies if level == null else []) + mobs.filter(func(m): return m.alive())
@@ -837,7 +861,8 @@ func _draw_fx() -> void:
 
 
 ## test keys: F2 = straight into the cave, F3 = clear the room, F4 = next room, F5 = jump around town, F6 = +3 hours,
-## F7 = straight into the guild hall, F8 = next hall floor, F9 = Eilin straight to where her day says she should be
+## F7 = straight into the guild hall, F8 = next hall floor, F9 = Eilin straight to where her day says she should be,
+## F10 = weather (clear / rain / snow), F11 = Luce leaves / rejoins the party (she lives in town meanwhile), Shift+F11 = the same for Aida
 var tp_i := 0
 func _unhandled_input(ev: InputEvent) -> void:
 	if ev is InputEventKey and ev.pressed and not ev.echo:
@@ -866,6 +891,10 @@ func _unhandled_input(ev: InputEvent) -> void:
 			fade_then(func(): go_hall(n, Vector2(s1[0], s1[1]), s1[2]))
 		elif ev.keycode == KEY_F9:
 			eil.snap()
+		elif ev.keycode == KEY_F10:
+			weather = WEATHERS[(WEATHERS.find(weather) + 1) % WEATHERS.size()]
+		elif ev.keycode == KEY_F11 and not dlg.active:
+			toggle_member("aida" if ev.shift_pressed else "luce")
 		elif ev.keycode == KEY_F4 and level_kind() == "dungeon":
 			var rm = level.room()
 			for d in level.doors:

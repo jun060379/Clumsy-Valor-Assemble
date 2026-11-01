@@ -19,6 +19,18 @@ const SL := 420.0
 const BAND := 58.0
 const SURFR := 6.0
 const PXK := 1.78
+const LIFE := preload("res://scripts/town_life.gd")
+const TF := preload("res://scripts/townsfolk.gd")
+const BRAN := preload("res://scripts/bran.gd")
+## leaf rows of the canopies (baked by splitting each tree by the prototype's colour rule: g >= r*0.85 and g > b*1.3)
+const TREE_ROWS := {"f_tree2": [2, 247], "f_tree3": [2, 247], "f_bigtree": [2, 307]}
+const LAMP_BAN := Vector2(35, 86)     # where the lamp's banner (q_lamp_ban) sits on q_lamp
+## the wagon's horse (horse_strip: 8 cells of 214x148; frame 0 is cut into base / neck / tail / neck root)
+const HCW := 214
+const HCH := 148
+const HDX := 225.0
+const NECK_PIV := Vector2(128, 56)
+const TAIL_PIV := Vector2(30, 46)
 ## hour, sky tint rgba, ambient rgb, sun, lamp
 const TODK := [[0, [8, 12, 48, .72], [.32, .35, .58], 0, 1], [4.5, [20, 22, 70, .6], [.42, .42, .64], 0, 1], [5.8, [255, 140, 160, .38], [.72, .66, .82], .3, .8], [7.5, [255, 215, 190, .14], [.94, .9, .9], .75, .25],
 	[12, [255, 255, 255, 0], [1, 1, 1], 1, .1], [16, [255, 215, 160, .12], [1, .95, .88], .85, .2], [17.6, [255, 150, 90, .3], [.98, .82, .72], .6, .55], [18.5, [235, 105, 95, .4], [.86, .7, .74], .42, .85],
@@ -54,6 +66,14 @@ var front: Node2D
 var light_tex: GradientTexture2D
 var tfx: Array = []
 var emit_t := {}
+var life                      # wind, grass, props, birds, weather (town_life.gd)
+var folk                      # townsfolk (lives on the arena)
+var bran
+var folk_node: Node2D
+var lbl_layer: CanvasLayer
+var labels: Node2D
+var prof_cache := {}
+var horse := {"st": "idle", "t": 0.0, "next": 4000.0, "neck": 0.0, "tail": 0.0, "chew": 0.0, "st_t": 0.0, "frame": 0, "wake": false}
 
 
 func _ready() -> void:
@@ -72,6 +92,7 @@ func _ready() -> void:
 		if not tex.has(k): tex[k] = load("res://assets/town/" + k + ".png")
 	_build_tex()
 	_layout()
+	_build_climb()
 	light_tex = GradientTexture2D.new()
 	light_tex.fill = GradientTexture2D.FILL_RADIAL
 	light_tex.fill_from = Vector2(0.5, 0.5)
@@ -97,11 +118,33 @@ func _ready() -> void:
 	front.draw.connect(_draw_front)
 	arena.add_child(front)
 	_build_lights()
+	life = LIFE.new(self)
+	bran = BRAN.new(self)
+	folk = TF.of(arena)
+	folk.town = self
+	folk.place()
+	# townsfolk are drawn like the party (smooth filtering), behind the player
+	folk_node = Node2D.new()
+	folk_node.z_index = -1
+	folk_node.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	folk_node.draw.connect(func(): folk.draw(folk_node))
+	arena.add_child(folk_node)
+	# speech bubbles and fireflies ride the camera on their own canvas, so the night ambient doesn't dim them
+	lbl_layer = CanvasLayer.new()
+	lbl_layer.follow_viewport_enabled = true
+	arena.add_child(lbl_layer)
+	arena.move_child(lbl_layer, 0)
+	labels = Node2D.new()
+	labels.draw.connect(_draw_labels)
+	lbl_layer.add_child(labels)
 
 func cleanup() -> void:
 	cmod.queue_free()
 	bg_layer.queue_free()
 	front.queue_free()
+	folk_node.queue_free()
+	lbl_layer.queue_free()
+	folk.town = null
 	queue_free()
 
 
@@ -200,6 +243,109 @@ func _build_tex() -> void:
 			var c := wall.get_pixel(x, y)
 			wall.set_pixel(x, y, Color(c.r * 0.38, c.g * 0.38, c.b * 0.38, c.a))
 	t_wall = ImageTexture.create_from_image(wall)
+
+
+# ---------- climbable tops: one-way (sloped) surfaces traced from each placed sprite's top silhouette ----------
+## first opaque row of every column, median-filtered over 13 columns (drops thin spikes: finials, poles)
+func _top_profile(k: String) -> Dictionary:
+	if prof_cache.has(k): return prof_cache[k]
+	var img: Image = tex[k].get_image()
+	if img.is_compressed(): img.decompress()
+	img.convert(Image.FORMAT_RGBA8)
+	var w := img.get_width()
+	var h := img.get_height()
+	var data := img.get_data()
+	var top := PackedInt32Array()
+	top.resize(w)
+	for x in w:
+		top[x] = -1
+		for y in h:
+			if data[(y * w + x) * 4 + 3] > 40:
+				top[x] = y
+				break
+	var sm := PackedInt32Array()
+	sm.resize(w)
+	for i in w:
+		sm[i] = -1
+		if top[i] < 0: continue
+		var win := []
+		for j in range(maxi(0, i - 6), mini(w, i + 7)):
+			if top[j] >= 0: win.append(top[j])
+		win.sort()
+		sm[i] = win[win.size() / 2]
+	var P0 := {"w": w, "h": h, "top": sm}
+	prof_cache[k] = P0
+	return P0
+
+func _rdp(pts: Array, eps: float) -> Array:
+	if pts.size() < 3: return pts
+	var a: Vector2 = pts[0]
+	var b: Vector2 = pts[pts.size() - 1]
+	var md := 0.0
+	var mi := 0
+	var ln := maxf(0.0001, a.distance_to(b))
+	for i in range(1, pts.size() - 1):
+		var p: Vector2 = pts[i]
+		var d := absf((b.y - a.y) * p.x - (b.x - a.x) * p.y + b.x * a.y - b.y * a.x) / ln
+		if d > md:
+			md = d
+			mi = i
+	if md > eps:
+		var l := _rdp(pts.slice(0, mi + 1), eps)
+		var r := _rdp(pts.slice(mi), eps)
+		return l.slice(0, l.size() - 1) + r
+	return [a, b]
+
+func _add_climb(k: String, x: float, y_bottom: float, sink: float, flip: bool) -> void:
+	if not tex.has(k): return
+	var P0 := _top_profile(k)
+	var s := ks(k)
+	var pw: int = P0["w"]
+	var ph: int = P0["h"]
+	var top: PackedInt32Array = P0["top"]
+	var y0 := y_bottom - (ph - sink * PK) * s
+	var base := y_bottom - 26.0
+	var runs := []
+	var run := []
+	for i in range(0, pw, 4):
+		var v := top[i]
+		if v < 0 or v > ph - 6:
+			if run.size() > 0: runs.append(run)
+			run = []
+			continue
+		run.append(Vector2(i, v))
+	if run.size() > 0: runs.append(run)
+	for r in runs:
+		var sp := _rdp(r, 3.0)
+		for i in sp.size() - 1:
+			var A: Vector2 = sp[i]
+			var B: Vector2 = sp[i + 1]
+			if B.x - A.x < 12.0: continue
+			if absf(B.y - A.y) / (B.x - A.x) > 1.25: continue
+			var X0 := x + (pw - B.x if flip else A.x) * s
+			var X1 := x + (pw - A.x if flip else B.x) * s
+			var Y0 := y0 + (B.y if flip else A.y) * s + 3.0
+			var Y1 := y0 + (A.y if flip else B.y) * s + 3.0
+			# keep only the part clearly above the floor, so walking past never climbs it by itself
+			if Y0 > base and Y1 > base: continue
+			if Y0 > base:
+				X0 = X0 + (X1 - X0) * (Y0 - base) / (Y0 - Y1)
+				Y0 = base
+			if Y1 > base:
+				X1 = X0 + (X1 - X0) * (base - Y0) / (Y1 - Y0)
+				Y1 = base
+			if X1 - X0 >= 10.0:
+				tpl.append({"x0": X0, "x1": X1, "y0": Y0, "y1": Y1, "climb": k})
+
+func _build_climb() -> void:
+	for b in bld:
+		if b[0] == "g_ring" or b[0] == "g_anvil": continue
+		_add_climb("g_wagon2" if b[0] == "g_wagon" else b[0], b[1], b[2], b[3], b.size() > 7 and b[7])
+	_add_climb("g_hall", HXB, TTOP, 1.0, false)
+	for d in deco_props:
+		if d[0] == "q_pot": continue
+		_add_climb(d[0], d[1], d[2], 0.0, d.size() > 3 and d[3])
+	_add_climb("q_fountain", HDOOR - 52.0 * PK * BS, LOWF, 0.0, false)
 
 
 # ---------- surfaces ----------
@@ -342,17 +488,42 @@ func step(dt: float) -> void:
 				break
 		if near_door == null:
 			near_door = arena.eil.door_near(P)
+		if near_door == null:
+			var n = folk.near(P)
+			if n != null:
+				near_door = {"x": n["x"], "y": n["y"], "name": TF.CH.NAME[n["c"]], "act": "npc", "c": n["c"], "hide": n["say_t"] > 0.0}
+		if near_door == null and bran.is_near(P):
+			near_door = {"x": bran.x + bran.MID, "y": bran.y, "name": "브랜", "act": "bran"}
+	life.step(dt)
+	folk.step(dt)
+	bran.step(dt)
+	_horse_step(dt)
+	# leaves blow off the trees on screen (more in a gust)
+	for d in deco_back:
+		var k: String = d[0]
+		if not k.contains("tree"): continue
+		var w: float = tex[k].get_width()
+		var s: float = ks(k)
+		if d[1] > vr.end.x or d[1] + w * s < vr.position.x: continue
+		if randf() < 0.004 * (0.3 + life.gust * 2.0) * w / 250.0 * dt / 16.7:
+			var h: float = tex[k].get_height()
+			tfx.append({"k": "leaf", "x": d[1] + w * s * (0.2 + randf() * 0.6), "y": d[2] - h * s * (0.6 + randf() * 0.25), "vx": 0.02, "vy": 0.02 + randf() * 0.02, "t": 0.0, "life": 4500.0,
+				"ph": randf() * 9.0, "c": Color("#6f8f44") if randf() < 0.5 else Color("#97ad58")})
 	# ambient: smoke, embers, fountain drops, leaves
-	_emit("camp", 170.0, dt, func(): tfx.append({"k": "smoke", "x": 4350.0 + 27.0 * PK + randf_range(-3, 3), "y": G - 64.0, "vx": 0.006, "vy": -0.03 - randf() * 0.012, "s": 10.0, "t": 0.0, "life": 2600.0, "dark": false}))
-	_emit("forge", 130.0, dt, func(): tfx.append({"k": "smoke", "x": 7428.0, "y": LOWF - 208.0 * BS, "vx": 0.006, "vy": -0.03 - randf() * 0.012, "s": 11.0 * BS, "t": 0.0, "life": 2600.0, "dark": true}))
+	var gx: float = life.gust * 0.03
+	_emit("camp", 170.0, dt, func(): tfx.append({"k": "smoke", "x": 4350.0 + 27.0 * PK + randf_range(-3, 3), "y": G - 64.0, "vx": 0.006 + gx, "vy": -0.03 - randf() * 0.012, "s": 10.0, "t": 0.0, "life": 2600.0, "dark": false}))
+	_emit("forge", 130.0, dt, func(): tfx.append({"k": "smoke", "x": 7428.0, "y": LOWF - 208.0 * BS, "vx": 0.006 + gx, "vy": -0.03 - randf() * 0.012, "s": 11.0 * BS, "t": 0.0, "life": 2600.0, "dark": true}))
 	_emit("emb", 160.0, dt, func(): tfx.append({"k": "ember", "x": 4350.0 + 27.0 * PK + randf_range(-8, 8), "y": G - 22.0, "vx": randf_range(-0.015, 0.015), "vy": -0.06 - randf() * 0.04, "t": 0.0, "life": 700.0 + randf() * 600.0}))
 	_emit("fnt", 60.0, dt, func(): tfx.append({"k": "drop", "x": HDOOR + randf_range(-8, 8), "y": LOWF - 100.0 * BS, "vx": randf_range(-0.025, 0.025), "vy": 0.02, "t": 0.0, "life": 1000.0, "floor": LOWF - 40.0 * BS}))
 	_emit("leaf", 420.0, dt, func(): tfx.append({"k": "leaf", "x": 8750.0 + randf() * 450.0, "y": LOWF - 340.0 + randf() * 120.0, "vx": 0.02, "vy": 0.025 + randf() * 0.02, "t": 0.0, "life": 6500.0, "ph": randf() * 9.0, "c": Color("#8f8a3a") if randf() < 0.5 else Color("#b8aa52")}))
+	_emit("leaf2", 1100.0, dt, func(): tfx.append({"k": "leaf", "x": randf() * 500.0, "y": G - 300.0, "vx": 0.02, "vy": 0.02 + randf() * 0.02, "t": 0.0, "life": 5000.0, "ph": randf() * 9.0, "c": Color("#9a9446")}))
+	var gl: float = life.gust * 0.05
 	for f in tfx:
 		f["t"] += dt
 		f["x"] += f["vx"] * dt
 		f["y"] += f["vy"] * dt
-		if f["k"] == "leaf": f["vx"] = 0.02 + sin(f["t"] / 300.0 + f["ph"]) * 0.03
+		if f["k"] == "leaf": f["vx"] = 0.02 + gl + sin(f["t"] / 300.0 + f["ph"]) * 0.03
+		elif f["k"] == "spark": f["vy"] += 0.0005 * dt
 		if f["k"] == "drop":
 			f["vy"] += 0.0009 * dt
 			if f["y"] > f["floor"]: f["t"] = f["life"]
@@ -360,6 +531,8 @@ func step(dt: float) -> void:
 	queue_redraw()
 	front.queue_redraw()
 	bg_node.queue_redraw()
+	folk_node.queue_redraw()
+	labels.queue_redraw()
 
 func _emit(id: String, every: float, dt: float, fn: Callable) -> void:
 	emit_t[id] = emit_t.get(id, 0.0) + dt
@@ -384,6 +557,10 @@ func try_interact() -> bool:
 		arena.fade_then(func(): arena.go_hall(0, Vector2(s0[0], s0[1]), s0[2]))
 	elif d.get("act", "") == "eilin":
 		arena.eil.talk()
+	elif d.get("act", "") == "npc":
+		folk.talk(d["c"])
+	elif d.get("act", "") == "bran" or to == "forge":
+		bran.talk()
 	else:
 		arena.sfx("guard", 0.4)
 		arena.text(arena.player.position + Vector2(0, -170), d["name"] + " — 준비 중", Color("#ffe9a8"))
@@ -448,7 +625,7 @@ func _shear(t: Texture2D, x0: float, x1: float, f: Callable, clip_h := -1.0) -> 
 		draw_texture_rect_region(t, Rect2(x, y, PK, th), Rect2(minf(sx, tw - PK), 0, PK, th))
 		x += PK
 
-func _spr(k: String, x: float, y_bottom: float, sink := 0.0, flip := false, ci: CanvasItem = null) -> void:
+func _spr(k: String, x: float, y_bottom: float, sink := 0.0, flip := false, ci: CanvasItem = null, xf := Transform2D.IDENTITY) -> void:
 	if not tex.has(k): return
 	if ci == null: ci = self
 	var im: Texture2D = tex[k]
@@ -457,8 +634,12 @@ func _spr(k: String, x: float, y_bottom: float, sink := 0.0, flip := false, ci: 
 	var h := im.get_height() * s
 	var y := y_bottom - h + sink * PK * s
 	if flip:
-		ci.draw_set_transform(Vector2(roundf(x) + w, 0), 0.0, Vector2(-1, 1))
+		ci.draw_set_transform_matrix(xf * Transform2D(0.0, Vector2(-1, 1), 0.0, Vector2(roundf(x) + w, 0)))
 		ci.draw_texture_rect(im, Rect2(0, y, w, h), false)
+		ci.draw_set_transform(Vector2.ZERO)
+	elif xf != Transform2D.IDENTITY:
+		ci.draw_set_transform_matrix(xf)
+		ci.draw_texture_rect(im, Rect2(roundf(x), y, w, h), false)
 		ci.draw_set_transform(Vector2.ZERO)
 	else:
 		ci.draw_texture_rect(im, Rect2(roundf(x), y, w, h), false)
@@ -496,16 +677,34 @@ func _draw() -> void:
 	_shear(t_solid, STX1 - 40.0, STX1 + SL + 40.0, func(_x): return LOWF)
 	_shear(t_solid, SX0, RX1, ramp_y)
 	# 5. trees, buildings, the hall, props, lamps, bridge
-	for d in deco_back:
-		_spr(d[0], d[1], d[2], d[3], d[4])
+	var vr0: Rect2 = arena.view_rect().grow(60.0)
+	for i in deco_back.size():
+		var d: Array = deco_back[i]
+		var dk: String = d[0]
+		if dk.contains("tree"): _tree(dk, d[1], d[2], d[3], d[4], d[5], d[1] * 0.003, vr0)
+		else: _sway(dk, d[1], d[2], d[3], d[4], d[5] * (1.0 + life.rust.get(i, 0.0) * 4.0), d[1] * 0.003, vr0)
 	for b in bld:
 		if b[0] == "g_anvil": continue
+		if b[0] == "g_wagon":
+			_draw_wagon(b)
+			continue
 		_spr(b[0], b[1], b[2], b[3], b.size() > 7 and b[7])
 	_spr("g_hall", HXB, TTOP, 1.0)
-	for d in deco_props:
-		_spr(d[0], d[1], d[2], 0.0, d.size() > 3 and d[3])
+	var fp := HM(HX2 + 162.0 * PK, HTOP2 + 6.0 * PK)
+	_flag(fp.x, fp.y, 1.75 * BS)
+	var tms := float(Time.get_ticks_msec())
+	for i in deco_props.size():
+		var d: Array = deco_props[i]
+		var j: float = life.jig.get(i, 0.0)
+		var xf := Transform2D.IDENTITY
+		if j > 0.02:
+			# struck: it rocks and hops
+			var cx: float = d[1] + tex[d[0]].get_width() * ks(d[0]) / 2.0
+			var c := Vector2(cx, d[2])
+			xf = Transform2D(sin(tms / 28.0) * 0.08 * j, c) * Transform2D(0.0, -c - Vector2(0, absf(sin(tms / 60.0)) * 6.0 * j))
+		_spr(d[0], d[1], d[2], 0.0, d.size() > 3 and d[3], null, xf)
 	for lp in lamps:
-		_spr("q_lamp", lp[0] - 28.0 * PK, lp[1])
+		_lamp(lp[0] - 28.0 * PK, lp[1], vr0)
 	var E = arena.eil
 	if E.map == "town" and not E.hide:
 		var vr: Rect2 = arena.view_rect()
@@ -513,7 +712,7 @@ func _draw() -> void:
 			E.y = floor_at(E.x)
 			E.draw_on(self, roundf(E.x), roundf(E.y))
 	_spr("q_bridge", RIV0 - 38.0, LOWF + 28.0)
-	_spr("g_anvil", 7790.0, LOWF)
+	bran.draw(self)
 	# campfire on the art-pixel grid
 	var fxx := 4350.0 + 27.0 * PK
 	var n := int(28.0 / PK)
@@ -536,6 +735,12 @@ func _draw_front() -> void:
 	_front_shear(SX0, RX1, ramp_y)
 	_front_shear(RX1, RIV0, func(_x): return LOWF)
 	_front_shear(RIV1, TOWN_W + PK, func(_x): return LOWF)
+	var fl2: Callable = func(_x): return LOWF
+	life.draw_blades(front, -PK, SX0, fl)
+	life.draw_blades(front, SX0, STX1 + SL, up_y)
+	life.draw_blades(front, SX0, RX1, ramp_y)
+	life.draw_blades(front, RX1, RIV0, fl2)
+	life.draw_blades(front, RIV1, TOWN_W + PK, fl2)
 	for f in tfx:
 		var k: float = f["t"] / f["life"]
 		match f["k"]:
@@ -550,13 +755,16 @@ func _draw_front() -> void:
 				front.draw_rect(Rect2(roundf(f["x"]), roundf(f["y"]), PK * 2.0 if sin(f["t"] / 180.0 + f["ph"]) > 0.0 else PK, PK), Color(f["c"], minf(1.0, (1.0 - k) * 3.0)))
 			"drop":
 				front.draw_rect(Rect2(roundf(f["x"]), roundf(f["y"]), PK, PK), Color(0.75, 0.9, 1.0, 0.95))
+			"spark":
+				front.draw_rect(Rect2(roundf(f["x"] / PK) * PK, roundf(f["y"] / PK) * PK, PK, PK), Color(Color("#fde7a2") if k < 0.5 else Color("#ea7a26"), 1.0 - k))
+	life.draw_front(front)
 	if arena.eil.map == "town": arena.eil.draw_say(front, floor_at(arena.eil.x))
 	# door labels and the prompt
 	var fnt: Font = arena.font_black
 	var tt := Time.get_ticks_msec() / 1000.0
-	if near_door != null:
+	if near_door != null and not near_door.get("hide", false):
 		var d = near_door
-		var s2: String = d["name"] + "  ·  공격 키" + (" 대화" if d.get("act", "") == "eilin" else "")
+		var s2: String = d["name"] + "  ·  공격 키" + (" 대화" if d.get("act", "") in ["eilin", "npc", "bran"] else "")
 		var tw := fnt.get_string_size(s2, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x + 20.0
 		var y2: float = d["y"] - 230.0 + sin(tt * 4.0) * 3.0
 		front.draw_rect(Rect2(d["x"] - tw / 2.0, y2 - 16.0, tw, 24.0), Color(0, 0, 0, 0.6))
@@ -573,3 +781,179 @@ func _front_shear(x0: float, x1: float, f: Callable) -> void:
 		var y: float = roundf(f.call(x + PK / 2.0)) - SURFR
 		front.draw_texture_rect_region(t_solid, Rect2(x, y, PK, SURFR), Rect2(minf(sx, tw - PK), 0, PK, SURFR))
 		x += PK
+
+
+# ---------- living sprites ----------
+## tree: the trunk stays, the canopy bends as one soft mass in 2 px rows (the top moves most)
+func _tree(k: String, x: float, y_bottom: float, sink: float, flip: bool, amp: float, ph: float, vr: Rect2) -> void:
+	var trunk: Texture2D = tex[k + "_trunk"]
+	var leaf: Texture2D = tex[k + "_leaf"]
+	var s := ks(k)
+	var w := float(trunk.get_width())
+	var h := float(trunk.get_height())
+	x = roundf(x)
+	if x > vr.end.x or x + w * s < vr.position.x or y_bottom - h * s > vr.end.y or y_bottom < vr.position.y: return
+	var t := Time.get_ticks_msec() / 1000.0
+	var g: float = 0.5 + life.gust * 1.1
+	var lean := (sin(t * 0.9 + ph) * 0.6 + sin(t * 0.37 + ph * 2.0) * 0.4) * amp * 1.6 * g
+	var rows: Array = TREE_ROWS[k]
+	var top: int = rows[0]
+	var bot: int = rows[1]
+	var span := maxf(1.0, bot - top)
+	var y0 := -h + sink * PK
+	draw_set_transform(Vector2(x + (w * s if flip else 0.0), y_bottom), 0.0, Vector2(-s if flip else s, s))
+	draw_texture(trunk, Vector2(0, y0))
+	var r := top
+	while r <= bot:
+		var u := 1.0 - (r - top) / span
+		var o := roundf((lean * u * u + sin(t * 2.6 + ph + r * 0.07) * 0.6 * u * g) / 2.0) * 2.0
+		var rh := minf(2.0, h - r)
+		draw_texture_rect_region(leaf, Rect2(o, y0 + r, w, rh), Rect2(0, r, w, rh))
+		r += 2
+	draw_set_transform(Vector2.ZERO)
+
+## bush / grass clump: rows shear with the wind, the bottom 28% stays planted
+func _sway(k: String, x: float, y_bottom: float, sink: float, flip: bool, amp: float, ph: float, vr: Rect2) -> void:
+	var im: Texture2D = tex[k]
+	var s := ks(k)
+	var w := float(im.get_width())
+	var h := float(im.get_height())
+	x = roundf(x)
+	if x > vr.end.x or x + w * s < vr.position.x or y_bottom - h * s > vr.end.y or y_bottom < vr.position.y: return
+	var t := Time.get_ticks_msec() / 1000.0
+	var g: float = 0.6 + life.gust * 0.8
+	var cut := floorf(h * 0.72)
+	var y0 := -h + sink * PK
+	draw_set_transform(Vector2(x + (w * s if flip else 0.0), y_bottom), 0.0, Vector2(-s if flip else s, s))
+	var r := 0.0
+	while r < h:
+		var u := maxf(0.0, 1.0 - r / cut)
+		var o := roundf((sin(t * 1.6 + ph + r * 0.06) * amp * u * g + sin(t * 0.55 + ph) * amp * 0.5 * u) * PK) if r < cut else 0.0
+		var rh := minf(2.0, h - r)
+		draw_texture_rect_region(im, Rect2(o, y0 + r, w, rh), Rect2(0, r, w, rh))
+		r += 2.0
+	draw_set_transform(Vector2.ZERO)
+
+## street lamp: the banner under the arm flutters, more in a gust
+func _lamp(x: float, surf: float, vr: Rect2) -> void:
+	var base: Texture2D = tex["q_lamp_base"]
+	var ban: Texture2D = tex["q_lamp_ban"]
+	x = roundf(x)
+	if x > vr.end.x or x + base.get_width() < vr.position.x: return
+	var y := roundf(surf - base.get_height())
+	draw_texture(base, Vector2(x, y))
+	var t := Time.get_ticks_msec() / 1000.0
+	var bh := float(ban.get_height())
+	var r := 0.0
+	while r < bh:
+		var u := r / bh
+		var o := roundf((sin(t * 2.4 - r * 0.09 + x * 0.01) * 1.6 + sin(t * 0.9 + x) * 1.2) * u * (0.5 + life.gust * 1.4))
+		draw_texture_rect_region(ban, Rect2(x + LAMP_BAN.x + o, y + LAMP_BAN.y + r, ban.get_width(), minf(2.0, bh - r)), Rect2(0, r, ban.get_width(), minf(2.0, bh - r)))
+		r += 2.0
+
+## pennant on the hall's pole: pixel columns riding a travelling sine; limp when the wind drops
+func _flag(px: float, py: float, k: float) -> void:
+	var vr: Rect2 = arena.view_rect()
+	if px > vr.end.x + 40.0 or px + 40.0 < vr.position.x: return
+	var w: float = 0.25 + minf(1.3, life.gust) * 0.9
+	var t := Time.get_ticks_msec() / 1000.0
+	var N := 13
+	for c in N:
+		var u := c / (N - 1.0)
+		var hh := maxf(2.0, roundf(11.0 * (1.0 - u * 0.75)))
+		var droop := (1.0 - w) * u * 6.0
+		var off := roundf(sin(t * (4.0 + w * 6.0) - c * 0.55) * (0.6 + w * 2.2) * u + droop)
+		var cx := roundf(px + c * k * (0.75 + w * 0.25))
+		var cy := roundf(py + off * k)
+		draw_rect(Rect2(cx, cy, ceilf(k), roundf(hh * k)), Color("#486e7c"))
+		draw_rect(Rect2(cx, cy, ceilf(k), roundf(maxf(1.0, hh * 0.45) * k)), Color("#6a96a4"))
+		draw_rect(Rect2(cx, roundf(cy + (hh - 1.0) * k), ceilf(k), ceilf(k)), Color("#2e4a58"))
+
+## the wagon's horse lives: grazes, tosses its head, looks about, swishes its tail, now and then lies down and sleeps
+func _horse_step(dt: float) -> void:
+	var H := horse
+	H["t"] += dt
+	H["next"] -= dt
+	H["st_t"] += dt
+	var st: String = H["st"]
+	if st == "down":
+		H["frame"] = [1, 2, 3][mini(2, int(H["st_t"] / 300.0))]
+		if H["st_t"] >= 900.0:
+			H["st"] = "lie"
+			H["st_t"] = 0.0
+			H["next"] = 6000.0 + randf() * 8000.0
+	elif st == "up":
+		H["frame"] = [5, 6, 7][mini(2, int(H["st_t"] / 280.0))]
+		if H["st_t"] >= 840.0:
+			H["st"] = "idle"
+			H["st_t"] = 0.0
+			H["frame"] = 0
+			H["next"] = 3000.0 + randf() * 3000.0
+	elif st == "lie" or st == "sleep":
+		H["frame"] = 4 if st == "sleep" else 3
+		if H["next"] <= 0.0:
+			if st == "lie" and randf() < 0.6:
+				H["st"] = "sleep"
+				H["next"] = 5000.0 + randf() * 6000.0
+			elif st == "sleep":
+				H["st"] = "lie"
+				H["next"] = 2500.0 + randf() * 3000.0
+				H["wake"] = true
+			else:
+				H["st"] = "up"
+				H["st_t"] = 0.0
+		if H["st"] == "lie" and H["wake"] and H["next"] <= 0.0:
+			H["wake"] = false
+			H["st"] = "up"
+			H["st_t"] = 0.0
+	else:
+		H["frame"] = 0
+		if H["next"] <= 0.0:
+			var r := randf()
+			if st == "graze": H["st"] = "graze" if r < 0.35 else ("toss" if r < 0.55 else "idle")
+			else: H["st"] = "graze" if r < 0.4 else ("toss" if r < 0.55 else ("look" if r < 0.7 else ("down" if r < 0.85 else "idle")))
+			H["st_t"] = 0.0
+			match H["st"]:
+				"graze": H["next"] = 3500.0 + randf() * 4000.0
+				"toss": H["next"] = 900.0
+				"look": H["next"] = 2200.0
+				_: H["next"] = 2500.0 + randf() * 3000.0
+	st = H["st"]
+	var target := 0.0
+	if st == "graze": target = 0.95
+	elif st == "toss": target = -0.3 if H["st_t"] < 300.0 else 0.05
+	elif st == "look": target = -0.15
+	H["neck"] += (target - H["neck"]) * minf(1.0, dt * (0.012 if st == "toss" else 0.0032))
+	if H["frame"] != 0: H["neck"] = 0.0
+	H["chew"] = sin(H["t"] / 140.0) * 0.05 if st == "graze" and H["neck"] > 0.8 else 0.0
+	H["tail"] = sin(H["t"] / 430.0) * 0.12 + sin(H["t"] / 170.0) * 0.05 * (1.0 if sin(H["t"] / 2300.0) > 0.6 else 0.0)
+
+func _draw_wagon(b: Array) -> void:
+	var W2: Texture2D = tex["g_wagon2"]
+	var x := roundf(b[1])
+	var vr: Rect2 = arena.view_rect()
+	if x > vr.end.x + 20.0 or x + 480.0 < vr.position.x: return
+	var wy := roundf(b[2] - W2.get_height() + b[3] * PK)
+	draw_texture(W2, Vector2(x, wy))
+	var H := horse
+	var hx := x + HDX
+	var hy := roundf(b[2] - HCH + 2.0)
+	var breath := 1.0 if sin(H["t"] / 900.0) > 0.2 else 0.0
+	var fr: int = H["frame"]
+	if fr != 0:
+		draw_texture_rect_region(tex["horse_strip"], Rect2(hx, hy + (breath if fr == 4 else 0.0), HCW, HCH), Rect2(fr * HCW, 0, HCW, HCH))
+		return
+	draw_set_transform(Vector2(hx, hy) + TAIL_PIV, -H["tail"], Vector2.ONE)
+	draw_texture(tex["horse_tail"], -TAIL_PIV)
+	draw_set_transform(Vector2.ZERO)
+	draw_texture(tex["horse_base"], Vector2(hx, hy))
+	draw_texture(tex["horse_root"], Vector2(hx, hy - breath))
+	draw_set_transform(Vector2(hx, hy - breath) + NECK_PIV, H["neck"] + H["chew"], Vector2.ONE)
+	draw_texture(tex["horse_neck"], -NECK_PIV)
+	draw_set_transform(Vector2.ZERO)
+
+## bubbles and fireflies (on the camera-following canvas that the ambient doesn't dim)
+func _draw_labels() -> void:
+	life.draw_flies(labels, light_tex)
+	folk.draw_bubbles(labels, arena.font_bold)
+	bran.draw_bubble(labels, arena.font_bold)

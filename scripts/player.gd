@@ -1484,7 +1484,9 @@ func _draw() -> void:
 		variant = "_air" if dig_air else ("_q" if rift_q else "")
 	draw_frame(who, an, fr2, Vector2.ZERO, dir, col, variant)
 
-func draw_frame(c: String, an: String, fr: int, at: Vector2, d: int, col: Color, variant := "") -> void:
+## `ci`: draw onto another canvas item (the townsfolk use the same sheets); null = the player itself
+func draw_frame(c: String, an: String, fr: int, at: Vector2, d: int, col: Color, variant := "", ci: CanvasItem = null) -> void:
+	if ci == null: ci = self
 	var rf: Array = CH.resolve(c, an, fr, variant)
 	var row: int = rf[0]
 	var sheet: Texture2D = sheets[c][row / CH.ROWS_PER_SHEET]
@@ -1492,6 +1494,6 @@ func draw_frame(c: String, an: String, fr: int, at: Vector2, d: int, col: Color,
 	var sc: float = CH.SCALE[c] * (CH.ROWFIX_AIDA.get(row, 1.0) if c == "aida" else 1.0)
 	var w := CW * sc
 	var h := CHH * sc
-	draw_set_transform(at, 0.0, Vector2(d, 1))
-	draw_texture_rect_region(sheet, Rect2(-w / 2.0, -BASE * sc, w, h), src, col)
-	draw_set_transform(Vector2.ZERO)
+	ci.draw_set_transform(at, 0.0, Vector2(d, 1))
+	ci.draw_texture_rect_region(sheet, Rect2(-w / 2.0, -BASE * sc, w, h), src, col)
+	ci.draw_set_transform(Vector2.ZERO)
