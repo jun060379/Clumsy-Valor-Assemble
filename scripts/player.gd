@@ -98,6 +98,7 @@ var teeter_q := false
 var teeter_t := 0.0
 var edge_idle := 0.0
 var xs := 0.0                # x at the start of the frame (edge hold)
+var plat = null              # town: the sloped surface she stands on
 
 
 func _ready() -> void:
@@ -706,7 +707,13 @@ func step(dt: float) -> void:
 			arena.sfx("swing")
 		elif want("jump"):
 			take("jump")
-			if arena.platform_under(position) != null:
+			if plat != null and arena.level != null:
+				drop_t = 260.0
+				plat = null
+				on = false
+				vy = 0.1
+				set_anim("jump", 4)
+			elif arena.platform_under(position) != null:
 				drop_t = 260.0
 				on = false
 				vy = 0.1
@@ -864,6 +871,8 @@ func neutral_dodge() -> bool:
 
 ## what is under her feet as an x-span, or null
 func support_span(x: float, y: float) -> Variant:
+	if arena.level != null and arena.level.has_method("land"):
+		return arena.level.support_span(x, y)
 	if absf(y - arena.ground_y) < 1.0:
 		return [-1e9, 1e9]
 	for so in arena.solids:
@@ -955,6 +964,25 @@ func physics(dt: float, a: String) -> void:
 		elif anim != "teeter" and anim != "teeterL":
 			edge_idle = 0.0
 	var landed := false
+	if arena.level != null and arena.level.has_method("land"):
+		landed = arena.level.land(self, prev_x, dt)
+		if landed and not on:
+			on = true
+			vy = 0.0
+			air = 0
+			if a in ["jump", "runjump", "double_jump"]:
+				set_anim("jump", 6)
+				arena.sfx("step")
+				arena.dust(position, 0, false)
+		elif landed:
+			vy = 0.0
+		elif on:
+			on = false
+			vy = 0.05
+			coyote = 90.0
+			if not attacking() and a != "kneel" and not busy_rift():
+				set_anim("jump", 4)
+		return
 	if vy >= 0.0:
 		for so in arena.solids:
 			if prev_y <= so.top + 1.0 and position.y >= so.top and position.x > so.x - 2.0 and position.x < so.x + so.w + 2.0:

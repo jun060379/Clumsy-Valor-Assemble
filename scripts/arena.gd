@@ -8,6 +8,7 @@ const TOUCH := preload("res://scripts/touch_controls.gd")
 const MOB := preload("res://scripts/mob.gd")
 const HUD := preload("res://scripts/hud.gd")
 const DUNGEON := preload("res://scripts/dungeon.gd")
+const TOWN := preload("res://scripts/town.gd")
 const WAVES := [["goblin", "goblin", "eye"], ["mush", "goblin", "goblin"], ["mush", "mush", "eye", "goblin"], ["skel", "goblin", "eye", "mush"], ["skel", "skel", "eye", "eye", "goblin"]]
 
 const H := 500.0
@@ -43,13 +44,14 @@ var luce_fx: Array = []
 var mark_pos := Vector2.INF
 var solids: Array = []        # raised rock {x,w,top}
 var ceil_y := -1.0e9
-var level = null              # the dungeon while inside it; null = training ground
+var level = null              # the dungeon or the town; null = training ground
 var shilling := 0
 var fade_rect: ColorRect
 var fade := 0.0
 var fade_dir := 0
 var fade_cb = null
 var near_entry := false
+var near_exit := false
 var train_platforms: Array = []
 
 var t_sky: Texture2D = preload("res://assets/bg/bg_sky.png")
@@ -129,8 +131,9 @@ func _ready() -> void:
 	var tc := Control.new()
 	tc.set_script(TOUCH)
 	ui.add_child(tc)
+	call_deferred("go_town", Vector2(700.0, ground_y), 1)
 	var stamp := Label.new()
-	stamp.text = "STEP 2 · 전투 · 교대  ·  " + _stamp()
+	stamp.text = "STEP 3 · 마을 · 동굴  ·  " + _stamp()
 	stamp.add_theme_font_override("font", font_bold)
 	stamp.add_theme_font_size_override("font_size", 11)
 	stamp.modulate = Color(1, 1, 1, 0.45)
@@ -182,12 +185,15 @@ func view_rect() -> Rect2:
 func snap_camera() -> void:
 	cam.limit_right = int(world_w)
 	cam.limit_top = int(ceil_y + 100.0) if level != null else 0
+	cam.limit_bottom = int(H) if level == null else 100000
 	cam.position = Vector2(player.position.x, cam_y_target())
 	cam.reset_smoothing()
 
 func cam_y_target() -> float:
 	if level == null:
 		return H / 2.0
+	if level.has_method("land"):
+		return clampf(player.position.y - 110.0, level.TTOP - 460.0 + H / 2.0, level.LOWF + 120.0 - H / 2.0)
 	return clampf(player.position.y - 110.0, ceil_y + 100.0 + H / 2.0, ground_y + 70.0 - H / 2.0)
 
 ## black out, run cb, come back
@@ -207,8 +213,17 @@ func clear_room() -> void:
 	player.ghosts.clear()
 	player.outs.clear()
 
-func enter_dungeon() -> void:
+func _drop_level() -> void:
 	clear_room()
+	if level != null:
+		level.cleanup()
+	level = null
+	solids = []
+	ceil_y = -1.0e9
+	player.plat = null
+
+func enter_dungeon() -> void:
+	_drop_level()
 	for d in dummies: d.visible = false
 	level = Node2D.new()
 	level.set_script(DUNGEON)
@@ -217,26 +232,40 @@ func enter_dungeon() -> void:
 	level.generate()
 	level.enter()
 
+## back from the cave: the party comes out by the sortie wagon
 func leave_dungeon() -> void:
-	clear_room()
-	if level != null:
-		level.cleanup()
-	level = null
-	for d in dummies: d.visible = true
+	go_town(Vector2(5107.0, ground_y), -1)
+
+func go_town(at: Vector2, d: int) -> void:
+	_drop_level()
+	for dm in dummies: dm.visible = false
+	platforms = []
+	level = Node2D.new()
+	level.set_script(TOWN)
+	level.arena = self
+	add_child(level)
+	world_w = level.TOWN_W
+	player.position = at
+	player.dir = d
+	player.on = true
+	player.vy = 0.0
+	snap_camera()
+
+func go_training() -> void:
+	_drop_level()
+	for dm in dummies: dm.visible = true
 	world_w = 2800.0
-	ceil_y = -1.0e9
-	solids = []
 	platforms = train_platforms.duplicate()
-	player.position = Vector2(world_w - 260.0, ground_y)
-	player.dir = -1
+	player.position = Vector2(560.0, ground_y)
+	player.dir = 1
 	player.on = true
 	wave = 0
 	wave_t = 1500.0
 	snap_camera()
 
 func party_wiped() -> void:
-	if level != null:
-		fade_then(func(): leave_dungeon())
+	if level != null and not level.has_method("land"):
+		fade_then(func(): go_town(Vector2(5107.0, ground_y), -1))
 
 func try_interact() -> bool:
 	if level != null:
@@ -244,6 +273,10 @@ func try_interact() -> bool:
 	if near_entry:
 		sfx("ready", 0.6)
 		fade_then(func(): enter_dungeon())
+		return true
+	if near_exit:
+		sfx("ready", 0.6)
+		fade_then(func(): go_town(Vector2(820.0 + 378.0, ground_y), 1))
 		return true
 	return false
 
@@ -277,6 +310,7 @@ func _process(delta: float) -> void:
 			level.step(dt)
 		else:
 			near_entry = absf(player.position.x - (world_w - 110.0)) < 90.0 and player.on and absf(player.position.y - ground_y) < 4.0
+			near_exit = absf(player.position.x - 450.0) < 46.0 and player.on and absf(player.position.y - ground_y) < 4.0
 	# fades between rooms
 	if fade_dir == 1:
 		fade = minf(1.0, fade + dt / 260.0)
@@ -349,6 +383,12 @@ func _draw() -> void:
 			draw_texture(t_dirt, Vector2(gx, dy))
 			dy += t_dirt.get_height()
 		gx += t_ground.get_width()
+	# the way back to town
+	var tl := "길드 마을로" + ("  ·  공격 키" if near_exit else "")
+	var tlw := font_black.get_string_size(tl, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x + 20.0
+	draw_rect(Rect2(450.0 - tlw / 2.0, ground_y - 200.0, tlw, 24.0), Color(0, 0, 0, 0.6))
+	draw_string(font_black, Vector2(450.0 - tlw / 2.0 + 10.0, ground_y - 183.0), tl, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#ffe9a8"))
+	draw_rect(Rect2(440.0, ground_y - 170.0, 4.0, 170.0), Color(0.35, 0.28, 0.2))
 	# the way into the cave: a dark mouth at the right end of the training ground
 	var ex := world_w - 110.0
 	draw_rect(Rect2(ex - 60.0, ground_y - 150.0, 120.0, 150.0), Color(0.08, 0.06, 0.1))
@@ -731,7 +771,8 @@ func _draw_fx() -> void:
 
 
 
-## test keys: F2 = straight into the cave, F3 = clear the room, F4 = next room (for checking doors / rooms)
+## test keys: F2 = straight into the cave, F3 = clear the room, F4 = next room, F5 = jump around town, F6 = +3 hours
+var tp_i := 0
 func _unhandled_input(ev: InputEvent) -> void:
 	if ev is InputEventKey and ev.pressed and not ev.echo:
 		if ev.keycode == KEY_F2 and level == null:
@@ -739,6 +780,17 @@ func _unhandled_input(ev: InputEvent) -> void:
 		elif ev.keycode == KEY_F3:
 			for m in mobs:
 				if not m.is_dead(): m.hit(999.0, 0.0)
+		elif ev.keycode == KEY_F5 and level != null and level.has_method("land"):
+			var spots := [700.0, 2100.0, 3024.0, 4400.0, 5107.0, 3000.0, 7550.0, 8750.0]
+			tp_i = (tp_i + 1) % spots.size()
+			var x: float = spots[tp_i]
+			var y: float = level.LOWF if tp_i >= 5 else level.floor_at(x)
+			player.position = Vector2(x, y)
+			player.plat = null
+			player.vy = 0.0
+			snap_camera()
+		elif ev.keycode == KEY_F6 and level != null and level.has_method("land"):
+			level.tod_h = fposmod(level.tod_h + 3.0, 24.0)
 		elif ev.keycode == KEY_F4 and level != null:
 			var rm = level.room()
 			for d in level.doors:

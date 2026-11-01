@@ -70,8 +70,12 @@ func _draw() -> void:
 	draw_string(arena.font_bold, Vector2(bx + 76, by + 22), CH.SKILL[P.who] + ("" if cdk <= 0.0 else " %.0f" % ceil(cdk * (3.0 if P.who == "aida" else 9.0))), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1, 1, 1, 0.5 if cdk > 0.0 else 0.85))
 	var vs := get_viewport_rect().size
 	draw_party(P, vs)
-	if arena.level != null:
+	if arena.level != null and not arena.level.has_method("land"):
 		draw_dungeon_ui(vs)
+	elif arena.level != null:
+		var hh := int(arena.level.tod_h)
+		var mm := int((arena.level.tod_h - hh) * 60.0)
+		draw_string(arena.font_bold, Vector2(18, 92), "길드 마을  %02d:%02d" % [hh, mm], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1, 1, 1, 0.75))
 	# wave counter, top right
 	if arena.wave > 0 and arena.level == null:
 		var alive := 0
