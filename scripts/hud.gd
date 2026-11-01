@@ -7,6 +7,7 @@ extends Control
 const CH = preload("res://scripts/chars.gd")
 const UI := preload("res://scripts/ui_kit.gd")
 const UIA := preload("res://scripts/ui_anim.gd")
+const TOUCH := preload("res://scripts/touch_controls.gd")
 const A0 := PI * 1.18
 const A1 := PI * 2.12
 const RR := 86.0
@@ -44,6 +45,7 @@ var objective := ""
 var obj_shown := ""
 var obj_t := 99999.0
 var clock := 0.0
+var qte_on := {}                 # bench member -> clock when their QTE card came up
 
 
 func _input(ev: InputEvent) -> void:
@@ -221,6 +223,48 @@ func _draw() -> void:
 		var low := f <= 0.3
 		var col := Color.WHITE if hf > 0.0 else (Color("#e8243c") if low and sin(clock / 120.0) > 0.0 else _tc())
 		draw_colored_polygon(_off(pf, c), Color(col, a))
+	_draw_hp_notches(c, f, a)
+
+## HP-condition runes (prototype HPRUNE): while one is equipped a threshold notch with a diamond sits on the crescent,
+## lit cyan with its name once HP is at or under it. A memory node with a low-HP effect hooks in as its own entry:
+## HPRUNE["node"] = {"at": 0.5, "n": Callable (its name, '' = none), "has": Callable}.
+## (In the prototype the memory tree's HPRUNE = {node} is defined first, which shadows the 철벽 entry; here both count.)
+static var HPRUNE := {"wall": {"at": 0.5, "n": "철벽"}}
+
+func hp_rune_on(id: String) -> bool:
+	var e: Dictionary = HPRUNE[id]
+	if e.has("has"): return bool((e["has"] as Callable).call())
+	return arena.runes != null and arena.runes.has(id)
+
+func hp_rune_name(id: String) -> String:
+	var n = HPRUNE[id].get("n", "")
+	return String((n as Callable).call()) if n is Callable else String(n)
+
+func _draw_hp_notches(c: Vector2, f: float, a: float) -> void:
+	for id in HPRUNE:
+		if not hp_rune_on(id) or hp_rune_name(id) == "": continue
+		var th: float = HPRUNE[id]["at"]
+		var on := f <= th
+		var an := A0 + (A1 - A0) * th
+		var tt := _thk(an)
+		var d := Vector2(cos(an), sin(an))
+		var p0 := c + d * (RR - tt / 2.0 - 3.0)
+		var p1 := c + d * (RR + tt / 2.0 + 5.0)
+		draw_line(p0, p1, Color(0, 0, 0, a), 4.0)
+		draw_line(p0, p1, Color(SKY, a) if on else Color(1, 1, 1, 0.85 * a), 2.0)
+		draw_set_transform(c + d * (RR + tt / 2.0 + 9.0), PI / 4.0)
+		draw_rect(Rect2(-2, -2, 7, 7), Color(0, 0, 0, a))
+		draw_rect(Rect2(-3.5, -3.5, 7, 7), Color(SKY, a) if on else Color(1, 1, 1, a))
+		if on:
+			var bf := UI.bhs()
+			var nm := hp_rune_name(id)
+			var w := UI.text_w(bf, nm, 10)
+			var x := -w if d.x < 0.0 else 0.0
+			var by := (bf.get_ascent(10) - bf.get_descent(10)) / 2.0
+			draw_set_transform(c + d * (RR + tt / 2.0 + 16.0), -0.1)
+			draw_string(bf, Vector2(x + 1.0, by + 1.0), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0, 0, 0, a))
+			draw_string(bf, Vector2(x, by), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(SKY, a))
+		draw_set_transform(Vector2.ZERO)
 
 static func _off(p: PackedVector2Array, o: Vector2) -> PackedVector2Array:
 	var out := PackedVector2Array()
@@ -445,49 +489,147 @@ func _draw_party(ci: CanvasItem, vs: Vector2) -> void:
 	var bench: Array = P.party.filter(func(c): return c != P.who)
 	var y := 50.0
 	var idle := idle_t > 3000.0
+	var any_q := false
+	for c in bench:
+		if P.qte["t"] > 0.0 and P.qte["who"].has(c): any_q = true
 	for c in bench:
 		var r := Rect2(vs.x - 10.0 - 48.0, y, 48.0, 48.0)
 		slots.append({"c": c, "rect": r})
 		var col := UI.col(c)
 		var on: bool = P.qte["t"] > 0.0 and P.qte["who"].has(c)
+		if on and not qte_on.has(c): qte_on[c] = clock
+		elif not on: qte_on.erase(c)
 		var down: bool = P.hpm[c] <= 0.0
-		var a := 1.0 if on or not idle else 0.55
+		# #pcol:has(.ps.qte) .ps:not(.qte) .35; idle .55
+		var a := 1.0 if on else (0.35 if any_q else (0.55 if idle else 1.0))
 		var ctr := r.get_center()
-		var R := 24.0 * (1.12 if on else 1.0)
+		var R := 24.0
 		var hk: float = clampf(P.hpm[c] / (arena.runes.max_hp(c) if arena.get("runes") != null else CH.STATS[c]["hp"]), 0.0, 1.0)
-		ci.draw_circle(ctr, R, Color(0, 0, 0, 0.55 * a))
-		if hk > 0.0:
-			var pts := PackedVector2Array([ctr])
-			var nseg := maxi(2, int(40 * hk))
-			for i in nseg + 1:
-				var an := -PI / 2.0 + TAU * hk * i / nseg
-				pts.append(ctr + Vector2(cos(an), sin(an)) * R)
-			ci.draw_colored_polygon(pts, Color(col, a))
-		ci.draw_circle(ctr, R - 4.0 + 2.0, Color(0, 0, 0, a))
-		_face(ci, faces[c], ctr, R - 4.0, Color(0.35, 0.35, 0.35, a) if down else Color(1, 1, 1, a))
-		if P.swap_cd > 0.0 and not down and not on:
-			var k: float = clampf(P.swap_cd / 2200.0, 0.0, 1.0)
-			var pts2 := PackedVector2Array([ctr])
-			for i in 33:
-				var an2 := -PI / 2.0 + TAU * k * i / 32.0
-				pts2.append(ctr + Vector2(cos(an2), sin(an2)) * (R - 4.0))
-			ci.draw_colored_polygon(pts2, Color(10 / 255.0, 8 / 255.0, 16 / 255.0, 0.72 * a))
-		if on:
-			var pulse := 0.5 + 0.5 * sin(Time.get_ticks_msec() / 90.0)
-			ci.draw_arc(ctr, R + 3.0, 0, TAU, 40, Color(1, 1, 1, 0.6 + 0.4 * pulse), 3.0, true)
-			ci.draw_arc(ctr, R + 8.0, -PI / 2.0, -PI / 2.0 + TAU * P.qte["t"] / P.QTE_T, 40, Color.WHITE, 2.0, true)
-			var lbl: String = CH.QTE_LBL[c]
-			var lw := UI.text_w(UI.bhs(), lbl, 16) + 18.0
-			ci.draw_set_transform(Vector2(r.position.x - lw - 6.0, ctr.y), deg_to_rad(-6.0))
-			UI.para(ci, 4, -10, lw, 22, 4.0, col)
-			UI.para(ci, 0, -13, lw, 22, 4.0, Color.BLACK)
-			ci.draw_string(UI.bhs(), Vector2(9, 4), lbl, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.WHITE)
-			ci.draw_set_transform(Vector2.ZERO)
-		else:
+		if not on:
+			# the round face: ring HP, the face, the swap cooldown sweep, the name to its left
+			ci.draw_circle(ctr, R, Color(0, 0, 0, 0.55 * a))
+			if hk > 0.0:
+				var pts := PackedVector2Array([ctr])
+				var nseg := maxi(2, int(40 * hk))
+				for i in nseg + 1:
+					var an := -PI / 2.0 + TAU * hk * i / nseg
+					pts.append(ctr + Vector2(cos(an), sin(an)) * R)
+				ci.draw_colored_polygon(pts, Color(col, a))
+			ci.draw_circle(ctr, R - 4.0 + 2.0, Color(0, 0, 0, a))
+			_face(ci, faces[c], ctr, R - 4.0, Color(0.35, 0.35, 0.35, a) if down else Color(1, 1, 1, a))
+			if P.swap_cd > 0.0 and not down:
+				var k: float = clampf(P.swap_cd / 2200.0, 0.0, 1.0)
+				var pts2 := PackedVector2Array([ctr])
+				for i in 33:
+					var an2 := -PI / 2.0 + TAU * k * i / 32.0
+					pts2.append(ctr + Vector2(cos(an2), sin(an2)) * (R - 4.0))
+				ci.draw_colored_polygon(pts2, Color(10 / 255.0, 8 / 255.0, 16 / 255.0, 0.72 * a))
 			var nm: String = CH.NAME[c]
 			var nw := UI.text_w(UI.bhs(), nm, 11)
 			UI.shadow_text(ci, UI.bhs(), Vector2(r.position.x - 6.0 - nw, ctr.y + 4.0), nm, 11, Color(1, 1, 1, a))
+		# ult-ready mark: a small cyan diamond at the face's lower right (.ps.uready::after)
+		if bench_ult_ready(c):
+			var dc := r.position + Vector2(48.0 - 3.0, 48.0 - 3.0)
+			ci.draw_set_transform(dc + Vector2(2, 2), PI / 4.0)
+			ci.draw_rect(Rect2(-5, -5, 10, 10), Color(0, 0, 0, a))
+			ci.draw_set_transform(dc, PI / 4.0)
+			ci.draw_rect(Rect2(-5, -5, 10, 10), Color(SKY, a))
+			ci.draw_set_transform(Vector2.ZERO)
+		if on:
+			_draw_qte_card(ci, c, ctr, P.qte["t"] / P.QTE_T, clock - float(qte_on[c]))
 		y += 64.0
+
+## a bench member's own 기력 is full (ULTV >= ULTMAX)
+func bench_ult_ready(c: String) -> bool:
+	return arena.ult != null and arena.ult.v[c] >= arena.ult.ULTMAX[c]
+
+## the QTE card (H3 .qc): the round face steps aside for a slanted card of three slabs (member colour 12/8 back,
+## black 5/4 back, the standing art over running colour stripes), a white timer draining along the bottom, the QTE tag,
+## the tag-in name (수호 / 기습 / 구원) and SWITCH!. It pops out (.38 s overshoot) and bobs.
+func _draw_qte_card(ci: CanvasItem, c: String, ctr: Vector2, k: float, since: float) -> void:
+	var pc := UI.col(c)
+	var W := 178.0
+	var Hh := 62.0
+	var e := UI.bez(0.2, 1.6, 0.4, 1.0, clampf(since / 380.0, 0.0, 1.0))
+	var op := clampf(since / 150.0, 0.0, 1.0)
+	var bob := Vector2.ZERO
+	if since > 400.0:
+		var ph := fmod((since - 400.0) / 900.0, 2.0)
+		bob = Vector2(-3, -2) * UI.bez(0.42, 0.0, 0.58, 1.0, ph if ph < 1.0 else 2.0 - ph)
+	# .ps (rotated -4deg about its centre) -> the card box (right 4, centred) -> rotate(-7deg) translateX scale
+	var xf := Transform2D(deg_to_rad(-4.0), ctr) * Transform2D(0.0, bob + Vector2(-69.0, 0.0))
+	xf = xf * Transform2D(deg_to_rad(-7.0), Vector2.ZERO) * Transform2D(0.0, Vector2(60.0 * (1.0 - e), 0.0))
+	var sc := lerpf(0.6, 1.0, e)
+	xf = xf * Transform2D(0.0, Vector2(sc, sc), 0.0, Vector2.ZERO) * Transform2D(0.0, Vector2(-W / 2.0, -Hh / 2.0))
+	ci.draw_set_transform_matrix(xf)
+	var box := Rect2(0, 0, W, Hh)
+	var front := UI.clip(box, [[9, 0], [100, 8], [92, 100], [0, 94]])
+	ci.draw_colored_polygon(_off(UI.clip(box, [[4, 10], [100, 0], [94, 100], [0, 86]]), Vector2(12, 8)), Color(pc, op))
+	ci.draw_colored_polygon(_off(front, Vector2(5, 4)), Color(0, 0, 0, op))
+	# running stripes (-55deg, 10 px each, one period every .6 s)
+	var dark := pc.lerp(Color.BLACK, 0.32)
+	ci.draw_colored_polygon(front, Color(pc, op))
+	var gd := Vector2(sin(deg_to_rad(-55.0)), -cos(deg_to_rad(-55.0)))
+	var along := Vector2(-gd.y, gd.x) * 400.0
+	var shift := fmod(clock / 600.0, 1.0) * 24.4 * -gd.x
+	var p0 := -60.0
+	while p0 < 200.0:
+		var o := gd * (p0 + 10.0 + shift)
+		var band := PackedVector2Array([o - along, o + along, o + gd * 10.0 + along, o + gd * 10.0 - along])
+		for piece in Geometry2D.intersect_polygons(band, front):
+			ci.draw_colored_polygon(piece, Color(dark, op))
+		p0 += 20.0
+	# the standing art: 118% wide, positioned 50% 16%
+	var im: Texture2D = art[c][0]
+	var aw := W * 1.18
+	var ah := aw * im.get_height() / im.get_width()
+	var ao := Vector2((W - aw) * 0.5, (Hh - ah) * 0.16)
+	var uvs := PackedVector2Array()
+	for v in front:
+		uvs.append((v - ao) / Vector2(aw, ah))
+	ci.draw_polygon(front, PackedColorArray([Color(1, 1, 1, op)]), uvs, im)
+	# ::after: dark from the left, gone by 38%
+	var sh := PackedVector2Array()
+	var shc := PackedColorArray()
+	for v in front:
+		sh.append(v)
+		shc.append(Color(0, 0, 0, 0.55 * op * clampf(1.0 - v.x / (W * 0.38), 0.0, 1.0)))
+	ci.draw_polygon(sh, shc)
+	# timer: white, skewX(-30deg), draining from the right (scaleX k about its left end)
+	var tx0 := W * 0.12
+	var tx1 := W - W * 0.10
+	var tw := (tx1 - tx0) * clampf(k, 0.0, 1.0)
+	if tw > 0.2:
+		var ty0 := Hh + 9.0 - 6.0
+		var t3 := tan(deg_to_rad(30.0)) * 3.0
+		var bar := PackedVector2Array([Vector2(tx0 + t3, ty0), Vector2(tx0 + tw + t3, ty0), Vector2(tx0 + tw - t3, ty0 + 6.0), Vector2(tx0 - t3, ty0 + 6.0)])
+		ci.draw_colored_polygon(_off(bar, Vector2(2, 2)), Color(0, 0, 0, op))
+		ci.draw_colored_polygon(bar, Color(1, 1, 1, op))
+	# the tag-in name: Black Han Sans 22, white with a 3 px black shadow
+	var bf := UI.bhs()
+	var lbl: String = CH.QTE_LBL[c]
+	var nxf := xf * Transform2D(deg_to_rad(-4.0), Vector2(12.0, Hh / 2.0))
+	ci.draw_set_transform_matrix(nxf)
+	var by := (bf.get_ascent(22) - bf.get_descent(22)) / 2.0
+	ci.draw_string(bf, Vector2(3, by + 3), lbl, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(0, 0, 0, op))
+	ci.draw_string(bf, Vector2(-1, by - 1), lbl, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(0, 0, 0, op))
+	ci.draw_string(bf, Vector2(0, by), lbl, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(1, 1, 1, op))
+	# QTE: a black chip in the member colour (Anton 10, wide spacing), tilted -9deg, top left
+	var fq := UI.anton(false, 2)
+	var qw := UI.text_w(fq, "QTE", 10) + 12.0
+	var qh := 14.0
+	ci.draw_set_transform_matrix(xf * Transform2D(deg_to_rad(-9.0), Vector2(-2.0 + qw / 2.0, -10.0 + qh / 2.0)))
+	ci.draw_rect(Rect2(-qw / 2.0, -qh / 2.0, qw, qh), Color(0, 0, 0, op))
+	ci.draw_string(fq, Vector2(-qw / 2.0 + 6.0, -qh / 2.0 + 1.0 + fq.get_ascent(10)), "QTE", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(pc, op))
+	# SWITCH!: a white chip (Anton 13 italic), tilted 7deg, top right, hard shadow
+	var fs := UI.anton(true, 1)
+	var sw := UI.text_w(fs, "SWITCH!", 13) + 16.0
+	var shh := 19.0
+	ci.draw_set_transform_matrix(xf * Transform2D(deg_to_rad(7.0), Vector2(W + 6.0 - sw / 2.0, -12.0 + shh / 2.0)))
+	ci.draw_rect(Rect2(-sw / 2.0 + 3.0, -shh / 2.0 + 3.0, sw, shh), Color(0, 0, 0, op))
+	ci.draw_rect(Rect2(-sw / 2.0, -shh / 2.0, sw, shh), Color(1, 1, 1, op))
+	ci.draw_string(fs, Vector2(-sw / 2.0 + 8.0, -shh / 2.0 + fs.get_ascent(13)), "SWITCH!", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0, 0, 0, op))
+	ci.draw_set_transform(Vector2.ZERO)
 
 ## a texture clipped to a circle (polygon with UVs)
 func _face(ci: CanvasItem, tex: Texture2D, c: Vector2, r: float, mod: Color) -> void:
@@ -505,16 +647,18 @@ func _draw_pips(ci: CanvasItem, vs: Vector2) -> void:
 	var P = arena.player
 	var base := Vector2(vs.x - 30.0, vs.y - 22.0)
 	if arena.cfg.touch_ui():
-		base = Vector2(vs.x - 206.0 - 8.0, vs.y - 158.0 - 40.0)
+		base = TOUCH.pip_base(get_viewport())     # #dashui: a row just above the dash button
+	# H2/H3 #dashui .pip: 11 px diamonds, 2 px white rim on black, filled with the leader's colour (dim while recharging)
+	var tc := _tc()
 	for i in 2:
-		var c := base + Vector2(i * 14.0, 0)
+		var c := base + Vector2(i * 16.0, 0)
 		var full: bool = i < P.charges
 		var k: float = 1.0 if full else (clampf(P.recharge / 1300.0, 0.0, 1.0) if i == P.charges else 0.0)
 		ci.draw_set_transform(c, PI / 4.0)
-		ci.draw_rect(Rect2(-4.5, -4.5, 9, 9), Color(14 / 255.0, 11 / 255.0, 20 / 255.0, 0.85))
-		ci.draw_rect(Rect2(-4.5, -4.5, 9, 9), Color(0.95, 0.87, 0.68, 0.85), false, 1.0)
+		ci.draw_rect(Rect2(-5.5, -5.5, 11, 11), Color.WHITE)
+		ci.draw_rect(Rect2(-3.5, -3.5, 7, 7), Color.BLACK)
 		if k > 0.0:
-			ci.draw_rect(Rect2(-3.5 * k, -3.5 * k, 7 * k, 7 * k), Color("#e8cf98"))
+			ci.draw_rect(Rect2(-3.5 * k, -3.5 * k, 7 * k, 7 * k), Color(tc, 1.0 if full else 0.55))
 		ci.draw_set_transform(Vector2.ZERO)
 
 
