@@ -1,22 +1,25 @@
 #!/usr/bin/env python3
 """Build Estelle's 초심 (skin id estelle_base, the default) from the user's two deliveries into assets/skins/estelle_base/.
 
-usage: python3 tools/make_skin_chosim.py <estelle_v1 folder> <estelle_v2 folder> [contact-sheet folder] [--v1-loco] [--v1-st]
+usage: python3 tools/make_skin_chosim.py <estelle_v1 folder> <estelle_v2 folder> <estelle_v3 folder> [contact-sheet folder]
+       [--v1-idle] [--v1-loco] [--v1-st]
 
 estelle_v1 (the first delivery; magenta sheets on a loose grid, run / walk transparent):
-  jump_8f_magenta.png       crouch, take-off, rise, apex, fall, fall, land, land → row 6  jump
-  run6_magenta.png          running take-off (2 rows of 3)                       → row 7  runjump
   walk_43f.png              43-frame walk cycle (7 a row)                        → rows 36-37 walk, 10 of its frames (KEEP)
+  jump_8f_magenta.png, run6_magenta.png: the first jump / runjump, replaced by v3's
   idle_4f_magenta.png, walkstart / runstop / turn_4f_magenta.png, run_18f.png, ref_greenbg.png: the first idle, start,
                             stop, turn, run and standing art, replaced by v2's; --v1-idle / --v1-loco / --v1-st build them again
 estelle_v2 (one row per file, facing right, magenta unless noted):
   ref_greenbg.png (green) → row 0 idle: the standing picture, the same in all 4 frames (the game's idle breathing,
                             player.gd draw_frame, stretches the torso for the motion); the size reference; also st_base.png
-  run_15f.png (transparent, 4 a row) → row 35 run, 8 of 15     start_4f / stop_4f / turn_4f → rows 3 / 4 / 5
+  start_4f / stop_4f / turn_4f → rows 3 / 4 / 5
   attack1_5f (overhead slash) → 8   attack2_rising_5f → 9   attack3_thrust_5f → 10   kneel_4f → 11   kneel_attack_6f → 12
-  attack_high_5f → 13   guard_4f → 14   air_combo_9f → 16   dive_6f → 17 (6 of 6, one held twice, one left out)
-  double_jump_6f (somersault) → 18   hurt_2f → 19   death_4f → 20   dash_6f → 21   vow_3f → 22   air_guard_4f → 23
-  teeter_4f → 28   ref_greenbg.png (green) → st_base.png
+  attack_high_5f → 13   guard_4f → 14   air_combo_9f → 16   double_jump_6f (somersault) → 18   hurt_2f → 19   death_4f → 20   dash_6f → 21   vow_3f → 22   air_guard_4f → 23
+  ref_greenbg.png (green) → st_base.png
+  (v2's run_15f, kneel_attack_6f, dive_6f and teeter_4f: replaced by v3's)
+estelle_v3 (one row per file, facing right, magenta):
+  jump_8f → 6 (8 of 8: the fall held twice, the landing crouch and standing)   runjump_6f → 7   kneel_attack_6f → 12
+  dive_6f → 17   teeter_4f → 28   run_8f → 35 (8 a cycle, no sword: the user's choice)
 no art of their own, made from the cells above (COMPOSE): parry (15) and air_parry (24) — the user's call, "패링 모션은 공격
   모션으로 충당": attack2's rising cut and air_combo's rising cut; tag_in (26): dash into attack3's thrust; tag_out (27): runjump.
 
@@ -50,8 +53,8 @@ ROOT = os.path.join(os.path.dirname(__file__), '..')
 OUT = os.path.join(ROOT, 'assets/skins/estelle_base')
 args = [a for a in sys.argv[1:] if not a.startswith('--')]
 FLAGS = {a for a in sys.argv[1:] if a.startswith('--')}
-SRC1, SRC2 = args[0], args[1]
-CS = args[2] if len(args) > 2 else None
+SRC1, SRC2, SRC3 = args[0], args[1], args[2]
+CS = args[3] if len(args) > 3 else None
 V1_LOCO = '--v1-loco' in FLAGS
 V1_IDLE = '--v1-idle' in FLAGS
 CSCALE = 1.3                          # chars.gd SCALE estelle: a sheet pixel is 0.5 × 1.3 world px
@@ -66,8 +69,6 @@ def base_h(row):
 
 # ---------------- v1: as the first build made them ----------------
 SPEC1 = [  # name, file, key, cols, n, target row, grounded
-    ('jump', 'jump_8f_magenta.png', 'magenta', 4, 8, 6, False),
-    ('runjump', 'run6_magenta.png', 'magenta', 3, 6, 7, False),
     ('walk', 'walk_43f.png', None, 7, 43, 36, True),
 ]
 if V1_LOCO:
@@ -80,7 +81,7 @@ if V1_IDLE: SPEC1.insert(0, ('idle', 'idle_4f_magenta.png', 'magenta', 4, 4, 0, 
 # idle frame 0's head in its source pixels (cropped to the figure): crown, bow, face and chin, no loose hair
 HEAD_BOX = (150, 10, 275, 135) if V1_IDLE else (185, 20, 330, 170)
 HEAD_SCALES = (0.25, 1.31)              # the v2 idle's head is ~1.25x the v1 idle's in source pixels: room below 0.40
-GROUND1 = {'jump': [0, 6, 7], 'runjump': [0]}      # frames standing on the ground (verified by eye)
+GROUND1 = {}                            # v1 rows off the ground: none left (jump / runjump are v3's)
 
 # ---------------- v2 ----------------
 # file, frames in it, row, options:
@@ -88,35 +89,40 @@ GROUND1 = {'jump': [0, 6, 7], 'runjump': [0]}      # frames standing on the grou
 #   y      'ground' / 'air'               ground  for 'air': the frames standing on the floor
 #   x      'hip' / 'plant' / 'body'       plant   for 'plant': the frames that keep frame 0's back foot
 #   pick   source frame per game frame (default: all, in order)
+RUN_PICK = [2, 3, 4, 5, 6, 7, 0, 1]     # run_8f's footfalls are its frames 3 and 7 (gait below): on game frames 1 and 5
 SPEC2 = {
     'attack1': dict(file='attack1_5f.png', n=5, row=8, smear=True, x='plant', plant=[1, 2, 3]),
     'attack2': dict(file='attack2_rising_5f.png', n=5, row=9, smear=True, x='plant', plant=[1, 2, 3]),
     'attack3': dict(file='attack3_thrust_5f.png', n=5, row=10, smear=True, x='plant', plant=[1, 2, 3]),
     'kneel': dict(file='kneel_4f.png', n=4, row=11),
-    'kneel_attack': dict(file='kneel_attack_6f.png', n=6, row=12, smear=True),
+    'kneel_attack': dict(file='kneel_attack_6f.png', n=6, row=12, smear=True, src=3),     # the smear on frame 3 = the hit
     'attack_high': dict(file='attack_high_5f.png', n=5, row=13, smear=True, x='plant', plant=[1, 2, 3]),
     'guard': dict(file='guard_4f.png', n=4, row=14),
     'air_combo': dict(file='air_combo_9f.png', n=9, row=16, smear=True, y='air'),
     # dive: the game holds frame 2 while falling (chars.gd dive, player.gd: f 3 waits for the ground), 3 is the slam,
-    # 4-5 the recovery. Source 1 turns the blade down, 3 plunges feet first (the held fall); source 2 (a slanted forward
-    # dive) doesn't fit a straight drop and is left out; the landing kneel shows for the slam and the next frame
-    'dive': dict(file='dive_6f.png', n=6, row=17, y='air', ground=[4, 5], pick=[0, 1, 3, 4, 4, 5]),
+    # 4-5 the recovery: the art matches (blade down, the plunge held, landing kneel with the sword planted, rise, stand)
+    'dive': dict(file='dive_6f.png', n=6, row=17, y='air', ground=[3, 4, 5], src=3),
+    # jump: the game starts a standing jump on 2, holds 5 while falling (player.gd locomotion), lands on 6-7; the art's
+    # 5 is already the landing crouch, so its fall (4) is held for 4-5, then the crouch and the stand (7 = 6, unused)
+    'jump': dict(file='jump_8f.png', n=8, row=6, y='air', ground=[0, 5, 6, 7], pick=[0, 1, 2, 3, 4, 4, 5, 6], src=3),
+    # runjump: starts on 1, holds 4 in the air (the front foot reaching down), 5 lands into the run
+    'runjump': dict(file='runjump_6f.png', n=6, row=7, y='air', ground=[0, 5], src=3),
     'double_jump': dict(file='double_jump_6f.png', n=6, row=18, y='air', x='body'),
     'hurt': dict(file='hurt_2f.png', n=2, row=19),
     'death': dict(file='death_4f.png', n=4, row=20),
     'dash': dict(file='dash_6f.png', n=6, row=21, y='air', ground=[0, 4, 5]),
     'vow': dict(file='vow_3f.png', n=3, row=22),
     'air_guard': dict(file='air_guard_4f.png', n=4, row=23, y='air'),
-    'teeter': dict(file='teeter_4f.png', n=4, row=28),
+    'teeter': dict(file='teeter_4f.png', n=4, row=28, src=3),
 }
 if not V1_LOCO:
     SPEC2.update({
         'start': dict(file='start_4f.png', n=4, row=3),
         'stop': dict(file='stop_4f.png', n=4, row=4),
         'turn': dict(file='turn_4f.png', n=4, row=5),
-        # 15 frames for two steps, footfalls at 1 and 8: reach, contact, down, passing of each step, two source frames
-        # apart (7 → 8 is one); contacts land on game frames 1 and 5 like 기본's run (skins.steps' default)
-        'run': dict(file='run_15f.png', n=15, row=35, cols=4, key=None, pick=[14, 1, 3, 5, 7, 8, 10, 12]),
+        # 8 frames for two steps (contact, down, passing, flight each); rotated so the contacts are game frames 1 and 5
+        # like 기본's run (skins.steps' default) and the bob's dip (skin_data.gd) lands on them
+        'run': dict(file='run_8f.png', n=8, row=35, src=3, pick=RUN_PICK),
     })
 # rows with no art of their own: [anim, game frame] cells of the rows above
 COMPOSE = {
@@ -192,7 +198,7 @@ for nm, (fr, row, grounded, sh) in strips.items():
         f['cell'], f['clipped'] = render(f, k, f['hip'], f.get('lift', 0.0))
         put(row + i // 9, i % 9, f['cell'])
     cells[nm] = [f['cell'] for f in fr]
-    info[nm] = {'src': 'v1', 'row': row, 'n': len(fr), 'scale': round(k, 4), 'head_vs_idle': head[nm]['head_vs_idle'],
+    info[nm] = {'src': 'v2 ref' if nm == 'idle' and not V1_IDLE else 'v1', 'row': row, 'n': len(fr), 'scale': round(k, 4), 'head_vs_idle': head[nm]['head_vs_idle'],
                 'median_h': round(float(np.median([f['height'] for f in fr])) * k, 1), 'keep': KEEP.get(nm),
                 'clipped': [i for i, f in enumerate(fr) if f['clipped']]}
 
@@ -223,7 +229,7 @@ def measure2(f):
 
 raw2 = {}
 for nm, o in SPEC2.items():
-    path = os.path.join(SRC2, o['file'])
+    path = os.path.join(SRC3 if o.get('src') == 3 else SRC2, o['file'])
     key = o.get('key', 'magenta')
     im = S.key_out(path, key, smear=o.get('smear', False)) if key else np.asarray(Image.open(path).convert('RGBA'))
     fr = [measure2(f) for f in S.split_frames(im, o['n'], o.get('cols'))]
@@ -253,7 +259,7 @@ for nm, o in SPEC2.items():
     cells[nm] = [rendered[i][0] for i in pick]
     for j, c in enumerate(cells[nm]): put(o['row'] + j // 9, j % 9, c)
     if nm == 'run': full_cells['run'] = [c for c, _ in rendered]
-    info[nm] = {'src': 'v2', 'row': o['row'], 'n': len(pick), 'pick': pick, 'scale': round(k, 4), 'head_vs_idle': round(rel, 3),
+    info[nm] = {'src': 'v%d' % o.get('src', 2), 'row': o['row'], 'n': len(pick), 'pick': pick, 'scale': round(k, 4), 'head_vs_idle': round(rel, 3),
                 'head': [(f['head'][0], f['head'][1], f['head'][2]) for f in fr],
                 'h': [round(f['height'] * k) for f in fr], 'lift_px': [round(l * k) for l in lift],
                 'anchor_vs_hip_px': [round((ax[i] - f['hip']) * k) for i, f in enumerate(fr)],
@@ -310,7 +316,7 @@ def gait(full, kept, speed, n_ms):
             'seam_diff': round(seam, 2), 'mean_step_diff': round(inner, 2)}
 
 
-info['gait_run'] = gait(full_cells['run'], cells['run'], RUN_SPEED, 610.0)
+info['gait_run'] = gait(full_cells['run'], cells['run'], RUN_SPEED, 620.0)
 
 # bounds of the costume's own rows
 bnd = {}
