@@ -4,12 +4,13 @@ extends Control
 ## Hidden until the device has a touch screen (or the first touch arrives).
 
 const BTN := [
-	{"a": "attack", "label": "ATK", "pos": Vector2(-96, -96), "r": 46.0},
-	{"a": "jump", "label": "JUMP", "pos": Vector2(-196, -62), "r": 36.0},
-	{"a": "dash", "label": "DASH", "pos": Vector2(-206, -158), "r": 32.0},
-	{"a": "guard", "label": "GUARD", "pos": Vector2(-104, -200), "r": 32.0},
+	{"a": "attack", "label": "공격", "pos": Vector2(-96, -96), "r": 46.0},
+	{"a": "jump", "label": "점프", "pos": Vector2(-196, -62), "r": 36.0},
+	{"a": "dash", "label": "대시", "pos": Vector2(-206, -158), "r": 32.0},
+	{"a": "guard", "label": "스킬", "pos": Vector2(-104, -200), "r": 32.0},
 ]
 const DEAD := 18.0
+const FONT := preload("res://assets/fonts/NotoSansKR-Black.otf")
 const STICK_R := 60.0
 
 var stick_id := -1
@@ -85,7 +86,7 @@ func set_act(a: String, on: bool) -> void:
 func _draw() -> void:
 	if not shown:
 		return
-	var font := ThemeDB.fallback_font
+	var font: Font = FONT
 	for b in BTN:
 		var c := _btn_center(b)
 		var on: bool = held.values().has(b["a"])

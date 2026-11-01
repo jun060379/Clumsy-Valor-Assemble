@@ -37,6 +37,8 @@ var font_anton: Font = preload("res://assets/fonts/Anton.woff2")
 var flash_mat := ShaderMaterial.new()
 var t_proj: Texture2D = preload("res://assets/mobs/eye_proj.png")
 var witch_rect: ColorRect
+var luce_fx: Array = []
+var mark_pos := Vector2.INF
 
 var t_sky: Texture2D = preload("res://assets/bg/bg_sky.png")
 var t_mtn: Texture2D = preload("res://assets/bg/bg_mountains.png")
@@ -110,7 +112,7 @@ func _ready() -> void:
 	tc.set_script(TOUCH)
 	ui.add_child(tc)
 	var stamp := Label.new()
-	stamp.text = "STEP 2 · 전투  ·  " + _stamp()
+	stamp.text = "STEP 2 · 전투 · 교대  ·  " + _stamp()
 	stamp.add_theme_font_override("font", font_bold)
 	stamp.add_theme_font_size_override("font_size", 11)
 	stamp.modulate = Color(1, 1, 1, 0.45)
@@ -127,9 +129,9 @@ func _stamp() -> String:
 func setup_input() -> void:
 	var map := {
 		"left": [KEY_LEFT], "right": [KEY_RIGHT], "up": [KEY_UP], "down": [KEY_DOWN],
-		"jump": [KEY_Z], "attack": [KEY_X], "guard": [KEY_A], "dash": [KEY_SHIFT],
+		"jump": [KEY_Z], "attack": [KEY_X], "guard": [KEY_A], "dash": [KEY_SHIFT], "swap": [KEY_CTRL, KEY_C],
 	}
-	var pad := {"jump": JOY_BUTTON_A, "attack": JOY_BUTTON_X, "dash": JOY_BUTTON_B, "guard": JOY_BUTTON_RIGHT_SHOULDER,
+	var pad := {"jump": JOY_BUTTON_A, "attack": JOY_BUTTON_X, "dash": JOY_BUTTON_B, "guard": JOY_BUTTON_RIGHT_SHOULDER, "swap": JOY_BUTTON_Y,
 		"left": JOY_BUTTON_DPAD_LEFT, "right": JOY_BUTTON_DPAD_RIGHT, "up": JOY_BUTTON_DPAD_UP, "down": JOY_BUTTON_DPAD_DOWN}
 	for a in map:
 		if not InputMap.has_action(a):
@@ -177,6 +179,7 @@ func _process(delta: float) -> void:
 		for m in mobs:
 			m.step(dt * wk)
 		step_proj(dt * wk)
+		step_luce(dt)
 		dodge_check()
 		step_waves(dt)
 	for m in mobs:
@@ -205,6 +208,8 @@ func _process(delta: float) -> void:
 	flash_rect.color.a = flash
 	# camera: follow the feet horizontally, fixed height (the room is one screen tall)
 	var target := Vector2(player.position.x, H / 2.0)
+	if player.cam_focus["t"] > 0.0:
+		target.x = player.cam_focus["x"]
 	cam.position = cam.position.lerp(target, minf(1.0, dt / 90.0))
 	cam.position.y = H / 2.0
 	cam.offset = Vector2(randf_range(-1, 1) * shake_amt * 0.6 + shake_dir * shake_amt * 0.3, randf_range(-1, 1) * shake_amt * 0.4)
@@ -371,26 +376,27 @@ func perfect_parry(m) -> void:
 	m.flare_t = -1.0
 	sfx("heavy", 0.7)
 
-func big_word(s: String, col: Color, life: float, off: Vector2) -> void:
-	big_words.append({"s": s, "col": col, "t": 0.0, "life": life, "x": player.position.x + off.x, "y": player.position.y + off.y, "screen": off == Vector2.ZERO})
+func big_word(s: String, col: Color, life: float, off: Vector2, at := Vector2.INF) -> void:
+	var p: Vector2 = at if at != Vector2.INF else player.position + off
+	big_words.append({"s": s, "col": col, "t": 0.0, "life": life, "x": p.x, "y": p.y, "screen": off == Vector2.ZERO and at == Vector2.INF})
 
 func shake(amt: float, d: int) -> void:
 	shake_amt = maxf(shake_amt, amt)
 	shake_dir = d
 
-func slash_fx(c: Vector2, r: float, a0: float, a1: float, d: int) -> void:
-	fx.append({"k": "slash", "x": c.x, "y": c.y, "r": r, "a0": a0, "a1": a1, "d": d, "t": 0.0, "life": 170.0})
+func slash_fx(c: Vector2, r: float, a0: float, a1: float, d: int, col := Color(1.0, 0.55, 0.82)) -> void:
+	fx.append({"k": "slash", "x": c.x, "y": c.y, "r": r, "a0": a0, "a1": a1, "d": d, "col": col, "t": 0.0, "life": 170.0})
 
-func streak_fx(x0: float, x1: float, y: float, d: int) -> void:
-	fx.append({"k": "streak", "x": x0, "x1": x1, "y": y, "d": d, "t": 0.0, "life": 160.0})
+func streak_fx(x0: float, x1: float, y: float, d: int, col := Color(1, 0.8, 0.93)) -> void:
+	fx.append({"k": "streak", "x": x0, "x1": x1, "y": y, "d": d, "col": col, "t": 0.0, "life": 160.0})
 
 func dust(p: Vector2, d: int, heavy: bool) -> void:
 	for i in (8 if heavy else 4):
 		var sx := (randf() - 0.5) * 0.12 + d * 0.08
 		fx.append({"k": "dust", "x": p.x + (randf() - 0.5) * 30.0, "y": p.y - randf() * 6.0, "vx": sx, "vy": -0.04 - randf() * 0.06, "r": 4.0 + randf() * 5.0, "t": 0.0, "life": 320.0})
 
-func ring(p: Vector2, r: float) -> void:
-	fx.append({"k": "ring", "x": p.x, "y": p.y, "r": r, "t": 0.0, "life": 260.0})
+func ring(p: Vector2, r: float, col := Color(1, 0.8, 0.95)) -> void:
+	fx.append({"k": "ring", "x": p.x, "y": p.y, "r": r, "col": col, "t": 0.0, "life": 260.0})
 
 func spark(p: Vector2, n: int) -> void:
 	for i in n:
@@ -398,17 +404,127 @@ func spark(p: Vector2, n: int) -> void:
 		var s := 0.25 + randf() * 0.4
 		fx.append({"k": "sp", "x": p.x, "y": p.y, "vx": cos(a) * s, "vy": sin(a) * s, "t": 0.0, "life": 140.0 + randf() * 120.0})
 
-func damage_text(p: Vector2, dmg: int, big: bool) -> void:
-	fx.append({"k": "txt", "x": p.x + randf_range(-10, 10), "y": p.y, "s": str(dmg * 10), "big": big, "t": 0.0, "life": 600.0})
+func damage_text(p: Vector2, value: int, big: bool) -> void:
+	fx.append({"k": "txt", "x": p.x + randf_range(-10, 10), "y": p.y, "s": str(value), "big": big, "t": 0.0, "life": 600.0})
 
-func charge_fx(p: Vector2, t: float) -> void:
+func charge_fx(p: Vector2, t: float, col := Color(1.0, 0.47, 0.75)) -> void:
 	if randf() < 0.35:
 		var a := randf() * TAU
 		var r := 40.0 + randf() * 20.0
-		fx.append({"k": "mote", "x": p.x + cos(a) * r, "y": p.y + sin(a) * r, "tx": p.x, "ty": p.y, "full": t >= 650.0, "t": 0.0, "life": 220.0})
+		fx.append({"k": "mote", "x": p.x + cos(a) * r, "y": p.y + sin(a) * r, "tx": p.x, "ty": p.y, "full": t >= 650.0, "col": col, "t": 0.0, "life": 220.0})
+
+
+# ---------- Luce's light ----------
+## a light bolt: rises up-and-back, holds a beat, then shoots and homes in on the target
+func bolt(o: Vector2, tg, sz: float, hold: float, d: int) -> void:
+	var b := {"k": "bolt", "x": o.x, "y": o.y, "vx": d * 0.001, "vy": 0.0, "tg": tg, "sz": sz, "hold": hold, "hits": [], "home": 0.011, "dmg": 1.0, "mul": player.atk_mul(), "d": d, "t": 0.0, "life": 1100.0 + hold, "tr": []}
+	if tg == null:
+		b["home"] = 0.0
+	luce_fx.append(b)
+
+func pillar(x: float, y: float, dmg: float, d: int) -> void:
+	luce_fx.append({"k": "pillar", "x": x, "y": y, "dmg": dmg, "d": d, "hits": [], "mul": player.atk_mul(), "t": 0.0, "life": 420.0})
+	sfx("ready", 0.4)
+
+func lightning(x: float, y: float, sz: float, dmg: float, d: int) -> void:
+	var pts := PackedVector2Array()
+	var px := x + (randf() - 0.5) * 60.0
+	var py := -20.0
+	while py < y - 30.0:
+		pts.append(Vector2(px, py))
+		py += 30.0 + randf() * 30.0
+		px += (x - px) * 0.35 + (randf() - 0.5) * 50.0 * sz
+	pts.append(Vector2(x, y))
+	luce_fx.append({"k": "lightning", "x": x, "y": y, "sz": sz, "dmg": dmg, "d": d, "pts": pts, "hits": [], "mul": player.atk_mul(), "t": 0.0, "life": 380.0})
+	flash = maxf(flash, 0.12 + 0.06 * sz)
+
+func step_luce(dt: float) -> void:
+	for f in luce_fx:
+		f["t"] += dt
+		if f["k"] == "bolt":
+			var tg = f["tg"]
+			var live: bool = tg != null and is_instance_valid(tg) and tg.alive()
+			if f["hold"] > 0.0:
+				f["hold"] -= dt
+				var tp: Vector2 = (tg.position + Vector2(0, -50)) if live else Vector2(f["x"] + f["d"] * 400.0, f["y"] + 40.0)
+				var dv := (tp - Vector2(f["x"], f["y"])).normalized()
+				f["y"] -= 0.01 * dt
+				if f["hold"] <= 0.0:
+					f["vx"] = dv.x * 1.35
+					f["vy"] = dv.y * 1.35
+					if not live: f["tg"] = null
+					sfx("thrust", 0.5)
+				continue
+			if live:
+				var tp2: Vector2 = tg.position + Vector2(0, -50)
+				var dv2 := (tp2 - Vector2(f["x"], f["y"])).normalized()
+				var sp := minf(1.25, Vector2(f["vx"], f["vy"]).length() + 0.0012 * dt)
+				var k2 := minf(1.0, dt * f["home"] * (1.0 + f["t"] / 250.0))
+				var v := Vector2(f["vx"], f["vy"]).lerp(dv2 * sp, k2).normalized() * sp
+				f["vx"] = v.x
+				f["vy"] = v.y
+			f["x"] += f["vx"] * dt
+			f["y"] += f["vy"] * dt
+			f["tr"].append(Vector2(f["x"], f["y"]))
+			if f["tr"].size() > 8: f["tr"].pop_front()
+			var R: float = 16.0 * f["sz"]
+			for m in foes():
+				if f["hits"].has(m): continue
+				if absf(m.position.x - f["x"]) < R + 20.0 and m.position.y - 95.0 < f["y"] + R and m.position.y > f["y"] - R:
+					f["hits"].append(m)
+					m.hit(f["dmg"], signf(f["vx"]) * 4.0, f["mul"])
+					spark(Vector2(f["x"], f["y"]), 8)
+					sfx("hit", 0.6)
+					f["t"] = f["life"] + 1.0
+					break
+			if f["y"] > ground_y + 10.0 or f["x"] < -60.0 or f["x"] > world_w + 60.0:
+				f["t"] = f["life"] + 1.0
+		elif f["t"] < 120.0:
+			var R2: float = 48.0 if f["k"] == "pillar" else 40.0 * f["sz"]
+			for m in foes():
+				if f["hits"].has(m): continue
+				if absf(m.position.x - f["x"]) < R2 + 20.0 and m.position.y > f["y"] - 220.0 and m.position.y - 95.0 < f["y"] + 10.0:
+					f["hits"].append(m)
+					m.hit(f["dmg"], f["d"] * 6.0, f["mul"])
+					spark(m.position + Vector2(0, -50), 12)
+	luce_fx = luce_fx.filter(func(f): return f["t"] < f["life"])
+
+func _draw_luce() -> void:
+	var gold := Color(1.0, 0.86, 0.45)
+	for f in luce_fx:
+		var k: float = f["t"] / f["life"]
+		match f["k"]:
+			"bolt":
+				var tr: Array = f["tr"]
+				for i in tr.size():
+					var a := float(i + 1) / tr.size()
+					fx_layer.draw_circle(tr[i], 5.0 * f["sz"] * a, Color(1, 0.8, 0.4, 0.35 * a))
+				var c := Vector2(f["x"], f["y"])
+				fx_layer.draw_circle(c, 11.0 * f["sz"], Color(1, 0.78, 0.3, 0.45))
+				fx_layer.draw_circle(c, 6.0 * f["sz"], Color(1, 0.95, 0.75))
+				fx_layer.draw_circle(c, 3.0 * f["sz"], Color.WHITE)
+			"pillar":
+				var e := minf(1.0, k / 0.2)
+				var fade := 1.0 - maxf(0.0, (k - 0.55) / 0.45)
+				var w := 46.0 * e
+				var top: float = f["y"] - 420.0 * e
+				fx_layer.draw_rect(Rect2(f["x"] - w, top, w * 2.0, f["y"] - top), Color(1, 0.8, 0.35, 0.35 * fade))
+				fx_layer.draw_rect(Rect2(f["x"] - w * 0.45, top, w * 0.9, f["y"] - top), Color(1, 0.95, 0.75, 0.8 * fade))
+				fx_layer.draw_rect(Rect2(f["x"] - w * 1.3, f["y"] - 6.0, w * 2.6, 6.0), Color(1, 1, 1, 0.8 * fade))
+			"lightning":
+				var fade2 := 1.0 if k < 0.15 else 1.0 - (k - 0.15) / 0.85
+				fx_layer.draw_polyline(f["pts"], Color(1, 0.85, 0.4, 0.5 * fade2), 10.0 * f["sz"])
+				fx_layer.draw_polyline(f["pts"], Color(1, 1, 0.9, fade2), 3.0 * f["sz"])
+				fx_layer.draw_circle(Vector2(f["x"], f["y"]), 40.0 * f["sz"] * (0.5 + k), Color(1, 0.9, 0.5, 0.4 * fade2))
+	# Aida's rift sigil while aiming
+	if mark_pos != Vector2.INF:
+		var tt := Time.get_ticks_msec() / 1000.0
+		fx_layer.draw_arc(mark_pos + Vector2(0, -40), 26.0, tt * 3.0, tt * 3.0 + TAU * 0.8, 24, Color(0.75, 0.55, 1.0, 0.9), 3.0)
+		fx_layer.draw_arc(mark_pos + Vector2(0, -40), 16.0, -tt * 4.0, -tt * 4.0 + TAU * 0.6, 18, Color(0.95, 0.85, 1.0, 0.9), 2.0)
+		fx_layer.draw_line(player.position + Vector2(0, -60), mark_pos + Vector2(0, -40), Color(0.75, 0.55, 1.0, 0.35), 2.0)
 
 func _draw_fx() -> void:
-	var pink := Color(1.0, 0.47, 0.75)
+	_draw_luce()
 	for e in fx:
 		var k: float = e["t"] / e["life"]
 		match e["k"]:
@@ -429,21 +545,21 @@ func _draw_fx() -> void:
 					var thick := 0.88 + 0.06 * (1.0 - sin(PI * float(i) / n))
 					pts.append(Vector2(e["x"] + cos(a2) * e["r"] * thick * e["d"], e["y"] + sin(a2) * e["r"] * thick))
 				if span - tail > 0.02:
-					fx_layer.draw_colored_polygon(pts, Color(1.0, 0.55, 0.82, 0.75 * (1.0 - k)))
+					fx_layer.draw_colored_polygon(pts, Color(e["col"], 0.75 * (1.0 - k)))
 					fx_layer.draw_polyline(pts.slice(0, n + 1), Color(1, 1, 1, 1.0 - k), 2.0)
 			"streak":
 				var w: float = (e["x1"] - e["x"]) * minf(1.0, k * 3.0)
-				fx_layer.draw_rect(Rect2(minf(e["x"], e["x"] + w), e["y"] - 5.0 * (1.0 - k), absf(w), 10.0 * (1.0 - k)), Color(1, 0.8, 0.93, 1.0 - k))
+				fx_layer.draw_rect(Rect2(minf(e["x"], e["x"] + w), e["y"] - 5.0 * (1.0 - k), absf(w), 10.0 * (1.0 - k)), Color(e["col"], 1.0 - k))
 				fx_layer.draw_rect(Rect2(minf(e["x"], e["x"] + w), e["y"] - 1.0, absf(w), 2.0), Color(1, 1, 1, 1.0 - k))
 			"dust":
 				fx_layer.draw_circle(Vector2(e["x"], e["y"]), e["r"] * (1.0 + k), Color(0.85, 0.78, 0.68, 0.5 * (1.0 - k)))
 			"ring":
-				fx_layer.draw_arc(Vector2(e["x"], e["y"]), e["r"] * (0.5 + k), 0, TAU, 24, Color(1, 0.8, 0.95, 1.0 - k), 2.0)
+				fx_layer.draw_arc(Vector2(e["x"], e["y"]), e["r"] * (0.5 + k), 0, TAU, 24, Color(e["col"], 1.0 - k), 2.0)
 			"sp":
 				fx_layer.draw_rect(Rect2(e["x"] - 2, e["y"] - 2, 4, 4), Color(1, 0.85, 0.92, 1.0 - k))
 			"mote":
 				var p := Vector2(e["x"], e["y"]).lerp(Vector2(e["tx"], e["ty"]), k)
-				fx_layer.draw_rect(Rect2(p.x - 1.5, p.y - 1.5, 3, 3), Color(1, 1, 1, 0.9) if e["full"] else pink)
+				fx_layer.draw_rect(Rect2(p.x - 1.5, p.y - 1.5, 3, 3), Color(1, 1, 1, 0.9) if e["full"] else e["col"])
 			"txt":
 				var y: float = e["y"] - 40.0 * (1.0 - pow(1.0 - minf(1.0, k * 2.0), 3))
 				var fs := 26 if e["big"] else 20
@@ -482,7 +598,7 @@ func _draw_fx() -> void:
 		var pop := 1.0 + 0.6 * maxf(0.0, 1.0 - u2 * 6.0)
 		var al := 1.0 - maxf(0.0, (u2 - 0.65) / 0.35)
 		var fs2 := int(40 * pop)
-		var fnt: Font = font_anton if w["s"].is_ascii() else font_black
+		var fnt: Font = font_anton if String(w["s"]).unicode_at(0) < 128 else font_black
 		var ww := fnt.get_string_size(w["s"], HORIZONTAL_ALIGNMENT_LEFT, -1, fs2).x
 		var pos := Vector2(w["x"] - ww / 2.0, w["y"] - 10.0 * u2)
 		fx_layer.draw_string_outline(fnt, pos, w["s"], HORIZONTAL_ALIGNMENT_LEFT, -1, fs2, 10, Color(0.05, 0.02, 0.06, al))

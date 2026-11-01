@@ -90,18 +90,18 @@ func alive() -> bool:
 
 
 ## the player's blade landed
-func hit(dmg: int, kb: float) -> void:
+func hit(dmg: float, kb: float, mul := 1.0) -> void:
 	if not alive():
 		return
-	var d := float(dmg) * 10.0
+	var d := dmg * 10.0 * mul
 	hp -= d
 	last_dmg = d
 	hit_now = true
 	flash = 120.0
 	kx = kb * 0.6
 	var hd := signf(position.x - arena.player.position.x)
-	arena.damage_text(position + Vector2(0, -95 if not M.has("fly") else -40), dmg, dmg > 1)
-	arena.spark(position + Vector2(-hd * 10.0, -20.0 if M.has("fly") else -62.0 * M["s"] / 3.0), 14 if dmg > 1 else 8)
+	arena.damage_text(position + Vector2(0, -95 if not M.has("fly") else -40), roundi(d), dmg > 1.0)
+	arena.spark(position + Vector2(-hd * 10.0, -20.0 if M.has("fly") else -62.0 * M["s"] / 3.0), 14 if dmg > 1.0 else 8)
 	if hp <= 0.0:
 		dead = 1.0
 		set_a("die")

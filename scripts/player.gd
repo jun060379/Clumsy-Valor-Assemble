@@ -1,9 +1,10 @@
 extends Node2D
-## Estelle: movement, jumps, dash, ground/air combos, charge thrust, shield guard.
-## Ported from the web prototype's update(). Units are kept as they were there:
-## world pixels, milliseconds, velocities in px/ms, gravity in px/ms^2.
+## The controlled party member and the party around her.
+## Estelle (shield, charge thrust), Aida (rift blink / rift sigil / rift strike), Luce (light bolts, pillar, lightning, heal).
+## Ported from the web prototype's update(), partySwap() and the sortie module's counter swap.
+## Units as in the prototype: world px, ms, px/ms, px/ms^2.
 
-const AN = preload("res://scripts/estelle_anims.gd")
+const CH = preload("res://scripts/chars.gd")
 
 const GRAV := 0.0021
 const JUMPV := 0.74
@@ -11,16 +12,17 @@ const DJUMPV := 0.80
 const FALLMAX := 1.15
 const RUN := 0.36
 const BUF := 170.0
-const CSCALE := 1.3          # Estelle is drawn 1.3x the sheet's half size
 const MELEE_K := 0.86
-const CW := 224.0            # drawn cell size before CSCALE (half the 448x352 source)
-const CH := 176.0
+const CW := 224.0            # drawn cell size before scale (half the 448x352 source)
+const CHH := 176.0
 const BASE := 170.0          # feet line inside a drawn cell
-const MAX_HP := 70.0
-const ATK_SPEED := 0.95      # Estelle's attack speed stat: attack frames last 1/0.95 as long
+const QTE_T := 3410.0        # tag-in window
 
-var arena                    # the room: ground, platforms, foes, fx
-var sheets: Array[Texture2D] = []
+var arena
+var sheets := {}             # char -> [Texture2D x5]
+var who := "estelle"         # current member
+var CSCALE := 1.3
+var MAX_HP := 70.0
 
 var vx := 0.0
 var vy := 0.0
@@ -47,25 +49,81 @@ var ghit := false
 var drop_t := 0.0
 var tap_dir := 0
 var tap_t := 999.0
-var buf := {"attack": 0.0, "jump": 0.0, "guard": 0.0, "dash": 0.0}
+var buf := {"attack": 0.0, "jump": 0.0, "guard": 0.0, "dash": 0.0, "swap": 0.0}
 var keys := {}
 var pressed := {}
-var ghosts: Array = []       # afterimages: {anim,f,x,y,dir,t,life}
-var hp := MAX_HP
-var inv := 0.0               # invulnerable time after a hit (ms)
-var bash_t := 0.0            # a landed parry drives her forward with the shield
+var ghosts: Array = []
+var hp := 70.0
+var inv := 0.0
+var bash_t := 0.0
 var dead_t := 0.0
+# Aida's rift
+var rift_q := false          # quick (blink) vs heavy (sigil / strike)
+var dig_to := 0.0
+var dig_y := NAN
+var dig_air := false
+var blink_face := 0
+var r_strike = null          # {r, x0}
+var r_follow := false
+var tp_cd := 0.0
+var mark_t := 0.0
+var mx := 0.0
+var my := 0.0
+var gate_in := Vector2.INF
+var gate_out := Vector2.INF
+var gate_t := 0.0
+# Luce
+var heal_cd := 0.0
+var heal_t := 0.0
+var cw_r := 0.0
+# party
+var party: Array = ["estelle", "aida", "luce"]
+var hpm := {}
+var swap_cd := 0.0
+var swap_to := 0.0
+var outs: Array = []         # members leaving the field: {c,x,y,dir,t,dead}
+var qte := {"t": 0.0, "cd": 0.0, "who": [], "hit": null, "low": false}
+var tag_to := 0.0
+var tag_ref = null
+var tag_hit := false
+var tag_mul := 1.0
+var tag_timer := 0.0
+var air_tag := false
+var air_y := 0.0
+var last_hp := 70.0
+var party_down := false
+var cam_focus := {"x": 0.0, "t": 0.0}
 
 
 func _ready() -> void:
-	for i in 5:
-		sheets.append(load("res://assets/chars/estelle/estelle_%d.png" % i))
+	for c in ["estelle", "aida", "luce"]:
+		var arr: Array[Texture2D] = []
+		var folder: String = c
+		for i in 5:
+			arr.append(load("res://assets/chars/%s/%s_%d.png" % [folder, folder, i]))
+		sheets[c] = arr
+		hpm[c] = CH.STATS[c]["hp"]
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	switch_char("estelle")
+	hp = MAX_HP
+	last_hp = hp
+
+
+func switch_char(c: String) -> void:
+	who = c
+	CSCALE = CH.SCALE[c]
+	MAX_HP = CH.STATS[c]["hp"]
+
+static func is_fly(e) -> bool:
+	return e.get("M") != null and e.M.has("fly")
+
+func atk_mul() -> float:
+	return CH.STATS[who]["atk"]
 
 
 # ---------- helpers ----------
 func set_anim(n: String, frame := -1) -> void:
-	if not AN.A.has(n):
+	if CH.entry(who, n) == null:
 		n = "idle"
 		frame = 0
 	if anim != n or frame >= 0:
@@ -75,18 +133,28 @@ func set_anim(n: String, frame := -1) -> void:
 		hit_done = false
 		fx_done = false
 
+func durs() -> Array:
+	if who == "aida" and (anim == "tp_in" or anim == "dig_out"):
+		if rift_q:
+			return [30, 40, 40, 40] if anim == "tp_in" else [40, 40, 50, 60]
+		return [50, 60, 70, 90] if anim == "tp_in" else [60, 60, 80, 100]
+	return CH.entry(who, anim)[1]
+
 func dur() -> float:
-	var a: Array = AN.A[anim][1]
+	var a: Array = durs()
 	var d := float(a[f] if f < a.size() else a[a.size() - 1])
-	if anim.begins_with("attack") or anim in ["air_combo", "kneel_attack", "cthrust"]:
-		d /= ATK_SPEED
+	if anim.begins_with("attack") or anim in ["air_combo", "kneel_attack", "cthrust", "lfinisher"]:
+		d /= CH.STATS[who]["as"]
 	return d
 
 func frames() -> int:
-	return AN.A[anim][1].size()
+	return durs().size()
 
 func attacking() -> bool:
-	return anim.begins_with("attack") or anim in ["kneel_attack", "air_combo", "dive", "cthrust"]
+	return anim.begins_with("attack") or anim in ["kneel_attack", "air_combo", "dive", "cthrust", "lfinisher"]
+
+func busy_rift() -> bool:
+	return anim in ["tp_in", "dig_out", "rturn", "mark", "amark", "dig_in"]
 
 func want(k: String) -> bool:
 	return buf[k] > 0.0
@@ -95,26 +163,59 @@ func take(k: String) -> void:
 	buf[k] = 0.0
 
 func cur_atk():
-	var a = null
 	if anim == "air_combo":
-		a = AN.ATK["air1"] if f < 3 else (AN.ATK["air2"] if f < 6 else AN.ATK["air3"])
-	elif AN.ATK.has(anim):
-		a = AN.ATK[anim]
-	return a
+		return CH.ATK["air1"] if f < 3 else (CH.ATK["air2"] if f < 6 else CH.ATK["air3"])
+	return CH.ATK.get(anim)
 
 func move_axis() -> int:
 	return (1 if keys["right"] else 0) - (1 if keys["left"] else 0)
 
+func foes_alive() -> Array:
+	return arena.foes()
+
+## nearest foe, front-weighted; null if none in range
+func target(rng: float):
+	var best = null
+	var bd := INF
+	for e in foes_alive():
+		var ey: float = e.position.y - 50.0
+		var dx: float = e.position.x - position.x
+		var d := Vector2(dx, (ey - (position.y - 60.0 * CSCALE)) * 1.5).length() * (1.8 if dx * dir < 0.0 else 1.0)
+		if d < rng and d < bd:
+			bd = d
+			best = e
+	return best
+
 
 # ---------- input ----------
 func read_input() -> void:
-	for k in ["left", "right", "up", "down", "jump", "attack", "guard", "dash"]:
+	for k in ["left", "right", "up", "down", "jump", "attack", "guard", "dash", "swap"]:
 		keys[k] = Input.is_action_pressed(k)
 		pressed[k] = Input.is_action_just_pressed(k)
 
 
 # ---------- attacks ----------
+## with no direction held, a fresh attack turns toward a foe behind if nothing is in front
+func auto_face() -> void:
+	if keys["left"] or keys["right"]:
+		return
+	var R := 420.0 if who == "luce" else 170.0 * CSCALE
+	var front := false
+	var back = null
+	for e in foes_alive():
+		var dx: float = e.position.x - position.x
+		if absf(dx) > R or absf(e.position.y - position.y) > (230.0 if is_fly(e) else 110.0):
+			continue
+		if dx * dir >= -12.0:
+			front = true
+			break
+		if back == null or absf(dx) < absf(back.position.x - position.x):
+			back = e
+	if not front and back != null:
+		dir = -dir
+
 func start_attack() -> void:
+	auto_face()
 	if not on:
 		if keys["down"]:
 			set_anim("dive")
@@ -135,16 +236,16 @@ func start_attack() -> void:
 		lunge_assist()
 	arena.sfx("swing")
 
-## step in toward a foe just out of reach so the first swing connects
 func lunge_assist() -> void:
 	lunge = 0.0
-	if not on:
+	if not on or who == "luce":
 		return
 	var reach := 140.0 * CSCALE * MELEE_K
 	var best := INF
-	for e in arena.foes():
+	for e in foes_alive():
 		var dx: float = (e.position.x - position.x) * dir
-		if absf(e.position.y - position.y) > 110.0:
+		var fly: bool = is_fly(e)
+		if absf(e.position.y - position.y) > (200.0 if fly else 110.0):
 			continue
 		if dx < reach - 25.0:
 			if dx > -20.0:
@@ -156,8 +257,40 @@ func lunge_assist() -> void:
 	if best < INF:
 		lunge = best - (reach - 35.0)
 
+## Luce: every strike is a gesture; the real hit is light the game draws
+func luce_gesture(atk) -> void:
+	if atk == null or f != atk["hit"][0] or hit_done:
+		return
+	hit_done = true
+	fx_done = true
+	add_ghost(140.0, -dir * 14.0 * CSCALE)
+	var tg = target(420.0)
+	if tg != null:
+		dir = int(signf(tg.position.x - position.x)) if tg.position.x != position.x else dir
+	var gy: float = (arena.ground_y if is_fly(tg) else tg.position.y) if tg != null else position.y
+	if anim == "attack3":
+		arena.pillar(tg.position.x if tg != null else position.x + dir * 95.0 * CSCALE, gy, 2.0, dir)
+		arena.sfx("heavy", 0.8)
+		arena.shake(5, dir)
+		arena.hitstop = 30.0
+	elif anim == "attack_high":
+		arena.lightning(tg.position.x if tg != null else position.x + dir * 80.0 * CSCALE, gy, 0.8, 2.0, dir)
+		arena.sfx("heavy", 0.7)
+		arena.shake(4, dir)
+		arena.hitstop = 25.0
+	else:
+		var sz := 1.15 if anim == "attack2" else (1.1 if anim == "air_combo" and f >= 7 else 1.0)
+		var n := 2 if anim == "attack2" else 1
+		for i in n:
+			var o := Vector2(position.x - dir * (30.0 + i * 18.0), position.y - 125.0 * CSCALE - i * 16.0)
+			arena.bolt(o, tg, sz, 150.0 + i * 90.0, dir)
+		arena.sfx("thrust", 0.6)
+
 func check_hits() -> void:
 	var atk = cur_atk()
+	if who == "luce":
+		luce_gesture(atk)
+		return
 	if atk == null or hit_done:
 		return
 	if f < atk["hit"][0] or f > atk["hit"][1]:
@@ -167,7 +300,7 @@ func check_hits() -> void:
 		add_ghost(140.0, -dir * 14.0 * CSCALE)
 		if atk.has("arc"):
 			var c: Array = atk["arc"]
-			arena.slash_fx(position + Vector2(dir * c[0] * CSCALE, c[1] * CSCALE), c[2] * CSCALE * MELEE_K * 1.12, c[3], c[4], dir)
+			arena.slash_fx(position + Vector2(dir * c[0] * CSCALE, c[1] * CSCALE), c[2] * CSCALE * MELEE_K * 1.12, c[3], c[4], dir, CH.COLOR[who])
 		if atk.get("streak", false):
 			arena.streak_fx(position.x + dir * 20.0 * CSCALE, position.x + dir * (170.0 if anim == "cthrust" else 105.0) * CSCALE, position.y - 50.0 * CSCALE, dir)
 	var b: Array = atk["box"]
@@ -176,15 +309,14 @@ func check_hits() -> void:
 	var by: float = position.y + b[1] * CSCALE
 	var bh: float = b[3] * CSCALE
 	var hit_any := false
-	for e in arena.foes():
+	for e in foes_alive():
 		var ex: float = e.position.x
 		var ey: float = e.position.y
-		var eh := 95.0
-		var vert := ey > by and ey - eh < by + bh
+		var vert := ey > by and ey - 95.0 < by + bh
 		var front := (ex - position.x) * dir
 		var point_blank := vert and front > -28.0 * CSCALE and front < 50.0 * CSCALE
 		if point_blank or (ex + 22.0 > bx - 20.0 and ex - 22.0 < bx + bw and vert):
-			e.hit(atk["dmg"], dir * atk["kb"])
+			e.hit(atk["dmg"], dir * atk["kb"], atk_mul())
 			hit_any = true
 	if hit_any:
 		hit_done = true
@@ -194,11 +326,102 @@ func check_hits() -> void:
 		arena.shake(atk.get("shake", 4), dir)
 		if heavy:
 			arena.flash = 0.2
+		if anim in ["attack3", "cthrust", "attack_high"] or (anim == "air_combo" and f >= 6):
+			qte_offer("finisher")
+
+
+# ---------- Aida's rift ----------
+func rift_enter(to_x: float, to_y: float, quick: bool) -> void:
+	rift_q = quick
+	dig_to = clampf(to_x, 30.0, arena.world_w - 30.0)
+	dig_y = to_y
+	dig_air = not on
+	set_anim("tp_in")
+	gate_in = position + Vector2(dir * (30.0 if quick else 42.0) * CSCALE, 0)
+	gate_out = Vector2.INF
+	gate_t = 0.0
+	arena.sfx("dash" if quick else "dig", 0.8)
+
+func rift_exit() -> void:
+	position.x = dig_to
+	if not is_nan(dig_y):
+		position.y = dig_y
+		dig_y = NAN
+		var onp: bool = position.y >= arena.ground_y - 1.0
+		for pl in arena.platforms:
+			if absf(position.y - pl.y) < 24.0 and position.x > pl.x - 2.0 and position.x < pl.x + pl.w + 2.0:
+				position.y = pl.y
+				onp = true
+		on = onp
+		if not onp:
+			vy = 0.0
+	if blink_face != 0:
+		dir = blink_face
+		blink_face = 0
+		inv = maxf(inv, 250.0)
+	gate_out = position + Vector2(-dir * (30.0 if rift_q else 42.0) * CSCALE, 0)
+	gate_t = 0.0
+	arena.sfx("dig", 0.5)
+	if r_strike != null:
+		# both gates snap shut: whatever stood on the path she cut through is cut
+		var s = r_strike
+		r_strike = null
+		var dmg: float = 2.0 + round(s["r"] * 2.0)
+		var lo: float = minf(s["x0"], position.x) - 20.0
+		var hi: float = maxf(s["x0"], position.x) + 20.0
+		var hit := false
+		for m in foes_alive():
+			if m.position.x < lo or m.position.x > hi or absf(m.position.y - position.y) > 100.0:
+				continue
+			m.hit(dmg, -dir * 8.0, atk_mul())
+			hit = true
+		if hit:
+			arena.streak_fx(s["x0"], position.x, position.y - 62.0 * CSCALE, dir, Color("#b37bff"))
+			qte_offer("finisher")
+		arena.sfx("heavy", 0.9)
+		arena.shake(5.0 + s["r"] * 7.0, dir)
+		arena.hitstop = maxf(arena.hitstop, 80.0 + s["r"] * 60.0 if hit else 30.0)
+	set_anim("dig_out")
+	dig_air = not on
+
+func rift_strike(r: float) -> void:
+	var R := (200.0 + r * 220.0) * CSCALE
+	var best = null
+	var bdx := INF
+	for m in foes_alive():
+		var dx: float = (m.position.x - position.x) * dir
+		if dx > 10.0 and dx < R and absf(m.position.y - position.y) < 120.0 and dx < bdx:
+			bdx = dx
+			best = m
+	var to: float = best.position.x + dir * 95.0 * CSCALE if best != null else position.x + dir * (150.0 + r * 110.0) * CSCALE
+	blink_face = -dir if best != null else 0
+	r_strike = {"r": r, "x0": position.x}
+	r_follow = best != null
+	rift_enter(to, best.position.y if best != null and not is_fly(best) else NAN, false)
+	arena.sfx("thrust", 0.8 + r * 0.3)
+
+## dash = blink behind an enemy within 260 px in the dash direction
+func aida_blink() -> bool:
+	var best = null
+	var bdx := INF
+	for c in foes_alive():
+		var dx: float = (c.position.x - position.x) * dir
+		if dx > 20.0 and dx < 260.0 and absf(c.position.y - position.y) < 120.0 and dx < bdx:
+			bdx = dx
+			best = c
+	if best == null:
+		return false
+	var back: int = -best.dir if best.get("dir") != null else dir
+	blink_face = -back
+	rift_enter(best.position.x + back * 125.0 * CSCALE, best.position.y if not is_fly(best) else NAN, true)
+	if best.has_method("daze"):
+		best.daze(700.0)
+	return true
 
 
 # ---------- afterimages ----------
 func add_ghost(life: float, ox := 0.0) -> void:
-	ghosts.append({"anim": anim, "f": f, "x": position.x + ox, "y": position.y, "dir": dir, "t": 0.0, "life": life})
+	ghosts.append({"c": who, "anim": anim, "f": f, "x": position.x + ox, "y": position.y, "dir": dir, "t": 0.0, "life": life})
 
 
 # ---------- main step ----------
@@ -207,10 +430,9 @@ func step(dt: float) -> void:
 	t += dt
 	if inv > 0.0: inv -= dt
 	if bash_t > 0.0: bash_t -= dt
-	if anim == "death":
-		dead_t += dt
-		if dead_t > 2200.0:
-			respawn()
+	if tp_cd > 0.0: tp_cd -= dt
+	if heal_cd > 0.0: heal_cd -= dt
+	gate_t += dt
 	if combo_win > 0.0: combo_win -= dt
 	if coyote > 0.0: coyote -= dt
 	if drop_t > 0.0: drop_t -= dt
@@ -219,8 +441,8 @@ func step(dt: float) -> void:
 			buf[k] = BUF
 		elif buf[k] > 0.0:
 			buf[k] -= dt
+	party_step(dt)
 
-	# double-tap a direction = dash
 	tap_t += dt
 	for d in [-1, 1]:
 		if pressed["left" if d < 0 else "right"]:
@@ -229,29 +451,30 @@ func step(dt: float) -> void:
 			tap_dir = d
 			tap_t = 0.0
 
-	# dash: 2 charges, each refills in 1.3 s
 	if charges < 2:
 		recharge += dt
 		if recharge >= 1300.0:
 			recharge = 0.0
 			charges += 1
-	var dash_ok := charges > 0 and dash_cd <= 0.0 and not anim in ["hurt", "death", "dive", "dash", "airdash", "backstep"]
+	var dash_ok := charges > 0 and dash_cd <= 0.0 and not anim in ["hurt", "death", "dive", "dash", "airdash", "backstep", "tag_in", "swap_in"] and not busy_rift()
 	if want("dash") and dash_ok:
 		take("dash")
 		var dd := move_axis()
 		dir = dd if dd != 0 else dir
 		charges -= 1
-		if on:
+		if who == "aida" and aida_blink():
+			pass
+		elif on:
 			set_anim("dash")
 			arena.dust(position, -dir, true)
+			arena.sfx("dash")
 		else:
 			set_anim("airdash")
 			vy = minf(vy, 0.05)
-		arena.sfx("dash")
+			arena.sfx("dash")
 		dash_cd = 200.0
 	if dash_cd > 0.0: dash_cd -= dt
 
-	# variable jump height: let go early = shorter hop
 	if not keys["jump"] and not on and vy < -0.32 and "jump" in anim:
 		vy = -0.32
 
@@ -259,32 +482,62 @@ func step(dt: float) -> void:
 	var a := anim
 
 	# ---- state machine ----
-	if a == "hurt" or a == "death":
+	if a == "hurt" or a == "death" or a == "tag_out":
 		vx = 0.0
-	elif a == "charge":
-		if move != 0: dir = move
+	elif a == "tag_in" or a == "swap_in":
+		vx = 0.0
+	elif a in ["charge", "acharge", "lgather"]:
+		if move != 0 and a != "lgather": dir = move
 		vx = 0.0
 		charge_t += dt
-		arena.charge_fx(position + Vector2(-dir * 2.0, -64.0 * CSCALE), charge_t)
+		arena.charge_fx(position + Vector2(-dir * 2.0, -64.0 * CSCALE), charge_t, CH.COLOR[who])
 		if charge_t >= 650.0 and not cfull:
 			cfull = true
 			arena.sfx("ready")
 			arena.flash = 0.08
 		if not keys["attack"]:
-			if charge_t >= 200.0:
+			var r := minf(1.0, (charge_t - 200.0) / 450.0)
+			if charge_t < 200.0:
+				set_anim("attack1", 2)
+			elif a == "lgather":
+				set_anim("lfinisher")
+				cw_r = r
+				arena.sfx("ready", 0.5)
+			elif a == "acharge":
+				rift_strike(r)
+			else:
 				set_anim("cthrust")
 				arena.sfx("thrust")
 				slide = 0.0
-				if cfull:
-					add_ghost(160.0)
+				if cfull: add_ghost(160.0)
+	elif a in ["tp_in", "dig_out", "rturn", "dig_in"]:
+		vx = 0.0
+		if dig_air and a != "rturn": vy = 0.0
+	elif a == "mark" or a == "amark":
+		vx = 0.0
+		if dig_air: vy = 0.0
+		mark_t += dt
+		var sp := 0.55 * dt
+		mx += float(move) * sp
+		my += ((1.0 if keys["down"] else 0.0) - (1.0 if keys["up"] else 0.0)) * sp
+		var off := Vector2(mx - position.x, my - position.y).limit_length(400.0)
+		mx = clampf(position.x + off.x, 30.0, arena.world_w - 30.0)
+		my = clampf(position.y + off.y, 60.0, arena.ground_y)
+		if absf(off.x) > 12.0: dir = int(signf(off.x))
+		arena.mark_pos = Vector2(mx, my)
+		if not keys["guard"]:
+			arena.mark_pos = Vector2.INF
+			if mark_t < 150.0 or Vector2(mx, my).distance_to(position) < 16.0:
+				rift_enter(position.x - dir * 90.0 * CSCALE, NAN, false)    # tap = short hop backwards through a hole
 			else:
-				set_anim("attack1", 2)
+				rift_enter(mx, my, false)
+				dig_air = true
+				tp_cd = 3000.0
 	elif a in ["dash", "airdash", "backstep"]:
 		if a == "dash":
-			var sp: Array = [0.7, 0.85, 0.8, 0.35]
-			vx = dir * (sp[f] if f < sp.size() else 0.0)
-			if f == 3 and move == dir:
-				set_anim("run")
+			var sp1: Array = [0.7, 0.85, 0.8, 0.35]
+			vx = dir * (sp1[f] if f < sp1.size() else 0.0)
+			if f == 3 and move == dir: set_anim("run")
 		elif a == "airdash":
 			var sp2: Array = [1.05, 1.25, 1.2, 1.05, 0.7, 0.35]
 			vx = dir * (sp2[f] if f < sp2.size() else 0.0)
@@ -305,6 +558,25 @@ func step(dt: float) -> void:
 			vy = -JUMPV
 			set_anim("runjump", 1)
 			arena.sfx("jump")
+	elif a == "heal":
+		vx = 0.0
+		heal_t += dt
+		if heal_t >= 700.0 and not fx_done:
+			fx_done = true
+			var hv := 30.0
+			hp = minf(MAX_HP, hp + hv)
+			var al := 0
+			for c in party:
+				if c != who and hpm[c] > 0.0 and hpm[c] < CH.STATS[c]["hp"]:
+					hpm[c] = minf(CH.STATS[c]["hp"], hpm[c] + hv)
+					al += 1
+			heal_cd = 9000.0
+			arena.sfx("ready", 0.9)
+			arena.flash = 0.1
+			arena.ring(position + Vector2(0, -60.0 * CSCALE), 40.0, Color("#fff1b0"))
+			arena.text(position + Vector2(0, -130.0 * CSCALE), "+%d" % int(hv), Color("#ffe9a8"))
+			if al > 0:
+				arena.text(position + Vector2(0, -165.0 * CSCALE), "동료 +%d" % int(hv), Color("#fff1b0"))
 	elif attacking():
 		if a == "dive":
 			if f < 2:
@@ -319,9 +591,9 @@ func step(dt: float) -> void:
 				arena.flash = 0.35
 				arena.dust(position, 0, true)
 				arena.hitstop = 50.0
-				for e in arena.foes():
+				for e in foes_alive():
 					if absf(e.position.x - position.x) < 110.0 and absf(e.position.y - position.y) < 40.0:
-						e.hit(2, dir * 6)
+						e.hit(2, dir * 6, atk_mul())
 		elif a == "air_combo":
 			vy = minf(vy + GRAV * dt * 0.35, 0.12)
 			vx = dir * 0.04
@@ -331,7 +603,7 @@ func step(dt: float) -> void:
 				set_anim("air_combo", 3 if f < 3 else 6)
 				arena.sfx("swing")
 				combo_win = 0.0
-			if on:
+			if on and not air_tag:
 				set_anim("jump", 6)
 				vx = 0.0
 				arena.dust(position, 0, false)
@@ -344,6 +616,15 @@ func step(dt: float) -> void:
 			if a == "attack2" and f == 2 and ft < 30.0: vx = dir * 0.3
 			if a == "attack3" and f == 2: vx = dir * 0.45
 			if a == "attack3" and f == 3 and ft < 40.0: vx = dir * 0.2
+			if a == "lfinisher" and f == 2 and not fx_done:
+				fx_done = true
+				var tg = target(520.0)
+				if tg != null: dir = int(signf(tg.position.x - position.x)) if tg.position.x != position.x else dir
+				var gy: float = (arena.ground_y if is_fly(tg) else tg.position.y) if tg != null else position.y
+				arena.lightning(tg.position.x if tg != null else position.x + dir * 95.0 * CSCALE, gy, 1.0 + cw_r * 1.2, 2.0 + round(cw_r * 2.0), dir)
+				arena.shake(6.0 + cw_r * 8.0, dir)
+				arena.hitstop = 40.0 + cw_r * 50.0
+				arena.flash = 0.25 + cw_r * 0.2
 			if a == "cthrust":
 				var cs: Array = [1.0, 0.55, 0.08, 0.0]
 				vx = dir * cs[mini(f, 3)]
@@ -360,8 +641,7 @@ func step(dt: float) -> void:
 				set_anim("attack3")
 				arena.sfx("swing")
 				lunge_assist()
-			# guard-cancel out of the recovery frames
-			if f >= 3 and want("guard"):
+			if f >= 3 and want("guard") and who == "estelle":
 				take("guard")
 				set_anim("parry")
 				ghit = false
@@ -388,7 +668,7 @@ func step(dt: float) -> void:
 			arena.sfx("swing")
 		elif want("jump"):
 			take("jump")
-			if arena.platform_under(position) != null:   # drop through a thin platform
+			if arena.platform_under(position) != null:
 				drop_t = 260.0
 				on = false
 				vy = 0.1
@@ -405,11 +685,34 @@ func step(dt: float) -> void:
 
 	physics(dt, a)
 	advance(dt, move)
+	tag_motion(dt)
 
 	for g in ghosts:
 		g["t"] += dt
 	ghosts = ghosts.filter(func(g): return g["t"] < g["life"])
 	queue_redraw()
+
+
+## guard key = each member's skill
+func use_skill(move: int) -> void:
+	if who == "estelle":
+		set_anim("parry")
+		ghit = false
+		arena.sfx("guard")
+		if move != 0: dir = move
+	elif who == "aida":
+		if tp_cd <= 0.0:
+			set_anim("mark" if on else "amark")
+			mark_t = 0.0
+			dig_air = not on
+			mx = position.x
+			my = position.y
+			arena.sfx("swing", 0.3)
+	elif who == "luce":
+		if heal_cd <= 0.0 and on:
+			set_anim("heal")
+			heal_t = 0.0
+			arena.sfx("swing", 0.2)
 
 
 func locomotion(dt: float, move: int, a: String) -> void:
@@ -471,10 +774,7 @@ func locomotion(dt: float, move: int, a: String) -> void:
 			start_attack()
 		if want("guard"):
 			take("guard")
-			set_anim("parry")
-			ghit = false
-			arena.sfx("guard")
-			if move != 0: dir = move
+			use_skill(move)
 	else:
 		if move != 0:
 			dir = move
@@ -503,18 +803,15 @@ func locomotion(dt: float, move: int, a: String) -> void:
 		if want("attack"):
 			take("attack")
 			start_attack()
-		if want("guard"):
+		if want("guard") and who != "luce":
 			take("guard")
-			set_anim("parry")
-			ghit = false
-			arena.sfx("guard")
-			if move != 0: dir = move
+			use_skill(move)
 
 
 func physics(dt: float, a: String) -> void:
-	if not on:
+	if not on and not air_tag:
 		var g := GRAV
-		if a == "dive": g = 0.0
+		if a == "dive" or ((a in ["tp_in", "dig_out", "mark", "amark", "dig_in"]) and dig_air): g = 0.0
 		elif a == "airdash": g *= 0.35
 		elif a == "guard" or a == "parry": g *= 0.45
 		elif absf(vy) < 0.14 and not attacking(): g *= 0.55
@@ -530,8 +827,8 @@ func physics(dt: float, a: String) -> void:
 	var prev_y := position.y
 	position.x = clampf(position.x + vx * dt, 30.0, arena.world_w - 30.0)
 	position.y += vy * dt
-
-	# landing: ground, then one-way platforms (unless dropping through)
+	if air_tag:
+		return
 	var landed := false
 	if vy >= 0.0:
 		if position.y >= arena.ground_y:
@@ -558,15 +855,15 @@ func physics(dt: float, a: String) -> void:
 			on = false
 			vy = 0.05
 			coyote = 90.0
-			if not attacking() and a != "kneel":
+			if not attacking() and a != "kneel" and not busy_rift():
 				set_anim("jump", 4)
 
 
 func advance(dt: float, move: int) -> void:
 	ft += dt
-	var guard_loops := 0
-	while ft >= dur() and guard_loops < 20:
-		guard_loops += 1
+	var loops := 0
+	while ft >= dur() and loops < 20:
+		loops += 1
 		ft -= dur()
 		f += 1
 		if f >= frames():
@@ -583,7 +880,11 @@ func advance(dt: float, move: int) -> void:
 				dir = -dir
 				set_anim("run", 0)
 				vx = dir * RUN * 0.7
-			elif n in ["stop", "hurt", "attack1", "attack2", "attack3", "attack_high", "parry", "cthrust"]:
+			elif n == "mark" or n == "amark":
+				f = 0
+			elif n == "lgather":
+				f = 1                   # prayer hold: the two floating frames sway
+			elif n in ["stop", "hurt", "attack1", "attack2", "attack3", "attack_high", "parry", "cthrust", "lfinisher", "heal"]:
 				set_anim("kneel" if keys["down"] else "idle")
 				if n.begins_with("attack"): combo_win = 0.0
 			elif n == "kneel_attack":
@@ -603,8 +904,28 @@ func advance(dt: float, move: int) -> void:
 					f = 4
 			elif n == "dive":
 				set_anim("idle")
+			elif n == "tp_in" or n == "dig_in":
+				rift_exit()
+			elif n == "dig_out":
+				rift_q = false
+				if r_follow:
+					r_follow = false
+					set_anim("attack2")
+					combo_win = 0.0
+					arena.sfx("swing")
+					lunge_assist()
+				else:
+					set_anim("run" if move == dir else "idle")
+			elif n == "rturn":
+				dir = -dir
+				set_anim("idle")
 			elif n == "dash":
 				set_anim("run" if move == dir else "idle")
+			elif n == "tag_in":
+				set_anim("idle")
+			elif n == "swap_in":
+				position.x = swap_to
+				set_anim("run" if move == dir else "stop")
 			elif n == "backstep":
 				set_anim("guard" if keys["guard"] else "idle", 1 if keys["guard"] else 0)
 			elif n == "death":
@@ -613,13 +934,13 @@ func advance(dt: float, move: int) -> void:
 				f = 0
 			break
 		if anim == "attack1" and f == 2 and keys["attack"] and on:
-			set_anim("charge", 1)
+			set_anim({"estelle": "charge", "aida": "acharge", "luce": "lgather"}[who], 1)
 			charge_t = 110.0
 			cfull = false
 			break
 		if anim == "attack1" or anim == "attack2": combo_win = 450.0
 		if anim == "air_combo" and (f == 2 or f == 5): combo_win = 420.0
-		if anim == "air_combo" and (f == 3 or f == 6):
+		if anim == "air_combo" and (f == 3 or f == 6) and not air_tag:
 			anim = "jump"
 			f = 4
 			combo_win = 0.0
@@ -636,27 +957,27 @@ func advance(dt: float, move: int) -> void:
 
 # ---------- getting hit ----------
 func dash_inv() -> bool:
-	return (anim == "dash" and f <= 2) or (anim == "airdash" and f <= 3)
+	return (anim == "dash" and f <= 2) or (anim == "airdash" and f <= 3) or anim == "tp_in" or anim == "dig_in" or (anim == "dig_out" and f <= 1) or anim == "swap_in"
 
-## A monster's blow (or projectile) reaches her. Same rules as the prototype: parry window, shield, hurt.
 func take_hit(m, raw: float) -> String:
 	if inv > 0.0 or dash_inv() or anim == "death" or hp <= 0.0:
 		return "miss"
 	var facing: bool = (m.position.x - position.x) * dir > 0.0
-	if anim == "parry" and f <= 1 and facing:
+	if who == "estelle" and anim == "parry" and f <= 1 and facing:
 		bash_t = 420.0
 		f = 2
 		ft = 0.0
 		position.x += dir * 16.0
 		arena.parry_fx(self, m)
-		m.hit(2, dir * 8)
+		m.hit(2, dir * 8, atk_mul())
 		m.hurt_t = 950.0
 		m.set_a("hurt")
 		m.st = "hurt"
 		if m.flared:
 			arena.perfect_parry(m)
+		qte_offer("parry")
 		return "parry"
-	if (anim == "guard" or anim == "parry" or anim == "backstep") and facing:
+	if who == "estelle" and (anim == "guard" or anim == "parry" or anim == "backstep") and facing:
 		var tk := raw * 0.5 * 0.75
 		hp -= tk
 		arena.sfx("guard", 0.9)
@@ -668,20 +989,23 @@ func take_hit(m, raw: float) -> String:
 		set_anim("guard", 2)
 		ghit = true
 		arena.text(position + Vector2(0, -120.0 * CSCALE), "-" + str(roundi(tk)), Color("#cfe3ff"))
+		qte_offer("hit", {"raw": raw * 0.5, "taken": tk, "victim": who})
 		if hp <= 0.0: die()
 		return "guard"
-	var tk2 := raw * 0.75          # Estelle's passive: 25% less damage taken
+	var tk2 := raw * (0.75 if who == "estelle" else 1.0)    # Estelle's passive: 25% less damage taken
 	hp -= tk2
 	inv = 1200.0
 	arena.sfx("hurt", 0.8)
 	arena.shake(8, -dir)
 	arena.flash = 0.25
 	vx = 0.0
+	air_tag = false
 	arena.text(position + Vector2(0, -130.0 * CSCALE), "-" + str(roundi(tk2)), Color("#ff9d9d"))
 	position.x -= (1.0 if m.position.x > position.x else -1.0) * 18.0
 	if hp <= 0.0:
 		die()
 	else:
+		qte_offer("hit", {"raw": raw, "taken": tk2, "victim": who})
 		set_anim("hurt")
 	return "hit"
 
@@ -690,37 +1014,319 @@ func die() -> void:
 	set_anim("death")
 	dead_t = 0.0
 
-func respawn() -> void:
-	hp = MAX_HP
-	inv = 1500.0
-	set_anim("idle")
-	arena.text(position + Vector2(0, -150.0), "재정비", Color("#ffe9a8"))
+
+# ---------- party: switching, QTE tag-in, counter swap ----------
+func party_step(dt: float) -> void:
+	if swap_cd > 0.0: swap_cd -= dt
+	if qte["cd"] > 0.0: qte["cd"] -= dt
+	if qte["t"] > 0.0:
+		qte["t"] -= dt
+		if qte["t"] <= 0.0: qte_end()
+	if cam_focus["t"] > 0.0: cam_focus["t"] -= dt
+	for o in outs:
+		o["t"] += dt
+	outs = outs.filter(func(o): return o["t"] < 600.0)
+	if hp < last_hp and hp > 0.0 and hp <= MAX_HP * 0.35:
+		qte_offer("low")
+	last_hp = hp
+	# Luce's passive: while she is in the party, members on standby slowly recover
+	for c in party:
+		if c != who and hpm[c] > 0.0:
+			hpm[c] = minf(CH.STATS[c]["hp"], hpm[c] + dt * 0.002)
+	if anim == "death":
+		dead_t += dt
+		if dead_t > 650.0 and not party_down:
+			party_down = true
+			var nx = null
+			for c in party:
+				if c != who and hpm[c] > 0.0:
+					nx = c
+					break
+			if nx != null:
+				swap(true, nx)
+		if dead_t > 2200.0 and party_down and anim == "death":
+			for c in party:
+				hpm[c] = CH.STATS[c]["hp"]
+			hp = MAX_HP
+			last_hp = hp
+			inv = 1500.0
+			set_anim("idle")
+			arena.text(position + Vector2(0, -150.0), "파티 전멸… 재정비", Color("#ff9d9d"))
+	else:
+		party_down = false
+	if pressed["swap"] or want("swap"):
+		take("swap")
+		party_input()
+	if tag_timer > 0.0:
+		tag_timer -= dt
+		if tag_timer <= 0.0 and not tag_hit:
+			tag_hit = true
+			tag_strike()
+
+func party_next():
+	var al: Array = party.filter(func(c): return c == who or hpm[c] > 0.0)
+	if al.size() < 2:
+		return null
+	return al[(al.find(who) + 1) % al.size()]
+
+## the swap key / a portrait tap: during a QTE it becomes a tag-in strike; on a glinting attack it is a counter swap
+func party_input(to = null) -> void:
+	if anim in ["tag_in", "swap_in"]:
+		return
+	var m = flared_mob()
+	if m != null:
+		var nx = to if to != null and to != who and hpm[to] > 0.0 else _qte_member()
+		if nx == null: nx = party_next()
+		if nx != null and nx != who:
+			counter_swap(m, nx)
+			return
+	if qte["t"] > 0.0:
+		var c = to if to != null and qte["who"].has(to) else _qte_member()
+		if c != null:
+			swap(true, c)
+			return
+	swap(false, to)
+
+func _qte_member():
+	for c in party:
+		if qte["who"].has(c) and hpm[c] > 0.0 and c != who:
+			return c
+	return null
+
+func flared_mob():
+	var best = null
+	for m in arena.mobs:
+		if not m.alive() or m.st != "atk" or not m.flared or m.atk_clock > m.hit_at + 180.0:
+			continue
+		var d: float = absf(m.position.x - position.x)
+		if d > 560.0: continue
+		if best == null or d < absf(best.position.x - position.x): best = m
+	return best
+
+func swap(tag: bool, to = null) -> void:
+	var nx = to if to != null else party_next()
+	if nx == null or nx == who or hpm[nx] <= 0.0:
+		arena.text(position + Vector2(0, -140.0 * CSCALE), "교대할 동료가 없다", Color("#cfd6e6"))
+		return
+	if not tag and swap_cd > 0.0:
+		return
+	var old := who
+	hpm[old] = maxf(0.0, hp)
+	var was_dead := anim == "death"
+	outs.append({"c": old, "anim": "death" if was_dead else "tag_out", "x": position.x, "y": position.y, "dir": dir, "t": 0.0, "dead": was_dead})
+	if not was_dead:
+		arena.dust(position, -dir, false)
+		arena.sfx("dash", 0.55)
+	var keep_x := position.x
+	var keep_dir := dir
+	switch_char(nx)
+	hp = hpm[nx] if hpm[nx] > 0.0 else MAX_HP
+	last_hp = hp
+	vx = 0.0
+	inv = maxf(inv, 700.0 if tag else 450.0)
+	charge_t = 0.0
+	arena.mark_pos = Vector2.INF
+	if tag and not qte["who"].has(nx):
+		tag = false
+	var q_hit = qte["hit"]
+	var q_low: bool = qte["low"]
+	if tag:
+		qte_end()
+		swap_cd = 900.0
+		# what each member brings when tagged in
+		if nx == "estelle" and q_hit != null and q_hit["victim"] == old:
+			hpm[old] = minf(CH.STATS[old]["hp"], hpm[old] + q_hit["taken"])
+			var take_dmg: float = q_hit["raw"] * 0.75
+			hp = maxf(1.0, hp - take_dmg)
+			last_hp = hp
+			arena.text(position + Vector2(0, -175.0 * CSCALE), "수호! " + CH.NAME[old] + " 피해 대신 받음", Color("#ffe39a"))
+		if nx == "luce" and q_low:
+			hpm[old] = minf(CH.STATS[old]["hp"], hpm[old] + 30.0)
+			arena.text(position + Vector2(0, -175.0 * CSCALE), "구원! " + CH.NAME[old] + " +30", Color("#fff1b0"))
+		tag_mul = 2.0 if nx == "aida" else 1.0
+		if nx == "aida":
+			arena.text(position + Vector2(0, -175.0 * CSCALE), "기습! 교대 공격 2배", Color("#d7b8ff"))
+		arena.flash = maxf(arena.flash, 0.22)
+		arena.hitstop = 70.0
+		arena.shake(6, dir)
+		arena.sfx("heavy", 0.9)
+		var tg = target(1600.0)
+		tag_in_at(tg, keep_x)
+		arena.text(position + Vector2(0, -150.0 * CSCALE), "TAG!  " + CH.NAME[nx], Color("#ffe39a"))
+	else:
+		swap_cd = 2200.0
+		if on:
+			swap_to = keep_x
+			position.x = clampf(keep_x - keep_dir * 170.0, 30.0, arena.world_w - 30.0)
+			set_anim("swap_in")
+		else:
+			set_anim("jump", 4)
+
+## the newcomer leaps in from behind the target; a flying target is met in the air, mid-combo
+func tag_in_at(tg, keep_x: float) -> void:
+	if tg != null:
+		var fly: bool = is_fly(tg)
+		if fly:
+			air_tag = true
+			air_y = minf(arena.ground_y - 60.0, tg.position.y + 30.0)
+			position.y = air_y
+			on = false
+			vy = 0.0
+		else:
+			air_tag = false
+			position.y = tg.position.y
+			on = true
+			vy = 0.0
+		dir = int(signf(tg.position.x - keep_x)) if tg.position.x != keep_x else dir
+		tag_ref = tg
+		tag_to = clampf(tg.position.x - dir * 72.0, 30.0, arena.world_w - 30.0)
+		position.x = clampf(tag_to - dir * 220.0, 30.0, arena.world_w - 30.0)
+		cam_focus = {"x": (tag_to + tg.position.x) / 2.0, "t": 1100.0}
+		tg.kx = 0.0
+	else:
+		tag_ref = null
+		tag_to = clampf(keep_x + dir * 120.0, 30.0, arena.world_w - 30.0)
+		position.x = clampf(keep_x - dir * 80.0, 30.0, arena.world_w - 30.0)
+		if not on:
+			position.y = arena.ground_y
+			on = true
+			vy = 0.0
+	set_anim("air_combo" if air_tag else "tag_in")
+	tag_hit = false
+	tag_timer = 460.0            # never let a tag be eaten
+
+func tag_motion(dt: float) -> void:
+	if anim == "swap_in":
+		position.x += (swap_to - position.x) * minf(1.0, dt / 95.0)
+	if anim == "tag_in" or (air_tag and anim == "air_combo"):
+		if f < 3:
+			position.x += (tag_to - position.x) * minf(1.0, dt / 55.0)
+		if f >= 3 and not tag_hit:
+			tag_hit = true
+			tag_strike()
+	if air_tag:
+		if anim == "air_combo" or anim == "tag_in":
+			vy = 0.0
+			position.y = air_y
+			on = false
+		else:
+			air_tag = false
+
+func tag_strike() -> void:
+	arena.sfx("heavy", 1.0)
+	var R0 = tag_ref
+	var M := tag_mul
+	tag_mul = 1.0
+	if R0 != null and is_instance_valid(R0) and R0.alive():
+		R0.hit(2.0 * M, dir * 8.0, atk_mul())
+	arena.hitstop = 80.0
+	arena.shake(7, dir)
+	arena.streak_fx(position.x - dir * 30.0, position.x + dir * 170.0, position.y - 50.0 * CSCALE, dir, CH.COLOR[who])
+	arena.dust(position, dir, true)
+	for d in foes_alive():
+		if d != R0 and (d.position.x - position.x) * dir > -30.0 and absf(d.position.x - position.x) < 200.0 and absf(d.position.y - position.y) < 60.0:
+			d.hit(2, dir * 8, atk_mul())
+
+## swapping on a glinting attack: cancel it and tag in on that mob (x2.5), PARRY
+func counter_swap(m, nx: String) -> void:
+	m.st = "hurt"
+	m.hurt_t = 1300.0
+	m.flared = false
+	m.flare_t = -1.0
+	m.atk_clock = 0.0
+	m.set_a("hurt")
+	m.cd = maxf(m.cd, 1600.0)
+	arena.proj = arena.proj.filter(func(p): return p["m"] != m or absf(p["x"] - position.x) > 500.0)
+	qte["who"] = [nx]
+	qte["t"] = maxf(qte["t"], 1.0)
+	qte["hit"] = null
+	qte["low"] = false
+	swap(true, nx)
+	tag_in_at(m, position.x)
+	tag_mul = maxf(tag_mul, 2.5)
+	inv = maxf(inv, 900.0)
+	arena.hitstop = maxf(arena.hitstop, 190.0)
+	arena.flash = maxf(arena.flash, 0.5)
+	arena.shake(10, dir)
+	arena.sfx("parry", 1.0)
+	arena.sfx("slam", 0.8)
+	arena.big_word("PARRY", Color("#ffffff"), 800.0, Vector2(0, 0), Vector2(tag_to, position.y - 190.0 * CSCALE))
+
+func qte_offer(reason: String, data = null) -> void:
+	var cands: Array = CH.QTE_WHO.get(reason, []).filter(func(c): return party.has(c) and c != who and hpm[c] > 0.0)
+	if cands.is_empty():
+		return
+	if qte["t"] <= 0.0:
+		if qte["cd"] > 0.0 and reason != "hit":
+			return
+		qte["who"] = []
+		qte["hit"] = null
+		qte["low"] = false
+	for c in cands:
+		if not qte["who"].has(c): qte["who"].append(c)
+	if reason == "hit": qte["hit"] = data
+	if reason == "low": qte["low"] = true
+	qte["t"] = QTE_T
+	qte["cd"] = 3500.0
+	arena.sfx("ready", 0.5)
+
+func qte_end() -> void:
+	qte["t"] = 0.0
+	qte["who"] = []
+	qte["hit"] = null
+	qte["low"] = false
 
 
 # ---------- drawing ----------
 func _draw() -> void:
+	for o in outs:
+		var k: float = o["t"] / 600.0
+		var ofs := Vector2(o["x"] - o["dir"] * 140.0 * k, o["y"]) - position
+		var fr := mini(int(o["t"] / 150.0), 3)
+		draw_frame(o["c"], o["anim"], fr, ofs, -o["dir"] if not o["dead"] else o["dir"], Color(1, 1, 1, 1.0 - k))
 	for g in ghosts:
-		var k: float = 1.0 - g["t"] / g["life"]
-		draw_frame(g["anim"], g["f"], Vector2(g["x"], g["y"]) - position, g["dir"], Color(1.0, 0.55, 0.85, 0.45 * k))
+		var k2: float = 1.0 - g["t"] / g["life"]
+		var gc: Color = CH.COLOR[g["c"]]
+		draw_frame(g["c"], g["anim"], g["f"], Vector2(g["x"], g["y"]) - position, g["dir"], Color(gc.r, gc.g, gc.b, 0.45 * k2).lightened(0.3))
+	# Aida's rift gates
+	for gp in [gate_in, gate_out]:
+		if gp != Vector2.INF and gate_t < 520.0:
+			var u: float = gate_t / 520.0
+			var hh := 150.0 * CSCALE * (1.0 - maxf(0.0, u - 0.6) / 0.4)
+			var w := 16.0 * minf(1.0, gate_t / 80.0) * (1.0 - maxf(0.0, u - 0.6) / 0.4)
+			var c: Vector2 = gp - position + Vector2(0, -hh / 2.0)
+			draw_set_transform(c, 0.0, Vector2(w / hh, 1.0))
+			draw_circle(Vector2.ZERO, hh / 2.0, Color(0.35, 0.12, 0.6, 0.85))
+			draw_set_transform(c, 0.0, Vector2(w * 0.45 / hh, 0.92))
+			draw_circle(Vector2.ZERO, hh / 2.0, Color(0.85, 0.7, 1.0, 0.9))
+			draw_set_transform(Vector2.ZERO)
 	var an := anim
-	var fr := f
-	if an == "parry" and bash_t <= 0.0:   # the shield bash only shows on a landed parry; otherwise the raised shield
+	var fr2 := f
+	if who == "estelle" and an == "parry" and bash_t <= 0.0:
 		an = "guard"
-		fr = 1
-	if not on and (an == "guard" or an == "parry"):
+		fr2 = 1
+	if who == "estelle" and not on and (an == "guard" or an == "parry"):
 		an = "air_" + an
 	var col := Color.WHITE
-	if inv > 0.0 and anim != "death" and int(t / 70.0) % 2 == 0:
+	if inv > 0.0 and anim != "death" and anim != "tag_in" and int(t / 70.0) % 2 == 0:
 		col = Color(1, 1, 1, 0.45)
-	draw_frame(an, fr, Vector2.ZERO, dir, col)
+	if anim == "tp_in":
+		col.a *= 1.0 - clampf(float(f) / 3.0, 0.0, 0.85)
+	elif anim == "dig_out":
+		col.a *= clampf(0.3 + float(f) / 2.0, 0.0, 1.0)
+	var variant := ""
+	if anim == "tp_in" or anim == "dig_out":
+		variant = "_air" if dig_air else ("_q" if rift_q else "")
+	draw_frame(who, an, fr2, Vector2.ZERO, dir, col, variant)
 
-func draw_frame(an: String, fr: int, at: Vector2, d: int, col: Color) -> void:
-	var rf: Array = AN.resolve(an, fr)
+func draw_frame(c: String, an: String, fr: int, at: Vector2, d: int, col: Color, variant := "") -> void:
+	var rf: Array = CH.resolve(c, an, fr, variant)
 	var row: int = rf[0]
-	var sheet: Texture2D = sheets[row / AN.ROWS_PER_SHEET]
-	var src := Rect2(rf[1] * AN.CELL_W, (row % AN.ROWS_PER_SHEET) * AN.CELL_H, AN.CELL_W, AN.CELL_H)
-	var w := CW * CSCALE
-	var h := CH * CSCALE
+	var sheet: Texture2D = sheets[c][row / CH.ROWS_PER_SHEET]
+	var src := Rect2(rf[1] * CH.CELL_W, (row % CH.ROWS_PER_SHEET) * CH.CELL_H, CH.CELL_W, CH.CELL_H)
+	var sc: float = CH.SCALE[c] * (CH.ROWFIX_AIDA.get(row, 1.0) if c == "aida" else 1.0)
+	var w := CW * sc
+	var h := CHH * sc
 	draw_set_transform(at, 0.0, Vector2(d, 1))
-	draw_texture_rect_region(sheet, Rect2(-w / 2.0, -BASE * CSCALE, w, h), src, col)
+	draw_texture_rect_region(sheet, Rect2(-w / 2.0, -BASE * sc, w, h), src, col)
 	draw_set_transform(Vector2.ZERO)
