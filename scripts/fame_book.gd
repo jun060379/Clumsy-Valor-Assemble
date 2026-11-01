@@ -9,6 +9,7 @@ const S := preload("res://scripts/fame_skin.gd")
 const UIA := preload("res://scripts/ui_anim.gd")
 const FD := preload("res://scripts/fame_data.gd")
 const DEV := preload("res://scripts/dev.gd")
+const SK := preload("res://scripts/skins.gd")
 const BOOKCOL := {"gbk": Color("#ffd34d"), "abk": Color("#7fd0ff")}
 const TABS := {"gbk": [["quest", "명성", "FAME"], ["fac", "시설", "FACILITY"], ["people", "동료", "MEMBERS"], ["dun", "던전", "DUNGEON"], ["rune", "룬 도감", "RUNES"]],
 	"abk": [["home", "개요", "OVERVIEW"], ["lv", "모험 레벨", "LEVEL"], ["ch", "모험 일지", "LOG"], ["day", "일일 훈련", "DAILY"]]}
@@ -1022,9 +1023,9 @@ func _imd(key: String) -> Array:
 			["day", "일일 훈련", "DAILY", "활동도가 쌓일 때마다 단계 보상으로 EXP.\n오늘 활동도 %d / 500" % int(D["pt"]), ["훈련 보기 ›", func(): _goto("abk", "day")]]]
 	var r: int = fame.r
 	var nx: Variant = fame.fame_next()
-	var L := [["now", "열린 것", "UNLOCKED", "지금 %d등급에서 할 수 있는 일.\n" % r + " · ".join(FD.FUNLOCK[r - 1]), null]]
+	var L := [["now", "열린 것", "UNLOCKED", "지금 %d등급에서 할 수 있는 일.\n" % r + " · ".join(FD.funlock(r - 1)), null]]
 	if nx != null:
-		L.append(["next", "%d등급에서" % (r + 1), "NEXT RANK", "「%s」에 오르면.\n" % nx["n"] + " · ".join(FD.FUNLOCK[r]), null, true])
+		L.append(["next", "%d등급에서" % (r + 1), "NEXT RANK", "「%s」에 오르면.\n" % nx["n"] + " · ".join(FD.funlock(r)), null, true])
 	L.append(["how", "오르는 법", "PROMOTION", "의뢰 보고 · 시설 복구 · 동료 합류 · 몬스터 관찰 완료로 명성이 쌓인다. 전부 할 필요는 없다.\n명성이 다 차면 길드 관리국에서 심사 서신이 온다. 에일린에게 받아 길드원 모두가 심사 과제를 해내면 승급.", null])
 	return L
 
@@ -1395,7 +1396,7 @@ func _p_people(cr: Rect2) -> void:
 		_ci.draw_colored_polygon(box.call(Rect2(0, 0, cw, ch)), Color(0.102, 0.086, 0.125, a))
 		_ci.draw_set_transform_matrix(m)
 		if p.has("por"):
-			var tx: Texture2D = _tex(p["por"])
+			var tx: Texture2D = _tex(SK.path(p["c"], "bust") if p.has("c") else p["por"])
 			var ih := ch * 0.96
 			var iw := ih * tx.get_width() / tx.get_height()
 			var ir := Rect2(cw / 2.0 - iw / 2.0, ch + 6.0 - ih, iw, ih)

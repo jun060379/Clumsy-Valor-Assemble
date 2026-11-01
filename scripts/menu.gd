@@ -5,6 +5,7 @@ extends Control
 
 const UI := preload("res://scripts/ui_kit.gd")
 const UIA := preload("res://scripts/ui_anim.gd")
+const SK := preload("res://scripts/skins.gd")       # member art through the worn costume
 const OPTIONS := preload("res://scripts/options.gd")
 ## step 5-2 pages: 대장간, 가방, 파티, 캐릭터, the 도감 books, Bran's choices
 const FORGE := preload("res://scripts/ui_forge.gd")
@@ -12,6 +13,7 @@ const BAG := preload("res://scripts/ui_bag.gd")
 const BAGP := BAG                  # loc(): toLocaleString's thousands commas
 const PARTY := preload("res://scripts/ui_party.gd")
 const CHARP := preload("res://scripts/ui_char.gd")
+const WARD := preload("res://scripts/ui_wardrobe.gd")
 const CODEX := preload("res://scripts/ui_codex.gd")
 const CHOICE := preload("res://scripts/ui_choice.gd")
 const BOOK := preload("res://scripts/fame_book.gd")
@@ -33,7 +35,6 @@ const PAGE := {
 	"gbk": ["GUILD BOOK", "길드 수첩", ""],          # PLACEHOLDER: English line invented (the prototype's page has its own layout)
 	"abk": ["ADVENTURE BOOK", "모험 수첩", ""],      # PLACEHOLDER: English line invented
 }
-const ST := {"estelle": ["res://assets/ui/st/estelle_base.webp", "res://assets/ui/st/estelle_cl.webp"], "aida": ["res://assets/ui/st/aida_base.webp", "res://assets/ui/st/aida_cl.webp"], "luce": ["res://assets/ui/st/luce_base.webp", "res://assets/ui/st/luce_cl.webp"]}
 
 var arena
 var ui_root
@@ -49,6 +50,7 @@ var ext := {}                   # page key -> its own page Control (step 5-2)
 var forge
 var bran_page
 var codex
+var wardrobe                    # ui_wardrobe.gd: the hall's 옷장
 
 # top bar
 var tb_rects := {}
@@ -94,6 +96,7 @@ func _ready() -> void:
 	_ext(PARTY)
 	_ext(CHARP)
 	codex = _ext(CODEX)
+	wardrobe = _ext(WARD)
 	bran_page = _ext(CHOICE)
 
 	book = Control.new()
@@ -180,6 +183,14 @@ func open_char(c: String) -> void:
 	if page != "": return
 	ext["char"].want_c = c
 	open_page("char")
+
+## the hall's 옷장 (ui_wardrobe.gd): in through the colour sweep, on the member in control
+func open_wardrobe(c := "") -> void:
+	if page != "": return
+	_release_keys()
+	arena.sfx("ready", 0.4)
+	wardrobe.want_c = c
+	ui_root.sweep.run(func(): _open_page("wardrobe", false), UI.col(c if c != "" else arena.player.who))
 
 ## a page straight from the top bar (m2Open: no sweep)
 func open_page(k: String) -> void:
@@ -461,7 +472,7 @@ func _draw_hub_bg(vs: Vector2) -> void:
 
 ## art geometry: right 4%, bottom -2%, full height; breathing; the slam on open
 func _art_xf(vs: Vector2) -> Dictionary:
-	var t0: Texture2D = _tex(ST[ph_c][0])
+	var t0: Texture2D = _tex(SK.path(ph_c, "st_base"))
 	var h := vs.y
 	var w := h * t0.get_width() / t0.get_height()
 	var r := Rect2(vs.x * 0.96 - w, vs.y * 1.02 - h, w, h)
@@ -479,7 +490,7 @@ func _art_begin(ci: CanvasItem, X: Dictionary) -> Rect2:
 
 ## a page's standing art (op2 .ochar): the leader at the left edge, a solid black drop to the right
 func _ochar(vs: Vector2) -> Array:
-	var t0: Texture2D = _tex(ST[arena.player.who][0])
+	var t0: Texture2D = _tex(SK.path(arena.player.who, "st_base"))
 	var h := vs.y * 0.96
 	return [t0, Rect2(-0.04 * vs.x, vs.y * 1.04 - h, h * t0.get_width() / t0.get_height(), h)]
 
@@ -493,7 +504,7 @@ func _draw_art_sil() -> void:
 	if page != "hub": return
 	var X := _art_xf(get_viewport_rect().size)
 	var lr := _art_begin(art_sil, X)
-	var t0: Texture2D = _tex(ST[ph_c][0])
+	var t0: Texture2D = _tex(SK.path(ph_c, "st_base"))
 	var a: float = X["a"]
 	art_sil.draw_texture_rect(t0, Rect2(lr.position + Vector2(16, 8), lr.size), false, Color(0, 0, 0, a))
 	for o in [Vector2(3, 0), Vector2(-3, 0), Vector2(0, 3), Vector2(0, -3)]:
@@ -512,7 +523,7 @@ func _draw_art() -> void:
 	var X := _art_xf(get_viewport_rect().size)
 	if X["dark"] >= 1.0: return
 	var lr := _art_begin(art, X)
-	var im: Texture2D = _tex(ST[ph_c][1] if blink < 0.0 else ST[ph_c][0])
+	var im: Texture2D = _tex(SK.path(ph_c, "st_cl") if blink < 0.0 else SK.path(ph_c, "st_base"))
 	art.draw_texture_rect(im, lr, false, Color(1, 1, 1, X["a"] * (1.0 - X["dark"])))
 	art.draw_set_transform(Vector2.ZERO)
 
@@ -603,7 +614,7 @@ func _draw_fg() -> void:
 		var lr := Rect2(-21, -21, 42, 42)
 		if on2: ci.draw_rect(Rect2(lr.position + Vector2(4, 4), lr.size), Color.WHITE)
 		ci.draw_rect(lr, Color.BLACK if on2 else Color.WHITE)
-		var st: Texture2D = _tex(ST[c][0])
+		var st: Texture2D = _tex(SK.path(c, "st_base"))
 		var k := 109.0 / st.get_width()
 		var ih := st.get_height() * k
 		var src := Rect2((109.0 - 36.0) * 0.58 / k, (ih - 36.0) * 0.06 / k, 36.0 / k, 36.0 / k)

@@ -9,7 +9,7 @@ extends Node
 ## Public interface (for the other systems):
 ##   gain_exp(n)            add adventurer EXP (the boss treasure chest's 60 on repeat clears goes through this)
 ##   finc(key, n)           bump a counter: "fuse" / "enh" (forge), "bestv" (bestiary opened), ... (see FQ / FCH / DPOOL keys)
-##   fac_ok(id)             a facility is restored ("fire", "chand", "forge", "hearth", "store", "barn", "library", "bath", "rooms", "yard")
+##   fac_ok(id)             a facility is restored ("fire", "chand", "forge", "hearth", "store", "barn", "wardrobe", "library", "bath", "rooms", "yard")
 ##   dmg_mul(kind)          fDmgK: kitchen hearth in dungeons, training yard, fully observed monster (+5 %)
 ##   obs_stage(kind)        bestiary observation stage 0..4 (Ⅰ met · Ⅱ first kill · Ⅲ / Ⅳ kill counts)
 ##   rune_seen(id)          a rune entered the codex (counts for 「룬 수집가」)
@@ -22,6 +22,7 @@ extends Node
 const FD := preload("res://scripts/fame_data.gd")
 const FX := preload("res://scripts/fame_fx.gd")
 const DEV := preload("res://scripts/dev.gd")
+const SK := preload("res://scripts/skins.gd")
 const EIL_POR := preload("res://assets/eilin/por.png")
 const BRAN_POR := preload("res://assets/bran/por.png")
 
@@ -558,7 +559,7 @@ func poll(force := false) -> void:
 # ---------- the counter: review letters, reports, the seniors' introduction ----------
 func _say(w: String, L: Array, C: Array) -> void:
 	var who := {"eilin": [EIL_POR, "에일린", "길드 접수원"], "bran": [BRAN_POR, "브랜", "길드 대장장이"],
-		"aida": [load("res://assets/fame/por_aida.png"), "아이다", "길드 선배 · 묘지기"], "luce": [load("res://assets/fame/por_luce.png"), "루체", "길드 선배 · 성녀 후보"]}
+		"aida": [SK.tex("aida", "bust"), "아이다", "길드 선배 · 묘지기"], "luce": [SK.tex("luce", "bust"), "루체", "길드 선배 · 성녀 후보"]}
 	var W: Array = who[w]
 	arena.dlg.ask(w, W[0], W[1], W[2], L, C)
 
@@ -684,6 +685,7 @@ func rank_up() -> void:
 	if r >= 7: return
 	r += 1
 	log_add("길드 등급 %d 「%s」 승인 · 길드 관리국" % [r, FD.FRANK[r - 1]["n"]], "rank")
+	if arena.get("skins") != null: arena.skins.sync()      # the grade's costume reward (skin_data.gd fame)
 	fx.rank_cut()
 
 ## after the rank cut: Eilin stamps and congratulates (hEilUpd), the guild book opens on the quests
@@ -715,6 +717,7 @@ func set_state(d: Dictionary) -> void:
 	done_seen = {}
 	scene = arena.level_kind() if arena != null else ""
 	poll(true)
+	if arena != null and arena.get("skins") != null: arena.skins.sync(true)
 
 
 # ---------- test keys (debug builds only, dev.gd): F12 = +100 EXP and finish one running request; Shift+F12 = guild fame +30;

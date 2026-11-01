@@ -8,6 +8,7 @@ const UI := preload("res://scripts/ui_kit.gd")
 const UIA := preload("res://scripts/ui_anim.gd")
 const MD := preload("res://scripts/memory_data.gd")
 const ST := "res://assets/ui/st/"
+const SK := preload("res://scripts/skins.gd")       # the skill / record art of the worn costume (the memorial and old art stay)
 const SPEC := {
 	"attr": {"shard": [[-6, -12, 66, 130], -7, [[18, 0], [100, 6], [84, 38], [96, 52], [70, 100], [0, 92], [10, 60], [0, 40]]], "edge": [[4, -8, 56, 120], -7, [[30, 0], [36, 0], [14, 100], [8, 100]]],
 		"slash": [[44, 31, 70], -14], "bigen": [56, 68, -8], "burst": [30, 58]},
@@ -19,7 +20,10 @@ const SPEC := {
 	"match": {"shard": [[-8, 18, 76, 70], -8, [[0, 10], [40, 0], [100, 14], [92, 60], [100, 100], [30, 92], [0, 100]]], "edge": [[-8, 86, 76, 3], -8, [[0, 0], [100, 0], [100, 100], [0, 100]]],
 		"slash": [[30, 10, 60], -20], "bigen": [-2, -6, -8], "burst": [78, 40]},
 	"rec": {"shard": [[-8, -14, 62, 130], 9, [[0, 0], [82, 0], [100, 30], [86, 46], [96, 100], [0, 100]]], "edge": [[46, -10, 6, 125], 9, [[40, 0], [100, 0], [60, 100], [0, 100]]],
-		"slash": [[-10, 12, 50], 10], "bigen": [40, 66, -6], "burst": [72, 45]}}
+		"slash": [[-10, 12, 50], 10], "bigen": [40, 66, -6], "burst": [72, 45]},
+	# 의상 (ui_char_wear.gd): her colour on the left for the standing art, the shard on the right for the list
+	"wear": {"shard": [[50, -15, 62, 135], -6, [[8, 0], [100, 0], [100, 100], [22, 100], [0, 64], [14, 48], [2, 30]]], "edge": [[47, -10, 30, 125], -6, [[0, 0], [6, 0], [-2, 64], [4, 100], [-2, 100], [-8, 64]]],
+		"slash": [[-10, 90, 62], -6], "bigen": [-3, 60, -6], "burst": [26, 50]}}
 ## node positions in the tree (% of its box): columns of a branch, rows A / B / C, the cross column
 const NX := [20, 27, 34, 45, 52, 62, 72]
 const NY := [28, 52, 76]
@@ -432,7 +436,7 @@ func paint(vs: Vector2, col: Color) -> void:
 func _skill(vs: Vector2, col: Color) -> void:
 	ground(vs, col, "skill")
 	var c: String = p.c
-	var t: Texture2D = p.tx(ST + c + "_skill.webp")
+	var t: Texture2D = p.tx(SK.path(c, "st_skill"))
 	var u := clampf(p.tab_t / 500.0, 0.0, 1.0)
 	if p.slam_t < p.tab_t: u = clampf(p.slam_t / 500.0, 0.0, 1.0)
 	var e := UI.bez(0.1, 1.4, 0.3, 1.0, u)
@@ -446,7 +450,7 @@ func _skill(vs: Vector2, col: Color) -> void:
 		deg = -5.0 * (1.0 - e)
 	var bc := box.get_center()
 	var sk := Transform2D(0.0, Vector2(-0.7 * box.size.x * (1.0 - e), 0) + bc) * Transform2D(Vector2(1, 0), Vector2(tan(deg_to_rad(-26.0 * (1.0 - e))), 1), Vector2.ZERO) * Transform2D(0.0, -bc)
-	cutout(ST + c + "_skill.webp", ST + c + "_skill_sil.webp", box, deg, Vector2(14, 10), 1.0, sk, clampf(1.0 - u / 0.35, 0.0, 1.0) * 0.6)
+	cutout(SK.path(c, "st_skill"), SK.path(c, "st_skill_sil"), box, deg, Vector2(14, 10), 1.0, sk, clampf(1.0 - u / 0.35, 0.0, 1.0) * 0.6)
 	# speed lines racing across as it lands
 	var su := clampf(p.tab_t / 550.0, 0.0, 1.0)
 	if su < 1.0:
@@ -518,7 +522,7 @@ func _mem(vs: Vector2, col: Color) -> void:
 	var scx := lerpf(0.34 * 0.85, 1.0, e)
 	var scy := lerpf(0.85, 1.0, e)
 	xx = xx * Transform2D(0.0, box.get_center()) * Transform2D(0.0, Vector2(scx, scy), 0.0, Vector2.ZERO) * Transform2D(0.0, -box.get_center())
-	cutout(ST + c + "_rec.webp", ST + c + "_rec_sil.webp", box, lerpf(10.0, -2.0, e), Vector2(14, 10), clampf(e, 0.0, 1.0), xx)
+	cutout(SK.path(c, "st_rec"), SK.path(c, "st_rec_sil"), box, lerpf(10.0, -2.0, e), Vector2(14, 10), clampf(e, 0.0, 1.0), xx)
 	p._name(Vector2(vs.x * 0.04, vs.y * 0.84 + 34.0))
 	# the zone, turned −4°
 	var z := Rect2(vs.x * 0.02, vs.y * 0.17, vs.x * 0.55, vs.y * 0.8)

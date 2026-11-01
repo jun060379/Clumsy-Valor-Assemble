@@ -407,7 +407,7 @@ func _draw_select(vs: Vector2) -> void:
 ## idle loop of the member's sheet (row 0), cropped like the prototype's card canvas
 func _preview(c: String, r: Rect2) -> void:
 	var P = arena.player
-	if P == null or not P.sheets.has(c): return
+	if P == null or not CH.NAME.has(c): return
 	var tim: Array = CH.TABLE[c]["idle"][1]
 	var tot := 0.0
 	for v in tim: tot += v
@@ -416,5 +416,5 @@ func _preview(c: String, r: Rect2) -> void:
 	while tm > tim[f]:
 		tm -= tim[f]
 		f += 1
-	var sheet: Texture2D = P.sheets[c][0]
+	var sheet: Texture2D = P.SK.sheet_row(c, 0)
 	draw_texture_rect_region(sheet, Rect2(r.position, Vector2(120, 131)).intersection(r), Rect2(f * CH.CELL_W + 114, 105, 220, 240 * 120.0 / 131.0), Color.WHITE)

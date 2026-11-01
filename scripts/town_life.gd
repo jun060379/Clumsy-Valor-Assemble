@@ -86,7 +86,7 @@ func step(dt: float) -> void:
 	if P.on and not prev_on: land = {"x": P.position.x, "y": P.position.y, "t": t}
 	prev_on = P.on
 	# footsteps kick up a little dust
-	if P.on and P.anim == "run" and P.f != prev_f and (P.f == 1 or P.f == 5): puff(arena, P.position.x - P.dir * 8.0, P.position.y, 2)
+	if P.on and P.anim == "run" and P.f != prev_f and P.f in P.SK.steps(P.who, "run"): puff(arena, P.position.x - P.dir * 8.0, P.position.y, 2)
 	prev_f = P.f
 	# bushes rustle as you push through
 	for i in town.deco_back.size():

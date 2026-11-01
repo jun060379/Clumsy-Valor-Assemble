@@ -8,6 +8,7 @@ const CH = preload("res://scripts/chars.gd")
 const UI := preload("res://scripts/ui_kit.gd")
 const UIA := preload("res://scripts/ui_anim.gd")
 const TOUCH := preload("res://scripts/touch_controls.gd")
+const SK := preload("res://scripts/skins.gd")
 const A0 := PI * 1.18
 const A1 := PI * 2.12
 const RR := 86.0
@@ -19,8 +20,11 @@ const SKY := Color("#7ae0ff")
 const ST := ["base", "sup", "cl"]
 
 var arena
-var faces := {}
-var art := {}                    # c -> [base, sup (hurt), cl (blink)]
+## the worn costume's round face and standing art [base, sup (hurt), cl (blink)] (skins.gd)
+func faces_of(c: String) -> Texture2D:
+	return SK.face(c)
+func art_of(c: String) -> Array:
+	return ST.map(func(e): return SK.tex(c, "st_" + e))
 var slots: Array = []            # [{c, rect}]
 var sil: Control
 var front: Control
@@ -78,9 +82,6 @@ func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-	for c in ["estelle", "aida", "luce"]:
-		faces[c] = load("res://assets/ui/faces/%s.png" % c)
-		art[c] = ST.map(func(e): return load("res://assets/ui/st/%s_%s.webp" % [c, e]))
 	sil = Control.new()
 	sil.set_anchors_preset(Control.PRESET_FULL_RECT)
 	sil.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -322,7 +323,7 @@ func _draw_art(shadow: bool) -> void:
 	var ci: CanvasItem = sil if shadow else get_child(1)
 	var vs := get_viewport_rect().size
 	var P = arena.player
-	var set_: Array = art[P.who]
+	var set_: Array = art_of(P.who)
 	var hurt: bool = P.hp <= P.MAX_HP * 0.35 or hit_t > 0.0
 	var blink := bl_t < 0.0
 	var im: Texture2D = set_[2] if blink and not hurt else (set_[1] if hurt else set_[0])
@@ -571,7 +572,7 @@ func _draw_party(ci: CanvasItem, vs: Vector2) -> void:
 					pts.append(ctr + Vector2(cos(an), sin(an)) * R)
 				ci.draw_colored_polygon(pts, Color(col, a))
 			ci.draw_circle(ctr, R - 4.0 + 2.0, Color(0, 0, 0, a))
-			_face(ci, faces[c], ctr, R - 4.0, Color(0.35, 0.35, 0.35, a) if down else Color(1, 1, 1, a))
+			_face(ci, faces_of(c), ctr, R - 4.0, Color(0.35, 0.35, 0.35, a) if down else Color(1, 1, 1, a))
 			if P.swap_cd > 0.0 and not down:
 				var k: float = clampf(P.swap_cd / 2200.0, 0.0, 1.0)
 				var pts2 := PackedVector2Array([ctr])
@@ -636,7 +637,7 @@ func _draw_qte_card(ci: CanvasItem, c: String, ctr: Vector2, k: float, since: fl
 			ci.draw_colored_polygon(piece, Color(dark, op))
 		p0 += 20.0
 	# the standing art: 118% wide, positioned 50% 16%
-	var im: Texture2D = art[c][0]
+	var im: Texture2D = SK.tex(c, "st_base")
 	var aw := W * 1.18
 	var ah := aw * im.get_height() / im.get_width()
 	var ao := Vector2((W - aw) * 0.5, (Hh - ah) * 0.16)

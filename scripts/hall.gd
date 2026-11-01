@@ -9,6 +9,7 @@ extends Node2D
 const LITS := preload("res://scripts/lit.gd")
 const HD := preload("res://scripts/hall_data.gd")
 const TLIFE := preload("res://scripts/town_life.gd")
+const SK := preload("res://scripts/skins.gd")
 const PLASTER := Color(186 / 255.0, 162 / 255.0, 135 / 255.0)
 ## the sky behind the windows: day / dusk / night pictures cross-fade with the hour
 const HSKY := [[0.0, "night"], [4.6, "night"], [5.9, "dusk"], [7.6, "day"], [16.2, "day"], [17.6, "dusk"], [18.9, "dusk"], [20.3, "night"], [24.0, "night"]]
@@ -427,7 +428,7 @@ func step(dt: float) -> void:
 	# boards creak under your feet; the stairs thud (환경음)
 	var AM = arena.get("amb")
 	if AM != null:
-		var stp: bool = P.on and P.anim == "run" and P.f != snd_f and (P.f == 1 or P.f == 5)
+		var stp: bool = P.on and P.anim == "run" and P.f != snd_f and P.f in P.SK.steps(P.who, "run")
 		snd_f = P.f
 		if stp:
 			if P.plat != null and P.plat.has("ramp"): AM.hsnd(95.0, 55.0, 0.12, 0.06, "sine", 0.7)
@@ -472,7 +473,7 @@ func step(dt: float) -> void:
 ## the attic mouse, the cat on its cushion
 func _life(dt: float, P, AM) -> void:
 	var t := float(Time.get_ticks_msec())
-	if P.on and P.anim == "run" and P.f != dust_f and (P.f == 1 or P.f == 5): TLIFE.puff(arena, P.position.x - P.dir * 8.0, P.position.y, 2)
+	if P.on and P.anim == "run" and P.f != dust_f and P.f in P.SK.steps(P.who, "run"): TLIFE.puff(arena, P.position.x - P.dir * 8.0, P.position.y, 2)
 	dust_f = P.f
 	var at = P.cur_atk() if P.attacking() else null
 	if at != null and P.f >= at["hit"][0] and P.f <= at["hit"][1]:
@@ -692,6 +693,13 @@ func try_interact() -> bool:
 			arena.sortie.party_ui.show_it()           # openParty
 		"library":
 			arena.ui_root.menu.open_char(P.who)       # cxOpen(CHAR)
+		"wardrobe":
+			# 옷장 (fame_data FAC "wardrobe"): the end room of the 2nd-floor corridor, behind its odd door
+			if arena.fame != null and not arena.fame.fac_ok("wardrobe"):
+				arena.sfx("guard", 0.3)
+				arena.text(P.position + Vector2(0, -140.0 * 1.3), "먼지 쌓인 옷장… 시설 복구가 필요하다", Color("#bfeee6"))
+			else:
+				arena.ui_root.menu.open_wardrobe()
 		"room":
 			if arena.fame != null and not arena.fame.fac_ok("rooms"):
 				arena.sfx("guard", 0.3)
@@ -724,8 +732,11 @@ func _draw() -> void:
 	if E.here() and E.layer() == "free" and not E.hide:
 		E.draw_on(self, roundf(E.x), roundf(E.y))
 	if fl == 0:
-		var dk := ["dollP", "dollG", "dollC"]
-		for i in mini(3, arena.player.roster().size()): hi(self, dk[i], 1920.0 + i * 18.0, G - HH("counter") + 4.0)
+		# a little doll on the counter for each member who has joined, in her worn costume's doll (skins.gd "doll")
+		var ro: Array = arena.player.roster()
+		for i in mini(3, ro.size()):
+			var dt: Texture2D = SK.tex(ro[i], "doll")
+			if dt != null: draw_texture_rect(dt, Rect2(roundf(1920.0 + i * 18.0), roundf(G - HH("counter") + 4.0 - dt.get_height() * 2.0), dt.get_width() * 2.0, dt.get_height() * 2.0), false)
 	hfill(self, "top", 0.0, G, W, 30.0, 0.0, G)
 	for p in F["props"]:
 		if String(p[4]).contains("r"): _prop(self, p)

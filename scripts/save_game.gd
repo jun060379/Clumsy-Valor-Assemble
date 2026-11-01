@@ -21,6 +21,9 @@ extends RefCounted
 ##   inventory  any     inventory.get_state() when that system exists (restored with inventory.set_state(...))
 ##   memory     any     runes.memory.get_state(): character levels and memory trees (restored with set_state, before HP)
 ##   bran_met   bool    Bran has introduced himself (branGreet's localStorage bran_met): his first-meeting lines play once
+##   skins      any     skins.get_state(): {"v": 1, "owned": {id: how}, "equipped": {member: id}, "fresh": {id: 1}} (costumes);
+##                      a save without it (before costumes) loads with everyone on 기본, then what fame grade and levels
+##                      already earn is handed out quietly (skins.sync)
 
 const VERSION := 1
 
@@ -62,6 +65,7 @@ func snapshot() -> Dictionary:
 	var I = arena.get("runes")
 	if I != null and I.has_method("get_state"): d["inventory"] = I.get_state()
 	if I != null and I.get("memory") != null: d["memory"] = I.memory.get_state()
+	if arena.get("skins") != null: d["skins"] = arena.skins.get_state()
 	return d
 
 func save() -> bool:
@@ -113,5 +117,9 @@ func apply(d: Dictionary) -> Array:
 	var F = arena.get("fame")
 	if F != null and F.has_method("set_state") and d.has("fame"): F.set_state(d["fame"])
 	if F != null and F.has_method("settle_rec"): F.settle_rec(party)
+	var SKN = arena.get("skins")
+	if SKN != null:
+		SKN.set_state(d.get("skins"))     # missing (an old save): everyone on 기본
+		SKN.sync(true)                    # then what grade and levels already earned, without notices
 	loaded = true
 	return [String(d.get("scene", "town")), Vector2(float(d.get("x", 700.0)), float(d.get("y", arena.ground_y))), int(d.get("dir", 1)), int(d.get("fl", 0))]

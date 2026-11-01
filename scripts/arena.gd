@@ -33,6 +33,7 @@ const ULT := preload("res://scripts/ult.gd")
 const SAVE := preload("res://scripts/save_game.gd")
 const ELEM := preload("res://scripts/elements.gd")
 const GHOST := preload("res://scripts/ghost.gd")
+const SKINS := preload("res://scripts/skins.gd")
 const TRAINING := preload("res://scripts/training.gd")
 const AW := 2000.0            # training ground width
 
@@ -100,6 +101,7 @@ var fame                      # fame.gd: guild fame, quests, adventurer level, t
 var sortie                    # sortie.gd: dungeon select, band sweeps, entry dash, deploy cut, title cards, clear screen, party screen
 var ult                       # ult.gd: 기력 gauges, the ult moves and their world effects
 var save                      # save_game.gd: user://save.json
+var skins                     # skins.gd: costume skins (owned, worn) and the art resolver every screen draws members through
 var hit_by := ""              # who a delayed hit (Luce's light) belongs to, for its element
 var last_e := {}              # the last elemDamage result, so damage_text can split a hybrid hit per element
 
@@ -153,6 +155,7 @@ func _ready() -> void:
 	shadow_node = Node2D.new()
 	shadow_node.draw.connect(_draw_shadow)
 	add_child(shadow_node)
+	skins = SKINS.new(self)              # before the player: her sheets come through it
 	player = Node2D.new()
 	player.set_script(PLAYER)
 	player.arena = self

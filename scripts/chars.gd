@@ -108,25 +108,28 @@ const ATK := {
 }
 
 
-static func entry(c: String, anim: String) -> Variant:
+## `ov`: a costume's own animations ({anim: [row, [ms...]]}, skin_data.gd "anims"), looked up first
+static func entry(c: String, anim: String, ov: Dictionary = {}) -> Variant:
+	if ov.has(anim): return ov[anim]
 	var T: Dictionary = TABLE[c]
 	if T.has(anim): return T[anim]
 	if COMMON.has(anim): return COMMON[anim]
 	return null
 
 ## Which (row, frame) to draw. `variant` picks the rift flavour for tp_in / dig_out ("", "_q", "_air").
-static func resolve(c: String, anim: String, f: int, variant := "") -> Array:
+## A row holds 9 frames; an animation with more (a costume's own) runs on into the next rows.
+static func resolve(c: String, anim: String, f: int, variant := "", ov: Dictionary = {}) -> Array:
 	if anim == "airdash":
-		var de: Array = entry(c, "dash")
+		var de: Array = entry(c, "dash", ov)
 		return [de[0], [1, 2, 2, 3, 3, 3][mini(5, f)]]
-	var e = entry(c, anim)
+	var e = entry(c, anim, ov)
 	if e != null and int(e[0]) >= 0:
-		return [int(e[0]), f]
+		return [int(e[0]) + f / 9, f % 9]
 	var key := anim + variant if VIRT.has(anim + variant) else anim
 	if VIRT.has(key):
 		var vl: Array = VIRT[key]
 		var m: Array = vl[mini(f, vl.size() - 1)]
-		var e2 = entry(c, m[0])
+		var e2 = entry(c, m[0], ov)
 		if e2 != null and int(e2[0]) >= 0:
-			return [int(e2[0]), m[1]]
+			return [int(e2[0]) + int(m[1]) / 9, int(m[1]) % 9]
 	return [0, 0]

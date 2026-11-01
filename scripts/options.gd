@@ -5,7 +5,7 @@ extends Control
 
 const UI := preload("res://scripts/ui_kit.gd")
 const CFG := preload("res://scripts/settings.gd")
-const ST := {"estelle": "res://assets/ui/st/estelle_base.webp", "aida": "res://assets/ui/st/aida_base.webp", "luce": "res://assets/ui/st/luce_base.webp"}
+const SK := preload("res://scripts/skins.gd")       # member art through the worn costume
 
 var arena
 var menu
@@ -278,7 +278,7 @@ func _draw() -> void:
 	draw_colored_polygon(UI.rot(UI.clip(band, [[0, 0], [100, 0], [100, 100], [0, 100]]), band.get_center(), deg_to_rad(-12.0)), Color.BLACK)
 
 func _art_rect(vs: Vector2) -> Rect2:
-	var tex: Texture2D = menu._tex(ST[arena.player.who])
+	var tex: Texture2D = menu._tex(SK.path(arena.player.who, "st_base"))
 	var h := vs.y * 0.96
 	var w := h * tex.get_width() / tex.get_height()
 	return Rect2(-0.04 * vs.x, vs.y * 1.04 - h, w, h)
@@ -286,11 +286,11 @@ func _art_rect(vs: Vector2) -> Rect2:
 func _draw_sil() -> void:
 	var vs := get_viewport_rect().size
 	var r := _art_rect(vs)
-	sil.draw_texture_rect(menu._tex(ST[arena.player.who]), Rect2(r.position + Vector2(8, 0), r.size), false, Color.BLACK)
+	sil.draw_texture_rect(menu._tex(SK.path(arena.player.who, "st_base")), Rect2(r.position + Vector2(8, 0), r.size), false, Color.BLACK)
 
 func _draw_art() -> void:
 	var vs := get_viewport_rect().size
-	art.draw_texture_rect(menu._tex(ST[arena.player.who]), _art_rect(vs), false)
+	art.draw_texture_rect(menu._tex(SK.path(arena.player.who, "st_base")), _art_rect(vs), false)
 
 func _draw_fg() -> void:
 	var vs := get_viewport_rect().size

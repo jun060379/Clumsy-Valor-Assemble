@@ -9,7 +9,7 @@ extends "res://scripts/ui_page.gd"
 ## .5 s --bk; .spot.pop: disc w_pop, gem w_popd, name w_stamp (.45 s --bk, the name 80 ms late); the gem bobs (2.6 s);
 ## the disc, whose w_spin replaces its centring translate, only drifts from centred to half a disc right-down in 14 s.
 
-const FACE := {"estelle": preload("res://assets/ui/faces/estelle.png"), "aida": preload("res://assets/ui/faces/aida.png"), "luce": preload("res://assets/ui/faces/luce.png")}
+const SK := preload("res://scripts/skins.gd")       # member art through the worn costume
 const AE := preload("res://scripts/ui_anim.gd")
 
 var cat := "gear"
@@ -457,7 +457,7 @@ func _bwho(m: Transform2D, y0: float, nw: float, o: Dictionary, W: Array, bw2: A
 		var op := (1.0 if on else 0.45) * a
 		var r := Rect2(x, y0 + lift, 38, 38)
 		var pts := poly(r, [[10, 0], [100, 0], [90, 100], [0, 100]], m)
-		var tex: Texture2D = FACE[c]
+		var tex: Texture2D = SK.face(c)
 		var ts := tex.get_size()
 		var s := maxf(38.0 / ts.x, 38.0 / ts.y)
 		var uw := 38.0 / s / ts.x

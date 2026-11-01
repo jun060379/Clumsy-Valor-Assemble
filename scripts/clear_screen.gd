@@ -7,6 +7,7 @@ extends Control
 ## picked up during this sortie are counted.
 
 const UI := preload("res://scripts/ui_kit.gd")
+const SK := preload("res://scripts/skins.gd")       # member art through the worn costume
 const CGN := ["커먼", "레어", "에픽", "유니크", "레전더리"]
 const CGC := [Color("#d8d0bf"), Color("#5fa8ff"), Color("#b46cff"), Color("#ff8a3d"), Color("#ffe066")]
 const SHC := Color("#ffd34d")
@@ -25,7 +26,6 @@ var sel := -1
 var info_t := 9999.0
 var r_go := Rect2()
 var r_tiles: Array = []
-var arts := {}
 
 
 func _ready() -> void:
@@ -33,8 +33,6 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	visible = false
-	for c in ["estelle", "aida", "luce"]:
-		arts[c] = load("res://assets/ult/ult_art_%s.png" % c)
 
 ## lootList and friends. With the inventory system present: inventory.run_loot() -> {items: [{n, g (grade 0-4), k}], sh, mem, runes, gear, grade}
 func _gather() -> Dictionary:
@@ -179,7 +177,7 @@ func _xk() -> float:
 func _draw_sil() -> void:
 	if not open: return
 	var vs := get_viewport_rect().size
-	var tex: Texture2D = arts[arena.player.who]
+	var tex: Texture2D = SK.tex(arena.player.who, "ult_art")
 	var X := _art_xf(vs, tex, _xk())
 	if X.is_empty(): return
 	_sil_node.draw_set_transform_matrix(X[0])
@@ -190,7 +188,7 @@ func _draw_sil() -> void:
 func _draw_front() -> void:
 	if not open: return
 	var vs := get_viewport_rect().size
-	var tex: Texture2D = arts[arena.player.who]
+	var tex: Texture2D = SK.tex(arena.player.who, "ult_art")
 	var X := _art_xf(vs, tex, _xk())
 	if not X.is_empty():
 		_front.draw_set_transform_matrix(X[0])

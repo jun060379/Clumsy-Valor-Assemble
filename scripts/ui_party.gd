@@ -10,7 +10,7 @@ extends "res://scripts/ui_page.gd"
 
 const UIA := preload("res://scripts/ui_anim.gd")
 const SHEET := preload("res://scripts/ui_char.gd").SHEET
-const ST := {"estelle": "res://assets/ui/st/estelle_base.webp", "aida": "res://assets/ui/st/aida_base.webp", "luce": "res://assets/ui/st/luce_base.webp"}
+const SK := preload("res://scripts/skins.gd")       # member art through the worn costume
 ## CSS filter: brightness(b) grayscale(g) (in that order; both linear, so one pass)
 const FILTER_SH := "shader_type canvas_item;\nuniform float br = 1.0;\nuniform float gs = 0.0;\nvoid fragment(){ vec4 c = texture(TEXTURE, UV) * COLOR; float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722)); c.rgb = mix(c.rgb, vec3(l), gs) * br; COLOR = c; }"
 
@@ -208,7 +208,7 @@ func _draw_col(ci: Control, slot: int) -> void:
 	ci.material.set_shader_parameter("gs", fg)
 	ci.draw_colored_polygon(poly, Color.BLACK)
 	# img: left 50 %, top 4 %, height 150 %, translateX(-50 %) → on: translateX(-46 %) scale(1.04); .55s --ez
-	var st: Texture2D = tx(ST[c])
+	var st: Texture2D = tx(SK.path(c, "st_base"))
 	var ih := r.size.y * 1.5
 	var iw := ih * st.get_width() / st.get_height()
 	var k: float = tr.get_v("img_" + c, 1.0 if on else 0.0, 550.0, "ez")

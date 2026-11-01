@@ -976,6 +976,7 @@ func _ready() -> void:
 		JavaScriptBridge.get_interface("window").cvaTest = _js_cb
 
 ## "page <key>" opens a menu page · "close" shuts it · "station <up|eng|fuse|dis>" · "fill" · "memlv <n>" · "lowfat" · "kill" · "chesthit <n>"
+## · "skins" (every costume; "page wardrobe" opens the 옷장)
 func test_cmd(cmd: String) -> void:
 	var w := cmd.split(" ")
 	var M = arena.ui_root.menu if arena != null and arena.ui_root != null else null
@@ -989,6 +990,8 @@ func test_cmd(cmd: String) -> void:
 		"station":
 			if M != null: M.forge.go_station(w[1])
 		"fill": test_fill()
+		"skins":                 # every costume (as Page Up)
+			if arena.get("skins") != null: arena.skins.grant_all()
 		"memlv":                 # screenshots: everyone's memory level (and lamps for the breakthrough)
 			for c in ROSTER: memory.T(c)["lv"] = clampi(int(w[1]) if w.size() > 1 else 12, 1, 12)
 			mats["lamp"] = int(mats.get("lamp", 0)) + 3
@@ -1011,8 +1014,14 @@ func test_cmd(cmd: String) -> void:
 					loot.hit_chest()
 
 func _unhandled_input(ev_: InputEvent) -> void:
-	# Home = test kit, End = rune book, Page Down = boss room (moved off F12, which the fame test keys use); debug builds only
+	# Home = test kit, End = rune book, Page Down = boss room (moved off F12, which the fame test keys use),
+	# Page Up = every costume (skins.gd); debug builds only
 	if not DEV.on: return
+	if ev_ is InputEventKey and ev_.pressed and not ev_.echo and ev_.keycode == KEY_PAGEUP:
+		if arena != null and arena.get("skins") != null:
+			arena.skins.grant_all()
+			arena.sfx("ready", 0.6)
+		return
 	if ev_ is InputEventKey and ev_.pressed and not ev_.echo and ev_.keycode in [KEY_HOME, KEY_END, KEY_PAGEDOWN]:
 		if ev_.keycode == KEY_HOME:
 			test_fill()

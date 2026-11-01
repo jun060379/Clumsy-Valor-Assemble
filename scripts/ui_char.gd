@@ -1,15 +1,15 @@
 extends "res://scripts/ui_page.gd"
-## 캐릭터 (prototype CHARACTER SCREEN v2, cx v2): tabs 상세 · 장비 · 스킬 · 기억 · 기록 along the top, the member's faces
+## 캐릭터 (prototype CHARACTER SCREEN v2, cx v2): tabs 상세 · 장비 · 스킬 · 기억 · 기록 · 의상 along the top, the member's faces
 ## top right. 상세 = the numbers with gear on (+ what gear adds), the passive; 장비 = seven blades (WEAPON … ACC 3), the picked
 ## piece as a card (stats, its rune), 교체 = what in the bag fits, with a stat diff, and 해제.
 ## 스킬 · 기억 · 기록 are drawn by ui_char_mem.gd (mx): the moves, the memory tree and levels (memory.gd), the record and memorial.
+## 의상 is drawn by ui_char_wear.gd (wr): the member's costumes (skins.gd), quick switching. All member art goes through skins.gd.
 
 const MEMUI := preload("res://scripts/ui_char_mem.gd")
 const UIA := preload("res://scripts/ui_anim.gd")
-const ST := {"estelle": "res://assets/ui/st/estelle_base.webp", "aida": "res://assets/ui/st/aida_base.webp", "luce": "res://assets/ui/st/luce_base.webp"}
-const GEAR_ART := {"estelle": "res://assets/ui/st/estelle_gear.webp", "aida": "res://assets/ui/st/aida_gear.webp", "luce": "res://assets/ui/st/luce_gear.webp"}
-const FACE := {"estelle": preload("res://assets/ui/faces/estelle.png"), "aida": preload("res://assets/ui/faces/aida.png"), "luce": preload("res://assets/ui/faces/luce.png")}
-const TABS := [["attr", "상세", "STATUS"], ["gear", "장비", "GEAR"], ["skill", "스킬", "SKILL"], ["match", "기억", "MEMORY"], ["rec", "기록", "RECORD"]]
+const SK := preload("res://scripts/skins.gd")       # every member picture comes through the worn costume (skins.gd)
+const WEAR := preload("res://scripts/ui_char_wear.gd")
+const TABS := [["attr", "상세", "STATUS"], ["gear", "장비", "GEAR"], ["skill", "스킬", "SKILL"], ["match", "기억", "MEMORY"], ["rec", "기록", "RECORD"], ["wear", "의상", "COSTUME"]]
 const GSL := [["weapon", "WEAPON"], ["head", "HEAD"], ["body", "BODY"], ["shoe", "SHOES"], ["acc1", "ACC 1"], ["acc2", "ACC 2"], ["acc3", "ACC 3"]]
 const SHEET := {"estelle": ["에스텔 벨라시타", "자칭 성기사 · 탱커", ["수호자", "받는 피해 25% 감소."]],
 	"aida": ["스나가와 아이다", "삽 · 기습형", ["그림자 걸음", "적의 등 뒤에서 때리면 피해 2배 (뒷치기)."]],
@@ -22,6 +22,7 @@ var picking := false
 var slam_t := 0.0
 var tab_t := 0.0
 var mx                           # ui_char_mem.gd: the 스킬 · 기억 · 기록 tabs
+var wr                           # ui_char_wear.gd: the 의상 tab
 # ---- motion (status.js cx v2: .wipe, cx_mn / cx_cd, cx_slam, cx_drop, cx_flash, .menu / .cur transitions, .nm and the
 # per-tab ground gliding .7s --mv, cx_xgear, cx_flb, cx_gdpop) ----
 var trn := UIA.Tr.new()
@@ -51,6 +52,7 @@ func _ready() -> void:
 	super()
 	keys = ["char"]
 	mx = MEMUI.new(self)
+	wr = WEAR.new(self)
 
 var want_c := ""                 # cxOpen(c): open on this member instead of the one in control
 var stat_scroll := 0.0           # 상세: #cx .stats scrolls (overflow auto) down to the 패시브 and 상성 cards
@@ -81,6 +83,7 @@ func _opened() -> void:
 	jolt_t = 1e9
 	trn.clear()
 	mx.opened()
+	wr.reset()
 
 func _tick(dt: float) -> void:
 	slam_t += dt
@@ -107,11 +110,14 @@ func _tick(dt: float) -> void:
 			react = ""
 			react_t = 0.0
 			mx.member_changed()
+			wr.reset()
 		if wipe_t >= (540.0 if wipe_kind == "open" else 490.0): wipe_t = -1.0
 	mx.tick(dt)
+	wr.tick(dt)
 
 func _key(k: int) -> void:
 	if tab in ["skill", "match", "rec"] and mx.key(k): return
+	if tab == "wear" and wr.key(k): return
 	if k == KEY_ESCAPE:
 		if picking: picking = false
 		else: back()
@@ -144,6 +150,7 @@ func _tab(k: String) -> void:
 	react = ""
 	react_t = 0.0
 	mx.tab_changed()
+	if k == "wear": wr.reset()
 	sfx("ready", 0.2)
 
 func _member(cc: String) -> void:
@@ -164,6 +171,9 @@ func _paint(vs: Vector2) -> void:
 	draw_rect(Rect2(Vector2.ZERO, vs), Color.BLACK)
 	if tab == "gear": _gear(vs, col)
 	elif tab == "attr": _attr(vs, col)
+	elif tab == "wear":
+		wr.paint(vs, col)
+		if prev_tab == "attr" and tab_t < 350.0: _attr_art(vs, tab_t)
 	else:
 		mx.paint(vs, col)
 		if mx.clean: return          # 감상: only the memorial art and its ✕
@@ -194,7 +204,7 @@ func _faces(vs: Vector2) -> void:
 			if on: draw_rect(Rect2(lr.position + Vector2(5, 5), lr.size), Color(1, 1, 1, a))
 			draw_rect(lr, Color(Color.BLACK if on else Color.WHITE, a))
 			var g := 1.0 if on else 0.45
-			draw_texture_rect(FACE[cc], lr.grow(-3), false, Color(g, g, g, a))
+			draw_texture_rect(SK.face(cc), lr.grow(-3), false, Color(g, g, g, a))
 			draw_set_transform(Vector2.ZERO)
 		var c2: String = cc
 		hit(r, func(): _member(c2))
@@ -444,10 +454,10 @@ func _gear(vs: Vector2, col: Color) -> void:
 	# the gear ground (#cx[data-tab=gear]: her colour on the left, the black shard on the right), the gear art (cx_xgear)
 	mx.ground(vs, col, "gear")
 	if prev_tab == "attr" and tab_t < 350.0: _attr_art(vs, tab_t)
-	var art := tx(GEAR_ART[c])
+	var art := tx(SK.path(c, "st_gear"))
 	var h := vs.y * 1.05
 	var w := h * art.get_width() / art.get_height()
-	_art(vs, GEAR_ART[c], Rect2(vs.x * 0.98 - w, vs.y * 1.02 - h, w, h), "gear")
+	_art(vs, SK.path(c, "st_gear"), Rect2(vs.x * 0.98 - w, vs.y * 1.02 - h, w, h), "gear")
 	_name(Vector2(vs.x * 0.05, vs.y * 0.83))
 	var G: Dictionary = R().gear[c]
 	var y := vs.y * 0.21
@@ -589,7 +599,7 @@ func _gear_card(vs: Vector2, col: Color) -> void:
 
 ## the 상세 art (left 4 %, top 4 %, full height); out > 0 = leaving the tab
 func _attr_art(vs: Vector2, out: float) -> void:
-	var t0 := tx(ST[c])
+	var t0 := tx(SK.path(c, "st_base"))
 	var h := vs.y
 	var w := h * t0.get_width() / t0.get_height()
 	var r := Rect2(vs.x * 0.04, vs.y * 0.04, w, h)
@@ -602,9 +612,9 @@ func _attr_art(vs: Vector2, out: float) -> void:
 
 ## the face on show (face / artSrc): a reaction, else a blink (sblink: the cl picture), else base
 func face_path() -> String:
-	if react != "": return "res://assets/ui/st/%s_%s.webp" % [c, react]
-	if blk > 0.0: return "res://assets/ui/st/%s_cl.webp" % c
-	return ST[c]
+	if react != "": return SK.path(c, "st_" + react)
+	if blk > 0.0: return SK.path(c, "st_cl")
+	return SK.path(c, "st_base")
 
 ## react(): a tap smiles for 1.7 s with a hop and ♪; the third tap within 1.3 s is a surprise (sup, 1.5 s, shake, !!)
 func react_tap() -> void:

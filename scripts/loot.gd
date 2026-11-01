@@ -228,6 +228,10 @@ func break_chest() -> void:
 	var nG := (1 + (1 if gi >= 3 else 0)) if gi >= 1 else 0
 	for i in nG:
 		out.append({"kind": "gear", "v": runes.make_gear(D["bonus"] if top and i == 0 else runes.roll_grade(minf(1.0, 0.3 + gi * 0.15)))})
+	# a costume token, rarely (skin_data.gd DROP_CHANCE by the chest's grade; only costumes whose art is in)
+	if arena.get("skins") != null:
+		var sk: String = arena.skins.roll_chest(gi, func(): return runes.rand())
+		if sk != "": out.append({"kind": "skin", "v": sk})
 	for i in out.size():
 		var o: Dictionary = out[i]
 		var a: float = -PI / 2.0 + (runes.rand() - 0.5) * 2.4
@@ -251,6 +255,7 @@ func _collect(o: Dictionary) -> void:
 		"mem": runes.mem += o["v"]
 		"rune": runes.add_rune(o["v"])
 		"gear": runes.gearbag.append(o["v"])
+		"skin": if arena.get("skins") != null: arena.skins.grant(o["v"], "drop")      # its GET notice comes from skins.gd
 	got.append({"kind": o["kind"], "v": o["v"]})
 	runes.changed()
 	arena.loot_tink()           # lootGet: the tink
@@ -265,13 +270,14 @@ func town_gate() -> bool:
 		return true
 	return not items.is_empty()
 
-## what this chest gave: {sh, mem, runes: [r..], gear: [item..], grade}
+## what this chest gave: {sh, mem, runes: [r..], gear: [item..], skins: [id..], grade}
 func summary() -> Dictionary:
-	var s := {"sh": 0, "mem": 0, "runes": [], "gear": [], "grade": grade}
+	var s := {"sh": 0, "mem": 0, "runes": [], "gear": [], "skins": [], "grade": grade}
 	for o in got:
 		if o["kind"] == "sh": s["sh"] += o["v"]
 		elif o["kind"] == "mem": s["mem"] += o["v"]
 		elif o["kind"] == "rune": s["runes"].append(o["v"])
+		elif o["kind"] == "skin": s["skins"].append(o["v"])
 		else: s["gear"].append(o["v"])
 	return s
 
@@ -394,11 +400,13 @@ func _item_col(o: Dictionary) -> Color:
 		"sh": return runes.SHC
 		"mem": return runes.MEMC
 		"rune": return runes.gcol(runes.RUNE[o["v"]]["g"])
+		"skin": return Color("#ff6fae")
 	return runes.gcol(o["v"]["g"])
 
 func _tier(o: Dictionary) -> int:
 	if o["kind"] == "sh": return 0
 	if o["kind"] == "mem": return 1
+	if o["kind"] == "skin": return 4
 	var g: String = runes.RUNE[o["v"]]["g"] if o["kind"] == "rune" else o["v"]["g"]
 	return {"common": 0, "uncommon": 1, "rare": 1, "elite": 2, "epic": 3, "legend": 4, "unique": 4}.get(g, 0)
 

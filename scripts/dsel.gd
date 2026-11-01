@@ -8,6 +8,7 @@ extends Control
 const UI := preload("res://scripts/ui_kit.gd")
 const EL := preload("res://scripts/elements.gd")
 const MOB := preload("res://scripts/mob.gd")
+const SK := preload("res://scripts/skins.gd")       # member art through the worn costume
 const GRADE := {"common": ["일반", Color("#b9b2a3")], "uncommon": ["고급", Color("#7fc77a")], "rare": ["레어", Color("#6aa7ff")], "elite": ["엘리트", Color("#b48cff")]}
 ## DUNGEONS + SXD
 const DUN := [
@@ -38,7 +39,6 @@ var r_tabs: Array = []
 var r_go := Rect2()
 var r_x := Rect2()
 var r_faces: Array = []
-var st := {}
 var mobs := {}
 
 
@@ -47,8 +47,6 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	visible = false
-	for c in ["estelle", "aida", "luce"]:
-		st[c] = load("res://assets/ui/st/%s_base.webp" % c)
 
 func show_it() -> void:
 	sel = 0
@@ -368,7 +366,7 @@ func _draw_party(vs: Vector2) -> void:
 		r_faces.append(r)
 		var poly := UI.clip(r, [[10, 0], [100, 0], [90, 100], [0, 100]])
 		draw_colored_polygon(poly, Color.BLACK)
-		var tex: Texture2D = st[c]
+		var tex: Texture2D = SK.tex(c, "st_base")
 		# background-size 300% auto at the face crop
 		var tw := 52.0 * 3.0
 		var th := tw * tex.get_height() / tex.get_width()
@@ -497,7 +495,7 @@ func _stand(vs: Vector2, c: String, k: int, top: float, off: Vector2, stretch: f
 	draw_rect(Rect2(x0, -bh / 2.0 - 4.0, x1 - x0, bh + 8.0), Color.BLACK)
 	draw_rect(Rect2(x0, -bh / 2.0, x1 - x0, bh), UI.col(c))
 	# the art: left at 14% (52% for the middle one), 46% wide, shifted up by --fy, mirrored for the middle one
-	var tex: Texture2D = st[c]
+	var tex: Texture2D = SK.tex(c, "st_base")
 	var iw := bw * 0.46
 	var ih := iw * tex.get_height() / tex.get_width()
 	var fx := 0.52 if k == 1 else 0.14

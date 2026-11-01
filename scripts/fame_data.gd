@@ -4,10 +4,12 @@ extends RefCounted
 ## Quest progress: v = counter(k) - base(id) (FBASEK gives a base to every quest that opens after the first rank).
 ## Chapter tasks use either a counter (k) or a named function (fn) that fame.gd evaluates.
 
+const SD := preload("res://scripts/skin_data.gd")
+const CHN := {"estelle": "에스텔", "aida": "아이다", "luce": "루체"}
 const FRANK := [{"n": "무명 길드", "need": 0}, {"n": "동네 소문", "need": 30}, {"n": "마을의 소문", "need": 130}, {"n": "마을의 자랑", "need": 330}, {"n": "영지의 용병단", "need": 630}, {"n": "이름난 길드", "need": 1030}, {"n": "전설의 시작", "need": 1530}]
 const FUNLOCK := [
 	["버섯 동굴 의뢰", "시설 복구 · 벽난로 · 샹들리에 · 대장간 풀무"],
-	["새 의뢰 6건", "시설 복구 · 부엌 화덕 · 창고 · 헛간", "등급 보상 (향후 추가 예정)"],
+	["새 의뢰 6건", "시설 복구 · 부엌 화덕 · 창고 · 헛간 · 옷장", "등급 보상 (향후 추가 예정)"],
 	["새 의뢰 7건", "시설 복구 · 도서관 · 객실 · 목욕집 · 훈련장", "등급 보상 (향후 추가 예정)"],
 	["다음 장 (향후 추가 예정)"], ["다음 장 (향후 추가 예정)"], ["다음 장 (향후 추가 예정)"], ["다음 장 (향후 추가 예정)"]]
 const AMAX := 30
@@ -80,6 +82,7 @@ const FAC := [
 	{"id": "hearth", "n": "부엌 화덕", "r": 2, "cost": 140, "f": 10, "eff": "출격 전 든든한 한 끼. 던전에서 공격력 +10%.", "where": "본관 1층 부엌"},
 	{"id": "store", "n": "창고", "r": 2, "cost": 150, "f": 10, "eff": "짐을 넉넉히 꾸려 간다. 보스를 쓰러뜨리면 실링 +40, 레어 룬 +1.", "where": "마을 서쪽 창고", "town": true},
 	{"id": "barn", "n": "헛간 · 마차 정비", "r": 2, "cost": 170, "f": 10, "eff": "말이 쉬고 마차가 고쳐진다. 출격하면 파티 전원 기력 40%에서 시작.", "where": "마을 헛간", "town": true},
+	{"id": "wardrobe", "n": "옷장", "r": 2, "cost": 120, "f": 10, "eff": "2층 복도 끝 방의 옷장이 열린다. 모든 의상을 둘러보고, 입어 보고, 실링으로 산다.", "where": "본관 2층 복도"},
 	{"id": "library", "n": "도서관 서가", "r": 3, "cost": 210, "f": 15, "eff": "룬 도감에 미발견 룬의 효과가 보이고, 몬스터 관찰에 필요한 처치 수가 절반.", "where": "본관 2층 도서관"},
 	{"id": "bath", "n": "목욕집", "r": 3, "cost": 220, "f": 10, "eff": "개운하게 머리를 비운다. 보스를 쓰러뜨리면 기억석 +10.", "where": "마을 목욕집", "town": true},
 	{"id": "rooms", "n": "길드원 객실", "r": 3, "cost": 240, "f": 15, "eff": "3층 객실이 열린다. 동료들이 밤에 자기 방으로 간다.", "where": "본관 3층"},
@@ -113,6 +116,17 @@ const DUNGEONS := [
 const LAMP := {"n": "광부의 등잔", "src": "버섯 동굴 · 감독관 해골"}
 const MOBN := {"goblin": "고블린", "mush": "독버섯", "skel": "해골 광부", "eye": "동굴 눈알", "boss": "감독관 해골"}
 
+
+## FUNLOCK[i] (what grade i + 1 opens) with the grade's costume rewards from skin_data.gd in the "등급 보상" slot
+static func funlock(i: int) -> Array:
+	var L: Array = FUNLOCK[i].duplicate()
+	var sk := SD.fame_rewards(i + 1)
+	if sk.is_empty(): return L
+	var line := "등급 보상 · 의상 " + " · ".join(sk.map(func(s): return "%s 「%s」" % [CHN[s["c"]], s["n"]]))
+	var j := L.find("등급 보상 (향후 추가 예정)")
+	if j >= 0: L[j] = line
+	else: L.append(line)
+	return L
 
 static func a_need(lv: int) -> int:
 	return 60 + 40 * (lv - 1)

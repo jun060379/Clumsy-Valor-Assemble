@@ -529,7 +529,7 @@ func _rk_scene(vs: Vector2, t: float, r: int, R: Dictionary) -> void:
 		draw_string(S.bhs(), Vector2(14, nm.size.y * 0.5 + fs_nm * 0.36), R["n"], HORIZONTAL_ALIGNMENT_LEFT, -1, fs_nm, Color(0, 0, 0, u5))
 		draw_set_transform(Vector2.ZERO)
 	# what the rank opens
-	var items: Array = FD.FUNLOCK[r - 1]
+	var items: Array = FD.funlock(r - 1)
 	var uy := H * 0.89 - items.size() * 30.0
 	for i in items.size():
 		var u := S.k(t, 1400.0 + i * 110.0, 340.0)

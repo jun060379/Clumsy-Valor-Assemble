@@ -5,6 +5,7 @@ extends RefCounted
 ## One instance lives on the arena (meta "folk"), so where they are survives leaving and re-entering town.
 
 const CH := preload("res://scripts/chars.gd")
+const SK := preload("res://scripts/skins.gd")
 const ROSTER := ["estelle", "aida", "luce"]
 const HDOOR := 3024.0         # town.gd HDOOR
 ## two walkable routes: "top" (streets, terrace) and "bot" (the lower walkway); they meet at both ends
@@ -67,7 +68,7 @@ func anim(n: Dictionary, a: String) -> void:
 		n["ft"] = 0.0
 
 func anim_step(n: Dictionary, dt: float) -> void:
-	var e = CH.entry(n["c"], n["anim"])
+	var e = SK.entry(n["c"], n["anim"])
 	if e == null:
 		n["anim"] = "idle"
 		return

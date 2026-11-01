@@ -8,6 +8,7 @@ extends Control
 
 const UI := preload("res://scripts/ui_kit.gd")
 const ULT := preload("res://scripts/ult.gd")
+const SK := preload("res://scripts/skins.gd")       # member art through the worn costume
 ## UC and ULTVID durations (ms)
 const PING := 110.0
 const SPLASH := 820.0
@@ -18,7 +19,6 @@ var arena
 var sortie
 var on := false
 var who := "estelle"
-var arts := {}
 var vids := {}                  # member -> {"fps", "w", "h", "buf": PackedByteArray, "off": [[start, size]...]}
 var vp: TextureRect             # the clip's current frame
 var started := false
@@ -35,7 +35,6 @@ func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	visible = false
 	for c in ["estelle", "aida", "luce"]:
-		arts[c] = load("res://assets/ult/ult_art_%s.png" % c)
 		var pk := read_pack("res://assets/ult/ult_%s.useq" % c)
 		if not pk.is_empty(): vids[c] = pk
 	art_node = _layer(_draw_art)
@@ -196,7 +195,7 @@ func _draw_art() -> void:
 	var t2 := PING + SPLASH
 	if not (t < t2 + 60.0 and t > PING * 0.6): return
 	var vs := get_viewport_rect().size
-	var tex: Texture2D = arts[who]
+	var tex: Texture2D = SK.tex(who, "ult_art")
 	var ak := _uB((t - PING * 0.6) / 240.0)
 	var h := vs.y * 1.08
 	var w := h * tex.get_width() / tex.get_height()

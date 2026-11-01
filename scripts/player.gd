@@ -5,6 +5,7 @@ extends Node2D
 ## Units as in the prototype: world px, ms, px/ms, px/ms^2.
 
 const CH = preload("res://scripts/chars.gd")
+const SK := preload("res://scripts/skins.gd")
 
 const GRAV := 0.0021
 const JUMPV := 0.74
@@ -19,7 +20,6 @@ const BASE := 170.0          # feet line inside a drawn cell
 const QTE_T := 3410.0        # tag-in window
 
 var arena
-var sheets := {}             # char -> [Texture2D x5]
 var who := "estelle"         # current member
 var CSCALE := 1.3
 var MAX_HP := 70.0
@@ -114,11 +114,7 @@ var plat = null              # town: the sloped surface she stands on
 
 func _ready() -> void:
 	for c in ["estelle", "aida", "luce"]:
-		var arr: Array[Texture2D] = []
-		var folder: String = c
-		for i in 5:
-			arr.append(load("res://assets/chars/%s/%s_%d.png" % [folder, folder, i]))
-		sheets[c] = arr
+		for i in 5: SK.sheet(c, i)         # load the worn costume's sheets now (skins.gd resolves every draw)
 		hpm[c] = CH.STATS[c]["hp"]
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	material = pix_mat()
@@ -141,7 +137,7 @@ func atk_mul() -> float:
 
 # ---------- helpers ----------
 func set_anim(n: String, frame := -1) -> void:
-	if CH.entry(who, n) == null:
+	if SK.entry(who, n) == null:
 		n = "idle"
 		frame = 0
 	if anim != n or frame >= 0:
@@ -156,7 +152,7 @@ func durs() -> Array:
 		if rift_q:
 			return [30, 40, 40, 40] if anim == "tp_in" else [40, 40, 50, 60]
 		return [50, 60, 70, 90] if anim == "tp_in" else [60, 60, 80, 100]
-	return CH.entry(who, anim)[1]
+	return SK.entry(who, anim)[1]
 
 func dur() -> float:
 	var a: Array = durs()
@@ -1761,7 +1757,7 @@ static func pix_slot(key: String, c: String, row: int, col: int, wa: Vector2, d:
 	S_M[i] = Vector4(d * 2.0 / sc, 0.0, cx0 + CH.CELL_W / 2.0, cx0)
 	# the sprite's own top and bottom rows (alpha > 100), through the bands, for the lit-from-above ramp
 	var bi: int = (row * 9 + col) * 2
-	var BB: Array = CB.B[c]
+	var BB: Array = SK.bounds(c)
 	var tb := Vector2(0, 0)
 	if bi + 1 < BB.size() and BB[bi] >= 0:
 		for j in 2:
@@ -1831,19 +1827,20 @@ func _rift_clean() -> void:
 ## `rim`: the body takes the directional rim of nearby lights
 func draw_frame(c: String, an: String, fr: int, at: Vector2, d: int, col: Color, variant := "", ci: CanvasItem = null, cx := NAN, keep := 0, sk := "", breath := -1.0, rim := false) -> void:
 	if ci == null: ci = self
-	var rf: Array = CH.resolve(c, an, fr, variant)
+	var rf: Array = SK.resolve(c, an, fr, variant)        # the worn costume's own animations first (skins.gd)
 	var row: int = rf[0]
-	var sheet: Texture2D = sheets[c][row / CH.ROWS_PER_SHEET]
+	var sheet: Texture2D = SK.sheet_row(c, row)            # its row, or the original art's row it doesn't draw yet
+	if sheet == null: return
 	var src := Rect2(rf[1] * CH.CELL_W, (row % CH.ROWS_PER_SHEET) * CH.CELL_H, CH.CELL_W, CH.CELL_H)
 	var sc: float = CH.SCALE[c] * (CH.ROWFIX_AIDA.get(row, 1.0) if c == "aida" else 1.0)
-	var bt: Array = CH.BOB[c].get(an, [])
+	var bt: Array = SK.bob(c, an)
 	if not bt.is_empty(): at.y += bt[fr % bt.size()]
 	var w := CW * sc
 	var h := CHH * sc
 	# drawFrame's idle breathing: hips and legs stay, the chest stretches by whole pixels, head and shoulders ride on top
 	var bands: Array = [[0.0, float(CH.CELL_H), -BASE, CHH]]
 	if breath >= 0.0 and row == 0:
-		var top: float = CH.BREATH_TOP[c]
+		var top: float = SK.breath_top(c)
 		var hg := 341.0 - top
 		var yW := roundf(341.0 - hg * 0.47)
 		var yN := roundf(341.0 - hg * 0.74)

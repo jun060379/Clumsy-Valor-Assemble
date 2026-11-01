@@ -220,6 +220,8 @@ func mem_decay(top := 6) -> float:
 func _changed() -> void:
 	_fx_cache.clear()
 	if runes != null: runes.changed()
+	# a level can earn a costume (skin_data.gd "level"; Lv 12 = 메모리얼 해방)
+	if runes != null and runes.arena != null and runes.arena.get("skins") != null: runes.arena.skins.sync()
 
 ## nfx: the effects of the nodes a member has on
 func nfx(c: String) -> Array:

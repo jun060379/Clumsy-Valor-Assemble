@@ -355,9 +355,9 @@ func _draw_hero() -> void:
 	if an == "tp_in" or an == "dig_out":
 		variant = "_air" if P.dig_air else ("_q" if P.rift_q else "")
 	var col := Color(1, 1, 1, 0.85 * k)
-	var rf: Array = CH.resolve(P.who, an, P.f, variant)
+	var rf: Array = P.SK.resolve(P.who, an, P.f, variant)
 	var row: int = rf[0]
-	var sheet: Texture2D = P.sheets[P.who][row / CH.ROWS_PER_SHEET]
+	var sheet: Texture2D = P.SK.sheet_row(P.who, row)
 	var src := Rect2(rf[1] * CH.CELL_W, (row % CH.ROWS_PER_SHEET) * CH.CELL_H, CH.CELL_W, CH.CELL_H)
 	var sc: float = CH.SCALE[P.who] * (CH.ROWFIX_AIDA.get(row, 1.0) if P.who == "aida" else 1.0)
 	var w: float = P.CW * sc

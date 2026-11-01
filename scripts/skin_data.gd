@@ -1,0 +1,130 @@
+extends RefCounted
+## Costume skins: the registry (scripts/skins.gd reads it; the 의상 tab and the wardrobe show it).
+## Each skin is a full costume for one member: five sprite sheets in the exact layout of the 기본 sheets, its standing art,
+## its round face and, where it has them, the other pictures the screens use. Files live in assets/skins/<id>/ (docs/skin_assets.md).
+## Every entry:
+##   id       unique id; also the asset folder name (assets/skins/<id>/)
+##   c        "estelle" / "aida" / "luce"
+##   n, d     name and one-line description shown in the 의상 tab and the wardrobe
+##   unlock   {kind, value}:
+##              default  always owned (the 기본 of each member)
+##              fame     guild fame grade reward: value = the grade (2..7); granted on the rank-up, shown in the rank cut's list
+##              drop     boss chest: value = the lowest chest grade that can hold it (0 커먼 .. 4 레전더리, loot.gd CGN);
+##                       a low chance per chest (DROP_CHANCE), only skins whose art is in
+##              level    character level: value = the level (12 = 메모리얼 해방)
+##              shop     bought in the wardrobe: value = price in shillings (only once its art is in)
+##              story    a story reward: value = the story key; the story system calls skins.grant(id, "story")
+##   dir      the asset folder ("" = the original art in assets/chars, assets/ui/st, ... as it always was)
+## optional, for a costume drawn in parts or with its own timing:
+##   rows     the sheet rows this costume draws itself (others come from the original art, row by row); absent = all 35
+##   anims    {anim: [row, [ms...]]}: its own frame count / timing / row for an animation (frames run 9 a row, then wrap
+##            to the next row; rows past 34 live in sheet_5.png ...)
+##   bob      {anim: [...]}: its own stride bob (empty = none: the frames carry it); steps {anim: [frames]}: footfalls
+##   partial  true: "부분 완성" on the screens; done = the animations it has
+##   placeholder  true: the name / description were invented and wait for the user's own (the 기본 entries: only the description)
+
+const BASE := {"estelle": "estelle_base", "aida": "aida_base", "luce": "luce_base"}
+## 초심's run (18 frames = 2 steps) and walk (43 frames = 2 steps), timed from tools/make_skin_chosim.py's measurement:
+##   run: the planted foot drifts 10.7 sheet px a frame (6.95 world px); at player.gd RUN 0.36 px/ms no slide = 19.3 ms a
+##        frame (a 347 ms cycle; 기본's is 680 ms with longer strides)
+##   walk: the art's steps are short (1.2 world px a frame); no slide at townsfolk.gd WALKSP 0.2 would need 6 ms a frame, so
+##        it plays at a natural 24 ms (1.03 s a cycle) and the soles slide ~150 px a cycle (docs/skin_assets.md)
+const RUN18 := [19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19]
+const WALK43 := [24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24]
+const STEP_RUN18 := [1, 10]      # the frames a foot lands (dust puffs, footstep sounds)
+const ROOT := "res://assets/skins/"
+
+const SKINS := [
+	# 초심: Estelle's default since the white dress arrived. Partial: only the rows below are drawn yet; every other row
+	# (attacks, guard, hurt, ...) and picture still comes from the original art (미숙한 결의's files) until it is delivered.
+	{"id": "estelle_base", "c": "estelle", "n": "초심", "d": "흰 드레스에 검은 소매, 검 한 자루. 방패도 망토도 없이 다시 시작하는 차림.", "unlock": {"kind": "default", "value": 0},
+		"dir": ROOT + "estelle_base/", "placeholder": true, "partial": true,
+		# own rows: 0 idle · 3 start (walk start) · 4 stop · 5 turn · 6 jump · 7 runjump · 35-36 run (18) · 37-41 walk (43)
+		"rows": [0, 3, 4, 5, 6, 7, 35, 36, 37, 38, 39, 40, 41],
+		"anims": {"run": [35, RUN18], "walk": [37, WALK43]},
+		"bob": {"run": [], "walk": []},           # the frames carry their own rise and fall
+		"steps": {"run": STEP_RUN18},
+		"breath_top": 166,                         # the head's top in the idle cells (player.gd idle breathing)
+		"done": ["idle", "start", "stop", "turn", "jump", "runjump", "run", "walk"]},
+	# 미숙한 결의: the original art (cape and shield), the files in assets/chars/estelle and assets/ui/st as they always were
+	{"id": "estelle_misuk", "c": "estelle", "n": "미숙한 결의", "d": "망토와 방패를 두르고 길드 문을 처음 두드리던 날의 차림.", "unlock": {"kind": "story", "value": "estelle_misuk"}, "dir": "", "placeholder": true},
+	{"id": "estelle_s1", "c": "estelle", "n": "순례자의 여행복", "d": "먼 길을 걷는 순례자의 차림. 방패는 등에 메고, 망토 자락엔 길 먼지가 앉았다.", "unlock": {"kind": "fame", "value": 2}, "dir": ROOT + "estelle_s1/", "placeholder": true},
+	{"id": "estelle_s2", "c": "estelle", "n": "축제의 밤 드레스", "d": "마을 축제 날 빌려 입은 드레스. 방패를 들어도 춤출 수 있게 치맛단을 줄였다.", "unlock": {"kind": "shop", "value": 300}, "dir": ROOT + "estelle_s2/", "placeholder": true},
+	{"id": "aida_base", "c": "aida", "n": "기본", "d": "묘지기 앞치마 원피스와 흙 묻은 장화.", "unlock": {"kind": "default", "value": 0}, "dir": "", "placeholder": true},
+	{"id": "aida_s1", "c": "aida", "n": "묘지기의 상복", "d": "검은 베일과 긴 상복. 동굴 깊은 곳 상자에서 나온, 누군가의 장례 차림.", "unlock": {"kind": "drop", "value": 2}, "dir": ROOT + "aida_s1/", "placeholder": true},
+	{"id": "aida_s2", "c": "aida", "n": "균열 너머의 옷", "d": "기억을 끝까지 따라간 끝에서 꺼내 온 옷.", "unlock": {"kind": "level", "value": 12}, "dir": ROOT + "aida_s2/", "placeholder": true},
+	{"id": "luce_base", "c": "luce", "n": "기본", "d": "수습 사제 로브와 헝겊 신.", "unlock": {"kind": "default", "value": 0}, "dir": "", "placeholder": true},
+	{"id": "luce_s1", "c": "luce", "n": "성가대 수습복", "d": "성가대 수습 시절의 흰 옷. 이야기가 이어지면 받을 수 있다.", "unlock": {"kind": "story", "value": "luce_choir"}, "dir": ROOT + "luce_s1/", "placeholder": true},
+	{"id": "luce_s2", "c": "luce", "n": "여름 휴가 차림", "d": "밀짚모자와 가벼운 원피스. 길드가 마을의 자랑이 된 기념.", "unlock": {"kind": "fame", "value": 3}, "dir": ROOT + "luce_s2/", "placeholder": true},
+]
+
+## the chance a boss chest of each grade (0 커먼 .. 4 레전더리) holds a costume token
+const DROP_CHANCE := [0.0, 0.03, 0.06, 0.10, 0.15]
+
+## The pictures a skin can bring. base: the 기본 file ({c} = member, {i} = sheet number, {p} = BUST / DOLL name);
+## file: the name in the skin folder (.png or .webp); n: how many (the sheets); need: without it the skin is "준비 중".
+## "sil" keys pair with their picture: a skin that brings the picture but not its silhouette draws without one.
+## "alt": the faces of one standing picture (blink, smile, surprise) — a skin with its own st_base but not this face shows its
+## st_base instead, so a blink never flashes another costume.
+const ASSETS := {
+	"sheet": {"base": "res://assets/chars/{c}/{c}_{i}.png", "file": "sheet_{i}", "n": 5, "need": true},
+	"st_base": {"base": "res://assets/ui/st/{c}_base.webp", "file": "st_base", "need": true},
+	"face": {"base": "res://assets/ui/faces/{c}.png", "file": "face", "need": true},
+	"st_cl": {"base": "res://assets/ui/st/{c}_cl.webp", "file": "st_cl", "alt": "st_base"},
+	"st_smile": {"base": "res://assets/ui/st/{c}_smile.webp", "file": "st_smile", "alt": "st_base"},
+	"st_sup": {"base": "res://assets/ui/st/{c}_sup.webp", "file": "st_sup", "alt": "st_base"},
+	"st_gear": {"base": "res://assets/ui/st/{c}_gear.webp", "file": "st_gear"},
+	"st_skill": {"base": "res://assets/ui/st/{c}_skill.webp", "file": "st_skill"},
+	"st_skill_sil": {"base": "res://assets/ui/st/{c}_skill_sil.webp", "file": "st_skill_sil", "pair": "st_skill"},
+	"st_rec": {"base": "res://assets/ui/st/{c}_rec.webp", "file": "st_rec"},
+	"st_rec_sil": {"base": "res://assets/ui/st/{c}_rec_sil.webp", "file": "st_rec_sil", "pair": "st_rec"},
+	"bust": {"base": "res://assets/fame/{p}.png", "file": "bust"},
+	"ult_art": {"base": "res://assets/ult/ult_art_{c}.png", "file": "ult_art"},
+	"doll": {"base": "res://assets/hall/{p}.png", "file": "doll"},
+}
+const BUST := {"estelle": "por_est", "aida": "por_aida", "luce": "por_luce"}
+const DOLL := {"estelle": "dollP", "aida": "dollG", "luce": "dollC"}
+const EXT := [".png", ".webp"]
+
+const KIND_N := {"default": "기본", "fame": "명성 보상", "drop": "보스 상자", "level": "레벨", "shop": "상점", "story": "이야기"}
+const CHEST_N := ["커먼", "레어", "에픽", "유니크", "레전더리"]
+
+
+static func get_skin(id: String) -> Dictionary:
+	for s in SKINS:
+		if s["id"] == id: return s
+	return {}
+
+static func of(c: String) -> Array:
+	return SKINS.filter(func(s): return s["c"] == c)
+
+static func kind(id: String) -> String:
+	var s := get_skin(id)
+	return String(s["unlock"]["kind"]) if not s.is_empty() else ""
+
+static func is_base(id: String) -> bool:
+	return BASE.values().has(id)
+
+## how to get it, one line ("길드 명성 2등급 「동네 소문」 보상")
+static func how(id: String, ranks: Array = []) -> String:
+	var s := get_skin(id)
+	if s.is_empty(): return ""
+	var u: Dictionary = s["unlock"]
+	var v = u["value"]
+	match String(u["kind"]):
+		"default": return "처음부터 갖고 있다"
+		"fame":
+			var rn: String = ranks[int(v) - 1]["n"] if int(v) - 1 < ranks.size() else ""
+			return "길드 명성 %d등급%s 보상" % [int(v), (" 「%s」" % rn) if rn != "" else ""]
+		"drop": return "보스 상자 · %s 이상에서 낮은 확률" % CHEST_N[clampi(int(v), 0, 4)]
+		"level": return "Lv %d · 메모리얼 해방" % int(v) if int(v) >= 12 else "Lv %d 달성" % int(v)
+		"shop": return "옷장에서 실링 %d" % int(v)
+		"story": return "이야기 진행 보상 (이야기 준비 중)"
+	return ""
+
+## the fame grade rewards in data: the costume names a grade grants
+static func fame_rewards(grade: int) -> Array:
+	var L: Array = []
+	for s in SKINS:
+		if s["unlock"]["kind"] == "fame" and int(s["unlock"]["value"]) == grade: L.append(s)
+	return L
