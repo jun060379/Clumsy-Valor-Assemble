@@ -19,6 +19,28 @@ const DEF := {
 static var TEX := {}
 const EL := preload("res://scripts/elements.gd")
 const DUMMY := preload("res://scripts/dummy.gd")
+## rimEntity for monsters: the 1-2 world px of outline that faces each of the (up to 3) strongest nearby lights, added in
+## the light's colour (min(0.9, k * 2.4)); nothing on the far side
+const RIM_SH := """
+shader_type canvas_item;
+render_mode blend_add;
+uniform vec4 rl[3];
+uniform vec4 rcol[3];
+uniform int n = 0;
+void fragment() {
+	float a = texture(TEXTURE, UV).a;
+	vec3 o = vec3(0.0);
+	if (a > 0.0) {
+		for (int i = 0; i < 3; i++) {
+			if (i >= n) break;
+			float an = texture(TEXTURE, UV + rl[i].xy * TEXTURE_PIXEL_SIZE).a;
+			o += rcol[i].rgb * rl[i].z * a * (1.0 - an);
+		}
+	}
+	COLOR = vec4(o, 1.0);
+}
+"""
+static var _rim_sh: Shader
 
 var arena
 var kind := "goblin"
@@ -59,6 +81,7 @@ var elite := false
 var phase := 0
 var tier := 1
 var bar_st := {}              # H2.mob ghost trail / hit flash state
+var rim_n: Node2D             # the rim from the room's lights (rimEntity), drawn over the sprite
 
 
 static func tex(key: String) -> Texture2D:
@@ -84,6 +107,16 @@ func setup(k: String, at: Vector2, delay: float, is_elite := false, room_tier :=
 	dir = -1 if randf() < 0.5 else 1
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	material = arena.flash_mat.duplicate()
+	if _rim_sh == null:
+		_rim_sh = Shader.new()
+		_rim_sh.code = RIM_SH
+	rim_n = Node2D.new()
+	rim_n.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	var rm := ShaderMaterial.new()
+	rm.shader = _rim_sh
+	rim_n.material = rm
+	rim_n.draw.connect(_draw_rim)
+	add_child(rim_n)
 
 
 func set_a(a: String) -> void:
@@ -412,6 +445,7 @@ func _draw() -> void:
 	var tint: Color = M.get("tint", Color(1.15, 0.8, 1.25) if elite else Color.WHITE)
 	draw_texture_rect_region(tex(A[0]), Rect2(-75.0 * s, -100.0 * s, 150.0 * s, 150.0 * s), Rect2(fr * 150, 0, 150, 150), Color(tint.r, tint.g, tint.b, alpha))
 	draw_set_transform(Vector2.ZERO)
+	if rim_n != null: rim_n.queue_redraw()
 	if not is_dead() and not M.has("boss"):
 		# small HP bar over the head
 		var bw := 36.0 if M.has("fly") else 44.0
@@ -423,3 +457,47 @@ func _draw() -> void:
 			var col := Color("#ffd23a") if mark == "!!" else Color("#cfd6e6")
 			draw_string_outline(arena.font_black, Vector2(-10, by - 12.0 - 6.0 * k), mark, HORIZONTAL_ALIGNMENT_LEFT, -1, 24, 6, Color(0.08, 0.04, 0.06, 1.0 - maxf(0.0, (mark_t - 700.0) / 200.0)))
 			draw_string(arena.font_black, Vector2(-10, by - 12.0 - 6.0 * k), mark, HORIZONTAL_ALIGNMENT_LEFT, -1, 24, Color(col, 1.0 - maxf(0.0, (mark_t - 700.0) / 200.0)))
+
+## rimEntity(() => drawMob(d, true), d.x, d.y + (fly ? 40 : 0)): the lights whose reach (r * 2.2) holds the body centre,
+## strongest three, each lighting the edge that faces it
+func rim_near() -> Array:
+	var Ls: Array = arena.pfx.rim_lights() if arena.get("pfx") != null else []
+	var c := position + Vector2(0.0, (40.0 if M.has("fly") else 0.0) - 60.0)
+	var near: Array = []
+	for l in Ls:
+		var dv: Vector2 = l[0] - c
+		var d := dv.length()
+		var R: float = l[1] * 2.2
+		if d >= R: continue
+		near.append([pow(1.0 - d / R, 1.3) * l[2], dv / (d if d > 0.0 else 1.0), l[3]])
+	near.sort_custom(func(a, b): return a[0] > b[0])
+	return near.slice(0, 3)
+
+func _draw_rim() -> void:
+	var mat: ShaderMaterial = rim_n.material
+	if spawn_t > 0.0 or is_dead():
+		mat.set_shader_parameter("n", 0)
+		return
+	var near := rim_near()
+	mat.set_shader_parameter("n", near.size())
+	if near.is_empty(): return
+	var s: float = M["s"]
+	var rl := PackedVector4Array()
+	var rc := PackedVector4Array()
+	for i in 3:
+		if i < near.size():
+			var u: Vector2 = near[i][1]
+			var o := Vector2(roundf(u.x * 2.0) * dir, roundf(u.y * 2.0)) / s      # world px -> sprite texels (flipped with the body)
+			rl.append(Vector4(o.x, o.y, minf(0.9, near[i][0] * 2.4), 0.0))
+			var lc: Color = near[i][2]
+			rc.append(Vector4(lc.r, lc.g, lc.b, 0.0))
+		else:
+			rl.append(Vector4.ZERO)
+			rc.append(Vector4.ZERO)
+	mat.set_shader_parameter("rl", rl)
+	mat.set_shader_parameter("rcol", rc)
+	var A: Array = M["anims"].get(anim, M["anims"]["idle"])
+	var fr := mini(f, A[1] - 1)
+	rim_n.draw_set_transform(Vector2.ZERO, 0.0, Vector2(dir, 1))
+	rim_n.draw_texture_rect_region(tex(A[0]), Rect2(-75.0 * s, -100.0 * s, 150.0 * s, 150.0 * s), Rect2(fr * 150, 0, 150, 150))
+	rim_n.draw_set_transform(Vector2.ZERO)
