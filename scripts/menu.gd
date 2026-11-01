@@ -6,9 +6,10 @@ extends Control
 const UI := preload("res://scripts/ui_kit.gd")
 const UIA := preload("res://scripts/ui_anim.gd")
 const OPTIONS := preload("res://scripts/options.gd")
-## step 5-2 pages: 대장간, 가방, 캐릭터, the 도감 books, Bran's choices
+## step 5-2 pages: 대장간, 가방, 파티, 캐릭터, the 도감 books, Bran's choices
 const FORGE := preload("res://scripts/ui_forge.gd")
 const BAG := preload("res://scripts/ui_bag.gd")
+const PARTY := preload("res://scripts/ui_party.gd")
 const CHARP := preload("res://scripts/ui_char.gd")
 const CODEX := preload("res://scripts/ui_codex.gd")
 const CHOICE := preload("res://scripts/ui_choice.gd")
@@ -24,7 +25,6 @@ const TB := [["fs", "전체화면"], ["gbk", "길드 수첩"], ["abk", "모험 �
 const PHM := [["party", "파티", "PARTY", "함께 던전에 나설 동료."], ["char", "캐릭터", "CHARACTER", "능력치 · 장비 · 스킬 · 기억 · 기록."], ["bag", "가방", "INVENTORY", "던전에서 얻은 장비와 룬, 재화."], ["forge", "대장간", "FORGE", "브랜에게 강화 · 각인 · 합성 · 계승을 맡긴다."], ["best", "적 도감", "BESTIARY", "만난 적과 상성을 정리한 기록."], ["opts", "설정", "CONFIG", "소리 · 화면 · 조작 · 테스트."], ["help", "조작 안내", "HOW TO", "터치와 키보드 조작법."]]
 ## pages without their system yet: title (English small line, Korean big line) and icon
 const PAGE := {
-	"party": ["PARTY", "파티", "res://assets/ui/icons/ui_party.png"],
 	"char": ["CHARACTER", "캐릭터", "res://assets/ui/icons/ui_character.png"],
 	"bag": ["INVENTORY", "가방", "res://assets/ui/icons/ui_bag.png"],
 	"forge": ["FORGE", "대장간", ""],
@@ -90,6 +90,7 @@ func _ready() -> void:
 	opts.visible = false
 	forge = _ext(FORGE)
 	_ext(BAG)
+	_ext(PARTY)
 	_ext(CHARP)
 	codex = _ext(CODEX)
 	bran_page = _ext(CHOICE)
