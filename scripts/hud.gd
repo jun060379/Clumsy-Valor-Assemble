@@ -70,8 +70,10 @@ func _draw() -> void:
 	draw_string(arena.font_bold, Vector2(bx + 76, by + 22), CH.SKILL[P.who] + ("" if cdk <= 0.0 else " %.0f" % ceil(cdk * (3.0 if P.who == "aida" else 9.0))), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1, 1, 1, 0.5 if cdk > 0.0 else 0.85))
 	var vs := get_viewport_rect().size
 	draw_party(P, vs)
+	if arena.level != null:
+		draw_dungeon_ui(vs)
 	# wave counter, top right
-	if arena.wave > 0:
+	if arena.wave > 0 and arena.level == null:
 		var alive := 0
 		for m in arena.mobs:
 			if not m.is_dead(): alive += 1
@@ -126,3 +128,65 @@ func draw_party(P, vs: Vector2) -> void:
 		draw_rect(Rect2(r.position.x, r.end.y + 6, r.size.x * hk, 4), col)
 		draw_string(arena.font_bold, Vector2(r.position.x + 2, r.end.y + 22), CH.NAME[c], HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1, 1, 1, 0.7))
 		y += 90.0
+
+
+## dungeon: room banner, minimap, boss bar, shilling
+func draw_dungeon_ui(vs: Vector2) -> void:
+	var D = arena.level
+	var fb: Font = arena.font_black
+	if D.msg_t > 0.0:
+		var a := minf(1.0, D.msg_t / 400.0) * minf(1.0, (2600.0 - D.msg_t) / 200.0 + 0.3)
+		var tw := fb.get_string_size(D.msg, HORIZONTAL_ALIGNMENT_LEFT, -1, 22).x
+		var y := vs.y * 0.24
+		draw_rect(Rect2(vs.x / 2.0 - tw / 2.0 - 30.0, y - 28.0, tw + 60.0, 40.0), Color(0.04, 0.03, 0.06, 0.7 * a))
+		draw_rect(Rect2(vs.x / 2.0 - tw / 2.0 - 30.0, y - 28.0, 4.0, 40.0), Color(1, 0.83, 0.3, a))
+		draw_string(fb, Vector2(vs.x / 2.0 - tw / 2.0, y), D.msg, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(1, 0.95, 0.85, a))
+	# minimap, left of the party column
+	var R: Dictionary = D.rooms
+	var seen: Array = R.values().filter(func(r): return r["seen"])
+	if not seen.is_empty():
+		var gx0: int = seen.map(func(r): return r["x"]).min()
+		var gx1: int = seen.map(func(r): return r["x"]).max()
+		var gy0: int = seen.map(func(r): return r["y"]).min()
+		var gy1: int = seen.map(func(r): return r["y"]).max()
+		var cw := 24.0
+		var chh := 15.0
+		var gap := 5.0
+		var bw := (gx1 - gx0 + 1) * (cw + gap) + 8.0
+		var bh := (gy1 - gy0 + 1) * (chh + gap) + 8.0
+		var x0 := vs.x - 96.0 - bw
+		var y0 := 16.0
+		draw_rect(Rect2(x0 - 6.0, y0 - 6.0, bw, bh), Color(0.04, 0.03, 0.06, 0.55))
+		draw_rect(Rect2(x0 - 6.0, y0 - 6.0, bw, bh), Color(0.91, 0.83, 0.63, 0.35), false, 1.0)
+		for r in seen:
+			var px: float = x0 + (r["x"] - gx0) * (cw + gap)
+			var py: float = y0 + (r["y"] - gy0) * (chh + gap)
+			for d in ["R", "D"]:
+				if r["doors"].has(d):
+					var nb = R.get(D.rkey(r["x"] + D.DIRS[d][0], r["y"] + D.DIRS[d][1]))
+					if nb != null and (r["visited"] or nb["visited"]):
+						if d == "R": draw_line(Vector2(px + cw, py + chh / 2.0), Vector2(px + cw + gap, py + chh / 2.0), Color(0.91, 0.83, 0.63, 0.5), 2.0)
+						else: draw_line(Vector2(px + cw / 2.0, py + chh), Vector2(px + cw / 2.0, py + chh + gap), Color(0.91, 0.83, 0.63, 0.5), 2.0)
+		for r in seen:
+			var px2: float = x0 + (r["x"] - gx0) * (cw + gap)
+			var py2: float = y0 + (r["y"] - gy0) * (chh + gap)
+			var col := Color("#f3dfae") if r["k"] == D.cur else (Color(0.63, 0.57, 0.7, 0.85) if r["visited"] else Color(0.27, 0.24, 0.33, 0.8))
+			draw_rect(Rect2(px2, py2, cw, chh), col)
+			var ic = {"boss": Color("#ff5a6a"), "camp": Color("#ffa04a"), "vault": Color("#ffd34d"), "start": Color("#9fe3a0")}.get(r["type"])
+			if ic != null and (r["visited"] or r["type"] == "boss"):
+				draw_circle(Vector2(px2 + cw / 2.0, py2 + chh / 2.0), 3.5, ic)
+			if r["visited"] and r["type"] == "fight" and not r["cleared"]:
+				draw_rect(Rect2(px2 + cw / 2.0 - 2.0, py2 + chh / 2.0 - 2.0, 4, 4), Color("#ff6f6f"))
+	# boss bar
+	for m in arena.mobs:
+		if m.M.has("boss") and not m.is_dead() and m.spawn_t <= 0.0:
+			var bw2 := minf(420.0, vs.x * 0.46)
+			var bx := (vs.x - bw2) / 2.0
+			var by := vs.y - 60.0
+			draw_string(fb, Vector2(bx, by - 8.0), m.M["name"], HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#ffd1d8"))
+			draw_rect(Rect2(bx - 2.0, by - 2.0, bw2 + 4.0, 12.0), Color(0.04, 0.02, 0.05, 0.85))
+			draw_rect(Rect2(bx, by, bw2 * clampf(m.hp / m.max_hp, 0.0, 1.0), 8.0), Color("#ff3d5a"))
+			if m.phase == 1:
+				draw_string(arena.font_bold, Vector2(bx + bw2 - 60.0, by - 8.0), "격노", HORIZONTAL_ALIGNMENT_RIGHT, 60, 12, Color("#ff9d9d"))
+	# shilling
+	draw_string(arena.font_bold, Vector2(18, 92), "실링 %d" % arena.shilling, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("#ffd34d"))

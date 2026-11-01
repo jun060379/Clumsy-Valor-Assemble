@@ -197,6 +197,11 @@ func read_input() -> void:
 	for k in ["left", "right", "up", "down", "jump", "attack", "guard", "dash", "swap"]:
 		keys[k] = Input.is_action_pressed(k)
 		pressed[k] = Input.is_action_just_pressed(k)
+	# the attack key doubles as interact: at a door it opens, and doesn't swing
+	if (pressed["attack"] or pressed["up"]) and on and not attacking() and arena.try_interact():
+		pressed["attack"] = false
+		keys["attack"] = false
+		buf["attack"] = 0.0
 
 
 # ---------- attacks ----------
@@ -861,6 +866,9 @@ func neutral_dodge() -> bool:
 func support_span(x: float, y: float) -> Variant:
 	if absf(y - arena.ground_y) < 1.0:
 		return [-1e9, 1e9]
+	for so in arena.solids:
+		if absf(y - so.top) < 1.0 and x > so.x - 2.0 and x < so.x + so.w + 2.0:
+			return [so.x - 2.0, so.x + so.w + 2.0]
 	for pl in arena.platforms:
 		if absf(y - pl.y) < 1.0 and x > pl.x - 2.0 and x < pl.x + pl.w + 2.0:
 			return [pl.x - 2.0, pl.x + pl.w + 2.0]
@@ -904,6 +912,23 @@ func physics(dt: float, a: String) -> void:
 	var prev_x := position.x
 	position.x = clampf(position.x + vx * dt, 30.0, arena.world_w - 30.0)
 	position.y += vy * dt
+	# raised rock: stand on top, blocked from the sides, pushed out the way she came in (never up on top)
+	for so in arena.solids:
+		if position.y > so.top + 2.0 and position.x > so.x - 12.0 and position.x < so.x + so.w + 12.0:
+			if on and position.y - so.top <= 14.0 and vy >= 0.0:
+				position.y = so.top
+			elif prev_x <= so.x - 12.0:
+				position.x = so.x - 12.0
+			elif prev_x >= so.x + so.w + 12.0:
+				position.x = so.x + so.w + 12.0
+			elif not (vy > 0.0 and position.y - so.top <= 40.0):
+				position.x = so.x - 12.0 if prev_x < so.x + so.w / 2.0 else so.x + so.w + 12.0
+			else:
+				position.y = so.top
+				vy = 0.0
+	if position.y < arena.ceil_y + 150.0 and vy < 0.0:
+		position.y = arena.ceil_y + 150.0
+		vy = 0.0
 	if air_tag:
 		return
 	if on:
@@ -931,7 +956,13 @@ func physics(dt: float, a: String) -> void:
 			edge_idle = 0.0
 	var landed := false
 	if vy >= 0.0:
-		if position.y >= arena.ground_y:
+		for so in arena.solids:
+			if prev_y <= so.top + 1.0 and position.y >= so.top and position.x > so.x - 2.0 and position.x < so.x + so.w + 2.0:
+				position.y = so.top
+				landed = true
+		if landed:
+			pass
+		elif position.y >= arena.ground_y:
 			position.y = arena.ground_y
 			landed = true
 		elif drop_t <= 0.0 and (not keys["down"] or a == "dive"):
@@ -950,7 +981,7 @@ func physics(dt: float, a: String) -> void:
 	elif landed:
 		on = true
 	elif on:
-		var support: bool = position.y >= arena.ground_y - 0.5 or arena.platform_under(position) != null
+		var support: bool = position.y >= arena.ground_y - 0.5 or support_span(position.x, position.y) != null
 		if not support:
 			on = false
 			vy = 0.05
@@ -1157,6 +1188,7 @@ func party_step(dt: float) -> void:
 			inv = 1500.0
 			set_anim("idle")
 			arena.text(position + Vector2(0, -150.0), "파티 전멸… 재정비", Color("#ff9d9d"))
+			arena.party_wiped()
 	else:
 		party_down = false
 	if pressed["swap"] or want("swap"):

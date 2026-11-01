@@ -12,6 +12,9 @@ const DEF := {
 		"anims": {"idle": ["skel_idle", 4, 160], "run": ["skel_walk", 4, 140], "atk": ["skel_attack", 8, 85], "shield": ["skel_shield", 4, 110], "hurt": ["skel_takehit", 4, 85], "die": ["skel_death", 4, 150]}},
 	"eye": {"name": "동굴 눈알", "hp": 35, "atk": 6, "ms": 0.11, "s": 3.0, "fly": 68, "range": 300, "aggro": 640, "cd": [1500, 2300], "hit": 4, "ranged": "eye_proj",
 		"anims": {"idle": ["eye_flight", 8, 80], "run": ["eye_flight", 8, 70], "atk": ["eye_attack3", 6, 90], "hurt": ["eye_takehit", 4, 85], "die": ["eye_death", 4, 130]}},
+	"boss": {"name": "감독관 해골", "hp": 620, "atk": 18, "ms": 0.07, "s": 4.0, "range": 120, "aggro": 2000, "cd": [900, 1400], "boss": true, "hit": 6, "reach": 160, "shield_p": 0.2,
+		"tint": Color(1.25, 0.72, 0.95),
+		"anims": {"idle": ["skel_idle", 4, 170], "run": ["skel_walk", 4, 150], "atk": ["skel_attack", 8, 80], "atk2": ["skel_attack2", 8, 85], "wave": ["skel_attack3", 6, 95], "shield": ["skel_shield", 4, 110], "hurt": ["skel_takehit", 4, 90], "die": ["skel_death", 4, 190]}},
 }
 static var TEX := {}
 
@@ -50,6 +53,9 @@ var last_dmg := 0.0
 var mark := ""
 var mark_t := 0.0
 var pl = null                 # platform it patrols on
+var elite := false
+var phase := 0
+var tier := 1
 
 
 static func tex(key: String) -> Texture2D:
@@ -58,10 +64,11 @@ static func tex(key: String) -> Texture2D:
 	return TEX[key]
 
 
-func setup(k: String, at: Vector2, delay: float) -> void:
+func setup(k: String, at: Vector2, delay: float, is_elite := false, room_tier := 0) -> void:
 	kind = k
 	M = DEF[k]
-	hp = M["hp"]
+	elite = is_elite or M.has("boss")
+	hp = round(M["hp"] * (1.6 if is_elite else 1.0) * (1.0 + 0.12 * room_tier)) if room_tier > 0 else M["hp"]
 	max_hp = hp
 	base_y = at.y - M.get("fly", 0)
 	position = Vector2(at.x, base_y)
@@ -154,7 +161,7 @@ func step(dt: float) -> void:
 	if flash > 0.0: flash -= dt
 	ph += dt / 600.0
 	if kx != 0.0:
-		position.x += kx * dt * 0.12
+		position.x += kx * dt * 0.12 * (0.3 if M.has("boss") else 1.0)
 		kx *= pow(0.985, dt)
 		if absf(kx) < 0.05: kx = 0.0
 	position.x = clampf(position.x, 40.0, arena.world_w - 40.0)
@@ -164,6 +171,10 @@ func step(dt: float) -> void:
 		position.y = base_y + sin(ph) * 8.0
 	if pl != null:
 		position.x = clampf(position.x, pl.x + 18.0, pl.x + pl.w - 18.0)
+	elif not M.has("fly"):
+		for so in arena.solids:
+			if position.x > so.x - 22.0 and position.x < so.x + so.w + 22.0 and position.y > so.top + 1.0:
+				position.x = so.x - 22.0 if position.x < so.x + so.w / 2.0 else so.x + so.w + 22.0
 	(material as ShaderMaterial).set_shader_parameter("flash", clampf(flash / 120.0 * 0.85, 0.0, 1.0))
 	queue_redraw()
 
@@ -184,7 +195,7 @@ func step(dt: float) -> void:
 			arena.text(position + Vector2(0, -130), "막음", Color("#cfe3ff"))
 		else:
 			set_a("hurt")
-			hurt_t = 260.0
+			hurt_t = 120.0 if M.has("boss") else 260.0
 	if hit_now and not aw:
 		notice(true)
 		react = 520.0
@@ -214,20 +225,27 @@ func step(dt: float) -> void:
 			arena.sfx("flare", 0.6)
 		if _adv(A):
 			var key := anim
-			var hit_f: int = M.get("burst_hit", 7) if key == "burst" else M["hit"]
+			var hit_f: int = M.get("burst_hit", 7) if key == "burst" else (3 if key == "wave" else M["hit"])
 			if f == hit_f:
 				if key == "burst":
 					arena.ring(position + Vector2(0, -30), 60.0)
 					if absf(dx) < 120.0 and absf(P.position.y - position.y) < 80.0:
 						P.take_hit(self, M["atk"] * 1.3)
+				elif key == "wave":
+					arena.shoot(self, position + Vector2(dir * 80.0, -60.0), Vector2(dir * 0.5, 0.0), true)
+					arena.sfx("heavy", 0.6)
 				elif M.has("ranged"):
 					arena.shoot(self, position + Vector2(dir * 30.0, -28.0), Vector2(dir * 0.36, ((P.position.y - 60.0) - (position.y - 28.0)) / maxf(300.0, adx) * 0.36))
 					arena.sfx("swing", 0.4)
 				else:
-					arena.sfx("swing", 0.7)
-					var in_front: bool = dx * dir > -20.0 and adx < M["reach"]
-					if in_front and absf(P.position.y - position.y) < 90.0:
-						P.take_hit(self, M["atk"])
+					arena.sfx("heavy" if M.has("boss") else "swing", 0.7)
+					var reach: float = M["reach"] * (1.25 if key == "atk2" else 1.0)
+					var in_front: bool = dx * dir > -20.0 and adx < reach
+					if in_front and absf(P.position.y - position.y) < (140.0 if M.has("boss") else 90.0):
+						P.take_hit(self, M["atk"] * (1.4 if key == "atk2" else 1.0))
+					if key == "atk2":
+						arena.shake(7, dir)
+						arena.dust(Vector2(position.x + dir * 90.0, arena.ground_y), dir, true)
 			if f >= A[1]:
 				set_a("idle")
 				st = "idle"
@@ -295,7 +313,7 @@ func step(dt: float) -> void:
 		lost = 0.0
 	if seen and dx * dir < 0.0:
 		turn_t += dt
-		if turn_t > 300.0:
+		if turn_t > (160.0 if M.has("boss") else 300.0):
 			dir *= -1
 			turn_t = 0.0
 	else:
@@ -310,11 +328,16 @@ func step(dt: float) -> void:
 		if cd <= 0.0 and in_range:
 			st = "atk"
 			var k := "atk"
-			if M["anims"].has("burst") and adx < 90.0 and randf() < 0.45:
+			if M.has("boss"):
+				phase = 1 if hp < max_hp * 0.5 else 0
+				var r := randf()
+				k = "wave" if adx > 220.0 else ("atk2" if r < 0.4 else "atk")
+				if phase == 1 and r < 0.25: k = "wave"
+			elif M["anims"].has("burst") and adx < 90.0 and randf() < 0.45:
 				k = "burst"
 			set_a(k)
 			var AA: Array = M["anims"][k]
-			var hf: int = M.get("burst_hit", 7) if k == "burst" else M["hit"]
+			var hf: int = M.get("burst_hit", 7) if k == "burst" else (3 if k == "wave" else M["hit"])
 			atk_clock = 0.0
 			hit_at = hf * AA[2]
 			flared = false
@@ -322,7 +345,7 @@ func step(dt: float) -> void:
 		if want == "close" or want == "away":
 			st = "run"
 			set_a("run")
-			position.x += (1.0 if want == "close" else -1.0) * dir * M["ms"] * dt
+			position.x += (1.0 if want == "close" else -1.0) * dir * M["ms"] * (1.3 if phase == 1 else 1.0) * dt
 		else:
 			st = "idle"
 			set_a("idle")
@@ -363,9 +386,10 @@ func _draw() -> void:
 	draw_set_transform(Vector2(0, floor_dy - 1.0), 0.0, Vector2(1.0, 0.25))
 	draw_circle(Vector2.ZERO, 16.0 * s / 3.0, Color(0, 0, 0, 0.28 * alpha))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(dir, 1))
-	draw_texture_rect_region(tex(A[0]), Rect2(-75.0 * s, -100.0 * s, 150.0 * s, 150.0 * s), Rect2(fr * 150, 0, 150, 150), Color(1, 1, 1, alpha))
+	var tint: Color = M.get("tint", Color(1.15, 0.8, 1.25) if elite else Color.WHITE)
+	draw_texture_rect_region(tex(A[0]), Rect2(-75.0 * s, -100.0 * s, 150.0 * s, 150.0 * s), Rect2(fr * 150, 0, 150, 150), Color(tint.r, tint.g, tint.b, alpha))
 	draw_set_transform(Vector2.ZERO)
-	if not is_dead():
+	if not is_dead() and not M.has("boss"):
 		# small HP bar over the head
 		var bw := 36.0 if M.has("fly") else 44.0
 		var by := -(40.0 if M.has("fly") else (150.0 if kind == "skel" else 115.0))

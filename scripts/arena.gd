@@ -7,6 +7,7 @@ const DUMMY := preload("res://scripts/dummy.gd")
 const TOUCH := preload("res://scripts/touch_controls.gd")
 const MOB := preload("res://scripts/mob.gd")
 const HUD := preload("res://scripts/hud.gd")
+const DUNGEON := preload("res://scripts/dungeon.gd")
 const WAVES := [["goblin", "goblin", "eye"], ["mush", "goblin", "goblin"], ["mush", "mush", "eye", "goblin"], ["skel", "goblin", "eye", "mush"], ["skel", "skel", "eye", "eye", "goblin"]]
 
 const H := 500.0
@@ -36,9 +37,20 @@ var font_black: Font = preload("res://assets/fonts/NotoSansKR-Black.otf")
 var font_anton: Font = preload("res://assets/fonts/Anton.woff2")
 var flash_mat := ShaderMaterial.new()
 var t_proj: Texture2D = preload("res://assets/mobs/eye_proj.png")
+var t_wave: Texture2D = preload("res://assets/mobs/skel_proj.png")
 var witch_rect: ColorRect
 var luce_fx: Array = []
 var mark_pos := Vector2.INF
+var solids: Array = []        # raised rock {x,w,top}
+var ceil_y := -1.0e9
+var level = null              # the dungeon while inside it; null = training ground
+var shilling := 0
+var fade_rect: ColorRect
+var fade := 0.0
+var fade_dir := 0
+var fade_cb = null
+var near_entry := false
+var train_platforms: Array = []
 
 var t_sky: Texture2D = preload("res://assets/bg/bg_sky.png")
 var t_mtn: Texture2D = preload("res://assets/bg/bg_mountains.png")
@@ -60,6 +72,7 @@ func _ready() -> void:
 		{"x": 1700.0, "y": ground_y - 140.0, "w": 220.0},
 		{"x": 2250.0, "y": ground_y - 120.0, "w": 180.0},
 	]
+	train_platforms = platforms.duplicate()
 	var sh := Shader.new()
 	sh.code = "shader_type canvas_item;\nuniform float flash = 0.0;\nvoid fragment(){ vec4 c = texture(TEXTURE, UV) * COLOR; c.rgb = mix(c.rgb, vec3(1.0), flash); COLOR = c; }"
 	flash_mat.shader = sh
@@ -104,6 +117,11 @@ func _ready() -> void:
 	witch_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	witch_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	ui.add_child(witch_rect)
+	fade_rect = ColorRect.new()
+	fade_rect.color = Color(0.03, 0.02, 0.05, 0)
+	fade_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fade_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	ui.add_child(fade_rect)
 	var hud := Control.new()
 	hud.set_script(HUD)
 	hud.arena = self
@@ -154,7 +172,80 @@ func setup_input() -> void:
 
 
 func foes() -> Array:
-	return dummies + mobs.filter(func(m): return m.alive())
+	return (dummies if level == null else []) + mobs.filter(func(m): return m.alive())
+
+func view_rect() -> Rect2:
+	var vs := get_viewport_rect().size
+	var c := cam.get_screen_center_position()
+	return Rect2(c - vs / 2.0, vs)
+
+func snap_camera() -> void:
+	cam.limit_right = int(world_w)
+	cam.limit_top = int(ceil_y + 100.0) if level != null else 0
+	cam.position = Vector2(player.position.x, cam_y_target())
+	cam.reset_smoothing()
+
+func cam_y_target() -> float:
+	if level == null:
+		return H / 2.0
+	return clampf(player.position.y - 110.0, ceil_y + 100.0 + H / 2.0, ground_y + 70.0 - H / 2.0)
+
+## black out, run cb, come back
+func fade_then(cb: Callable) -> void:
+	if fade_dir != 0: return
+	fade_dir = 1
+	fade_cb = cb
+
+func clear_room() -> void:
+	for m in mobs: m.queue_free()
+	mobs.clear()
+	proj.clear()
+	luce_fx.clear()
+	fx.clear()
+	big_words.clear()
+	witch = 0.0
+	player.ghosts.clear()
+	player.outs.clear()
+
+func enter_dungeon() -> void:
+	clear_room()
+	for d in dummies: d.visible = false
+	level = Node2D.new()
+	level.set_script(DUNGEON)
+	level.arena = self
+	add_child(level)
+	level.generate()
+	level.enter()
+
+func leave_dungeon() -> void:
+	clear_room()
+	if level != null:
+		level.cleanup()
+	level = null
+	for d in dummies: d.visible = true
+	world_w = 2800.0
+	ceil_y = -1.0e9
+	solids = []
+	platforms = train_platforms.duplicate()
+	player.position = Vector2(world_w - 260.0, ground_y)
+	player.dir = -1
+	player.on = true
+	wave = 0
+	wave_t = 1500.0
+	snap_camera()
+
+func party_wiped() -> void:
+	if level != null:
+		fade_then(func(): leave_dungeon())
+
+func try_interact() -> bool:
+	if level != null:
+		return level.try_interact()
+	if near_entry:
+		sfx("ready", 0.6)
+		fade_then(func(): enter_dungeon())
+		return true
+	return false
 
 func platform_under(p: Vector2):
 	for pl in platforms:
@@ -182,6 +273,22 @@ func _process(delta: float) -> void:
 		step_luce(dt)
 		dodge_check()
 		step_waves(dt)
+		if level != null:
+			level.step(dt)
+		else:
+			near_entry = absf(player.position.x - (world_w - 110.0)) < 90.0 and player.on and absf(player.position.y - ground_y) < 4.0
+	# fades between rooms
+	if fade_dir == 1:
+		fade = minf(1.0, fade + dt / 260.0)
+		if fade >= 1.0:
+			var cb = fade_cb
+			fade_cb = null
+			if cb != null: cb.call()
+			fade_dir = -1
+	elif fade_dir == -1:
+		fade = maxf(0.0, fade - dt / 260.0)
+		if fade <= 0.0: fade_dir = 0
+	fade_rect.color.a = fade
 	for m in mobs:
 		m.queue_redraw()
 	mobs = mobs.filter(func(m):
@@ -207,11 +314,11 @@ func _process(delta: float) -> void:
 	if flash > 0.0: flash = maxf(0.0, flash - dt * 0.004)
 	flash_rect.color.a = flash
 	# camera: follow the feet horizontally, fixed height (the room is one screen tall)
-	var target := Vector2(player.position.x, H / 2.0)
+	var target := Vector2(player.position.x, cam_y_target())
 	if player.cam_focus["t"] > 0.0:
 		target.x = player.cam_focus["x"]
-	cam.position = cam.position.lerp(target, minf(1.0, dt / 90.0))
-	cam.position.y = H / 2.0
+	cam.position.x = lerpf(cam.position.x, target.x, minf(1.0, dt / 90.0))
+	cam.position.y = lerpf(cam.position.y, target.y, minf(1.0, dt / 140.0))
 	cam.offset = Vector2(randf_range(-1, 1) * shake_amt * 0.6 + shake_dir * shake_amt * 0.3, randf_range(-1, 1) * shake_amt * 0.4)
 	queue_redraw()
 	fx_layer.queue_redraw()
@@ -219,6 +326,8 @@ func _process(delta: float) -> void:
 
 # ---------- background & ground ----------
 func _draw() -> void:
+	if level != null:
+		return
 	var vs := get_viewport_rect().size
 	var c := cam.get_screen_center_position() if cam else Vector2(vs.x / 2, H / 2)
 	var left := c.x - vs.x / 2.0
@@ -240,6 +349,16 @@ func _draw() -> void:
 			draw_texture(t_dirt, Vector2(gx, dy))
 			dy += t_dirt.get_height()
 		gx += t_ground.get_width()
+	# the way into the cave: a dark mouth at the right end of the training ground
+	var ex := world_w - 110.0
+	draw_rect(Rect2(ex - 60.0, ground_y - 150.0, 120.0, 150.0), Color(0.08, 0.06, 0.1))
+	draw_circle(Vector2(ex, ground_y - 150.0), 60.0, Color(0.08, 0.06, 0.1))
+	draw_rect(Rect2(ex - 60.0, ground_y - 150.0, 6.0, 150.0), Color(0.35, 0.3, 0.25))
+	draw_rect(Rect2(ex + 54.0, ground_y - 150.0, 6.0, 150.0), Color(0.35, 0.3, 0.25))
+	var lbl := "버섯 동굴" + ("  ·  공격 키로 입장" if near_entry else "")
+	var lw := font_black.get_string_size(lbl, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x + 20.0
+	draw_rect(Rect2(ex - lw / 2.0, ground_y - 250.0, lw, 24.0), Color(0, 0, 0, 0.6))
+	draw_string(font_black, Vector2(ex - lw / 2.0 + 10.0, ground_y - 233.0), lbl, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#ffe9a8"))
 	# one-way platforms: plank with a lit top edge
 	for pl in platforms:
 		draw_rect(Rect2(pl.x, pl.y, pl.w, 14), Color("#5a3b24"))
@@ -278,18 +397,21 @@ func text(p: Vector2, s: String, col: Color) -> void:
 
 
 # ---------- monsters ----------
-func spawn(k: String, x: float, delay: float):
+func spawn(k: String, x: float, delay: float, y := -1.0, pl = null, elite := false, tier := 0):
 	var m := Node2D.new()
 	m.set_script(MOB)
 	m.arena = self
-	var y := ground_y
+	if y < 0.0: y = ground_y
 	add_child(m)
-	m.setup(k, Vector2(x, y), delay)
+	m.setup(k, Vector2(x, y), delay, elite, tier)
+	m.pl = pl
 	m.z_index = 1
 	mobs.append(m)
 	return m
 
 func step_waves(dt: float) -> void:
+	if level != null:
+		return
 	if mobs.any(func(m): return not m.is_dead()):
 		return
 	wave_t -= dt
@@ -306,8 +428,8 @@ func step_waves(dt: float) -> void:
 	sfx("ready", 0.7)
 	wave_t = 2500.0
 
-func shoot(m, p: Vector2, v: Vector2) -> void:
-	proj.append({"x": p.x, "y": p.y, "vx": v.x, "vy": v.y, "t": 0.0, "life": 2600.0, "m": m})
+func shoot(m, p: Vector2, v: Vector2, big := false) -> void:
+	proj.append({"x": p.x, "y": p.y, "vx": v.x, "vy": v.y, "t": 0.0, "life": 1800.0 if big else 2600.0, "m": m, "big": big})
 
 func step_proj(dt: float) -> void:
 	var P = player
@@ -315,8 +437,9 @@ func step_proj(dt: float) -> void:
 		p["t"] += dt
 		p["x"] += p["vx"] * dt
 		p["y"] += p["vy"] * dt
-		if absf(P.position.x - p["x"]) < 32.0 and p["y"] > P.position.y - 130.0 * 1.3 and p["y"] < P.position.y + 4.0:
-			var r: String = P.take_hit(p["m"], p["m"].M["atk"] * 0.8)
+		var R: float = 74.0 if p["big"] else 32.0
+		if absf(P.position.x - p["x"]) < R and p["y"] > P.position.y - 130.0 * 1.3 and p["y"] < P.position.y + 4.0:
+			var r: String = P.take_hit(p["m"], p["m"].M["atk"] * (1.2 if p["big"] else 0.8))
 			if r != "miss":
 				spark(Vector2(p["x"], p["y"]), 8)
 				return false
@@ -586,9 +709,11 @@ func _draw_fx() -> void:
 	# projectiles (8-frame strip, 48x48)
 	for p in proj:
 		var fr := int(p["t"] / 70.0) % 8
-		var sc := 2.2
 		fx_layer.draw_set_transform(Vector2(p["x"], p["y"]), 0.0, Vector2(-1.0 if p["vx"] < 0.0 else 1.0, 1.0))
-		fx_layer.draw_texture_rect_region(t_proj, Rect2(-24.0 * sc, -24.0 * sc, 48.0 * sc, 48.0 * sc), Rect2(fr * 48, 0, 48, 48))
+		if p["big"]:
+			fx_layer.draw_texture_rect_region(t_wave, Rect2(-92.0, -102.0, 184.0, 204.0), Rect2(fr * 92, 0, 92, 102))
+		else:
+			fx_layer.draw_texture_rect_region(t_proj, Rect2(-24.0 * 2.2, -24.0 * 2.2, 48.0 * 2.2, 48.0 * 2.2), Rect2(fr * 48, 0, 48, 48))
 		fx_layer.draw_set_transform(Vector2.ZERO)
 	# PARRY / 극한 회피 words over her head
 	for w in big_words:
@@ -604,3 +729,22 @@ func _draw_fx() -> void:
 		fx_layer.draw_string_outline(fnt, pos, w["s"], HORIZONTAL_ALIGNMENT_LEFT, -1, fs2, 10, Color(0.05, 0.02, 0.06, al))
 		fx_layer.draw_string(fnt, pos, w["s"], HORIZONTAL_ALIGNMENT_LEFT, -1, fs2, Color(w["col"], al))
 
+
+
+## test keys: F2 = straight into the cave, F3 = clear the room, F4 = next room (for checking doors / rooms)
+func _unhandled_input(ev: InputEvent) -> void:
+	if ev is InputEventKey and ev.pressed and not ev.echo:
+		if ev.keycode == KEY_F2 and level == null:
+			fade_then(func(): enter_dungeon())
+		elif ev.keycode == KEY_F3:
+			for m in mobs:
+				if not m.is_dead(): m.hit(999.0, 0.0)
+		elif ev.keycode == KEY_F4 and level != null:
+			var rm = level.room()
+			for d in level.doors:
+				if d["town"]: continue
+				var n = level.rooms[level.rkey(rm["x"] + level.DIRS[d["d"]][0], rm["y"] + level.DIRS[d["d"]][1])]
+				if not n["visited"]:
+					level.near_gate = d
+					level.try_interact()
+					return
