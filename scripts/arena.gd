@@ -17,6 +17,10 @@ const WEATHERS := ["clear", "rain", "snow"]
 const SETTINGS := preload("res://scripts/settings.gd")
 const FATIGUE := preload("res://scripts/fatigue.gd")
 const UIROOT := preload("res://scripts/ui_root.gd")
+const SORTIE := preload("res://scripts/sortie.gd")
+const ULT := preload("res://scripts/ult.gd")
+const SAVE := preload("res://scripts/save_game.gd")
+const ELEM := preload("res://scripts/elements.gd")
 const WAVES := [["goblin", "goblin", "eye"], ["mush", "goblin", "goblin"], ["mush", "mush", "eye", "goblin"], ["skel", "goblin", "eye", "mush"], ["skel", "skel", "eye", "eye", "goblin"]]
 
 const H := 500.0
@@ -72,6 +76,11 @@ var fatigue                   # fatigue.gd: 피로도 160, +1 / 6 min (nothing s
 var ambient := true           # 환경음 (no ambient sound yet)
 var screen_fx := true         # 화면 효과 (no post effects yet)
 var ui_root                   # ui_root.gd: title, top-right buttons, main menu, transitions
+# step 4-2 / 5-3: sortie flow, 궁극기, elements, save
+var sortie                    # sortie.gd: dungeon select, band sweeps, entry dash, deploy cut, title cards, clear screen, party screen
+var ult                       # ult.gd: 기력 gauges, the ult moves and their world effects
+var save                      # save_game.gd: user://save.json
+var hit_by := ""              # who a delayed hit (Luce's light) belongs to, for its element
 
 var t_sky: Texture2D = preload("res://assets/bg/bg_sky.png")
 var t_mtn: Texture2D = preload("res://assets/bg/bg_mountains.png")
@@ -170,7 +179,21 @@ func _ready() -> void:
 	ui_root.set_script(UIROOT)
 	ui_root.arena = self
 	ui2.add_child(ui_root)
-	call_deferred("go_town", Vector2(700.0, ground_y), 1)
+	ult = Node2D.new()
+	ult.set_script(ULT)
+	ult.arena = self
+	add_child(ult)
+	var ui4 := CanvasLayer.new()
+	ui4.layer = 4
+	add_child(ui4)
+	sortie = Control.new()
+	sortie.set_script(SORTIE)
+	sortie.arena = self
+	ui4.add_child(sortie)
+	save = SAVE.new(self)
+	if get_tree().get_script() != null:
+		save.path = "user://save_test.json"     # test runs never touch the real save
+	call_deferred("_start_world")
 	var stamp := Label.new()
 	stamp.text = "STEP 4 · UI  ·  " + _stamp()
 	stamp.add_theme_font_override("font", font_bold)
@@ -179,6 +202,65 @@ func _ready() -> void:
 	stamp.position = Vector2(12, 480)
 	ui.add_child(stamp)
 
+
+## load silently (the title has no 이어하기): the saved scene, or the village street
+func _start_world() -> void:
+	var d = save.read() if get_tree().get_script() == null else null
+	if d != null:
+		var s: Array = save.apply(d)
+		match s[0]:
+			"hall":
+				go_hall(clampi(s[3], 0, 3), s[1], s[2])
+				return
+			"training":
+				go_training()
+				return
+		go_town(s[1], s[2])
+		return
+	go_town(Vector2(700.0, ground_y), 1)
+
+func save_now() -> void:
+	if save != null: save.save()
+
+func _autosave() -> void:
+	if save != null and player != null: save.save()
+
+# ---------- what the player / mobs ask (sortie, ult, elements) ----------
+## keys forced by a scripted moment (ult move, sortie run / dash): null = her own
+func forced_keys() -> Variant:
+	if ult != null and ult.state != "": return {}
+	if sortie != null: return sortie.forced()
+	return null
+
+func ult_gain(n: float) -> void:
+	if ult != null: ult.gain(n)
+
+## Estelle's vow (auto-parry) time left
+func auto_parry() -> float:
+	return ult.auto_t if ult != null else 0.0
+
+func ult_busy() -> bool:
+	return ult != null and ult.state != ""
+
+func ult_alpha() -> float:
+	return ult.ualpha if ult != null and ult.state == "act" else 1.0
+
+func ucut():
+	return sortie.ucut
+
+## elemDamage + effTag + ultGain for a hit landing on a target with elements `defs`; returns the damage dealt
+func elem_hit(p: Vector2, base: float, defs: Array) -> float:
+	var who: String = hit_by if hit_by != "" else player.who
+	var E: Dictionary = ELEM.damage(base, who, defs)
+	ELEM.tag(self, p, E["mul"])
+	ult_gain(E["dmg"] * 0.7)
+	return E["dmg"]
+
+## a mob's attack element against the member's own elements (hurtAmt)
+func taken_mul(m) -> float:
+	var el := "phys"
+	if m != null and m.get("M") != null: el = String(m.M.get("atkEl", "phys"))
+	return ELEM.taken_mul(el, player.who)
 
 func _stamp() -> String:
 	var f := FileAccess.open("res://build.txt", FileAccess.READ)
@@ -318,6 +400,7 @@ func enter_dungeon() -> void:
 	add_child(level)
 	level.generate()
 	level.enter()
+	_autosave()
 
 ## back from the cave: the party comes out by the sortie wagon
 func leave_dungeon() -> void:
@@ -337,6 +420,7 @@ func go_town(at: Vector2, d: int) -> void:
 	player.on = true
 	player.vy = 0.0
 	snap_camera()
+	_autosave()
 
 ## into the guild hall: floor fl, standing at `at`
 func go_hall(fl: int, at: Vector2, d: int) -> void:
@@ -354,6 +438,7 @@ func go_hall(fl: int, at: Vector2, d: int) -> void:
 	add_child(level)
 	world_w = level.W
 	snap_camera()
+	_autosave()
 
 func go_training() -> void:
 	_drop_level()
@@ -366,6 +451,7 @@ func go_training() -> void:
 	wave = 0
 	wave_t = 1500.0
 	snap_camera()
+	_autosave()
 
 func party_wiped() -> void:
 	if level_kind() == "dungeon":
@@ -395,6 +481,13 @@ func _process(delta: float) -> void:
 	if ui_root != null and ui_root.holds():
 		return            # the world holds still under the title, a menu page or a transition
 	var dt := minf(delta * 1000.0, 50.0)
+	if sortie != null and (sortie.holds() or sortie.pre_step()):
+		return            # a title card, the dungeon select, the clear screen or the party screen holds the world
+	if ult != null:
+		if Input.is_action_just_pressed("ult") and not dlg.active: ult.try_ult()
+		if ult.state == "cut":
+			ult.cut_step(dt)          # the cut-in holds the world
+			return
 	if witch > 0.0:
 		witch -= dt
 		if witch <= 0.0:
@@ -411,6 +504,10 @@ func _process(delta: float) -> void:
 		hitstop -= dt
 	else:
 		player.step(dt)
+		if sortie != null: sortie.post_player(dt)
+		if ult != null:
+			ult.tick(dt)
+			ult.step(dt)
 		for d in dummies:
 			d.step(dt)
 		for m in mobs:
@@ -439,6 +536,7 @@ func _process(delta: float) -> void:
 		fade = maxf(0.0, fade - dt / 260.0)
 		if fade <= 0.0: fade_dir = 0
 	fade_rect.color.a = fade
+	if ult != null: ult.fx_step(dt)
 	for m in mobs:
 		m.queue_redraw()
 	mobs = mobs.filter(func(m):
@@ -696,13 +794,13 @@ func charge_fx(p: Vector2, t: float, col := Color(1.0, 0.47, 0.75)) -> void:
 # ---------- Luce's light ----------
 ## a light bolt: rises up-and-back, holds a beat, then shoots and homes in on the target
 func bolt(o: Vector2, tg, sz: float, hold: float, d: int) -> void:
-	var b := {"k": "bolt", "x": o.x, "y": o.y, "vx": d * 0.001, "vy": 0.0, "tg": tg, "sz": sz, "hold": hold, "hits": [], "home": 0.011, "dmg": 1.0, "mul": player.atk_mul(), "d": d, "t": 0.0, "life": 1100.0 + hold, "tr": []}
+	var b := {"by": player.who, "k": "bolt", "x": o.x, "y": o.y, "vx": d * 0.001, "vy": 0.0, "tg": tg, "sz": sz, "hold": hold, "hits": [], "home": 0.011, "dmg": 1.0, "mul": player.atk_mul(), "d": d, "t": 0.0, "life": 1100.0 + hold, "tr": []}
 	if tg == null:
 		b["home"] = 0.0
 	luce_fx.append(b)
 
 func pillar(x: float, y: float, dmg: float, d: int) -> void:
-	luce_fx.append({"k": "pillar", "x": x, "y": y, "dmg": dmg, "d": d, "hits": [], "mul": player.atk_mul(), "t": 0.0, "life": 420.0})
+	luce_fx.append({"by": player.who, "k": "pillar", "x": x, "y": y, "dmg": dmg, "d": d, "hits": [], "mul": player.atk_mul(), "t": 0.0, "life": 420.0})
 	sfx("ready", 0.4)
 
 func lightning(x: float, y: float, sz: float, dmg: float, d: int) -> void:
@@ -714,11 +812,12 @@ func lightning(x: float, y: float, sz: float, dmg: float, d: int) -> void:
 		py += 30.0 + randf() * 30.0
 		px += (x - px) * 0.35 + (randf() - 0.5) * 50.0 * sz
 	pts.append(Vector2(x, y))
-	luce_fx.append({"k": "lightning", "x": x, "y": y, "sz": sz, "dmg": dmg, "d": d, "pts": pts, "hits": [], "mul": player.atk_mul(), "t": 0.0, "life": 380.0})
+	luce_fx.append({"by": player.who, "k": "lightning", "x": x, "y": y, "sz": sz, "dmg": dmg, "d": d, "pts": pts, "hits": [], "mul": player.atk_mul(), "t": 0.0, "life": 380.0})
 	flash = maxf(flash, 0.12 + 0.06 * sz)
 
 func step_luce(dt: float) -> void:
 	for f in luce_fx:
+		hit_by = String(f.get("by", ""))
 		f["t"] += dt
 		if f["k"] == "bolt":
 			var tg = f["tg"]
@@ -766,6 +865,7 @@ func step_luce(dt: float) -> void:
 					f["hits"].append(m)
 					m.hit(f["dmg"], f["d"] * 6.0, f["mul"])
 					spark(m.position + Vector2(0, -50), 12)
+	hit_by = ""
 	luce_fx = luce_fx.filter(func(f): return f["t"] < f["life"])
 
 func _draw_luce() -> void:
@@ -889,7 +989,8 @@ func _draw_fx() -> void:
 
 ## test keys: F2 = straight into the cave, F3 = clear the room, F4 = next room, F5 = jump around town, F6 = +3 hours,
 ## F7 = straight into the guild hall, F8 = next hall floor, F9 = Eilin straight to where her day says she should be,
-## F10 = weather (clear / rain / snow), F11 = Luce leaves / rejoins the party (she lives in town meanwhile), Shift+F11 = the same for Aida
+## F10 = weather (clear / rain / snow), F11 = Luce leaves / rejoins the party (she lives in town meanwhile), Shift+F11 = the same for Aida,
+## F12 = fill the 기력 gauge, Shift+F4 = straight to the boss room
 var tp_i := 0
 func _unhandled_input(ev: InputEvent) -> void:
 	if ev is InputEventKey and ev.pressed and not ev.echo:
@@ -922,6 +1023,16 @@ func _unhandled_input(ev: InputEvent) -> void:
 			weather = WEATHERS[(WEATHERS.find(weather) + 1) % WEATHERS.size()]
 		elif ev.keycode == KEY_F11 and not dlg.active:
 			toggle_member("aida" if ev.shift_pressed else "luce")
+		elif ev.keycode == KEY_F12 and ult != null:
+			ult.v[player.who] = ult.ULTMAX[player.who]     # test: fill the 기력 gauge, clear the cooldown
+			ult.cd[player.who] = 0.0
+			sfx("ready", 0.8)
+		elif ev.keycode == KEY_F4 and ev.shift_pressed and level_kind() == "dungeon":
+			for k in level.rooms:                          # test: straight to the boss room
+				if level.rooms[k]["type"] == "boss":
+					level.from = "L"
+					level.cur = k
+					fade_then(func(): level.enter())
 		elif ev.keycode == KEY_F4 and level_kind() == "dungeon":
 			var rm = level.room()
 			for d in level.doors:

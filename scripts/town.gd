@@ -494,6 +494,8 @@ func step(dt: float) -> void:
 				near_door = {"x": n["x"], "y": n["y"], "name": TF.CH.NAME[n["c"]], "act": "npc", "c": n["c"], "hide": n["say_t"] > 0.0}
 		if near_door == null and bran.is_near(P):
 			near_door = {"x": bran.x + bran.MID, "y": bran.y, "name": "브랜", "act": "bran"}
+		if near_door == null and absf(P.position.x - HDOOR) < 120.0 and absf(P.position.y - LOWF) < 30.0:
+			near_door = {"x": HDOOR, "y": LOWF - 20.0, "name": "파티 편성", "act": "party"}     # the fountain (nearFountain)
 	life.step(dt)
 	folk.step(dt)
 	bran.step(dt)
@@ -549,14 +551,15 @@ func try_interact() -> bool:
 		arena.sfx("ready", 0.6)
 		arena.fade_then(func(): arena.go_training())
 	elif to == "dungeon":
-		arena.sfx("ready", 0.6)
-		arena.fade_then(func(): arena.enter_dungeon())
+		arena.sortie.open_dsel(0)          # 출격 마차: the dungeon select
 	elif to == "hall":
 		arena.sfx("ready", 0.6)
 		var s0: Array = arena.HALL.HD.SPAWN[0]
 		arena.fade_then(func(): arena.go_hall(0, Vector2(s0[0], s0[1]), s0[2]))
 	elif d.get("act", "") == "eilin":
 		arena.eil.talk()
+	elif d.get("act", "") == "party":
+		arena.sortie.party_ui.show_it()
 	elif d.get("act", "") == "npc":
 		folk.talk(d["c"])
 	elif d.get("act", "") == "bran" or to == "forge":

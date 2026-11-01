@@ -195,7 +195,7 @@ static func _key(ev: InputEvent) -> int:
 	return -1
 
 func _bar_visible() -> bool:
-	return page == "" and not ui_root.title.active and not arena.dlg.active
+	return page == "" and not ui_root.title.active and not arena.dlg.active and not (arena.sortie != null and arena.sortie.covers())
 
 func _input_bar(ev: InputEvent) -> void:
 	if not _bar_visible():
