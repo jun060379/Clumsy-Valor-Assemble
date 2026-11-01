@@ -21,6 +21,19 @@ const SH_TEAR := preload("res://shaders/pfx_tear.gdshader")
 const SH_HOL := preload("res://shaders/pfx_hollow.gdshader")
 const SH_PIL := preload("res://shaders/pfx_pillar.gdshader")
 const SH_AFX := preload("res://shaders/afx.gdshader")
+const SPARK := preload("res://assets/fx/tear_spark.png")
+
+## the prototype's stepped hashes fract(sin(n * 12.9898 + seed * m + o2) * 43758.5453), in double precision, as a float
+## texture the effect shaders read (pfx_common hT): groups of o2 offsets, one row each, column n + 16 (n = -16 .. 239)
+static func _hash_tex(m: float, seed: float, groups: Array) -> ImageTexture:
+	var rows: Array = []
+	for g in groups: rows.append_array(g)
+	var im := Image.create(256, rows.size(), false, Image.FORMAT_RF)
+	for r in rows.size():
+		for c in 256:
+			var v: float = sin((c - 16) * 12.9898 + seed * m + rows[r]) * 43758.5453
+			im.set_pixel(c, r, Color(v - floorf(v), 0, 0))
+	return ImageTexture.create_from_image(im)
 
 static func _p(a: Array) -> Array:
 	var o: Array = []
@@ -160,10 +173,12 @@ class Rng:
 	func _init(seed: float) -> void:
 		s = int(seed) & 0xffffffff
 		if s == 0: s = 1
+	## pfxRng's xorshift exactly as JS runs it: s>>17 is a SIGNED 32-bit shift (s is unsigned only after each >>>0)
 	func r() -> float:
-		s ^= (s << 13) & 0xffffffff
-		s ^= s >> 17
-		s ^= (s << 5) & 0xffffffff
+		s = (s ^ (s << 13)) & 0xffffffff
+		var t := s - 0x100000000 if s >= 0x80000000 else s
+		t ^= t >> 17
+		s = (t ^ (t << 5)) & 0xffffffff
 		return float(s % 10000) / 10000.0
 
 static func fr(t: float) -> int:
@@ -644,6 +659,7 @@ func _slash(e: Dictionary) -> bool:
 			m.set_shader_parameter("sc", e["r"] / 100.0)
 			m.set_shader_parameter("dir", float(e["d"]))
 			m.set_shader_parameter("seed", e["seed"])
+			m.set_shader_parameter("hsh", _hash_tex(3.3, e["seed"], [[0, 1, 2, 3], [9, 10, 11, 12], [3, 4, 5, 6]]))
 		# glass shards breaking off along the swing
 		var a0 := deg_to_rad(e["a0"])
 		var span := deg_to_rad(e["a1"]) - a0
@@ -679,6 +695,7 @@ func _slash(e: Dictionary) -> bool:
 		m2.set_shader_parameter("sy", e["sy"])
 		m2.set_shader_parameter("dir", float(e["d"]))
 		m2.set_shader_parameter("seed", e["seed"])
+		m2.set_shader_parameter("hsh", _hash_tex(7.1, e["seed"], [[1, 2, 3]]))
 		m2.set_shader_parameter("jag", 0.0)
 		var P: Array = _pal(e["ch"])
 		var pv := PackedVector4Array()
@@ -700,7 +717,7 @@ func _thrust(g: CanvasItem, e: Dictionary) -> bool:
 		var back := 26.0 / S
 		var Ll := maxf(90.0, absf(x1 - x0) * 1.6) / S + back
 		var o := Vector2(x0 - dir * back * S, y)
-		_tear_quad(e, o, Vector2(dir, 0.0), Ll, F, [[0.0, -1.0, 0.0, 1.0, 7.0, 0.0, 0], [-9.0, -15.0, 0.22, 0.96, 3.6, 0.7, 0], [8.0, 12.0, 0.12, 0.82, 2.4, 1.1, 0], [-4.0, -6.0, 0.4, 1.04, 1.0, 0.4, 0]], Vector3(36, 24, 60), 24.0, Vector2(-2.0 / Ll, 1.06))
+		_tear_quad(e, o, Vector2(dir, 0.0), Ll, F, [[0.0, -1.0, 0.0, 1.0, 7.0, 0.0, 0], [-9.0, -15.0, 0.22, 0.96, 3.6, 0.7, 0], [8.0, 12.0, 0.12, 0.82, 2.4, 1.1, 0], [-4.0, -6.0, 0.4, 1.04, 1.0, 0.4, 0]], Vector3(36, 24, 60), 24.0, Vector2(-2.0 / Ll, 1.06), "q", Vector2(0.0, 1.0))
 		var sh: Array = []
 		for i in 10:
 			var v := 0.25 + i * 0.07
@@ -774,6 +791,7 @@ func _quad(e: Dictionary, sh: Shader, at: Vector2, r: Rect2) -> Node2D:
 			q = pool.pop_back()
 		var m := ShaderMaterial.new()
 		m.shader = sh
+		m.set_shader_parameter("spk", SPARK)
 		q.material = m
 		e["q"] = q
 	q.visible = true
@@ -803,7 +821,7 @@ func _sync_quads() -> void:
 	pass
 
 ## one straight cut of eye-tears: strokes [o0, o1, lo, hi, W, dl, prof]
-func _tear_quad(e: Dictionary, a: Vector2, ud: Vector2, Ll: float, tt: float, st: Array, nf := Vector3(30, 22, 56), Wm := 14.0, ur := Vector2(-0.02, 1.02), key := "q") -> void:
+func _tear_quad(e: Dictionary, a: Vector2, ud: Vector2, Ll: float, tt: float, st: Array, nf := Vector3(30, 22, 56), Wm := 14.0, ur := Vector2(-0.02, 1.02), key := "q", nrm := Vector2.ZERO) -> void:
 	var ex := ud * Ll
 	var x0 := minf(0.0, ex.x) - Wm
 	var x1 := maxf(0.0, ex.x) + Wm
@@ -820,8 +838,10 @@ func _tear_quad(e: Dictionary, a: Vector2, ud: Vector2, Ll: float, tt: float, st
 	if not q.has_meta("tset") or q.get_meta("tset") != e:
 		q.set_meta("tset", e)
 		m.set_shader_parameter("ud", ud)
+		m.set_shader_parameter("nrm", nrm)
 		m.set_shader_parameter("L", Ll)
 		m.set_shader_parameter("seed", e["seed"])
+		m.set_shader_parameter("hsh", _hash_tex(3.3, e["seed"], [[0, 1, 2, 3], [9, 10, 11, 12], [3, 4, 5, 6]]))
 		m.set_shader_parameter("nf", nf)
 		m.set_shader_parameter("ur", ur)
 		m.set_shader_parameter("n", st.size())

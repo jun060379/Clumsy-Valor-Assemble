@@ -3,6 +3,13 @@ const float S = 2.0;
 const float TT = 6.28318530718;
 varying vec2 lp;
 float hn3(float u, float k, float seed, float o2) { float v = sin(floor(u * k) * 12.9898 + seed * 3.3 + o2) * 43758.5453; return fract(v); }
+// the prototype's stepped hashes, fract(sin(n * 12.9898 + seed * m + o2) * 43758.5453), are taken in double precision on
+// the CPU (pfx.gd _hash_tex; a float32 sin of those arguments is noise of its own): row r, column n + 16
+uniform sampler2D hsh : filter_nearest;
+float hT(float u, float k, int r) { return texelFetch(hsh, ivec2(clamp(int(floor(u * k)) + 16, 0, 255), r), 0).r; }
+// tearPx's void sparkle, the same hash of the art pixel (assets/fx/tear_spark.png, made by tools/make_tear_spark.py)
+uniform sampler2D spk : filter_nearest;
+bool spark(float xx, float yy) { return texelFetch(spk, ivec2(clamp(int(xx) + 256, 0, 511), clamp(int(yy) + 256, 0, 511)), 0).r > 0.5; }
 float eo(float x) { return 1.0 - pow(1.0 - clamp(x, 0.0, 1.0), 3.0); }
 float smo(float x) { x = clamp(x, 0.0, 1.0); return x * x * (3.0 - 2.0 * x); }
 // tearState(tt): x = ext, y = tl, z = cool, w = snap; valid when tt in [0, 10.5]
@@ -29,7 +36,7 @@ const vec4 T_VOID = vec4(0.024, 0.008, 0.039, 1.0);
 // tearPx: returns a colour with a > 0 when the pixel is painted
 vec4 tear_px(float xx, float yy, float dist, float hw, vec4 st, float hn) {
 	float ad = abs(dist);
-	if (hw > 0.6 && ad < hw) { float h2 = fract(sin(xx * 12.9898 + yy * 78.233) * 43758.5453); return h2 < 0.02 ? T_RIM : T_VOID; }
+	if (hw > 0.6 && ad < hw) return spark(xx, yy) ? T_RIM : T_VOID;
 	float lip = hw > 0.6 ? ad - hw : ad;
 	if (lip < (st.w > 0.5 ? 1.3 : 0.8)) return tear_lip(int(min(4.0, st.z)));
 	if (st.z < 3.0 && lip < 1.9 && hw > 0.8 && hn > 0.15) return T_RIM;
