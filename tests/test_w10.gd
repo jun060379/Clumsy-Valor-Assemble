@@ -46,8 +46,11 @@ func _initialize() -> void:
 	ok(c["st"] == "sleep", "cat curls up again once you leave")
 	# ---------- butterflies ----------
 	L.bflies.clear()
-	for i in 600:
-		L._bflies(16.0, arena.view_rect(), P)
+	var vr0: Rect2 = arena.view_rect()
+	var far := {"x": vr0.position.x - 5000.0, "y": -5000.0, "position": Vector2(vr0.position.x - 5000.0, -5000.0)}
+	for i in 2000:                    # spawns are random (dt / 2500 a step): keep her far off so none flee before the count
+		L._bflies(16.0, vr0, far)
+		if L.bflies.size() > 0 and i > 600: break
 	ok(L.bflies.size() > 0 and L.bflies.size() <= 3, "butterflies by day in fair weather (%d)" % L.bflies.size())
 	var b: Dictionary = L.bflies[0]
 	P.position = Vector2(b["x"], b["y"] + 60.0)
