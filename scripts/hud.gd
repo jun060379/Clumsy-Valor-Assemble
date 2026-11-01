@@ -51,6 +51,7 @@ var obj_tr_t := 1e9              # ms since the last .off toggle (its CSS transi
 var obj_from := Vector2(1, 0)    # (opacity, translate x) when that transition began
 var clock := 0.0
 var qte_on := {}                 # bench member -> clock when their QTE card came up
+var qte_xf := {}                 # bench member -> the card's last drawn transform (its tap area)
 
 
 func _input(ev: InputEvent) -> void:
@@ -61,6 +62,13 @@ func _input(ev: InputEvent) -> void:
 	if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 		for sl in slots:
 			var rr: Rect2 = sl["rect"]
+			# a QTE card up: the whole card takes the tap (its slanted box, plus a little margin for a thumb)
+			if qte_on.has(sl["c"]) and qte_xf.has(sl["c"]):
+				var lp: Vector2 = (qte_xf[sl["c"]] as Transform2D).affine_inverse() * ev.position
+				if Rect2(-10, -10, 178 + 20, 62 + 20).has_point(lp):
+					arena.player.party_input(sl["c"])
+					get_viewport().set_input_as_handled()
+					return
 			if ev.position.distance_to(rr.get_center()) <= rr.size.x * 0.5:      # the round face (.ps, 48 px) takes the tap
 				arena.player.party_input(sl["c"])
 				get_viewport().set_input_as_handled()
@@ -543,7 +551,9 @@ func _draw_party(ci: CanvasItem, vs: Vector2) -> void:
 		var col := UI.col(c)
 		var on: bool = P.qte["t"] > 0.0 and P.qte["who"].has(c)
 		if on and not qte_on.has(c): qte_on[c] = clock
-		elif not on: qte_on.erase(c)
+		elif not on:
+			qte_on.erase(c)
+			qte_xf.erase(c)
 		var down: bool = P.hpm[c] <= 0.0
 		# #pcol:has(.ps.qte) .ps:not(.qte) .35; idle .55
 		var a := 1.0 if on else (0.35 if any_q else (0.55 if idle else 1.0))
@@ -607,6 +617,7 @@ func _draw_qte_card(ci: CanvasItem, c: String, ctr: Vector2, k: float, since: fl
 	var sc := lerpf(0.6, 1.0, e)
 	xf = xf * Transform2D(0.0, Vector2(sc, sc), 0.0, Vector2.ZERO) * Transform2D(0.0, Vector2(-W / 2.0, -Hh / 2.0))
 	ci.draw_set_transform_matrix(xf)
+	qte_xf[c] = xf
 	var box := Rect2(0, 0, W, Hh)
 	var front := UI.clip(box, [[9, 0], [100, 8], [92, 100], [0, 94]])
 	ci.draw_colored_polygon(_off(UI.clip(box, [[4, 10], [100, 0], [94, 100], [0, 86]]), Vector2(12, 8)), Color(pc, op))

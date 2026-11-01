@@ -190,6 +190,30 @@ func _initialize() -> void:
 	P.qte["t"] = 0.0
 	for i in 80: P.step(16.0)
 
+	# ---- a QTE card up: a tap anywhere on the card swaps in that member ----
+	P.switch_char("estelle")
+	P.swap_cd = 0.0
+	P.qte["t"] = 1000.0
+	P.qte["who"] = {"aida": true}
+	var HD = null
+	for n in arena.find_children("*", "Control", true, false):
+		if n.get_script() == arena.HUD: HD = n
+	HD.queue_redraw()
+	await process_frame
+	await process_frame
+	var hx = HD.qte_xf.get("aida")
+	check(hx != null, "the QTE card records its tap area")
+	if hx != null:
+		var far: Vector2 = (hx as Transform2D) * Vector2(20.0, 50.0)     # the card's far lower-left, nowhere near the face
+		var mb := InputEventMouseButton.new()
+		mb.button_index = MOUSE_BUTTON_LEFT
+		mb.pressed = true
+		mb.position = far
+		HD._input(mb)
+		check(P.who == "aida", "tapping the QTE card's far end swaps to aida (got %s)" % P.who)
+	P.qte["t"] = 0.0
+	for i in 80: P.step(16.0)
+
 	# ---- touch: exact circles, the stick's thresholds and zone ----
 	var TC = get_nodes_in_group("touch_controls")[0]
 	var b0: Dictionary = TC.BTN[3]

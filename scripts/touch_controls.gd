@@ -197,15 +197,16 @@ func _release_all() -> void:
 
 
 # ---------- layout ----------
-## the prototype's CSS pixels in this viewport's units: 1 on a desktop window; on a phone the prototype page is laid out
-## 980 px wide and zoomed out (no viewport meta), which is a little larger than the 500-unit-tall view here
+## the prototype's CSS pixels in this viewport's units: 1 on a desktop window. On a phone the prototype ran inside the
+## artifact page (viewport meta width=device-width), so its buttons were sized in the phone's own CSS pixels; the
+## 500-unit-tall view here is drawn smaller than that, so the controls scale up by view units per CSS pixel.
 static func k_of(vp: Viewport) -> float:
 	var win := Vector2(DisplayServer.window_get_size())
 	var sc: float = maxf(1.0, DisplayServer.screen_get_scale())
 	var css := win / sc
 	if css.y <= 1.0: return 1.0
 	var logical_per_css: float = vp.get_visible_rect().size.y / css.y
-	return clampf(logical_per_css * minf(1.0, css.x / 980.0), 1.0, 1.3)
+	return clampf(logical_per_css, 1.0, 2.0)
 
 func K() -> float:
 	return k_of(get_viewport())

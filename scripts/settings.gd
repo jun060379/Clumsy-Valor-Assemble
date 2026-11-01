@@ -212,15 +212,15 @@ func qwatch(dt: float, skip: bool) -> bool:
 		return true
 	return false
 
-## fit(): the canvas is capped at 1600·QK pixels across. Godot draws 2D at the window's pixels (stretch canvas_items) or
-## at the game's own size (stretch viewport), so once QK has dropped and its cap is below the window's width, the latter.
+## fit(): the prototype caps its canvas at 1600·QK pixels. Here the drop never touches the resolution: drawing the
+## game at its own size (stretch viewport) made the HUD, menus and text blocky on phones, which already run the
+## low_end path (half-res bloom source, slower bloom refresh, cheaper shade). QK is kept and saved, but 2D stays at
+## the window's pixels.
 func apply_qk() -> void:
 	var tree := Engine.get_main_loop() as SceneTree
 	if tree == null or tree.root == null: return
 	var w: Window = tree.root
-	var px: float = DisplayServer.window_get_size().x if DisplayServer.get_name() != "headless" else float(w.size.x)
-	var want := Window.CONTENT_SCALE_MODE_VIEWPORT if qk < 1.0 and 1600.0 * qk < px - 1.0 else Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
-	if w.content_scale_mode != want: w.content_scale_mode = want
+	if w.content_scale_mode != Window.CONTENT_SCALE_MODE_CANVAS_ITEMS: w.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
 
 ## devUsed: every real input says which device is in hand (a touch right after keys is ignored; emulated mouse = touch)
 func note(ev: InputEvent) -> void:
