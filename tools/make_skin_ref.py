@@ -83,6 +83,5 @@ for i in range(6):
     p = os.path.join(ROOT, f'assets/skins/estelle_base/sheet_{i}.png')
     if os.path.exists(p): cs[i] = Image.open(p).convert('RGBA')
 lab = {0: [('idle', 4)], 3: [('start', 4)], 4: [('stop', 4)], 5: [('turn', 4)], 6: [('jump', 8)], 7: [('runjump', 6)],
-       35: [('run 0-8', 9)], 36: [('run 9-17', 9)], 37: [('walk 0-8', 9)], 38: [('walk 9-17', 9)], 39: [('walk 18-26', 9)],
-       40: [('walk 27-35', 9)], 41: [('walk 36-42', 7)]}
+       35: [('run', 8)], 36: [('walk 0-8', 9)], 37: [('walk 9', 1)]}
 sheet_img(cs, sorted(lab), lab, '에스텔 초심 — 지금까지 받은 줄 (나머지 줄은 원래 그림을 씀)', os.path.join(OUT, 'estelle_chosim_ref.png'), lambda r: True)

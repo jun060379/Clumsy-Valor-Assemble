@@ -8,14 +8,21 @@ Inputs (one folder):
   turn_4f_magenta.png       side, side, front, mirrored side             → row 5  turn (기본's turn has the same shape)
   jump_8f_magenta.png       crouch, take-off, rise, apex, fall, fall, land, land (2 rows of 4) → row 6 jump
   run6_magenta.png          running take-off (2 rows of 3)                → row 7  runjump
-  run_18f.png               18-frame run cycle (transparent, 5 a row)     → rows 35-36 run  (skin_data anims)
-  walk_43f.png              43-frame walk cycle (transparent, 7 a row)    → rows 37-41 walk (skin_data anims)
+  run_18f.png               18-frame run cycle (transparent, 5 a row)     → row 35 run, 8 of its frames (KEEP)
+  walk_43f.png              43-frame walk cycle (transparent, 7 a row)    → rows 36-37 walk, 10 of its frames (KEEP)
   ref_greenbg.png           side-view standing art on green               → st_base.png
 Magenta / green are keyed with colour unmixing (skin_slice.key_out).
 
 Normalisation, the same for every row so 초심 is one consistent character:
-  scale     one factor per delivery image: its frames' median height matched to 기본 Estelle's median height for the same
-            animation row (char_bounds.gd); run_18f and walk_43f came as one pair and share run's factor
+  scale     one factor per delivery image, from the HEAD, not the bounding box: the deliveries came from different
+            generator runs at different pixel sizes, and a crouch or a lean is shorter than standing while the head is not,
+            so matching box heights blew the crouched / leaning rows up (a bigger body in the run than at idle). Each
+            delivery's head size relative to the idle sheet's (skin_slice.head_size: idle frame 0's head, crown to chin, matched
+            at many scales / tilts) gives its factor = idle's factor / that ratio. Idle keeps its factor (its median height on
+            기본's idle height), so the standing figure stays the size it was and every row has the same head and torso.
+            Cross-checked by hand: the torso (neck to skirt hem) and the upright poses' full height agree within a few %.
+  frames    run_18f / walk_43f are drawn on twos and more (18 and 43 frames for two steps): too busy for a pixel game, so
+            KEEP picks the key poses (contact, down, passing, up of each step) and the game plays them at sprite timing
   baseline  grounded rows: each frame's lowest solid row on the feet line (340); jump / runjump keep the image's own
             vertical layout (the ground = the lowest feet of the grounded frames), so the body rises in the cell as 기본's does
   anchor    the hips (dark belt / skirt-hem / stocking pixels of the hip band) on the cell centre, not the bounding box
@@ -52,8 +59,15 @@ SPEC = [  # name, file, key, cols, n, target row, grounded
     ('jump', 'jump_8f_magenta.png', 'magenta', 4, 8, 6, False),
     ('runjump', 'run6_magenta.png', 'magenta', 3, 6, 7, False),
     ('run', 'run_18f.png', None, 5, 18, 35, True),
-    ('walk', 'walk_43f.png', None, 7, 43, 37, True),
+    ('walk', 'walk_43f.png', None, 7, 43, 36, True),
 ]
+# the frames kept of the long cycles (source indices, in play order). run: footfalls at 1 and 10 (the planted foot's x
+# jumps forward), 9 frames a step → contact, down, passing, reach of each step (2 apart, 3 into the next contact);
+# rotated so the contacts are frames 1 and 5, as in 기본's run (skins.steps' default).
+# walk: footfalls at 13 and 37, passing (the swing foot highest) near 3 and 26; steps of 24 and 19 frames → 5 a step,
+# starting near the source's frame 0 (what walk start hands over to).
+KEEP = {'run': [16, 1, 3, 5, 7, 10, 12, 14], 'walk': [2, 5, 9, 13, 18, 22, 26, 31, 37, 41]}
+HEAD_BOX = (150, 10, 275, 135)          # idle frame 0's head in the source pixels: crown, bow and chin
 GROUND = {'jump': [0, 6, 7], 'runjump': [0]}      # frames standing on the ground (verified by eye)
 
 os.makedirs(OUT, exist_ok=True)
@@ -72,11 +86,23 @@ for nm, fn, key, cols, n, row, grounded in SPEC:
         f['slot_bottom'] = f['box'][1] + f['bottom'] - (i // cols) * sh     # the feet's height inside the slot
     strips[nm] = (fr, row, grounded, sh)
 
-scale = {}
+scale, head = {}, {}
+idle_fr = strips['idle'][0]
+k_idle = base_h(0) / float(np.median([f['height'] for f in idle_fr]))
 for nm, (fr, row, grounded, sh) in strips.items():
-    if nm == 'walk': continue
-    scale[nm] = base_h(2 if nm == 'run' else row) / float(np.median([f['height'] for f in fr]))
-scale['walk'] = scale['run']           # one delivery pair: one scale
+    rel, per = S.head_size(idle_fr[0]['rgba'], HEAD_BOX, fr, every=max(1, len(fr) // 6))
+    if nm == 'idle': rel = 1.0
+    head[nm] = {'head_vs_idle': round(rel, 3), 'frames': per}
+    scale[nm] = k_idle / rel
+
+# the run / walk gait from every source frame (before KEEP thins them): placed on a scratch sheet
+scratch = {}
+for nm in ('run', 'walk'):
+    S.place(strips[nm][0], scale[nm], scratch, 35)
+full_cells = {nm: [f['cell'] for f in strips[nm][0]] for nm in ('run', 'walk')}
+for nm, keep in KEEP.items():
+    fr, row, grounded, sh = strips[nm]
+    strips[nm] = ([fr[i] for i in keep], row, grounded, sh)
 
 for nm, (fr, row, grounded, sh) in strips.items():
     k = scale[nm]
@@ -85,8 +111,10 @@ for nm, (fr, row, grounded, sh) in strips.items():
         for f in fr:                    # lift a frame by how far its feet are above the strip's ground
             f['lift'] = (g - f['slot_bottom'])
     S.place(fr, k, sheets, row)
-    info[nm] = {'row': row, 'n': len(fr), 'scale': round(k, 4), 'median_h': round(float(np.median([f['height'] for f in fr])) * k, 1),
-                'base_h': base_h(2 if nm in ('run', 'walk') else row), 'clipped': [i for i, f in enumerate(fr) if f['clipped']]}
+    info[nm] = {'row': row, 'n': len(fr), 'scale': round(k, 4), 'head_vs_idle': head[nm]['head_vs_idle'],
+                'median_h': round(float(np.median([f['height'] for f in fr])) * k, 1), 'keep': KEEP.get(nm),
+                'clipped': [i for i, f in enumerate(fr) if f['clipped']]}
+    print(nm, 'head matches (frame, score, size vs idle, tilt):', head[nm]['frames'], file=sys.stderr)
 
 # jump / runjump with their lift: redo those rows (place() puts every bottom on the feet line)
 for nm in ('jump', 'runjump'):
@@ -132,9 +160,9 @@ def contact_x(cell):
 
 
 def gait(nm, speed):
-    fr = strips[nm][0]
-    xs = [contact_x(f['cell'])[0] for f in fr]
-    n = len(fr)
+    cells = full_cells[nm]
+    xs = [contact_x(c)[0] for c in cells]
+    n = len(cells)
     d = np.diff(xs + xs[:1])
     # footfalls: the planted foot changes when the contact jumps forward by a lot
     steps = [int(i + 1) % n for i in np.nonzero(d > 25)[0]]
@@ -151,18 +179,18 @@ def gait(nm, speed):
     v = float(np.average(drifts, weights=lens)) if drifts else 0.0
     world = v * 0.5 * CSCALE
     ms = world / speed
-    seam = float(np.abs(np.asarray(fr[-1]['cell'], np.float32) - np.asarray(fr[0]['cell'], np.float32)).mean())
-    inner = float(np.mean([np.abs(np.asarray(fr[i + 1]['cell'], np.float32) - np.asarray(fr[i]['cell'], np.float32)).mean() for i in range(n - 1)]))
+    kc = [f['cell'] for f in strips[nm][0]]          # the kept frames: how alike the loop's seam is to its other steps
+    seam = float(np.abs(np.asarray(kc[-1], np.float32) - np.asarray(kc[0], np.float32)).mean())
+    inner = float(np.mean([np.abs(np.asarray(kc[i + 1], np.float32) - np.asarray(kc[i], np.float32)).mean() for i in range(len(kc) - 1)]))
     return {'drift_px_per_frame': round(v, 2), 'world_px_per_frame': round(world, 2), 'no_slide_ms': round(ms, 1),
             'cycle_ms': round(n * ms), 'stride_world_px_per_cycle': round(world * n, 1), 'footfalls': steps,
             'contact_x': [round(x) for x in xs], 'seam_diff': round(seam, 2), 'mean_step_diff': round(inner, 2)}
 
 info['gait_run'] = gait('run', RUN_SPEED)
 info['gait_walk'] = gait('walk', WALK_SPEED)
-for g, base_ms, n in [('gait_run', 680.0, 8), ('gait_walk', 1200.0, 8)]:
+for g, base_ms in [('gait_run', 680.0), ('gait_walk', 1200.0)]:
     G = info[g]
-    # with 기본's cycle time spread over the new frames, how far the foot would slide per cycle
-    per = base_ms / (18 if g == 'gait_run' else 43)
+    # with 기본's cycle time, how far the foot slides per cycle (the game's speed × the cycle − the art's stride)
     sp = RUN_SPEED if g == 'gait_run' else WALK_SPEED
     G['slide_px_per_cycle_at_base_cycle'] = round(sp * base_ms - G['stride_world_px_per_cycle'], 1)
     G['base_cycle_ms'] = base_ms

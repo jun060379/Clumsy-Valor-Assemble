@@ -91,6 +91,42 @@ def measure(frames):
     return frames
 
 
+def _gray(rgba):
+    """luminance over a flat mid-grey (so the transparent surround reads as one neutral tone)"""
+    a = rgba[..., 3:4].astype(np.float32) / 255.0
+    g = rgba[..., :3].astype(np.float32) * a + np.float32([70, 70, 80]) * (1 - a)
+    return g @ np.float32([0.299, 0.587, 0.114])
+
+
+def head_size(ref_rgba, box, frames, every=1, region=0.55, min_score=0.85, half=0.5):
+    """the head's size in each frame relative to the reference frame (1.0 = the same pixel size): the reference's head
+    (box = x0, y0, x1, y1 around crown, bow and chin, no loose hair) is matched over the upper part of each frame at
+    scales 0.40-1.30 and tilts -15..+10 deg (normalised cross-correlation, half resolution, then refined).
+    A head is a body measure that does not change with the pose (a crouch or a lean shortens the bounding box, never the
+    head), so one factor per delivery that brings its head to the reference's size keeps the figure one size everywhere.
+    Returns (median of the good matches, [(frame, score, scale, tilt) ...])."""
+    import cv2
+    x0, y0, x1, y1 = box
+    tpl = _gray(ref_rgba)[y0:y1, x0:x1]
+    res = []
+    for i in range(0, len(frames), every):
+        g = _gray(frames[i]['rgba'])
+        im = cv2.resize(g[:int(g.shape[0] * region)], None, fx=half, fy=half, interpolation=cv2.INTER_AREA)
+
+        def score(s, r):
+            t = cv2.resize(tpl, None, fx=s * half, fy=s * half, interpolation=cv2.INTER_AREA)
+            h, w = t.shape
+            if h >= im.shape[0] or w >= im.shape[1]: return -1.0
+            t = cv2.warpAffine(t, cv2.getRotationMatrix2D((w / 2, h / 2), r, 1.0), (w, h), borderMode=cv2.BORDER_REPLICATE)
+            return float(cv2.minMaxLoc(cv2.matchTemplate(im, t, cv2.TM_CCOEFF_NORMED))[1])
+        best = max((score(s, r), s, r) for s in np.arange(0.40, 1.31, 0.03) for r in range(-15, 11, 5))
+        best = max([best] + [(score(s, r), s, r) for s in np.arange(best[1] - 0.03, best[1] + 0.031, 0.006)
+                             for r in (best[2] - 2, best[2], best[2] + 2)])
+        res.append((i, round(best[0], 3), round(float(best[1]), 3), best[2]))
+    good = [s for _, v, s, _ in res if v >= min_score] or [s for _, v, s, _ in res]
+    return float(np.median(good)), res
+
+
 def place(frames, scale, sheet_imgs, row0, flip=False):
     """write frames into the sheets from sheet row row0 on (9 a row, wrapping); sheet_imgs: {sheet index: Image}"""
     for i, f in enumerate(frames):

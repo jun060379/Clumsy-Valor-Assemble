@@ -24,14 +24,16 @@ extends RefCounted
 ##   placeholder  true: the name / description were invented and wait for the user's own (the 기본 entries: only the description)
 
 const BASE := {"estelle": "estelle_base", "aida": "aida_base", "luce": "luce_base"}
-## 초심's run (18 frames = 2 steps) and walk (43 frames = 2 steps), timed from tools/make_skin_chosim.py's measurement:
-##   run: the planted foot drifts 10.7 sheet px a frame (6.95 world px); at player.gd RUN 0.36 px/ms no slide = 19.3 ms a
-##        frame (a 347 ms cycle; 기본's is 680 ms with longer strides)
-##   walk: the art's steps are short (1.2 world px a frame); no slide at townsfolk.gd WALKSP 0.2 would need 6 ms a frame, so
-##        it plays at a natural 24 ms (1.03 s a cycle) and the soles slide ~150 px a cycle (docs/skin_assets.md)
-const RUN18 := [19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19]
-const WALK43 := [24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24]
-const STEP_RUN18 := [1, 10]      # the frames a foot lands (dust puffs, footstep sounds)
+## 초심's run and walk: the delivered cycles (18 and 43 frames for two steps) thinned to their key poses by
+## tools/make_skin_chosim.py (KEEP: contact, down, passing, up of each step) and played at sprite timing:
+##   run: 8 frames, 640 ms a cycle (기본's is 680 ms), about 3.1 steps a second; the contacts and the reach hold a little
+##        longer. The art's stride is short for player.gd RUN 0.36 px/ms, so the soles slide a little (a natural cadence
+##        reads better than the 347 ms a cycle that would pin the feet)
+##   walk: 10 frames, 1050 ms a cycle, about 1.9 steps a second; the soles slide (the art's steps are short for
+##        townsfolk.gd WALKSP 0.2), as before
+const RUN8 := [85, 85, 75, 75, 85, 85, 75, 75]          # reach, contact, down, passing × 2
+const WALK10 := [105, 105, 105, 105, 105, 105, 105, 105, 105, 105]
+const STEP_RUN8 := [1, 5]       # the frames a foot lands (dust puffs, footstep sounds): 기본's too
 const ROOT := "res://assets/skins/"
 
 const SKINS := [
@@ -39,11 +41,11 @@ const SKINS := [
 	# (attacks, guard, hurt, ...) and picture still comes from the original art (미숙한 결의's files) until it is delivered.
 	{"id": "estelle_base", "c": "estelle", "n": "초심", "d": "흰 드레스에 검은 소매, 검 한 자루. 방패도 망토도 없이 다시 시작하는 차림.", "unlock": {"kind": "default", "value": 0},
 		"dir": ROOT + "estelle_base/", "placeholder": true, "partial": true,
-		# own rows: 0 idle · 3 start (walk start) · 4 stop · 5 turn · 6 jump · 7 runjump · 35-36 run (18) · 37-41 walk (43)
-		"rows": [0, 3, 4, 5, 6, 7, 35, 36, 37, 38, 39, 40, 41],
-		"anims": {"run": [35, RUN18], "walk": [37, WALK43]},
+		# own rows: 0 idle · 3 start (walk start) · 4 stop · 5 turn · 6 jump · 7 runjump · 35 run (8) · 36-37 walk (10)
+		"rows": [0, 3, 4, 5, 6, 7, 35, 36, 37],
+		"anims": {"run": [35, RUN8], "walk": [36, WALK10]},
 		"bob": {"run": [], "walk": []},           # the frames carry their own rise and fall
-		"steps": {"run": STEP_RUN18},
+		"steps": {"run": STEP_RUN8},
 		"breath_top": 166,                         # the head's top in the idle cells (player.gd idle breathing)
 		"done": ["idle", "start", "stop", "turn", "jump", "runjump", "run", "walk"]},
 	# 미숙한 결의: the original art (cape and shield), the files in assets/chars/estelle and assets/ui/st as they always were

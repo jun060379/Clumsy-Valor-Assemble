@@ -76,19 +76,24 @@ func _initialize() -> void:
 	# ---- 초심: a default drawn in parts, its own run / walk; the rest from the original art row by row ----
 	var CB0: Array = load("res://scripts/char_bounds.gd").B["estelle"]
 	check(SK.is_ready("estelle_base") and SK.worn("estelle") == "estelle_base", "초심 is worn by default")
-	for r in [0, 3, 4, 5, 6, 7, 35, 36, 37, 41]: check(SK.has_row("estelle_base", r), "초심 draws row %d" % r)
-	for r in [1, 2, 8, 14, 19, 21, 26, 28]: check(not SK.has_row("estelle_base", r), "초심 leaves row %d to the original art" % r)
+	for r in [0, 3, 4, 5, 6, 7, 35, 36, 37]: check(SK.has_row("estelle_base", r), "초심 draws row %d" % r)
+	for r in [1, 2, 8, 14, 19, 21, 26, 28, 38, 41]: check(not SK.has_row("estelle_base", r), "초심 leaves row %d to the original art" % r)
 	check(SK.sheet_row("estelle", 0).resource_path == "res://assets/skins/estelle_base/sheet_0.png", "idle from 초심")
 	check(SK.sheet_row("estelle", 8).resource_path == "res://assets/chars/estelle/estelle_1.png", "attack1 (row 8) from the original art")
 	check(SK.sheet_row("estelle", 7).resource_path == "res://assets/skins/estelle_base/sheet_1.png" and SK.sheet_row("estelle", 36).resource_path == "res://assets/skins/estelle_base/sheet_5.png", "runjump and run rows from its own sheets")
-	check((SK.entry("estelle", "run")[1] as Array).size() == 18 and (SK.entry("estelle", "walk")[1] as Array).size() == 43, "its own run (18) and walk (43)")
-	check(SK.resolve("estelle", "run", 10) == [36, 1] and SK.resolve("estelle", "walk", 42) == [41, 6], "frames past nine run on into the next row")
+	check((SK.entry("estelle", "run")[1] as Array).size() == 8 and (SK.entry("estelle", "walk")[1] as Array).size() == 10, "its own run (8 key frames) and walk (10)")
+	var rs := 0
+	for ms in SK.entry("estelle", "run")[1]: rs += int(ms)
+	var ws := 0
+	for ms in SK.entry("estelle", "walk")[1]: ws += int(ms)
+	check(rs >= 560 and rs <= 720 and ws >= 900 and ws <= 1250, "run / walk cycles at a natural cadence (%d / %d ms for two steps)" % [rs, ws])
+	check(SK.resolve("estelle", "run", 7) == [35, 7] and SK.resolve("estelle", "walk", 9) == [37, 0], "frames past nine run on into the next row")
 	check(SK.resolve("estelle", "swap_in", 2)[0] == 35, "composite moves built from run use 초심's run")
 	check(SK.resolve("estelle", "attack1", 2) == [8, 2] and SK.resolve("aida", "run", 3) == [1, 3], "everything else as before")
 	check(SK.bob("estelle", "run").is_empty() and SK.bob("estelle", "attack1").is_empty() and SK.bob("aida", "run") == load("res://scripts/chars.gd").BOB["aida"]["run"], "초심's frames carry their own bob")
-	check(SK.steps("estelle") == [1, 10] and SK.steps("luce") == [1, 5], "footfalls")
+	check(SK.steps("estelle") == [1, 5] and SK.steps("luce") == [1, 5], "footfalls")
 	var B0: Array = SK.bounds("estelle")
-	check(B0.size() >= 42 * 18 and B0[35 * 18] >= 0 and B0[8 * 18] == CB0[8 * 18], "bounds: 초심's rows merged over the original's")
+	check(B0.size() >= 38 * 18 and B0[35 * 18] >= 0 and B0[8 * 18] == CB0[8 * 18], "bounds: 초심's rows merged over the original's")
 	check(SK.path("estelle", "st_base").begins_with("res://assets/skins/estelle_base/st_base.") and SK.path("estelle", "st_cl") == SK.path("estelle", "st_base"), "its standing picture; a blink it lacks shows the same picture, never the old costume")
 	check(SK.path("estelle", "face") == SK.base_path("estelle", "face") and SK.path("estelle", "st_gear") == SK.base_path("estelle", "st_gear"), "face / gear art still the original's")
 
