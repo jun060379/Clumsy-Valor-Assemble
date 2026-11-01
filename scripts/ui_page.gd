@@ -141,10 +141,10 @@ static func gem(ci: CanvasItem, c: Vector2, r: float, col: Color, rim := true) -
 	var pts := PackedVector2Array([c + Vector2(0, -r), c + Vector2(r, 0), c + Vector2(0, r), c + Vector2(-r, 0)])
 	if rim:
 		var o := r + maxf(1.5, r * 0.18)
-		ci.draw_colored_polygon(PackedVector2Array([c + Vector2(0, -o), c + Vector2(o, 0), c + Vector2(0, o), c + Vector2(-o, 0)]), Color.WHITE)
+		ci.draw_colored_polygon(PackedVector2Array([c + Vector2(0, -o), c + Vector2(o, 0), c + Vector2(0, o), c + Vector2(-o, 0)]), Color(1, 1, 1, col.a))
 	ci.draw_colored_polygon(pts, col)
 	ci.draw_colored_polygon(PackedVector2Array([c + Vector2(0, -r), c + Vector2(r, 0), c + Vector2(-r, 0)]), col.lightened(0.35))
-	ci.draw_colored_polygon(PackedVector2Array([c + Vector2(-r * 0.45, -r * 0.1), c + Vector2(0, -r * 0.55), c + Vector2(r * 0.1, -r * 0.45), c + Vector2(-r * 0.35, 0)]), Color(1, 1, 1, 0.55))
+	ci.draw_colored_polygon(PackedVector2Array([c + Vector2(-r * 0.45, -r * 0.1), c + Vector2(0, -r * 0.55), c + Vector2(r * 0.1, -r * 0.45), c + Vector2(-r * 0.35, 0)]), Color(1, 1, 1, 0.55 * col.a))
 
 ## wrapped paragraphs [[text, size, colour, font?]...] from (x, y) in width w; returns the height used
 static func paras(ci: CanvasItem, x: float, y: float, w: float, ps: Array, gap := 3.0) -> float:
@@ -230,3 +230,88 @@ static func rune_kind(r: String) -> String:
 	if Rd["k"] == "w": return "무기 룬" + (" · " + Rd["cls"] if Rd.has("cls") else "")
 	if Rd["k"] == "a": return "방어구 룬"
 	return "장신구 룬" + (" · " + RN.pname(Rd["who"]) + " 전용" if Rd.has("who") else "")
+
+
+# ---------- CSS box helpers (the DOM-mirroring pages: 가방, 대장간) ----------
+## a box transform: translate to p, then about the local pivot: rotate, scale, skewX (CSS order translate · rotate · scale · skew)
+static func xf(p: Vector2, pivot: Vector2, rot_deg := 0.0, sc := 1.0, skew_deg := 0.0) -> Transform2D:
+	var m := Transform2D(Vector2(1, 0), Vector2(tan(deg_to_rad(skew_deg)), 1), Vector2.ZERO)
+	m = Transform2D(0.0, Vector2(sc, sc), 0.0, Vector2.ZERO) * m
+	m = Transform2D(deg_to_rad(rot_deg), Vector2.ZERO) * m
+	return Transform2D(0.0, p + pivot) * m * Transform2D(0.0, -pivot)
+
+static func poly(r: Rect2, pct: Array, m: Transform2D) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for q in pct: out.append(m * (r.position + Vector2(r.size.x * q[0] / 100.0, r.size.y * q[1] / 100.0)))
+	return out
+
+const SQ := [[0, 0], [100, 0], [100, 100], [0, 100]]
+
+## text whose CSS line box is at y with line height lh
+func txt(ci: CanvasItem, f: Font, x: float, y: float, s: String, fs: int, col: Color, lh := 0.0) -> float:
+	var asc := f.get_ascent(fs)
+	var h := asc + f.get_descent(fs)
+	if lh <= 0.0: lh = h
+	ci.draw_string(f, Vector2(x, y + (lh - h) / 2.0 + asc), s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
+	return tw(f, s, fs)
+
+## inline runs [[text, font, size, colour], ...] ("\n" = <br>), Korean breaking anywhere, latin per word; returns the
+## lines as [[x, run, text]...] per line, for width w. Measuring and drawing share it.
+func flow(runs: Array, w: float) -> Array:
+	var lines: Array = [[]]
+	var x := 0.0
+	for r in runs:
+		var s: String = r[0]
+		var f: Font = r[1]
+		var fs: int = r[2]
+		var toks: Array = []
+		var cur := ""
+		for ch in s:
+			if ch == "\n":
+				if cur != "": toks.append(cur)
+				toks.append("\n")
+				cur = ""
+			elif ch == " ":
+				toks.append(cur + " ")
+				cur = ""
+			elif ch.unicode_at(0) >= 0x1100:
+				if cur != "": toks.append(cur)
+				toks.append(ch)
+				cur = ""
+			else:
+				cur += ch
+		if cur != "": toks.append(cur)
+		for tk in toks:
+			if tk == "\n":
+				lines.append([])
+				x = 0.0
+				continue
+			var tw0 := tw(f, tk.rstrip(" "), fs)
+			if x > 0.0 and x + tw0 > w + 0.5:
+				lines.append([])
+				x = 0.0
+				if tk == " ": continue
+			var ln: Array = lines[-1]
+			if not ln.is_empty() and ln[-1][1] == r:
+				ln[-1][2] += tk
+			else:
+				ln.append([x, r, tk])
+			x += tw(f, tk, fs)
+	return lines
+
+static func flow_w(lines: Array) -> float:
+	var w := 0.0
+	for ln in lines:
+		if ln.is_empty(): continue
+		var last: Array = ln[-1]
+		var r: Array = last[1]
+		w = maxf(w, last[0] + (r[1] as Font).get_string_size(String(last[2]).rstrip(" "), HORIZONTAL_ALIGNMENT_LEFT, -1, r[2]).x)
+	return w
+
+func draw_flow(ci: CanvasItem, lines: Array, x: float, y: float, lh: float, a := 1.0) -> void:
+	for i in lines.size():
+		for seg in lines[i]:
+			var r: Array = seg[1]
+			txt(ci, r[1], x + seg[0], y + i * lh, seg[2], r[2], Color(r[3], r[3].a * a), lh)
+
+

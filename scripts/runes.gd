@@ -213,7 +213,10 @@ static func slot_kind(s: String) -> String:
 static func pname(c: String) -> String:
 	return CH.NAME.get(c, c)
 
+var force_roll := -1.0        # tests / captures: every roll returns this (0..1) while >= 0
+
 func rand() -> float:
+	if force_roll >= 0.0: return force_roll
 	return rng.randf()
 
 func pick(a: Array):
@@ -868,7 +871,7 @@ func boss_count() -> int:
 
 # ---------- forge operations (the four stations) ----------
 ## 강화: a rune's star; returns "" when it cannot run, else "ok" / "miss"
-func star_up(c: String, s: String) -> String:
+func star_up(c: String, s: String, bonus := 0) -> String:
 	var it = gear[c][s]
 	if it == null or not has_rune_item(it): return ""
 	var lv := int(it.get("rs", 1))
@@ -876,7 +879,7 @@ func star_up(c: String, s: String) -> String:
 	var cost := rs_cost(lv)
 	if iron < cost: return ""
 	iron -= cost
-	var ok := rand() * 100.0 < minf(100.0, rs_rate(lv))
+	var ok := rand() * 100.0 < minf(100.0, rs_rate(lv) + bonus)
 	if ok: it["rs"] = lv + 1
 	changed()
 	return "ok" if ok else "miss"

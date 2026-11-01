@@ -53,8 +53,12 @@ func _ready() -> void:
 	mx = MEMUI.new(self)
 
 var want_c := ""                 # cxOpen(c): open on this member instead of the one in control
+var stat_scroll := 0.0           # 상세: #cx .stats scrolls (overflow auto) down to the 패시브 and 상성 cards
+var stat_max := 0.0
+const EL := preload("res://scripts/elements.gd")
 
 func _opened() -> void:
+	stat_scroll = 0.0
 	c = want_c if want_c != "" else arena.player.who
 	want_c = ""
 	tab = "attr"
@@ -130,6 +134,7 @@ func _pick_gi(i: int) -> void:
 	gd_t = 0.0
 
 func _tab(k: String) -> void:
+	stat_scroll = 0.0
 	if k == tab: return
 	prev_tab = tab
 	tab = k
@@ -142,6 +147,7 @@ func _tab(k: String) -> void:
 	sfx("ready", 0.2)
 
 func _member(cc: String) -> void:
+	stat_scroll = 0.0
 	if cc == c or wipe_t >= 0.0: return
 	# setChar: the wipe comes in (190 ms), the member changes under it, the wipe goes on out (300 ms)
 	pend_c = cc
@@ -364,36 +370,75 @@ func _attr(vs: Vector2, col: Color) -> void:
 		["공격 속도", str(roundi(S["as"] * 100.0)) + "%", 0, "%"]]
 	if c == "luce" or T["heal"] > 0.0: rows.append(["회복량", RN.fmt(100.0 + T["heal"]) + "%", T["heal"], "%"])
 	if T["ult"] > 0.0: rows.append(["기력 획득", RN.fmt(100.0 + T["ult"]) + "%", T["ult"], "%"])
-	var y := vs.y * 0.38
-	var rh := minf(30.0, (vs.y - y - 10.0) / (rows.size() + 1.0))
+	# .zone (53 %, 37 %) 396 × 310: .stats scrolls (overflow auto), -3°; under the rows the 패시브 card and the 상성 card
+	var top := vs.y * 0.37
+	var y := vs.y * 0.38 - stat_scroll
+	var rh := 30.0
 	var i := 0
 	for row in [["현재 체력", str(roundi(hp)), 0, "", hp / maxf(1.0, S["hp"])]] + rows:
 		var e := UI.bk(clampf((tab_t - i * 40.0) / 500.0, 0.0, 1.0))
 		var x := vs.x * 0.53 + (i % 2) * 14.0 + 60.0 * (1.0 - e) - i * 4.0
 		var bw := vs.x * 0.42
-		draw_colored_polygon(PackedVector2Array([Vector2(x, y), Vector2(x + bw, y - 4.0), Vector2(x + bw - 6.0, y + rh - 4.0), Vector2(x - 4.0, y + rh)]), Color(0, 0, 0, 0.92 * e))
-		draw_string(UI.noto_k(), Vector2(x + 12, y + rh * 0.68), row[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1, 1, 1, e))
-		if row.size() > 4:
-			draw_rect(Rect2(x + 90, y + rh * 0.42, bw * 0.38, 4), Color(1, 1, 1, 0.2 * e))
-			draw_rect(Rect2(x + 90, y + rh * 0.42, bw * 0.38 * clampf(row[4], 0.0, 1.0), 4), Color(col.lightened(0.3), e))
-		draw_string(UI.anton(true), Vector2(x + bw * 0.62, y + rh * 0.78), row[1], HORIZONTAL_ALIGNMENT_LEFT, -1, int(rh * 0.72), Color(1, 1, 1, e))
-		var d: float = row[2]
-		var ds: String = ("/ %d" % roundi(S["hp"])) if i == 0 else (("+" if d > 0 else "−") + RN.fmt(absf(d)) + row[3] if d != 0.0 else "")
-		draw_string(UI.anton(true), Vector2(x + bw * 0.86, y + rh * 0.55), ds, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(col.lightened(0.2), e))
+		if y >= top - 2.0:
+			draw_colored_polygon(PackedVector2Array([Vector2(x, y), Vector2(x + bw, y - 4.0), Vector2(x + bw - 6.0, y + rh - 4.0), Vector2(x - 4.0, y + rh)]), Color(0, 0, 0, 0.92 * e))
+			draw_string(UI.noto_k(), Vector2(x + 12, y + rh * 0.68), row[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1, 1, 1, e))
+			if row.size() > 4:
+				draw_rect(Rect2(x + 90, y + rh * 0.42, bw * 0.38, 4), Color(1, 1, 1, 0.2 * e))
+				draw_rect(Rect2(x + 90, y + rh * 0.42, bw * 0.38 * clampf(row[4], 0.0, 1.0), 4), Color(col.lightened(0.3), e))
+			draw_string(UI.anton(true), Vector2(x + bw * 0.62, y + rh * 0.78), row[1], HORIZONTAL_ALIGNMENT_LEFT, -1, int(rh * 0.72), Color(1, 1, 1, e))
+			var d: float = row[2]
+			var ds: String = ("/ %d" % roundi(S["hp"])) if i == 0 else (("+" if d > 0 else "−") + RN.fmt(absf(d)) + row[3] if d != 0.0 else "")
+			draw_string(UI.anton(true), Vector2(x + bw * 0.86, y + rh * 0.55), ds, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(col.lightened(0.2), e))
 		y += rh + 2.0
 		i += 1
-	# passive
+	# .card.it (패시브): 150 wide, black, the tag white on black, its text black (as the prototype's cascade leaves it);
+	# .card.aff.it (상성): black, the tags in her colour, the lines #ddd at 11.5 px
 	var pv: Array = SHEET[c][2]
-	var pw := vs.x * 0.3
-	var py := vs.y * 0.62
-	if y < vs.y * 0.9:
-		pass
-	draw_set_transform(Vector2(vs.x * 0.04, vs.y * 0.86), deg_to_rad(-3.0))
-	var ps: Array = [["패시브 · " + pv[0], 12, col], [pv[1], 11, Color.WHITE]]
-	var ph := paras_h(pw - 20.0, ps) + 12.0
-	draw_rect(Rect2(0, -ph, pw, ph), Color(0, 0, 0, 0.85))
-	paras(self, 10, -ph + 6.0, pw - 20.0, ps)
-	draw_set_transform(Vector2.ZERO)
+	var cx0 := vs.x * 0.53 + 2.0
+	var cw := 150.0
+	var f := UI.noto()
+	var cards: Array = [["패시브 · " + pv[0], [[pv[1]]], Color.BLACK, Color.WHITE, Color.BLACK, 12], ["상성", match_text(c), Color.BLACK, col, Color(0.867, 0.867, 0.867), 11]]
+	for ci in cards.size():
+		var cd: Array = cards[ci]
+		var e := UI.bk(clampf((tab_t - i * 40.0) / 500.0, 0.0, 1.0))
+		var tagw := tw(f, cd[0], 12) + 12.0
+		var lines: Array = []
+		var inner := cw - 32.0
+		var lh := 16.7 if ci == 1 else 18.75
+		var hh := 8.0
+		if ci == 0:
+			hh += 19.0
+			for ln in flow([[pv[1], f, 12, Color.BLACK]], inner): lines.append([ln, false])
+		else:
+			hh += 19.0
+			for ln in cd[1]:
+				var fl: Array = flow([[ln[0], f, 11, Color.BLACK], [ln[1], f, 11, Color(0.867, 0.867, 0.867)]], inner)
+				for k in fl.size(): lines.append([fl[k], k == 0])
+		hh += lines.size() * lh + 10.0
+		y += 8.0
+		if y + hh >= top and y < vs.y:
+			var m := xf(Vector2(cx0 + 60.0 * (1.0 - e), y), Vector2(cw / 2.0, hh / 2.0), -3.0)
+			draw_colored_polygon(poly(Rect2(0, 0, cw, hh), [[7, 0], [100, 0], [93, 100], [0, 100]], m), Color(0, 0, 0, e))
+			draw_set_transform_matrix(m)
+			var tx := 16.0 + (37.0 if ci == 1 else 0.0)
+			draw_rect(Rect2(tx, 8, tagw, 19), Color(cd[3] if ci == 1 else Color.BLACK, e))
+			txt(self, f, tx + 6, 8, cd[0], 12, Color(Color.BLACK if ci == 1 else Color.WHITE, e), 19.0)
+			var ly := 8.0 + 19.0
+			for ln in lines:
+				if ln[1]:
+					# the element tag: her colour behind the first run
+					var seg: Array = ln[0][0]
+					var r0: Array = seg[1]
+					draw_rect(Rect2(20, ly, tw(f, String(seg[2]).rstrip(" "), 11) + 8.0, lh), Color(col, e))
+				for seg2 in ln[0]:
+					var rr: Array = seg2[1]
+					var cc2: Color = rr[3]
+					txt(self, rr[1], 20 + (4.0 if ci == 1 and ln[1] else 0.0) + seg2[0] + (8.0 if ci == 1 and ln[1] and seg2 != ln[0][0] else 0.0), ly, seg2[2], rr[2], Color(cc2, e), lh)
+				ly += lh
+			draw_set_transform(Vector2.ZERO)
+		y += hh + 4.0
+		i += 1
+	stat_max = maxf(0.0, y + stat_scroll - vs.y + 6.0)
 
 func _gear(vs: Vector2, col: Color) -> void:
 	# the gear ground (#cx[data-tab=gear]: her colour on the left, the black shard on the right), the gear art (cx_xgear)
@@ -432,7 +477,6 @@ func _gear(vs: Vector2, col: Color) -> void:
 		if it != null:
 			var lv := "Lv %d" % int(it.get("lv", 0))
 			draw_string(UI.anton(true), Vector2(x + bw - 44, y + 21), lv, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0, 0, 0, e) if on else Color(col, e))
-			if R().has_rune_item(it): gem(self, Vector2(x + bw - 56, y + 14), 5.0, RN.gcol(RN.RUNE[it["rune"]]["g"]))
 		var ii := i
 		hit(poly, func():
 			if gi != ii:
@@ -508,10 +552,10 @@ func _gear_card(vs: Vector2, col: Color) -> void:
 	if it != null:
 		title = it["n"]
 		var desc: String = RN.gname(it["g"]) + " · " + (RN.CLS[c] + " 전용 · " if s == "weapon" else ((it["wt"] + " · ") if it.has("wt") else "")) + gear_line(it, kind)
+		# the card's p: grade · class / weight · stats, then "<br>룬 · name" when a rune is set (no star, no text)
 		ps.append([desc, 12, Color(0.15, 0.15, 0.15)])
 		if R().has_rune_item(it):
-			ps.append(["룬 · " + RN.RUNE[it["rune"]]["n"] + " ★%d" % int(it.get("rs", 1)), 12, Color(0.15, 0.15, 0.15)])
-			ps.append([RN.rune_scaled(it["rune"], int(it.get("rs", 1))), 11, Color(0.35, 0.35, 0.35)])
+			ps.append(["룬 · " + RN.RUNE[it["rune"]]["n"], 12, Color(0.15, 0.15, 0.15)])
 	else:
 		ps.append([RN.SLOTN[s] + " 칸이 비어 있습니다.", 12, Color(0.3, 0.3, 0.3)])
 	var h2 := 66.0 + paras_h(w - 24.0, ps) + 44.0
@@ -622,7 +666,33 @@ static func _xr(xf: Transform2D, r: Rect2) -> PackedVector2Array:
 	return PackedVector2Array([xf * r.position, xf * Vector2(r.end.x, r.position.y), xf * r.end, xf * Vector2(r.position.x, r.end.y)])
 
 func _wheel(d: int, _p: Vector2) -> void:
+	if tab == "attr":
+		stat_scroll = clampf(stat_scroll + d * 40.0, 0.0, stat_max)
+		return
 	mx.wheel(d)
+
+## matchText(c): per attack element what it beats / is weak to, then what this member takes more / less from
+static func match_text(cc: String) -> Array:
+	var out: Array = []
+	for e in EL.ATKEL.get(cc, ["phys"]):
+		if e == "holy":
+			out.append([EL.ELN["holy"], " 공격: 어둠을 가진 대상에 1.75배(다른 상성 무시), 그 외 모든 대상에 0.25배"])
+			continue
+		var g: Array = []
+		var b: Array = []
+		for k in EL.EFF[e]:
+			if EL.EFF[e][k] > 1.0: g.append(EL.ELN[k])
+			elif EL.EFF[e][k] < 1.0: b.append(EL.ELN[k])
+		out.append([EL.ELN[e], " 공격: " + (("유리 " + "·".join(g)) if not g.is_empty() else "유리 없음") + " / " + (("불리 " + "·".join(b)) if not b.is_empty() else "불리 없음")])
+	var weak: Array = []
+	var res: Array = []
+	for a in EL.ELN:
+		var m: float = (1.75 if EL.DEFEL[cc].has("dark") else 0.25) if a == "holy" else EL.eff_mul(a, EL.DEFEL[cc])
+		var ms := ("%s×%s" % [EL.ELN[a], str(m) if m != int(m) else str(int(m))])
+		if m > 1.0: weak.append(ms)
+		elif m < 1.0: res.append(ms)
+	out.append(["받는 피해", ": " + (("약점 " + " ".join(weak)) if not weak.is_empty() else "약점 없음") + " / " + (("저항 " + " ".join(res)) if not res.is_empty() else "저항 없음")])
+	return out
 
 func back() -> void:
 	mx.hush()
