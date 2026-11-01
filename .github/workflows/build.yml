@@ -32,6 +32,9 @@ jobs:
           touch build/.gdignore    # Godot must not import its own exports (also committed)
           ./godot --headless --import || true
           ./godot --headless --export-release "Web" build/web/index.html
+          # cache-bust the game data: Pages caches files ~10 min, so a phone kept loading the old index.pck
+          sed -i "s#GODOT_CONFIG = {#GODOT_CONFIG = {\"mainPack\":\"index.pck?v=${GITHUB_SHA::7}\",#" build/web/index.html
+          grep -q "index.pck?v=" build/web/index.html
           ./godot --headless --export-release "Windows" build/windows/ClumsyValor.exe
       - uses: actions/upload-artifact@v4
         with:
