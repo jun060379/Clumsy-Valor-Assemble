@@ -64,6 +64,7 @@ func _initialize() -> void:
 	var m = arena.spawn("eye", P.position.x + 120.0, 0.0)
 	await frames(2)
 	var h0: float = m.hp
+	if arena.get("runes") != null: arena.runes.force_roll = 0.999     # no crit roll: the gear the chest dealt may carry 치명
 	P.switch_char("luce")
 	P.set_anim("idle", 0)
 	m.hit(1.0, 0.0, 1.0)
@@ -77,6 +78,7 @@ func _initialize() -> void:
 	# phys on a phys mob is x1: the hit is the base 10 times her own gear/level/crit multipliers only (no element change)
 	var own: float = arena.runes.out_mul(g) if arena.get("runes") != null else 1.0
 	ok(g0 - g.hp >= 10.0 * own - 0.01, "Estelle's phys on the goblin: x1 (before her own bonuses) -> %.0f" % (g0 - g.hp))
+	if arena.get("runes") != null: arena.runes.force_roll = -1.0
 
 	print("기력 / ult")
 	var U = arena.ult
@@ -130,6 +132,7 @@ func _initialize() -> void:
 	# the boss chest (runes.gd loot): break it open first, as a player would, so the town door lets you go
 	if arena.get("runes") != null and arena.runes.loot != null:
 		var L = arena.runes.loot
+		if arena.fatigue != null: arena.fatigue.v = arena.fatigue.MAX     # the shared save may have spent it: breaking the chest costs 피로도
 		L.step(1300.0)
 		for i in 60:
 			L.step(50.0)
@@ -138,6 +141,7 @@ func _initialize() -> void:
 			if L.chest == null or L.chest["broken"]: break
 			L.hit_chest()
 			L.step(400.0)
+
 		ok(L.chest != null and L.chest["broken"], "boss chest broken open")
 		L.items.clear()             # (the player would walk over and pick the drops up)
 	var td = null
