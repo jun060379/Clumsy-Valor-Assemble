@@ -4,13 +4,14 @@
 usage: python3 tools/make_skin_chosim.py <estelle_v1 folder> <estelle_v2 folder> [contact-sheet folder] [--v1-loco] [--v1-st]
 
 estelle_v1 (the first delivery; magenta sheets on a loose grid, run / walk transparent):
-  idle_4f_magenta.png       4 idle frames                                        → row 0  idle (the size reference)
   jump_8f_magenta.png       crouch, take-off, rise, apex, fall, fall, land, land → row 6  jump
   run6_magenta.png          running take-off (2 rows of 3)                       → row 7  runjump
   walk_43f.png              43-frame walk cycle (7 a row)                        → rows 36-37 walk, 10 of its frames (KEEP)
-  walkstart / runstop / turn_4f_magenta.png, run_18f.png, ref_greenbg.png: the first start, stop, turn, run and standing
-                            art, replaced by v2's; --v1-loco / --v1-st build from them again
+  idle_4f_magenta.png, walkstart / runstop / turn_4f_magenta.png, run_18f.png, ref_greenbg.png: the first idle, start,
+                            stop, turn, run and standing art, replaced by v2's; --v1-idle / --v1-loco / --v1-st build them again
 estelle_v2 (one row per file, facing right, magenta unless noted):
+  ref_greenbg.png (green) → row 0 idle: the standing picture, the same in all 4 frames (the game's idle breathing,
+                            player.gd draw_frame, stretches the torso for the motion); the size reference; also st_base.png
   run_15f.png (transparent, 4 a row) → row 35 run, 8 of 15     start_4f / stop_4f / turn_4f → rows 3 / 4 / 5
   attack1_5f (overhead slash) → 8   attack2_rising_5f → 9   attack3_thrust_5f → 10   kneel_4f → 11   kneel_attack_6f → 12
   attack_high_5f → 13   guard_4f → 14   air_combo_9f → 16   dive_6f → 17 (6 of 6, one held twice, one left out)
@@ -23,10 +24,10 @@ Keying: magenta / green by colour unmixing (skin_slice.key_out); the attack rows
   white (key_out smear=True). Frames of a v2 strip are found from body cores (skin_slice.split_frames), not grid slots: the
   frames sit unevenly and touch.
 Normalisation, the same for every row so 초심 is one character:
-  scale     one factor per delivery image from the HEAD (idle frame 0's crown-to-chin, matched at many scales / tilts), so a
+  scale     one factor per delivery image from the HEAD (idle's crown, face and chin, matched at many scales / tilts), so a
             crouch, a lean, a somersault or a body lying on the floor is never blown up to a standing height. Idle keeps its
-            factor (its median height on 기본's). v2 strips: the matches within 0.05 of the strip's best score (a turned-away,
-            upside-down or lying head matches badly and is left out).
+            factor (its median height on 기본's). v2 strips: the best-scoring frame's size, with the good matches that agree with it
+            (a turned-away, tumbling or lying head can score well at a wrong size and is left out).
   baseline  'ground' rows: each frame's lowest solid row (24+ solid source pixels wide, so a blade tip or a smear under the
             boots doesn't count) on the feet line (340). 'air' rows keep the image's own vertical layout: frames listed as
             standing are on the line, the others rise by how far their feet are above those (jump, dive's take-off, the
@@ -52,6 +53,7 @@ FLAGS = {a for a in sys.argv[1:] if a.startswith('--')}
 SRC1, SRC2 = args[0], args[1]
 CS = args[2] if len(args) > 2 else None
 V1_LOCO = '--v1-loco' in FLAGS
+V1_IDLE = '--v1-idle' in FLAGS
 CSCALE = 1.3                          # chars.gd SCALE estelle: a sheet pixel is 0.5 × 1.3 world px
 RUN_SPEED, WALK_SPEED = 0.36, 0.2     # px/ms: player.gd RUN, townsfolk.gd WALKSP estelle
 
@@ -64,7 +66,6 @@ def base_h(row):
 
 # ---------------- v1: as the first build made them ----------------
 SPEC1 = [  # name, file, key, cols, n, target row, grounded
-    ('idle', 'idle_4f_magenta.png', 'magenta', 4, 4, 0, True),
     ('jump', 'jump_8f_magenta.png', 'magenta', 4, 8, 6, False),
     ('runjump', 'run6_magenta.png', 'magenta', 3, 6, 7, False),
     ('walk', 'walk_43f.png', None, 7, 43, 36, True),
@@ -75,7 +76,10 @@ if V1_LOCO:
 # walk: footfalls at 13 and 37, passing near 3 and 26; steps of 24 and 19 frames → 5 a step. (v1 run: 16, 1, 3, 5, 7, 10, 12, 14)
 KEEP = {'walk': [2, 5, 9, 13, 18, 22, 26, 31, 37, 41]}
 if V1_LOCO: KEEP['run'] = [16, 1, 3, 5, 7, 10, 12, 14]
-HEAD_BOX = (150, 10, 275, 135)          # idle frame 0's head in the source pixels: crown, bow and chin
+if V1_IDLE: SPEC1.insert(0, ('idle', 'idle_4f_magenta.png', 'magenta', 4, 4, 0, True))
+# idle frame 0's head in its source pixels (cropped to the figure): crown, bow, face and chin, no loose hair
+HEAD_BOX = (150, 10, 275, 135) if V1_IDLE else (185, 20, 330, 170)
+HEAD_SCALES = (0.25, 1.31)              # the v2 idle's head is ~1.25x the v1 idle's in source pixels: room below 0.40
 GROUND1 = {'jump': [0, 6, 7], 'runjump': [0]}      # frames standing on the ground (verified by eye)
 
 # ---------------- v2 ----------------
@@ -146,6 +150,11 @@ def render(f, k, ax, lift=0.0):
 
 # ---- v1 ----
 strips = {}
+if not V1_IDLE:
+    st0 = S.key_out(os.path.join(SRC2, 'ref_greenbg.png'), 'green')
+    f0 = S.measure(S.frames_from_rgba(st0, 1, 1))[0]
+    f0['slot_bottom'] = f0['bottom']
+    strips['idle'] = ([dict(f0) for _ in range(4)], 0, True, st0.shape[0])
 for nm, fn, key, cols, n, row, grounded in SPEC1:
     path = os.path.join(SRC1, fn)
     im = S.key_out(path, key) if key else np.asarray(Image.open(path).convert('RGBA'))
@@ -160,7 +169,7 @@ idle_fr = strips['idle'][0]
 REF = idle_fr[0]['rgba']
 k_idle = base_h(0) / float(np.median([f['height'] for f in idle_fr]))
 for nm, (fr, row, grounded, sh) in strips.items():
-    rel, per = S.head_size(REF, HEAD_BOX, fr, every=max(1, len(fr) // 6))
+    rel, per = S.head_size(REF, HEAD_BOX, fr, every=max(1, len(fr) // 6), scales=HEAD_SCALES)
     if nm == 'idle': rel = 1.0
     head[nm] = {'head_vs_idle': round(rel, 3), 'frames': per}
     scale[nm] = k_idle / rel
@@ -203,7 +212,7 @@ def measure2(f):
     lum = rgb @ np.float32([0.299, 0.587, 0.114])
     ys, xs = np.nonzero((a > 200) & (lum < 70))
     f['dark'] = (float(xs.mean()), float(ys.mean())) if len(xs) else (a.shape[1] / 2, a.shape[0] / 2)
-    hm = S.head_match(REF, HEAD_BOX, f['rgba'])
+    hm = S.head_match(REF, HEAD_BOX, f['rgba'], scales=HEAD_SCALES)
     f['head'] = hm
     crown = hm[4] - HEAD_BOX[1] * hm[1]
     f['crown'] = crown if hm[0] >= 0.6 and abs(hm[2]) <= 10 and crown < f['bottom'] - 40 else f['top']
@@ -220,9 +229,11 @@ for nm, o in SPEC2.items():
     fr = [measure2(f) for f in S.split_frames(im, o['n'], o.get('cols'))]
     for f in fr:
         f['slot_bottom'] = f['box'][1] + f['bottom']
-    # the head's size: the matches within 0.05 of the strip's best (the head turned away, upside down or lying matches badly)
-    sc = [f['head'][0] for f in fr]
-    good = [f['head'][1] for f in fr if f['head'][0] >= max(sc) - 0.05]
+    # the head's size: the strip's best match (an upright head), with the other good matches (score within 0.08 of it)
+    # that agree with it within 12 %; a head turned away, tumbling or lying on the floor can score well at a wrong size
+    bi = int(np.argmax([f['head'][0] for f in fr]))
+    s0, v0 = fr[bi]['head'][1], fr[bi]['head'][0]
+    good = [f['head'][1] for f in fr if f['head'][0] >= v0 - 0.08 and abs(f['head'][1] / s0 - 1) <= 0.12]
     rel = float(np.median(good))
     k = k_idle / rel
     raw2[nm] = fr

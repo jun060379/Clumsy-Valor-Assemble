@@ -98,8 +98,11 @@ def _gray(rgba):
     return g @ np.float32([0.299, 0.587, 0.114])
 
 
-def head_match(ref_rgba, box, frame_rgba, region=0.7, half=0.5, scales=(0.40, 1.31)):
-    """the reference head (box in ref_rgba) found in one frame: (score, scale, tilt, x, y of the box's top-left in the frame)"""
+def head_match(ref_rgba, box, frame_rgba, region=0.7, half=0.5, scales=(0.40, 1.31), min_frac=0.15):
+    """the reference head (box in ref_rgba) found in one frame: (score, scale, tilt, x, y of the box's top-left in the frame).
+    A head is never under min_frac of the frame's height (a crouch, a lying body or a somersault is at most ~5-6 heads
+    tall): the search starts there, so a tiny template can't lock onto a bow or a strand of hair"""
+    scales = (max(scales[0], min_frac * frame_rgba.shape[0] / (box[3] - box[1])), scales[1])
     import cv2
     x0, y0, x1, y1 = box
     tpl = _gray(ref_rgba)[y0:y1, x0:x1]
@@ -120,7 +123,7 @@ def head_match(ref_rgba, box, frame_rgba, region=0.7, half=0.5, scales=(0.40, 1.
     return round(v, 3), round(float(s), 3), r, loc[0] / half, loc[1] / half
 
 
-def head_size(ref_rgba, box, frames, every=1, region=0.55, min_score=0.85, half=0.5):
+def head_size(ref_rgba, box, frames, every=1, region=0.55, min_score=0.85, half=0.5, scales=(0.40, 1.31)):
     """the head's size in each frame relative to the reference frame (1.0 = the same pixel size): the reference's head
     (box = x0, y0, x1, y1 around crown, bow and chin, no loose hair) is matched over the upper part of each frame at
     scales 0.40-1.30 and tilts -15..+10 deg (normalised cross-correlation, half resolution, then refined).
@@ -141,7 +144,7 @@ def head_size(ref_rgba, box, frames, every=1, region=0.55, min_score=0.85, half=
             if h >= im.shape[0] or w >= im.shape[1]: return -1.0
             t = cv2.warpAffine(t, cv2.getRotationMatrix2D((w / 2, h / 2), r, 1.0), (w, h), borderMode=cv2.BORDER_REPLICATE)
             return float(cv2.minMaxLoc(cv2.matchTemplate(im, t, cv2.TM_CCOEFF_NORMED))[1])
-        best = max((score(s, r), s, r) for s in np.arange(0.40, 1.31, 0.03) for r in range(-15, 11, 5))
+        best = max((score(s, r), s, r) for s in np.arange(scales[0], scales[1], 0.03) for r in range(-15, 11, 5))
         best = max([best] + [(score(s, r), s, r) for s in np.arange(best[1] - 0.03, best[1] + 0.031, 0.006)
                              for r in (best[2] - 2, best[2], best[2] + 2)])
         res.append((i, round(best[0], 3), round(float(best[1]), 3), best[2]))
