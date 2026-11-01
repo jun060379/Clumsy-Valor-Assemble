@@ -213,22 +213,53 @@ func _process(delta: float) -> void:
 	_pix_frame()
 	cpu.queue_redraw()
 
-## the character shader's per-frame inputs: screen px per world px, the lights near her for the rim (rimLights)
+## the character shader's per-frame inputs: screen px per world px, and rimLights() — the lights the directional rim
+## reads, as the prototype lists them [pos, r, a, colour]: the dungeon's (no player light, no small glows), the hall's
+## (its lamps), elsewhere the lamps and fires (faint by day) plus the sky — the sun by day, the moon by night, from where
+## it sits in the sky
 func _pix_frame() -> void:
 	var vp := get_viewport()
 	var z: float = (vp.get_final_transform() * vp.get_canvas_transform()).x.length()
+	CH_PLAYER.pix_frame(z, rim_lights())
+
+func rim_lights() -> Array:
 	var Ls: Array = []
 	var lv = arena.level
 	var P = arena.player
-	if lv != null and lv.get("lights") != null and P != null:
+	if P == null: return Ls
+	var kind := "" if lv == null else String(lv.kind)
+	var tt := Time.get_ticks_msec() / 1000.0
+	var nk := 0.0
+	if kind != "dungeon" and kind != "hall":
+		var sky: Color = arena.tod_now()["sky"]
+		nk = clampf((sky.a - 0.33) / 0.33, 0.0, 1.0)
+	if lv != null and lv.get("lights") != null:
 		for l in lv.lights.get_children():
-			if not (l is PointLight2D) or not l.visible or l.energy <= 0.01 or l.has_meta("player"): continue
-			var r: float = l.texture_scale * 64.0 / 2.2
-			var d: float = l.position.distance_to(P.position + Vector2(0, -60))
-			if d > r * 2.2 + 200.0: continue
-			Ls.append([l.position, r, minf(1.2, l.energy), l.color, d])
-		Ls.sort_custom(func(a, b): return a[4] < b[4])
-	CH_PLAYER.pix_frame(z, Ls)
+			if not (l is PointLight2D) or l.has_meta("player"): continue
+			var r: float = l.texture_scale * float(l.texture.get_width() if l.texture != null else 64) / 2.2
+			var a: float = l.energy
+			if kind == "dungeon":
+				if r <= 100.5 and l.energy < 1.0: continue        # the small mushroom / crystal glows
+				if l.has_meta("flick") and l.get_meta("flick"): a *= 1.25 / 1.15
+			elif kind == "hall":
+				var kd: String = l.get_meta("kind", "soft")
+				var ph: float = l.get_meta("ph", 0.0)
+				a = l.get_meta("a", 0.8)
+				if kd == "fire" or kd == "chand": a *= 0.85 + 0.1 * sin(tt * 7.0 + ph) + 0.05 * sin(tt * 19.0 + ph * 3.0)
+			else:
+				if not l.visible or l.energy <= 0.01: continue
+				a = minf(1.1, l.energy) * (0.12 + 0.88 * nk)
+			if a <= 0.0: continue
+			Ls.append([l.position, r, a, l.color])
+	if kind != "dungeon" and kind != "hall":
+		var h := fposmod(arena.tod_h, 24.0)
+		var day := h >= 6.0 and h < 18.0
+		var u := (h - 6.0) / 12.0 if day else fposmod(h - 18.0 + 24.0, 24.0) / 12.0
+		var ang := PI * (1.0 - u)
+		var warm := day and (h < 8.5 or h > 16.0)
+		var col := (Color8(255, 165, 105) if warm else Color8(255, 238, 210)) if day else Color8(150, 175, 255)
+		Ls.append([Vector2(P.position.x + cos(ang) * 1600.0, P.position.y - 200.0 - sin(ang) * 1400.0), 4000.0, (0.95 if warm else 0.75) if day else 0.6, col])
+	return Ls
 
 
 # ---------- spawners ----------

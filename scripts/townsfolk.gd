@@ -312,7 +312,7 @@ func draw(ci: CanvasItem) -> void:
 	for c in folk():
 		var n := npc(c)
 		if not n["placed"] or n["x"] < vr.position.x - 200.0 or n["x"] > vr.end.x + 200.0: continue
-		P.draw_frame(c, n["anim"], n["f"], Vector2(roundf(n["x"]), roundf(n["y"])), n["dir"], Color.WHITE, "", ci)
+		P.draw_frame(c, n["anim"], n["f"], Vector2(roundf(n["x"]), roundf(n["y"])), n["dir"], Color.WHITE, "", ci, NAN, 0, "folk" + c, -1.0, true)
 
 func draw_bubbles(ci: CanvasItem, fnt: Font) -> void:
 	var vr: Rect2 = arena.view_rect()

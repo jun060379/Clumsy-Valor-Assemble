@@ -65,9 +65,12 @@ vec3 tap(vec2 uv) {
 	return c;
 }
 void fragment() {
-	vec3 a = tap(UV) * 0.227;
-	a += (tap(UV + d * 1.38) + tap(UV - d * 1.38)) * 0.316;
-	a += (tap(UV + d * 3.23) + tap(UV - d * 3.23)) * 0.070;
+	vec3 a = tap(UV);
+	if (d != vec2(0.0)) {
+		a *= 0.227;
+		a += (tap(UV + d * 1.38) + tap(UV - d * 1.38)) * 0.316;
+		a += (tap(UV + d * 3.23) + tap(UV - d * 3.23)) * 0.070;
+	}
 	COLOR = vec4(a, 1.0);
 }
 """
@@ -104,9 +107,10 @@ var mat: ShaderMaterial
 var witch_over: Control        # drawWitchTint
 var witch_vig: ColorRect
 var hero: Node2D               # drawWitchHero
-var bsv: Array = []            # [world 1/4, bright+h, v (b), h 1/16, h, v (b2)]
+var bsv: Array = []            # [world full-res, bright 1/4, h, v (b), h 1/16, h, v (b2)]
 var fr := 0
 var bq := Vector2i.ZERO
+var bpx := Vector2i.ZERO       # the screen in device pixels the chain was built for
 
 
 func _ready() -> void:
@@ -150,17 +154,31 @@ func _ready() -> void:
 	add_child(hero)
 	call_deferred("_bloom_setup")
 
-## the bloom chain: the world at a quarter size, bright pass + blur, then a sixteenth
+## the bloom chain as the prototype's POST builds it: the 2D canvas at full device resolution is the source (a LINEAR
+## texture); the bright pass renders it into a buffer a quarter of that size, so every quarter-res texel is a bilinear tap
+## of the full-res image (small bright pixels and the dot-filtered sprites are averaged, never point-sampled), then one
+## 5-tap blur across and one down (b); from b a sixteenth-size level blurred once more (b2). Here the full-res world is
+## a SubViewport sharing the game's World2D (the world canvas only: the HUD never blooms); on phones it renders at half
+## the device resolution. Every texture in the chain is sampled linear.
+func _dev_px() -> Vector2i:
+	var vp := get_viewport()
+	var base: Vector2 = vp.get_visible_rect().size
+	var k: float = vp.get_final_transform().x.length()
+	return Vector2i(maxi(4, roundi(base.x * k)), maxi(4, roundi(base.y * k)))
+
 func _bloom_setup() -> void:
-	var base: Vector2 = get_viewport().get_visible_rect().size
-	bq = Vector2i(maxi(1, int(base.x) >> 2), maxi(1, int(base.y) >> 2))
+	for sv in bsv: sv.queue_free()
+	bsv.clear()
+	bpx = _dev_px()
+	var src := bpx / 2 if arena != null and arena.get("low_end") else bpx
+	bq = Vector2i(maxi(1, bpx.x >> 2), maxi(1, bpx.y >> 2))
 	var cq := Vector2i(maxi(1, bq.x >> 2), maxi(1, bq.y >> 2))
 	var bsh := Shader.new()
 	bsh.code = BLUR_SH
 	var prev: SubViewport = null
-	var sizes := [bq, bq, bq, cq, cq, cq]
-	var dirs := [Vector2.ZERO, Vector2(1.0 / bq.x, 0), Vector2(0, 1.0 / bq.y), Vector2(1.0 / bq.x, 0), Vector2(1.6 / cq.x, 0), Vector2(0, 1.6 / cq.y)]
-	for i in 6:
+	var sizes := [src, bq, bq, bq, cq, cq, cq]
+	var dirs := [Vector2.ZERO, Vector2.ZERO, Vector2(1.0 / bq.x, 0), Vector2(0, 1.0 / bq.y), Vector2(1.0 / bq.x, 0), Vector2(1.6 / cq.x, 0), Vector2(0, 1.6 / cq.y)]
+	for i in 7:
 		var sv := SubViewport.new()
 		sv.size = sizes[i]
 		sv.disable_3d = true
@@ -176,14 +194,15 @@ func _bloom_setup() -> void:
 			m.shader = bsh
 			m.set_shader_parameter("t", prev.get_texture())
 			m.set_shader_parameter("d", dirs[i])
+			# the bright pass reads the full-res source; its first tap is the bilinear sample at the texel centre
 			m.set_shader_parameter("bright", i == 1)
 			tr.material = m
 			sv.add_child(tr)
 		add_child(sv)
 		bsv.append(sv)
 		prev = sv
-	mat.set_shader_parameter("b", bsv[2].get_texture())
-	mat.set_shader_parameter("b2", bsv[5].get_texture())
+	mat.set_shader_parameter("b", bsv[3].get_texture())
+	mat.set_shader_parameter("b2", bsv[6].get_texture())
 
 func on() -> bool:
 	return arena.screen_fx
@@ -206,6 +225,7 @@ func grades() -> bool:
 
 func _bloom_step(run: bool) -> void:
 	if bsv.is_empty(): return
+	if run and _dev_px() != bpx: _bloom_setup()
 	fr += 1
 	var every := 4 if arena.get("low_end") else 2
 	var go := run and fr % every == 0
@@ -214,7 +234,7 @@ func _bloom_step(run: bool) -> void:
 	if go:
 		var xf: Transform2D = get_viewport().get_canvas_transform()
 		var base: Vector2 = get_viewport().get_visible_rect().size
-		bsv[0].canvas_transform = Transform2D.IDENTITY.scaled(Vector2(bq) / base) * xf
+		bsv[0].canvas_transform = Transform2D.IDENTITY.scaled(Vector2(bsv[0].size) / base) * xf
 
 func _process(delta: float) -> void:
 	var dt := minf(delta * 1000.0, 100.0)
