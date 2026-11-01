@@ -1,7 +1,8 @@
 extends Control
-## On-screen controls for phones: a floating stick on the left half, four buttons on the right.
+## On-screen controls for phones: a stick on the left half (follows the thumb, or fixed: settings), four buttons on the right.
 ## Each finger is tracked on its own, so moving and attacking at the same time works.
-## Hidden until the device has a touch screen (or the first touch arrives).
+## Shown by the prototype's TOUCHUI rule (settings.gd touch_ui): on touch-first devices, or when forced in 설정;
+## once a keyboard or mouse is used they hide until a real touch.
 
 const BTN := [
 	{"a": "attack", "label": "공격", "pos": Vector2(-96, -96), "r": 46.0},
@@ -18,13 +19,34 @@ var stick_o := Vector2.ZERO
 var stick_p := Vector2.ZERO
 var held := {}            # finger index -> action
 var shown := false
+var arena
 
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	shown = DisplayServer.is_touchscreen_available()
-	visible = shown
+	visible = false
+
+func _process(_delta: float) -> void:
+	var on: bool = arena.cfg.touch_ui() and (arena.ui_root == null or not arena.ui_root.holds())
+	if on != shown:
+		shown = on
+		visible = on
+		if not on: _release_all()
+	if shown: queue_redraw()
+
+func _release_all() -> void:
+	for i in held:
+		Input.action_release(held[i])
+	held.clear()
+	if stick_id >= 0:
+		stick_id = -1
+		_apply_stick()
+
+## where the stick rests (and stays, in fixed mode)
+func _home() -> Vector2:
+	var s := get_viewport_rect().size
+	return Vector2(110.0, s.y - 110.0)
 
 
 func _btn_center(b: Dictionary) -> Vector2:
@@ -35,8 +57,7 @@ func _btn_center(b: Dictionary) -> Vector2:
 func _input(ev: InputEvent) -> void:
 	if ev is InputEventScreenTouch:
 		if not shown:
-			shown = true
-			visible = true
+			return
 		if ev.pressed:
 			for b in BTN:
 				if ev.position.distance_to(_btn_center(b)) < b["r"] + 14.0:
@@ -46,7 +67,7 @@ func _input(ev: InputEvent) -> void:
 					return
 			if ev.position.x < get_viewport_rect().size.x * 0.5 and stick_id < 0:
 				stick_id = ev.index
-				stick_o = ev.position
+				stick_o = ev.position if arena.cfg.stick == "float" else _home()
 				stick_p = ev.position
 				_apply_stick()
 		else:
@@ -62,7 +83,7 @@ func _input(ev: InputEvent) -> void:
 	elif ev is InputEventScreenDrag and ev.index == stick_id:
 		stick_p = ev.position
 		var d := stick_p - stick_o
-		if d.length() > STICK_R:          # the base follows the thumb when it drags too far
+		if d.length() > STICK_R and arena.cfg.stick == "float":   # the base follows the thumb when it drags too far
 			stick_o = stick_p - d.normalized() * STICK_R
 		_apply_stick()
 		queue_redraw()
@@ -90,11 +111,16 @@ func _draw() -> void:
 	for b in BTN:
 		var c := _btn_center(b)
 		var on: bool = held.values().has(b["a"])
-		draw_circle(c, b["r"], Color(1, 1, 1, 0.28) if on else Color(0.05, 0.04, 0.07, 0.42))
-		draw_arc(c, b["r"], 0, TAU, 40, Color(1, 1, 1, 0.55), 2.0)
+		# glass circles with a thin rim (hud3)
+		draw_circle(c, b["r"], Color(1, 1, 1, 0.28) if on else Color(0, 0, 0, 0.35))
+		draw_arc(c, b["r"], 0, TAU, 40, Color(1, 1, 1, 0.75), 2.0, true)
 		var fs := 13 if b["r"] > 40.0 else 11
 		var w := font.get_string_size(b["label"], HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 		draw_string(font, c + Vector2(-w / 2.0, fs * 0.36), b["label"], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, 0.85))
 	if stick_id >= 0:
 		draw_arc(stick_o, STICK_R, 0, TAU, 40, Color(1, 1, 1, 0.35), 2.0)
 		draw_circle(stick_o + (stick_p - stick_o).limit_length(STICK_R), 24.0, Color(1, 1, 1, 0.35))
+	else:
+		var a := 0.35 if arena.cfg.stick == "fixed" else 0.15
+		draw_arc(_home(), STICK_R, 0, TAU, 40, Color(1, 1, 1, a), 2.0)
+		draw_circle(_home(), 24.0, Color(1, 1, 1, a))
