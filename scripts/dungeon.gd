@@ -820,7 +820,7 @@ func _draw_front() -> void:
 		front.draw_string(fnt, Vector2(d["x"] - tw / 2.0 + 10.0, y + 1.0), tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color("#ffe9a8") if open else Color("#9c917a"))
 	if near_gate != null:
 		var d2 = near_gate
-		var s: String = ("마을로 돌아가기" if d2["town"] else "이동") + "  ·  공격 키"
+		var s: String = arena.cfg.kh() + ("마을로 돌아가기" if d2["town"] else "이동")
 		var tw2 := fnt.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x + 20.0
 		var y2: float = d2["y"] - 280.0 + sin(tt * 4.0) * 3.0
 		front.draw_rect(Rect2(d2["x"] - tw2 / 2.0, y2 - 16.0, tw2, 24.0), Color(0, 0, 0, 0.6))

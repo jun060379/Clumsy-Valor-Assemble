@@ -22,6 +22,8 @@ var stick := "float"       # float / fixed
 var kb := {}               # action -> [key, key]
 var rmb := "guard"
 var _touch_auto = null
+var qk := 1.0              # QK: render quality (1 → .8 → .6), lowered by qWatch when frames run long; saved
+var qw := {"n": 0, "s": 0.0, "cool": 0.0}
 
 
 func _init(a) -> void:
@@ -38,6 +40,7 @@ func _init(a) -> void:
 	arena.tod_auto = bool(cf.get_value("ui", "tod_auto", true))
 	arena.weather = String(cf.get_value("ui", "weather", "clear"))
 	arena.ambient = bool(cf.get_value("ui", "ambient", true))
+	qk = clampf(float(cf.get_value("ui", "qk", 1.0)), 0.6, 1.0)
 	rmb = String(cf.get_value("keys", "rmb", "guard"))
 	for a2 in ACTS:
 		var v = cf.get_value("keys", a2[0], null)
@@ -54,6 +57,7 @@ func save() -> void:
 	cf.set_value("ui", "tod_auto", arena.tod_auto)
 	cf.set_value("ui", "weather", arena.weather)
 	cf.set_value("ui", "ambient", arena.ambient)
+	cf.set_value("ui", "qk", qk)
 	cf.set_value("keys", "rmb", rmb)
 	for a in ACTS:
 		cf.set_value("keys", a[0], kb[a[0]])
@@ -154,6 +158,45 @@ func touch_ui() -> bool:
 func act_dev() -> String:
 	if dev != "auto": return dev
 	return "touch" if touch_ui() else last
+
+## KH: the key glyph in front of a prompt: "X " on keyboard, "Ⓧ " on a pad, nothing on touch
+func kh() -> String:
+	var d := act_dev()
+	return "" if d == "touch" else ("Ⓧ " if d == "pad" else "X ")
+
+## qWatch: 150 frames averaging over 24 ms lower QK by .2 (to .6), then 3 s before it looks again (menus and the title
+## don't count). Returns true when QK dropped.
+func qwatch(dt: float, skip: bool) -> bool:
+	if skip:
+		qw["n"] = 0
+		qw["s"] = 0.0
+		return false
+	if qw["cool"] > 0.0:
+		qw["cool"] -= dt
+		return false
+	qw["n"] += 1
+	qw["s"] += dt
+	if qw["n"] < 150: return false
+	var avg: float = qw["s"] / qw["n"]
+	qw["n"] = 0
+	qw["s"] = 0.0
+	if avg > 24.0 and qk > 0.6:
+		qk = maxf(0.6, snappedf(qk - 0.2, 0.01))
+		save()
+		apply_qk()
+		qw["cool"] = 3000.0
+		return true
+	return false
+
+## fit(): the canvas is capped at 1600·QK pixels across. Godot draws 2D at the window's pixels (stretch canvas_items) or
+## at the game's own size (stretch viewport), so once QK has dropped and its cap is below the window's width, the latter.
+func apply_qk() -> void:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null or tree.root == null: return
+	var w: Window = tree.root
+	var px: float = DisplayServer.window_get_size().x if DisplayServer.get_name() != "headless" else float(w.size.x)
+	var want := Window.CONTENT_SCALE_MODE_VIEWPORT if qk < 1.0 and 1600.0 * qk < px - 1.0 else Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
+	if w.content_scale_mode != want: w.content_scale_mode = want
 
 ## devUsed: every real input says which device is in hand (a touch right after keys is ignored; emulated mouse = touch)
 func note(ev: InputEvent) -> void:

@@ -1,6 +1,6 @@
 extends RefCounted
-## The town's small life: wind and gusts, trampled grass, rustling bushes, props that jig when struck (and spill apples),
-## fish in the river, pigeons, fireflies, and the weather (rain / snow). Ported from the prototype's LIFE / lifeUpdate /
+## The town's small life: wind and gusts, trampled grass, footstep dust, rustling bushes, props that jig when struck (and spill
+## apples), the cat on the crate, butterflies, fish in the river, wading splashes, pigeons, fireflies, and the weather (rain / snow). Ported from the prototype's LIFE / lifeUpdate /
 ## drawLife / BIRDS / drawFlies / drawWeather. Everything here works in world coordinates and only for what is near the screen.
 
 const BLADE_C := [Color("#4f6b34"), Color("#6f8f44"), Color("#97ad58"), Color("#bccd78")]
@@ -27,6 +27,10 @@ var snow: Array = []
 var flies: Array = []        # fireflies (two meadows: the lower plaza / the valley)
 var sil = null               # someone walking past a lit hall window: {wx, wy, t, dir, life} (town.gd draws it)
 var sil_t := 5000.0
+var prev_f := -1
+var cat = null               # the cat on the second crate (town only): {x, y, st: sleep|sit|startle, t, dir, yawn, z}
+var bflies: Array = []       # butterflies by day in fair weather: {ax, ay, x, y, ph, t, flee, c}
+const BFLY_C := [Color("#f3efe0"), Color("#f2d36b"), Color("#9fc6f0")]
 
 
 func _init(tn) -> void:
@@ -81,6 +85,9 @@ func step(dt: float) -> void:
 	# landing flattens the grass around you
 	if P.on and not prev_on: land = {"x": P.position.x, "y": P.position.y, "t": t}
 	prev_on = P.on
+	# footsteps kick up a little dust
+	if P.on and P.anim == "run" and P.f != prev_f and (P.f == 1 or P.f == 5): puff(arena, P.position.x - P.dir * 8.0, P.position.y, 2)
+	prev_f = P.f
 	# bushes rustle as you push through
 	for i in town.deco_back.size():
 		var d: Array = town.deco_back[i]
@@ -115,13 +122,14 @@ func step(dt: float) -> void:
 				jig[i] = 1.0
 				jcd[i] = t + 380.0
 				arena.sfx("guard", 0.25)
-				arena.dust(Vector2(x0 + iw / 2.0, d[2]), P.dir, false)
+				puff(arena, x0 + iw / 2.0, d[2], 3)
 				var dk: String = d[0]
 				if (dk.contains("barrel") or dk.contains("crate")) and randf() < 0.3:
 					apples.append({"x": x0 + iw / 2.0, "y": y0 + 4.0, "vx": P.dir * (0.08 + randf() * 0.1), "vy": -0.35 - randf() * 0.15, "t": 0.0})
 	for i in jig.keys():
 		jig[i] = jig[i] * pow(0.99, dt)
 		if jig[i] < 0.01: jig.erase(i)
+	_cat(dt, P)
 	# fish jump in the river
 	fish_t -= dt
 	if fish_t <= 0.0:
@@ -134,6 +142,9 @@ func step(dt: float) -> void:
 		f["t"] += dt
 		if f["t"] >= 700.0: _splash(f["x"] + f["dx"], 0.15)
 	fish = fish.filter(func(f): return f["t"] < 700.0)
+	# splash when you wade the river
+	if town.kind == "town" and P.position.x > town.RIV0 and P.position.x < town.RIV1 and P.position.y > town.LOWF + 20.0 and absf(P.vx) > 0.05 and randf() < dt / 60.0:
+		town.tfx.append({"k": "drop", "x": P.position.x + (randf() - 0.5) * 20.0, "y": town.LOWF + 20.0, "vx": (randf() - 0.5) * 0.15, "vy": -0.2, "t": 0.0, "life": 500.0, "floor": town.LOWF + 22.0})
 	# apples roll and fade
 	for a in apples:
 		a["t"] += dt
@@ -147,8 +158,72 @@ func step(dt: float) -> void:
 			a["vx"] *= 0.92
 			if absf(a["vy"]) < 0.03: a["vy"] = 0.0
 	apples = apples.filter(func(a): return a["t"] < 6000.0)
+	_bflies(dt, vr, P)
 	_birds(dt, vr)
 	_weather(dt, vr)
+
+## dust(x, y, n): the prototype's soft dust puffs (arena fx 'dust')
+static func puff(ar, x: float, y: float, n: int) -> void:
+	for i in n:
+		ar.fx.append({"k": "dust", "x": x + (randf() - 0.5) * 40.0, "y": y - randf() * 8.0, "vx": (randf() - 0.5) * 0.12, "vy": -0.05 - randf() * 0.08,
+			"r": 4.0 + randf() * 5.0, "t": 0.0, "life": 300.0})
+
+## the cat on the second crate: sleeps (breathing, z's); within 160 px it sits up and watches you, sometimes yawning;
+## a swing within 140 px startles it (puffed up), then it sits; left alone 3.5 s it curls up again
+func _cat(dt: float, P) -> void:
+	if town.kind != "town": return
+	if cat == null:
+		var cr: Array = town.deco_props[2]
+		var im: Texture2D = town.tex[cr[0]]
+		var s: float = town.ks(cr[0])
+		cat = {"x": cr[1] + im.get_width() * s / 2.0, "y": cr[2] - im.get_height() * s + 2.0, "st": "sleep", "t": 0.0, "dir": -1.0, "yawn": 0.0, "z": 0.0}
+	var c: Dictionary = cat
+	c["t"] += dt
+	var d := Vector2(P.position.x - c["x"], (P.position.y - c["y"]) * 1.2).length()
+	var atk_near: bool = P.attacking() and d < 140.0
+	if atk_near and c["st"] != "startle":
+		c["st"] = "startle"
+		c["t"] = 0.0
+		arena.sfx("guard", 0.15)
+	elif c["st"] == "startle":
+		if c["t"] > 700.0:
+			c["st"] = "sit"
+			c["t"] = 0.0
+	elif d < 160.0:
+		if c["st"] == "sleep":
+			c["st"] = "sit"
+			c["t"] = 0.0
+			c["yawn"] = 600.0 if randf() < 0.6 else 0.0
+		c["dir"] = -1.0 if P.position.x < c["x"] else 1.0
+	elif c["st"] == "sit" and c["t"] > 3500.0:
+		c["st"] = "sleep"
+		c["t"] = 0.0
+	if c["yawn"] > 0.0: c["yawn"] -= dt
+	c["z"] += dt
+
+## butterflies by day in clear weather: up to three, they wander on two sines and flee from you (and from the weather)
+func _bflies(dt: float, vr: Rect2, P) -> void:
+	var T: Dictionary = arena.tod_now()
+	var fair: bool = weather() == "clear" and T["sun"] > 0.25
+	if fair and bflies.size() < 3 and randf() < dt / 2500.0:
+		var x := vr.position.x + 60.0 + randf() * (vr.size.x - 120.0)
+		var gy: float = town.floor_at(x)
+		bflies.append({"ax": x, "ay": gy - 30.0 - randf() * 40.0, "x": x, "y": gy - 40.0, "ph": randf() * 9.0, "t": 0.0, "flee": false, "c": BFLY_C[randi() % 3]})
+	var keep := []
+	for b in bflies:
+		b["t"] += dt
+		if not fair: b["flee"] = true
+		if not b["flee"] and Vector2(P.position.x - b["x"], P.position.y - 60.0 - b["y"]).length() < 80.0: b["flee"] = true
+		if b["flee"]:
+			b["x"] += (-1.0 if b["x"] < P.position.x else 1.0) * 0.1 * dt
+			b["y"] -= 0.08 * dt
+			if b["y"] > vr.position.y - 60.0 and b["x"] > vr.position.x - 80.0 and b["x"] < vr.end.x + 80.0: keep.append(b)
+			continue
+		var s: float = b["t"] / 1000.0
+		b["x"] = b["ax"] + sin(s * 0.7 + b["ph"]) * 50.0 + sin(s * 1.9 + b["ph"]) * 12.0
+		b["y"] = b["ay"] + sin(s * 1.3 + b["ph"] * 2.0) * 18.0 + sin(s * 3.1) * 4.0
+		if b["x"] > vr.position.x - 200.0 and b["x"] < vr.end.x + 200.0: keep.append(b)
+	bflies = keep
 
 func _splash(x: float, v: float) -> void:
 	for i in 6:
@@ -361,6 +436,20 @@ func draw_front(ci: CanvasItem) -> void:
 		ci.draw_rect(Rect2(4, -1, 2, 2), Color("#222222"))
 		ci.draw_rect(Rect2(-10, -3, 4, 6), Color("#9fb4bd"))
 	ci.draw_set_transform(Vector2.ZERO)
+	# butterflies: wings open / shut every 90 ms
+	for b in bflies:
+		var x := roundf(b["x"] / 2.0) * 2.0
+		var y := roundf(b["y"] / 2.0) * 2.0
+		var bc: Color = b["c"]
+		ci.draw_rect(Rect2(x, y - 2, 2, 5), Color("#3a2a20"))
+		if int((t + b["ph"] * 100.0) / 90.0) % 2 == 1:
+			ci.draw_rect(Rect2(x - 4, y - 4, 4, 4), bc)
+			ci.draw_rect(Rect2(x + 2, y - 4, 4, 4), bc)
+			ci.draw_rect(Rect2(x - 2, y + 1, 2, 2), bc)
+			ci.draw_rect(Rect2(x + 2, y + 1, 2, 2), bc)
+		else:
+			ci.draw_rect(Rect2(x - 2, y - 6, 2, 5), bc)
+			ci.draw_rect(Rect2(x + 2, y - 6, 2, 5), bc)
 	_draw_birds(ci, t)
 	# weather
 	if weather() == "rain" and not rain.is_empty():
@@ -435,3 +524,58 @@ func draw_flies(ci: CanvasItem, glow_tex: Texture2D) -> void:
 		if b < 0.05: continue
 		ci.draw_texture_rect(glow_tex, Rect2(x - 10.0, y - 10.0, 20.0, 20.0), false, Color(210 / 255.0, 1.0, 140 / 255.0, 0.45 * b))
 		ci.draw_rect(Rect2(roundf(x / 2.0) * 2.0, roundf(y / 2.0) * 2.0, 2, 2), Color(240 / 255.0, 1.0, 190 / 255.0, b))
+
+## the cat on the crate (drawn behind the player, on the town canvas)
+func draw_cat(ci: CanvasItem) -> void:
+	if cat == null: return
+	var c: Dictionary = cat
+	var vr: Rect2 = arena.view_rect()
+	if c["x"] < vr.position.x - 60.0 or c["x"] > vr.end.x + 60.0: return
+	var t := now()
+	ci.draw_set_transform(Vector2(roundf(c["x"]), roundf(c["y"])), 0.0, Vector2(2.0 * c["dir"], 2.0))
+	if c["st"] == "sleep":
+		cat_sleep(ci, t)
+		ci.draw_set_transform(Vector2.ZERO)
+		if int(c["z"] / 900.0) % 3 == 0:
+			ci.draw_string(arena.font_black, Vector2(c["x"] + c["dir"] * 10.0, c["y"] - 16.0 - fmod(c["z"], 900.0) / 60.0), "z", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1, 1, 1, 0.75))
+		return
+	cat_sit(ci, t, c["st"] == "startle", c["yawn"] > 0.0 and c["yawn"] < 450.0)
+	ci.draw_set_transform(Vector2.ZERO)
+
+const CAT_O := Color("#c9813f")
+const CAT_S := Color("#9a5a2a")
+const CAT_L := Color("#e9b678")
+const CAT_K := Color("#2a1a12")
+
+## curled up asleep: the back rises and falls (art px, in the caller's transform; feet at 0)
+static func cat_sleep(ci: CanvasItem, t: float) -> void:
+	var br := 0.0 if sin(t / 700.0) > 0.0 else -1.0
+	ci.draw_rect(Rect2(-7, -5 + br, 13, 5 - br), CAT_O)
+	ci.draw_rect(Rect2(-5, -5 + br, 2, 1), CAT_S)
+	ci.draw_rect(Rect2(-1, -5 + br, 2, 1), CAT_S)
+	ci.draw_rect(Rect2(3, -5 + br, 2, 1), CAT_S)
+	ci.draw_rect(Rect2(4, -7 + br, 5, 4), CAT_O)
+	ci.draw_rect(Rect2(4, -8 + br, 1, 1), CAT_O)
+	ci.draw_rect(Rect2(8, -8 + br, 1, 1), CAT_O)
+	ci.draw_rect(Rect2(6, -5 + br, 2, 1), CAT_K)
+	ci.draw_rect(Rect2(-9, -2, 4, 2), CAT_O)
+	ci.draw_rect(Rect2(-9, -1, 9, 1), CAT_S)
+
+## sitting up, tail twitching; puffed up when startled; mouth open mid-yawn
+static func cat_sit(ci: CanvasItem, t: float, puffed: bool, yawn: bool) -> void:
+	var pf := 1.0 if puffed else 0.0
+	var tw := sin(t / 220.0) * 2.0
+	ci.draw_rect(Rect2(-4 - pf, -8 - pf, 8 + pf * 2.0, 8 + pf), CAT_O)
+	ci.draw_rect(Rect2(-3, -8, 2, 1), CAT_S)
+	ci.draw_rect(Rect2(1, -8, 2, 1), CAT_S)
+	ci.draw_rect(Rect2(-3, -3, 6, 3), CAT_L)
+	ci.draw_rect(Rect2(-6, -4 + roundf(tw / 2.0), 2, 4), CAT_O)
+	ci.draw_rect(Rect2(-8, -6 + roundf(tw), 2, 3), CAT_O)
+	ci.draw_rect(Rect2(1, -14, 7, 6), CAT_O)
+	ci.draw_rect(Rect2(1, -16 + pf * 2.0, 2, 2), CAT_O)
+	ci.draw_rect(Rect2(6, -16 + pf * 2.0, 2, 2), CAT_O)
+	ci.draw_rect(Rect2(5, -11, 2, 1), CAT_K)
+	ci.draw_rect(Rect2(2, -11, 2, 1), CAT_K)
+	if yawn: ci.draw_rect(Rect2(4, -9, 3, 2), Color("#7a2a2a"))
+	ci.draw_rect(Rect2(-1, -1, 2, 1), CAT_O)
+	ci.draw_rect(Rect2(3, -1, 2, 1), CAT_O)

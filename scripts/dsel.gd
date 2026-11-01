@@ -92,7 +92,7 @@ func do_launch() -> void:
 
 
 func _input(ev: InputEvent) -> void:
-	if not open: return
+	if not open or sortie.party_ui.open: return     # the party page (a face tapped) is over it
 	var handled := ev is InputEventKey or ev is InputEventMouseButton or ev is InputEventJoypadButton or ev is InputEventScreenTouch
 	if launch < 0.0:
 		if ev is InputEventKey and ev.pressed and not ev.echo:

@@ -7,6 +7,7 @@ const RN := preload("res://scripts/runes.gd")
 const CH := preload("res://scripts/chars.gd")
 const SYM := preload("res://assets/fonts/NotoSansKR-sym.otf")      # − Ⅰ Ⅱ Ⅲ Ⅳ ★ … the UI fonts lack
 const SYM2 := preload("res://assets/fonts/DejaVuSans-env.ttf")     # ✉ (Eilin's "관리국 서신 받기 ✉")
+const SYM3 := preload("res://assets/fonts/NotoSansKR-kh.otf")      # Ⓧ (KH on a pad) and ≫ (건너뛰기 ≫), from Noto Sans CJK KR
 static var _sym_done := false
 
 var arena
@@ -24,7 +25,7 @@ func _ready() -> void:
 		_sym_done = true
 		for f in [UI.noto(), UI.noto_k()]:
 			var a: Array[Font] = f.fallbacks
-			for sf in [SYM, SYM2]:
+			for sf in [SYM, SYM2, SYM3]:
 				if not a.has(sf): a.append(sf)
 			f.fallbacks = a
 	set_anchors_preset(Control.PRESET_FULL_RECT)

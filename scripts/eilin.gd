@@ -207,7 +207,7 @@ func world(dt: float) -> void:
 		wait = s["wait"]
 		hide = true
 		path.pop_front()
-		if here(): arena.sfx("ready", 0.12)
+		if here() and arena.level.kind == "hall": arena.sfx("ready", 0.12)     # hDoorBump: only indoors
 		return
 	if s["t"] == "arrive":
 		spot = s["spot"]
@@ -424,14 +424,14 @@ func talk() -> void:
 					F.eil_work(["…네! 바로 볼게요.", "(에일린이 수저를 내려놓고 서류를 집어 든다)", "말씀하세요. 어떤 용건이세요?"])],
 				["나중에 올게요", func():
 					talk_t = 0.0
-					say("천천히 다녀오세요!", 1800.0)]])
+					say("천천히 다녀오세요!", 1800.0), "leave"]])
 			return
 		arena.open_dialog("eilin", POR, "에일린", "길드 접수원", ["아, 앗…! 지금은 식사 중인데…"], func():
 			talk_t = 0.0
 			say("천천히 다녀오세요!", 1800.0))
 	else:
 		var L: Array = EIL_OFF[randi() % EIL_OFF.size()]
-		arena.dlg.ask("eilin", POR, "에일린", "길드 접수원", L, [["좋은 저녁 보내요", func(): talk_t = 0.0]])
+		arena.dlg.ask("eilin", POR, "에일린", "길드 접수원", L, [["좋은 저녁 보내요", func(): talk_t = 0.0, "leave"]])
 
 ## the counter when she is not behind it
 func desk_away() -> String:

@@ -17,6 +17,7 @@ const FOLK := preload("res://scripts/townsfolk.gd")
 const WEATHERS := ["clear", "rain", "snow"]
 const SETTINGS := preload("res://scripts/settings.gd")
 const AMBIENCE := preload("res://scripts/ambience.gd")
+const SLOWBUS := preload("res://scripts/slow_bus.gd")
 const POSTFX := preload("res://scripts/post_fx.gd")
 const PFX := preload("res://scripts/pfx.gd")
 const SPK := {"estelle": Color("#ffd9ea"), "aida": Color("#c9a6ff"), "luce": Color("#fff3c4")}             # PAL[].sp
@@ -88,6 +89,7 @@ var ambient := true           # 환경음 (ambience.gd)
 var post                      # post_fx.gd: shockwaves, colour fringes, vignette, the dodge grade (화면 효과)
 var low_end := false          # a phone (web + touch-first): fewer, wider lights
 var amb                       # ambience.gd: wind / rain / water loops, birds, crickets, fires, the hall's creaks and clock
+var slow_bus
 var screen_fx := true         # 화면 효과 (post_fx.gd)
 var pix := "shade"            # 캐릭터 도트화 (charPix, default 도트+셰이딩 as PIXCH): off / dot / shade (player.gd pix_mat, shaders/char_pix.gdshader)
 var ui_root                   # ui_root.gd: title, top-right buttons, main menu, transitions
@@ -114,6 +116,8 @@ func _ready() -> void:
 	cfg = SETTINGS.new(self)
 	cfg.apply_keys()
 	PLAYER.set_pix(pix)
+	cfg.apply_qk()
+	get_tree().root.size_changed.connect(func(): cfg.apply_qk())
 	low_end = OS.has_feature("mobile") or (OS.has_feature("web") and cfg.touch_auto())
 	fatigue = FATIGUE.new()
 	platforms = [
@@ -258,6 +262,10 @@ func _ready() -> void:
 	amb.set_script(AMBIENCE)
 	amb.arena = self
 	add_child(amb)
+	slow_bus = Node.new()                 # witch time: every sound through the "Slow" bus (slow_bus.gd)
+	slow_bus.set_script(SLOWBUS)
+	slow_bus.arena = self
+	add_child(slow_bus)
 	save = SAVE.new(self)
 	if get_tree().get_script() != null:
 		save.path = "user://save_test.json"     # test runs never touch the real save
@@ -634,6 +642,8 @@ func fit_view() -> void:
 	r.content_scale_size = Vector2i(view_w(win), int(H))
 
 func _process(delta: float) -> void:
+	# qWatch: long frames lower the render quality (menus and the title don't count)
+	cfg.qwatch(minf(delta * 1000.0, 50.0), ui_root == null or ui_root.holds() or DisplayServer.get_name() == "headless")
 	if pryw_t0 >= 0.0:
 		pryw_node.queue_redraw()          # on its own real-time clock, even while the world holds
 		if Time.get_ticks_msec() - pryw_t0 > 700.0: pryw_t0 = -1.0
@@ -668,6 +678,7 @@ func _process(delta: float) -> void:
 	elif hitstop > 0.0:
 		hitstop -= dt
 	else:
+		dlg.hold_keys()
 		player.step(dt)
 		if sortie != null: sortie.post_player(dt)
 		if ult != null:
@@ -758,7 +769,9 @@ func sfx(n: String, vol := 1.0) -> void:
 			break
 	best.stream = st
 	best.volume_db = linear_to_db(maxf(0.01, vol)) - 4.0
-	best.pitch_scale = 0.62 if witch > 0.0 else 1.0
+	var raw := n == "boom" or n == "witch_end"     # the slow-down's own cues play dry (boom / witchEnd: __raw)
+	best.bus = &"Master" if raw else SLOWBUS.BUS
+	best.pitch_scale = 0.62 if witch > 0.0 and not raw else 1.0
 	best.play()
 
 ## text(): floating text, 600 ms. Numbers pop as tilted condensed italics (H2.txt), words sit on a small black tag.
