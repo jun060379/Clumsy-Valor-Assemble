@@ -166,6 +166,12 @@ static func load_tex(p: String) -> Texture2D:
 	if not _tex.has(p): _tex[p] = load(p) if ResourceLoader.exists(p) else null
 	return _tex[p]
 
+## does the worn costume have this picture of its own (the original art has them all)? A face it lacks falls back to its
+## st_base, so screens that animate faces (the blink) skip the animation instead of showing the same picture twice
+static func has_face(c: String, key: String) -> bool:
+	var id := worn(c)
+	return own_dir(id) == "" or own_path(id, key) != ""
+
 static func tex(c: String, key: String, i := 0) -> Texture2D:
 	return load_tex(path(c, key, i))
 

@@ -143,6 +143,15 @@ static func hanger(ci: CanvasItem, c: Vector2, w: float, col: Color, a := 1.0) -
 static func how_line(id: String) -> String:
 	return SD.how(id, FD.FRANK)
 
+const ANIM_N := {"idle": "대기", "start": "출발", "stop": "멈춤", "turn": "돌아서기", "jump": "점프", "runjump": "달려 점프", "run": "달리기", "walk": "걷기"}
+## "부분 완성 · 새 그림: 대기 · 걷기 …" for a costume drawn in parts ("" otherwise)
+static func partial_line(id: String) -> String:
+	var s := SD.get_skin(id)
+	if not s.get("partial", false): return ""
+	var L: Array = []
+	for a in s.get("done", []): L.append(ANIM_N.get(a, a))
+	return "부분 완성 · 새 그림: " + " · ".join(L) + " (나머지 동작은 이전 그림)"
+
 
 # ---------- drawing ----------
 func paint(vs: Vector2, col: Color) -> void:
@@ -252,6 +261,7 @@ func _card(vs: Vector2, col: Color, id: String, sk: Dictionary, st: String) -> v
 	var y := vs.y * 0.21 + L.size() * 41.0 + 14.0
 	var w := vs.x * 0.36
 	var ps: Array = [[String(sk["d"]), 12, Color(0.15, 0.15, 0.15)], ["얻는 법 · " + how_line(id), 11, Color(0.35, 0.3, 0.32)]]
+	if partial_line(id) != "": ps.append([partial_line(id), 10, Color(0.75, 0.35, 0.1)])
 	var h: float = 64.0 + p.paras_h(w - 120.0, ps) + 44.0
 	h = maxf(h, 150.0)
 	h = minf(h, vs.y - y - 12.0)
