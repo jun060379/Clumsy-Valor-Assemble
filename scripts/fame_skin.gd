@@ -87,7 +87,7 @@ static func k(t: float, t0: float, d: float) -> float:
 
 
 # ---------- shapes ----------
-static func para(ci: CanvasItem, r: Rect2, sk: float, c: Color) -> void:
+static func para(ci, r: Rect2, sk: float, c: Color) -> void:
 	ci.draw_colored_polygon(PackedVector2Array([r.position + Vector2(sk, 0), Vector2(r.end.x + sk, r.position.y), r.end, Vector2(r.position.x, r.end.y)]), c)
 
 static func clip(r: Rect2, pct: Array) -> PackedVector2Array:
@@ -97,18 +97,18 @@ static func clip(r: Rect2, pct: Array) -> PackedVector2Array:
 	return out
 
 ## a small padlock (the fonts lack 🔒)
-static func lock(ci: CanvasItem, p: Vector2, s: float, c: Color) -> void:
+static func lock(ci, p: Vector2, s: float, c: Color) -> void:
 	ci.draw_arc(p + Vector2(s * 0.5, s * 0.42), s * 0.27, PI, TAU, 10, c, maxf(1.2, s * 0.13))
 	ci.draw_rect(Rect2(p + Vector2(s * 0.12, s * 0.42), Vector2(s * 0.76, s * 0.55)), c)
 
 ## a sealed envelope (✉)
-static func envelope(ci: CanvasItem, r: Rect2, c: Color, seal := Color("#d52a36")) -> void:
+static func envelope(ci, r: Rect2, c: Color, seal := Color("#d52a36")) -> void:
 	ci.draw_rect(r, c)
 	ci.draw_polyline(PackedVector2Array([r.position, r.position + Vector2(r.size.x / 2.0, r.size.y * 0.58), Vector2(r.end.x, r.position.y)]), Color(0, 0, 0, 0.55), 1.2, true)
 	ci.draw_circle(r.position + Vector2(r.size.x / 2.0, r.size.y * 0.58), r.size.y * 0.18, seal)
 
 ## repeating dots (radial-gradient dot grid): one small tile, repeated (the canvas item needs texture_repeat on)
-static func dots(ci: CanvasItem, r: Rect2, step: float, rad: float, c: Color, off := Vector2.ZERO) -> void:
+static func dots(ci, r: Rect2, step: float, rad: float, c: Color, off := Vector2.ZERO) -> void:
 	var key := "dot%d_%d" % [int(step * 10.0), int(rad * 10.0)]
 	if not _c.has(key):
 		var n := int(step)

@@ -5,15 +5,36 @@ extends "res://scripts/ui_page.gd"
 
 const POR := preload("res://assets/bran/por.png")
 const BRAN := preload("res://scripts/bran.gd")
+const TALK := preload("res://scripts/talk_fx.gd")
 
 var line := ""
 var choices: Array = []          # [icon, label, Callable]
 var sel := 0
+var talk = TALK.new()
+var _lay: Array = []
 
 
 func _ready() -> void:
 	super()
 	keys = ["bran"]
+	for i in 3:
+		var c := Control.new()
+		c.set_anchors_preset(Control.PRESET_FULL_RECT)
+		c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		c.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		if i == 1: c.material = UI.solid_mat()
+		var k := i
+		c.draw.connect(func(): _draw_layer(k, c))
+		add_child(c)
+		_lay.append(c)
+
+func _opened() -> void:
+	# it follows a talk with him straight on: the scene is already up, only the choices come in
+	talk.reset("bran", POR, "브랜", "길드 대장장이", tcol())
+	talk.open_t = 5000.0
+
+func _tick(dt: float) -> void:
+	talk.step(dt)
 
 ## who decides: the fame system when it is here (fame.bran); open until then
 func joined() -> bool:
@@ -75,48 +96,29 @@ func _key(k: int) -> void:
 				return
 
 func _paint(vs: Vector2) -> void:
-	# the same talk box as dialog.gd, his line held, choices on the right
-	var bh := 118.0
-	var bx := 16.0
-	var bw := vs.x - 32.0
-	var by := vs.y - bh - 16.0
+	# the talk scene of dialog.gd (talk_fx.gd), his line held, the choices on the right
 	draw_rect(Rect2(Vector2.ZERO, vs), Color(0, 0, 0, 0.25 * clampf(t / 200.0, 0.0, 1.0)))
-	var ph := minf(250.0, vs.y * 0.52)
-	var pw := POR.get_width() * ph / POR.get_height()
-	draw_texture_rect(POR, Rect2(bx + 6.0, by - ph + 30.0, pw, ph), false)
-	var px := bx + 170.0 if vs.x > 560.0 else bx + 12.0
-	draw_rect(Rect2(bx, by, bw, bh), Color(0.06, 0.05, 0.07, 0.9))
-	draw_rect(Rect2(bx, by, bw, bh), Color(1.0, 0.91, 0.66, 0.5), false, 2.0)
-	draw_rect(Rect2(bx, by, 4.0, bh), Color("#8fcf8a"))
-	var fb: Font = arena.font_black
-	var fr: Font = arena.font_bold
-	draw_string(fb, Vector2(px, by + 28.0), "브랜", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color("#ffe9a8"))
-	draw_string(fr, Vector2(px + tw(fb, "브랜", 17) + 10.0, by + 28.0), "길드 대장장이", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1, 1, 1, 0.55))
-	var n := mini(line.length(), int(t / 32.0))
-	draw_multiline_string(fr, Vector2(px, by + 58.0), line.substr(0, n), HORIZONTAL_ALIGNMENT_LEFT, bx + bw - px - 20.0, 16, 3, Color("#fff6df"))
-	# choices: slanted black plates, the chosen one white
-	var cw := 260.0
-	var ch := 40.0
-	var cy := by - 14.0 - choices.size() * (ch + 8.0)
-	for i in choices.size():
-		var d := t - i * 60.0
-		var e := UI.bk(clampf(d / 260.0, 0.0, 1.0))
-		if d <= 0.0: continue
-		var on := i == sel
-		var x := vs.x - cw - 30.0 + 40.0 * (1.0 - e) - (12.0 if on else 0.0)
-		var y := cy + i * (ch + 8.0)
-		var poly := PackedVector2Array([Vector2(x + 10, y), Vector2(x + cw + 10, y), Vector2(x + cw, y + ch), Vector2(x, y + ch)])
-		if on: draw_colored_polygon(PackedVector2Array([poly[0] + Vector2(4, 4), poly[1] + Vector2(4, 4), poly[2] + Vector2(4, 4), poly[3] + Vector2(4, 4)]), tcol())
-		draw_colored_polygon(poly, Color(1, 1, 1, e) if on else Color(0.05, 0.04, 0.06, 0.92 * e))
-		var ic := Vector2(x + 28, y + ch / 2.0)
-		draw_circle(ic, 13.0, Color(0, 0, 0, e) if on else Color(1, 1, 1, 0.12 * e))
-		_icon(choices[i][0], ic, Color(1, 1, 1, e))
-		draw_string(UI.noto_k(), Vector2(x + 52, y + 26), choices[i][1], HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(0, 0, 0, e) if on else Color(1, 1, 1, e))
-		var ii := i
-		hit(poly, func():
-			sel = ii
-			sfx("ready", 0.3)
-			choices[ii][2].call())
+	for c in _lay: c.queue_redraw()
+	for i in talk.ch_polys.size():
+		var ii: int = i
+		if talk.ch_polys[i].size() > 2:
+			hit(talk.ch_polys[i], func():
+				if sel != ii:
+					sel = ii
+					sfx("ready", 0.15)
+				sfx("ready", 0.3)
+				choices[ii][2].call())
+
+func _draw_layer(k: int, c: Control) -> void:
+	if not live(): return
+	var vs := get_viewport_rect().size
+	match k:
+		0: talk.draw_back(c, vs)
+		1: talk.draw_sil(c, vs)
+		2:
+			talk.show(line, int(t / 32.0))
+			talk.set_choices(choices.map(func(x): return String(x[1])), sel)
+			talk.draw_front(c, vs)
 
 func _icon(k: String, c: Vector2, col: Color) -> void:
 	match k:

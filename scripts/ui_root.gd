@@ -6,6 +6,7 @@ extends Control
 const TITLE := preload("res://scripts/title.gd")
 const MENU := preload("res://scripts/menu.gd")
 const SWEEP := preload("res://scripts/sweep.gd")
+const UIA := preload("res://scripts/ui_anim.gd")
 
 var arena
 var title
@@ -17,6 +18,9 @@ var mouse_held := {}            # button -> action pressed by it
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	UIA.hook_web()
+	var ck = UIA.clock_node()
+	if ck != null: add_child(ck)
 	menu = Control.new()
 	menu.set_script(MENU)
 	menu.arena = arena

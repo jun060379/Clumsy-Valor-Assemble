@@ -6,6 +6,7 @@ extends Control
 ## Tab switches books, Esc / B closes.
 
 const S := preload("res://scripts/fame_skin.gd")
+const UIA := preload("res://scripts/ui_anim.gd")
 const FD := preload("res://scripts/fame_data.gd")
 const BOOKCOL := {"gbk": Color("#ffd34d"), "abk": Color("#7fd0ff")}
 const TABS := {"gbk": [["quest", "명성", "FAME"], ["fac", "시설", "FACILITY"], ["people", "동료", "MEMBERS"], ["dun", "던전", "DUNGEON"], ["rune", "룬 도감", "RUNES"]],
@@ -36,6 +37,42 @@ var drag := {}
 var hover := Vector2(-999, -999)
 var tex := {}
 var cur_book := ""
+# ---- motion (fame_ui.js openFx / headerFx / pageSlide / fmClose / wipe / tabInd / heroSync) ----
+var _ci                         # what the page draws through: a UIA.Pen on this canvas item (group transform + opacity)
+var pen
+var trn := UIA.Tr.new()         # CSS transitions (the background layers per tab, the tabs' scale)
+var hdr_t := 0.0                # header clock (headerFx), hdr_d its delay
+var hdr_d := 300.0
+var hdr_hide := false           # under the wiper
+var closing := -1.0             # fmClose clock (ms), -1 = not closing
+var slide_t := 1e9              # pageSlide clock
+var slide_dir := 1
+var slide_n := 0
+var slide_old := Rect2()        # where the old sheet lay
+var lead_t := 1e9               # .bgl.lead (the slash leads a tab change)
+var bump_t := 1e9               # .wal.bump / .bm.bump
+var wipe_t := -1.0              # book switch fan, -1 = none
+var wipe_to := ""
+var wipe_from := Color.WHITE
+var wipe_mid := false
+var ind_l := UIA.Spring.new(0.0, 0.38, 0.82)
+var ind_w := UIA.Spring.new(0.0, 0.42, 0.9)
+var ind2_l := UIA.Spring.new(0.0, 0.62, 0.7)
+var ind2_w := UIA.Spring.new(0.0, 0.6, 0.9)
+var ind_init := false
+var hero_dock := ""
+var hero_off := Vector2.ZERO    # hero spring offset (it glides between docks)
+var hero_sp := [UIA.Spring.new(0.0, 0.62, 0.8), UIA.Spring.new(0.0, 0.62, 0.8), UIA.Spring.new(0.0, 0.75, 0.55), UIA.Spring.new(1.0, 0.7, 0.8)]
+var hero_last := Rect2()
+var stamps: Array = []          # stampFx: {p, text, t, dk}
+var flies: Array = []           # moveEl: reward labels flying to the purse / the hero {from, to, text, t, d}
+var jolt_t := 1e9               # the paper's jolt under the stamp
+var purse_at: Array = [Vector2.ZERO, Vector2.ZERO, Vector2.ZERO]
+var hot_t: Array = [1e9, 1e9, 1e9]   # fm_hit on a purse token when a chip lands
+const EZ := [0.2, 0.9, 0.25, 1.0]
+const BK := [0.2, 1.5, 0.4, 1.0]
+const FMIN := [0.16, 1.0, 0.3, 1.0]
+const SLOUT := [0.55, 0.0, 0.85, 0.4]
 
 
 func _ready() -> void:
@@ -44,6 +81,20 @@ func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 	visible = false
+	pen = UIA.Pen.new(self)
+	_ci = pen
+	if OS.has_feature("web"):
+		_js_cb = JavaScriptBridge.create_callback(func(a: Array): _js(str(a[0]) if a.size() > 0 else ""))
+		JavaScriptBridge.get_interface("window").cvaBook = _js_cb
+
+## web test hook (screenshots): window.cvaBook("tab dun" | "switch" | "close")
+var _js_cb
+func _js(cmd: String) -> void:
+	var w := cmd.split(" ")
+	match w[0]:
+		"tab": _go_tab(w[1])
+		"switch": _switch_book()
+		"close": close_fx()
 
 func book() -> String:
 	return menu.page if menu.page in ["gbk", "abk"] else ""
@@ -70,20 +121,86 @@ func _process(delta: float) -> void:
 		cur_book = ""
 		return
 	if b != cur_book:
+		if cur_book == "" or wipe_t < 0.0:
+			_open_fx()
 		cur_book = b
-		t = 0.0
-		tab_t = 0.0
 		fame.poll(true)
 	var dt := minf(delta * 1000.0, 250.0)
 	t += dt
 	tab_t += dt
+	hdr_t += dt
+	slide_t += dt
+	jolt_t += dt
+	for i in 3: hot_t[i] += dt
+	for st in stamps: st["t"] += dt
+	stamps = stamps.filter(func(st): return st["t"] < 1200.0)
+	for f in flies:
+		f["t"] += dt
+		if f["t"] - f["d"] >= 520.0 and not f.get("hit", false):
+			f["hit"] = true
+			if f["k"] >= 0: hot_t[f["k"]] = 0.0
+	flies = flies.filter(func(f): return f["t"] - f["d"] < 520.0)
+	lead_t += dt
+	bump_t += dt
+	trn.step(dt)
+	for sp in [ind_l, ind_w, ind2_l, ind2_w]: sp.step(dt)
+	for sp in hero_sp: sp.step(dt)
+	if closing >= 0.0:
+		closing += dt
+		if closing >= 440.0:
+			closing = -1.0
+			menu.close_page()
+	if wipe_t >= 0.0:
+		wipe_t += dt
+		if not wipe_mid and wipe_t >= 1140.0 * 0.35:
+			wipe_mid = true
+			hdr_hide = true
+			menu.page = wipe_to
+			cur_book = wipe_to
+			tab_t = 0.0
+			slide_t = 1e9
+			fame.poll(true)
+			S.play(self, S.noise_wav(0.16), 0.2)
+		if wipe_t >= 1140.0:
+			wipe_t = -1.0
+			hdr_hide = false
+			hdr_t = 0.0
+			hdr_d = 0.0
 	queue_redraw()
+
+## openFx: everything files in (t = 0); the rows start at 380 ms
+func _open_fx() -> void:
+	t = 0.0
+	tab_t = -380.0
+	hdr_t = 0.0
+	hdr_d = 300.0
+	closing = -1.0
+	slide_t = 1e9
+	lead_t = 1e9
+	bump_t = 1e9
+	ind_init = false
+	hero_dock = ""
+	trn.clear()
+	S.play(self, S.noise_wav(0.16), 0.26)
+
+## fmClose: the sheet drops, the band leaves, the header lifts away; the page goes after 440 ms
+func close_fx() -> void:
+	if closing >= 0.0 or wipe_t >= 0.0: return
+	closing = 0.0
+	S.play(self, S.noise_wav(0.16), 0.18)
+
+func busy() -> bool:
+	return closing >= 0.0 or wipe_t >= 0.0
 
 
 # ---------- input ----------
 func _input(ev: InputEvent) -> void:
 	if not visible or book() == "": return
 	if menu.ui_root.sweep.active or fame.fx.blocking(): return
+	if busy():
+		if ev is InputEventKey or ev is InputEventMouseButton or ev is InputEventJoypadButton or ev is InputEventScreenTouch:
+			get_viewport().set_input_as_handled()
+		return
 	if ev is InputEventMouseMotion:
 		hover = ev.position
 		if not drag.is_empty() and ev.button_mask & MOUSE_BUTTON_MASK_LEFT:
@@ -120,7 +237,7 @@ func _input(ev: InputEvent) -> void:
 		return
 	get_viewport().set_input_as_handled()
 	if k == KEY_ESCAPE or pad == JOY_BUTTON_B or pad == JOY_BUTTON_START:
-		menu.close_page()
+		close_fx()
 	elif k in [KEY_RIGHT, KEY_E, KEY_D] or pad == JOY_BUTTON_RIGHT_SHOULDER:
 		_tab_step(1)
 	elif k in [KEY_LEFT, KEY_Q, KEY_A] or pad == JOY_BUTTON_LEFT_SHOULDER:
@@ -151,18 +268,47 @@ func _tab_step(d: int) -> void:
 
 func _go_tab(tb: String) -> void:
 	if tb == cur_tab(): return
+	var L: Array = TABS[book()]
+	var ti := 0
+	var tj := 0
+	for j in L.size():
+		if L[j][0] == tb: ti = j
+		if L[j][0] == cur_tab(): tj = j
+	_page_slide(1 if ti >= tj else -1, absi(ti - tj))
 	tab[book()] = tb
-	tab_t = 0.0
 	arena.sfx("step", 0.3)
 	S.play(self, S.noise_wav(0.16), 0.18)
 	fame.poll(true)
 
 func _switch_book() -> void:
-	menu.page = "abk" if book() == "gbk" else "gbk"
+	_wipe("abk" if book() == "gbk" else "gbk")
+
+func _wipe(to: String) -> void:
+	if wipe_t >= 0.0 or closing >= 0.0 or to == book(): return
+	wipe_to = to
+	wipe_from = col()
+	wipe_t = 0.0
+	wipe_mid = false
 	arena.sfx("ready", 0.3)
 
+## pageSlide: a new sheet (and n - 1 blank ones) slides over the old one going right, the old one slides off going left
+func _page_slide(dir: int, steps: int) -> void:
+	slide_t = 0.0
+	slide_dir = dir
+	slide_n = mini(3, maxi(0, steps - 1))
+	slide_old = paper_r
+	lead_t = 0.0
+	bump_t = 0.0
+	tab_t = -float(slide_n * 90 + 120) if dir > 0 else 0.0
+
 func _goto(b: String, tb: String) -> void:
-	if b != book(): menu.page = b
+	if b != book():
+		tab[b] = tb
+		_wipe(b)
+		return
+	elif tb != cur_tab():
+		_go_tab(tb)
+		return
 	tab[b] = tb
 	tab_t = 0.0
 	arena.sfx("step", 0.3)
@@ -186,27 +332,23 @@ func _draw() -> void:
 	var vs := get_viewport_rect().size
 	var fa := col()
 	var tb := cur_tab()
-	# ground: ink, drifting dots, the colour band (breathing)
-	draw_rect(Rect2(Vector2.ZERO, vs), Color("#0d0b10"))
+	pen.reset()
+	var cl := closing
+	# ground: ink, drifting dots (fmdots)
+	_ci.draw_rect(Rect2(Vector2.ZERO, vs), Color("#0d0b10"))
 	var dof := fmod(t / 7000.0, 1.0) * 12.0
-	S.dots(self, Rect2(Vector2.ZERO, vs), 12.0, 1.6, Color(1, 1, 1, 0.06), Vector2(dof, dof))
+	S.dots(_ci, Rect2(Vector2.ZERO, vs), 12.0, 1.6, Color(1, 1, 1, 0.06), Vector2(dof, dof))
+	_draw_bgl(vs, fa, tb)
+	_draw_speed(vs)
+	# the colour band (fm_breath), sliding in from the upper left (openFx) and back out (fmClose)
 	var br := 0.5 - 0.5 * cos(t / 7000.0 * TAU)
 	var band := Rect2(-0.1 * vs.x, -30.0 + 2.0 * br, vs.x * 1.2, 120.0)
-	draw_set_transform(band.get_center(), deg_to_rad(-4.0 + 0.6 * br))
-	draw_rect(Rect2(-band.size / 2.0, band.size), fa)
-	draw_set_transform(Vector2.ZERO)
-	# title
-	var en := "GUILD BOOK" if b == "gbk" else "ADVENTURE BOOK"
-	var kr := "길드 수첩" if b == "gbk" else "모험 수첩"
-	draw_set_transform(Vector2(18, 10), deg_to_rad(-4.0))
-	draw_string(S.anton(false, 3), Vector2(0, 11), en, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0, 0, 0, 0.7))
-	var tw := S.tw(S.bhs(), kr, 30)
-	S.para(self, Rect2(-2, 15, tw + 26.0, 36), 7.0, Color.BLACK)
-	draw_string(S.bhs(), Vector2(10, 44), kr, HORIZONTAL_ALIGNMENT_LEFT, -1, 30, Color.WHITE)
-	draw_set_transform(Vector2.ZERO)
-	_draw_tabs(vs, fa)
-	_draw_purse(vs, fa)
-	_draw_bookmark(vs)
+	var bk := UIA.p(t, 170.0, 460.0, EZ)
+	if cl >= 0.0: bk = 1.0 - UIA.p(cl, 60.0, 380.0, SLOUT)
+	pen.group(UIA.xf(band.get_center(), Vector2(-0.7 * band.size.x, -0.6 * band.size.y) * (1.0 - bk)))
+	_ci.draw_set_transform(band.get_center(), deg_to_rad(-4.0 + 0.6 * br))
+	_ci.draw_rect(Rect2(-band.size / 2.0, band.size), fa)
+	pen.reset()
 	# the pane
 	var pane := Rect2(16, 106, vs.x - 32, vs.y - 118)
 	var dock: String = HDOCK.get(tb, "L")
@@ -215,10 +357,20 @@ func _draw() -> void:
 		"quest", "fac", "home", "lv", "day": left_w = pane.size.x * (0.34 if tb == "fac" else (0.29 if tb == "lv" else 0.31))
 		"dun": left_w = pane.size.x * 0.26
 		"ch": left_w = pane.size.x * 0.30
-	var e := S.ez(S.k(tab_t, 0.0, 420.0))
-	var slide := 40.0 * (1.0 - e)
-	paper_r = Rect2(pane.position.x + (left_w + 14.0 if left_w > 0.0 else 0.0) + slide, pane.position.y, pane.size.x - (left_w + 14.0 if left_w > 0.0 else 0.0), pane.size.y)
-	_draw_paper(paper_r, e)
+	paper_r = Rect2(pane.position.x + (left_w + 14.0 if left_w > 0.0 else 0.0), pane.position.y, pane.size.x - (left_w + 14.0 if left_w > 0.0 else 0.0), pane.size.y)
+	# the sheets: the old one (blank) under or over the new one while a tab turns
+	var ps := _paper_xf(paper_r)
+	var going_out := slide_t < 600.0 + slide_n * 90.0 and slide_dir < 0
+	if slide_t < 520.0 + slide_n * 90.0 and slide_dir > 0:
+		var oa: float = 1.0 - UIA.kf(slide_t, [[0.0, 0.0], [0.6, 0.0], [1.0, 1.0]], 520.0, slide_n * 90.0)
+		pen.group(Transform2D.IDENTITY, oa)
+		_draw_paper(slide_old, 1.0)
+		for i in slide_n:
+			pen.group(_sl_in(slide_old, slide_t, i * 90.0, 360.0), 1.0)
+			_draw_paper(slide_old, 1.0)
+	var jo: Vector2 = UIA.kf(jolt_t, [[0.0, Vector2.ZERO], [0.33, Vector2(0, 3)], [0.66, Vector2(-1, -2)], [1.0, Vector2.ZERO]], 200.0)
+	pen.group(Transform2D(0.0, jo) * ps[0], ps[1])
+	_draw_paper(paper_r, 1.0)
 	var cr := Rect2(paper_r.position + Vector2(34, 12), paper_r.size - Vector2(48, 20))
 	match tb:
 		"quest": _p_quest(cr)
@@ -230,14 +382,28 @@ func _draw() -> void:
 		"lv": _p_lv(cr)
 		"ch": _p_ch(cr)
 		"day": _p_day(cr)
-	# the left column
-	var lc := Rect2(pane.position.x - 30.0 * (1.0 - e), pane.position.y, left_w, pane.size.y)
+	if going_out:
+		# the old sheet slides off to the lower right first, then the blank ones in between
+		for i in range(slide_n - 1, -1, -1):
+			pen.group(_sl_out(slide_old, slide_t, 140.0 + i * 90.0, 340.0), 1.0)
+			_draw_paper(slide_old, 1.0)
+		pen.group(_sl_out(slide_old, slide_t, 0.0, 380.0), 1.0)
+		_draw_paper(slide_old, 1.0)
+	# the left column: files in from the side (fm_in), leaves left on close
+	var lc := Rect2(pane.position.x, pane.position.y, left_w, pane.size.y)
+	var lu := UIA.p(tab_t, 0.0, 500.0, FMIN)
+	var ldx := (-26.0 if (slide_dir > 0 or slide_t > 5000.0) else 26.0) * (1.0 - lu)
+	var la := clampf(tab_t / 500.0 * 2.0, 0.0, 1.0)
+	if cl >= 0.0:
+		ldx = -40.0 * UIA.lin(cl, 0.0, 260.0)
+		la = 1.0 - UIA.lin(cl, 0.0, 260.0)
+	pen.group(Transform2D(0.0, Vector2(ldx, 0)), la)
 	match tb:
 		"quest", "fac":
-			var y := _hero(lc, false)
+			var y := _hero_l(lc)
 			_info_menu(Rect2(lc.position.x, y + 8.0, lc.size.x, lc.end.y - y - 8.0), "rank", "등급 안내")
 		"home", "lv":
-			var y := _hero(lc, false)
+			var y := _hero_l(lc)
 			var n: int = fame.lv_can().size()
 			if n and tb == "home":
 				y = _goal(Rect2(lc.position.x, y + 6.0, lc.size.x - 8.0, 44.0), "받지 않은 레벨 보상 %d개" % n, "모험 레벨 탭에서 받기", Color("#7fd0ff"), func(): _go_tab("lv")) + 4.0
@@ -245,8 +411,231 @@ func _draw() -> void:
 		"day": _day_col(lc)
 		"dun": _dun_list(lc)
 		"ch": _ch_list(lc)
-	if dock == "R": _hero(Rect2(vs.x - 196.0, vs.y - 92.0, 180.0, 80.0), true)
-	_draw_close(vs, fa)
+	pen.reset()
+	if dock == "R": _hero_at(Rect2(vs.x - 196.0, vs.y - 92.0, 180.0, 80.0), true)
+	# the header on the band (headerFx), hidden under the wiper
+	if not hdr_hide:
+		_draw_title(vs, b)
+		_draw_tabs(vs, fa)
+		_draw_purse(vs, fa)
+		_draw_bookmark(vs)
+		_draw_close(vs, fa)
+	pen.reset()
+	_draw_claims()
+	_draw_wipe(vs)
+
+
+# ---------- claim choreography (stampFx · moveEl) ----------
+## the stamp slams onto the row (the paper jolts at 160 ms), then the row's reward labels fly to the purse
+func _claim_fx(r: Rect2, rw: Array, text: String, rx: float) -> void:
+	stamps.append({"p": Vector2(r.position.x + r.size.x * (0.8 if r.size.x > 300.0 else 0.5), r.get_center().y), "text": text, "t": 0.0})
+	jolt_t = -160.0
+	var k := 0
+	for lab in rw:
+		var L := String(lab)
+		if L == "": continue
+		var ti := 0 if L.contains("실링") else (1 if L.contains("기억석") else (2 if L.contains("룬") else -1))
+		var to: Vector2 = purse_at[ti] if ti >= 0 else hero_last.position + Vector2(60, 40)
+		flies.append({"from": Vector2(rx - S.tw(S.anton(), L, 14) / 2.0, r.position.y + 50.0 + k * 15.0), "to": to, "text": L, "t": -260.0, "d": 120.0 + k * 80.0, "k": ti})
+		k += 1
+
+func _draw_claims() -> void:
+	for st in stamps:
+		var tt: float = st["t"]
+		var sc: float = UIA.kf(tt, [[0.0, 3.0, [0.7, 0.0, 1.0, 0.6]], [0.62, 1.0, "ease-out"], [0.78, 1.06], [1.0, 1.0]], 260.0)
+		var rot: float = UIA.kf(tt, [[0.0, -24.0, [0.7, 0.0, 1.0, 0.6]], [0.62, -12.0, "ease-out"], [0.78, -11.0], [1.0, -12.0]], 260.0)
+		var a: float = UIA.kf(tt, [[0.0, 0.0, [0.7, 0.0, 1.0, 0.6]], [0.62, 1.0]], 260.0)
+		var dy := 0.0
+		if tt > 880.0:
+			var u := UIA.p(tt, 880.0, 320.0, "ease-out")
+			a = 1.0 - u
+			sc *= 1.0 + 0.1 * u
+			dy = -10.0 * u
+		var s: String = st["text"]
+		var w := S.tw(S.bhs(), s, 26) + 28.0
+		pen.group(UIA.xf(st["p"], Vector2(0, dy), deg_to_rad(rot), Vector2(sc, sc)), a)
+		var rr := Rect2(st["p"] - Vector2(w / 2.0, 19.0), Vector2(w, 38.0))
+		var red := Color("#c8232c")
+		_ci.draw_rect(rr, Color(red, 0.85), false, 4.0)
+		_ci.draw_string(S.bhs(), rr.position + Vector2(14, 30), s, HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color(red, 0.9))
+	for f in flies:
+		var tt: float = f["t"] - f["d"]
+		if tt < 0.0: continue
+		var a0: Vector2 = f["from"]
+		var b0: Vector2 = f["to"]
+		var x1 := b0.x - a0.x
+		var y1 := b0.y - a0.y
+		var lift := -18.0 if y1 > 40.0 else -50.0 - absf(x1) * 0.06
+		var k: Array = UIA.kf(tt, [[0.0, [0.0, 0.0, 1.0]], [0.2, [x1 * 0.1, -10.0 if y1 > 40.0 else -22.0, 1.35]], [0.55, [x1 * 0.55, y1 * 0.35 if y1 > 40.0 else minf(0.0, y1) + lift, 1.2]], [1.0, [x1, y1, 0.45]]], 520.0, 0.0, [0.4, 0.0, 0.2, 1.0])
+		pen.group(UIA.xf(a0, Vector2(k[0], k[1]), 0.0, Vector2(k[2], k[2])), 1.0 if tt < 500.0 else 0.9)
+		var s2: String = f["text"]
+		var w2 := S.tw(S.anton(), s2, 14) + 20.0
+		var r2 := Rect2(a0 - Vector2(w2 / 2.0, 12.0), Vector2(w2, 24.0))
+		_ci.draw_colored_polygon(S.clip(Rect2(r2.position + Vector2(3, 3), r2.size), [[6, 0], [100, 0], [94, 100], [0, 100]]), col())
+		_ci.draw_colored_polygon(S.clip(r2, [[6, 0], [100, 0], [94, 100], [0, 100]]), Color.BLACK)
+		_ci.draw_rect(Rect2(r2.position, Vector2(4, r2.size.y)), col())
+		_ci.draw_string(S.anton(), r2.position + Vector2(12, 18), s2, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color.WHITE)
+	pen.reset()
+
+
+# ---------- motion helpers ----------
+## header element k's entrance: [progress 0..1 with the overshoot, opacity]; on close, [1, fading]
+func _hdr(delay: float, dur: float, ez = BK) -> Array:
+	if closing >= 0.0: return [1.0, 1.0]
+	return [UIA.p(hdr_t, hdr_d + delay, dur, ez), clampf((hdr_t - hdr_d - delay) / (dur * 0.5), 0.0, 1.0)]
+
+## fmClose for header items i (tabs, tokens, bookmark, ✕): up 30 px and out, 20 ms apart
+func _hdr_out(i: int) -> Array:
+	if closing < 0.0: return [0.0, 1.0]
+	var u := UIA.lin(closing, i * 20.0, 240.0)
+	return [-30.0 * u, 1.0 - u]
+
+## the sheet's group transform: openFx rise, pageSlide slide-in (new sheet over the old), fmClose drop
+func _paper_xf(r: Rect2) -> Array:
+	var c := r.get_center()
+	if closing >= 0.0:
+		var u := UIA.p(closing, 0.0, 360.0, SLOUT)
+		return [UIA.xf(c, Vector2(0, r.size.y * 0.8 * u), deg_to_rad(4.0 * u)), 1.0 - u]
+	if t < 640.0 and tab_t < 0.0 and slide_t > 5000.0:
+		var y: float = UIA.kf(t, [[0.0, 0.78], [0.72, -0.014], [1.0, 0.0]], 640.0, 0.0, EZ)
+		var rr: float = UIA.kf(t, [[0.0, 3.0], [0.72, -0.5], [1.0, 0.0]], 640.0, 0.0, EZ)
+		return [UIA.xf(c, Vector2(0, r.size.y * y), deg_to_rad(rr)), clampf(t / (640.0 * 0.08), 0.0, 1.0)]
+	if slide_dir > 0 and slide_t < 520.0 + slide_n * 90.0:
+		return [_sl_in(r, slide_t, slide_n * 90.0, 520.0), clampf((slide_t - slide_n * 90.0) / 42.0, 0.0, 1.0)]
+	return [Transform2D.IDENTITY, 1.0]
+
+## SL_IN: from translate(72%,14%) rotate(9deg) to a little past home and back
+func _sl_in(r: Rect2, tt: float, delay: float, dur: float) -> Transform2D:
+	var k: Array = UIA.kf(tt, [[0.0, [0.72, 0.14, 9.0]], [0.72, [-0.014, -0.006, -0.9]], [1.0, [0.0, 0.0, 0.0]]], dur, delay, EZ)
+	return UIA.xf(r.get_center(), Vector2(r.size.x * k[0], r.size.y * k[1]), deg_to_rad(k[2]))
+
+## SL_OUT: to translate(78%,16%) rotate(10deg)
+func _sl_out(r: Rect2, tt: float, delay: float, dur: float) -> Transform2D:
+	var u := UIA.p(tt, delay, dur, SLOUT)
+	return UIA.xf(r.get_center(), Vector2(r.size.x * 0.78, r.size.y * 0.16) * u, deg_to_rad(10.0 * u))
+
+## the title on the band (headerFx .ttl: in from the left)
+func _draw_title(vs: Vector2, b: String) -> void:
+	var h := _hdr(0.0, 420.0, EZ)
+	var x: float = -70.0 * (1.0 - h[0])
+	var a: float = h[1]
+	if closing >= 0.0:
+		var u := UIA.lin(closing, 0.0, 260.0)
+		x = -60.0 * u
+		a = 1.0 - u
+	var en := "GUILD BOOK" if b == "gbk" else "ADVENTURE BOOK"
+	var kr := "길드 수첩" if b == "gbk" else "모험 수첩"
+	pen.group(Transform2D(0.0, Vector2(x, 0).rotated(deg_to_rad(-4.0))), a)
+	_ci.draw_set_transform(Vector2(18, 10), deg_to_rad(-4.0))
+	_ci.draw_string(S.anton(false, 3), Vector2(0, 11), en, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0, 0, 0, 0.7))
+	var tw := S.tw(S.bhs(), kr, 30)
+	S.para(_ci, Rect2(-2, 15, tw + 26.0, 36), 7.0, Color.BLACK)
+	_ci.draw_string(S.bhs(), Vector2(10, 44), kr, HORIZONTAL_ALIGNMENT_LEFT, -1, 30, Color.WHITE)
+	pen.reset()
+
+## .bgl: the slow burst, the dark shard with its colour edge, the white slash and the hollow GUILD / ADVENTURE,
+## each moving to its place for the tab (.75s --mv), sliding in on open and leading a tab change (fm_lead)
+const BGL := {
+	"": {"bx": 0.22, "by": 0.70, "sh": [-0.10, 0.46, -9.0], "ed": [0.30, -9.0], "sl": [0.01, 0.34, 0.30, -7.0, 16.0], "bg": [-0.04, 0.64, -8.0]},
+	"fac": {"by": 0.40, "sh": [-0.10, 0.46, -4.0], "ed": [0.30, -4.0], "sl": [0.01, 0.58, 0.30, -4.0, 16.0]},
+	"home": {"sl": [0.01, 0.40, 0.28, -7.0, 16.0]},
+	"lv": {"bx": 0.60, "by": 0.60, "sl": [0.01, 0.70, 0.30, -2.0, 16.0], "bg": [0.36, 0.14, -4.0]},
+	"day": {"sl": [0.01, 0.52, 0.30, -5.0, 16.0], "bg": [-0.04, 0.74, -8.0]},
+	"ch": {"sh": [-0.10, 0.40, -5.0], "ed": [0.27, -5.0], "sl": [0.01, 0.72, 0.26, -5.0, 16.0], "bg": [-0.06, 0.82, -8.0]},
+	"dun": {"sh": [-0.10, 0.40, -5.0], "ed": [0.27, -5.0], "sl": [0.01, 0.72, 0.26, -5.0, 16.0], "bg": [-0.06, 0.82, -8.0]},
+	"rune": {"sh": [-0.10, 0.62, -3.0], "ed": [0.50, -3.0], "sl": [0.01, 0.84, 0.48, -3.0, 16.0], "bg": [0.20, 0.70, -8.0]},
+	"people": {"bx": 0.80, "by": 0.30, "sh": [0.52, 0.60, 8.0], "ed": [0.50, 8.0], "sl": [0.34, 0.125, 0.44, -3.0, 6.0], "bg": [0.40, 0.70, -8.0]},
+}
+func _bgl(tb: String, k: String):
+	var d: Dictionary = BGL.get(tb, {})
+	return d.get(k, BGL[""][k])
+
+func _draw_bgl(vs: Vector2, fa: Color, tb: String) -> void:
+	var MV := "mv"
+	var bx: float = trn.get_v("bx", _bgl(tb, "bx"), 800.0, MV)
+	var by: float = trn.get_v("by", _bgl(tb, "by"), 800.0, MV)
+	var sh: Array = trn.get_v("sh", _bgl(tb, "sh"), 750.0, MV)
+	var ed: Array = trn.get_v("ed", _bgl(tb, "ed"), 750.0, MV)
+	var sl: Array = trn.get_v("sl", _bgl(tb, "sl"), 750.0, MV)
+	var bg: Array = trn.get_v("bg", _bgl(tb, "bg"), 750.0, MV)
+	var cl := closing
+	# burst: white rays 5° of every 13°, 80 s a turn
+	var bc := Vector2(vs.x * bx, vs.y * by)
+	var rr := maxf(vs.x, vs.y) * 2.6
+	var step := deg_to_rad(13.0)
+	var spin := t / 80000.0 * TAU
+	for i in int(TAU / step) + 1:
+		var a0 := spin + i * step
+		_ci.draw_colored_polygon(PackedVector2Array([bc, bc + Vector2(cos(a0), sin(a0)) * rr, bc + Vector2(cos(a0 + deg_to_rad(5.0)), sin(a0 + deg_to_rad(5.0))) * rr]), Color(1, 1, 1, 0.035))
+	# shard
+	var shr := Rect2(vs.x * sh[0], -0.04 * vs.y, vs.x * sh[1], vs.y * 1.3)
+	var su := UIA.p(t, 60.0, 620.0, EZ)
+	pen.group(UIA.xf(shr.get_center(), Vector2(-0.45 * shr.size.x * (1.0 - su), 0).rotated(deg_to_rad(sh[2])), deg_to_rad(sh[2])))
+	_ci.draw_colored_polygon(S.clip(shr, [[0, 0], [86, 0], [100, 30], [82, 48], [94, 100], [0, 100]]), Color("#17131d"))
+	# edge
+	var lt := lead_t
+	var e2: float = UIA.kf(lt, [[0.0, 0.0], [0.4, 36.0], [1.0, 0.0]], 950.0, 0.0, "mv")
+	var er := Rect2(vs.x * ed[0], -0.12 * vs.y, vs.x * 0.022, vs.y * 1.34)
+	var eu := UIA.p(t, 120.0, 560.0, EZ)
+	pen.group(UIA.xf(er.get_center(), Vector2(e2, 0) + Vector2(0, -1.1 * er.size.y * (1.0 - eu)).rotated(deg_to_rad(ed[1])), deg_to_rad(ed[1])))
+	_ci.draw_rect(er, Color(fa, 0.9))
+	# slash
+	var slr := Rect2(vs.x * sl[0], vs.y * sl[1], vs.x * sl[2], sl[4])
+	var slu := UIA.p(t, 160.0, 640.0, EZ)
+	var sla := clampf((t - 160.0) / (640.0 * 0.3), 0.0, 1.0)
+	var lead: Array = UIA.kf(lt, [[0.0, [0.0, 0.0, 1.0]], [0.38, [220.0, -16.0, 1.25]], [1.0, [0.0, 0.0, 1.0]]], 950.0, 0.0, "mv")
+	var sx := -1.2 * slr.size.x * (1.0 - slu)
+	if cl >= 0.0:
+		var cu := UIA.lin(cl, 0.0, 320.0)
+		sx = 1.2 * slr.size.x * cu
+		sla = 1.0 - cu
+	pen.group(Transform2D(0.0, Vector2(lead[0], lead[1])) * UIA.xf(slr.get_center(), Vector2(sx, 0).rotated(deg_to_rad(sl[3])), deg_to_rad(sl[3]), Vector2(lead[2], 1.0)), sla)
+	_ci.draw_colored_polygon(S.clip(slr, [[0, 40], [100, 0], [100, 30], [3, 100]]), Color.WHITE)
+	# the hollow word
+	var word := "ADVENTURE" if book() == "abk" else "GUILD"
+	var fs := int(vs.y * 0.34)
+	var bu := UIA.p(t, 300.0, 700.0, EZ)
+	var ba := clampf((t - 300.0) / 700.0, 0.0, 1.0)
+	if cl >= 0.0: ba = 1.0 - UIA.lin(cl, 0.0, 300.0)
+	var ww := S.tw(S.anton(), word, fs)
+	var l3: float = UIA.kf(lt, [[0.0, 0.0], [0.45, -60.0], [1.0, 0.0]], 950.0, 0.0, "mv")
+	var bp := Vector2(vs.x * bg[0], vs.y * bg[1])
+	pen.group(UIA.xf(bp + Vector2(ww / 2.0, fs * 0.4), Vector2(l3 - 0.12 * ww * (1.0 - bu), 0), deg_to_rad(bg[2])), ba)
+	_ci.draw_string_outline(S.anton(), bp + Vector2(0, fs * 0.8), word, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 3, Color(1, 1, 1, 0.09))
+	pen.reset()
+
+## speedFx: streaks sweep across as a tab turns
+func _draw_speed(vs: Vector2) -> void:
+	if slide_t > 560.0: return
+	var u := UIA.p(slide_t, 0.0, 560.0, "ease-out")
+	var a := 0.9 * (1.0 - u)
+	var off := vs.x * 1.8 * 0.3 * (1.0 - 2.0 * u) * (1.0 if slide_dir > 0 else -1.0)
+	var tk := tan(deg_to_rad(14.0))
+	var x := -0.4 * vs.x
+	while x < vs.x * 1.4:
+		var xx := x + off
+		var m := clampf(xx / vs.x, 0.0, 1.0)
+		var mk := clampf(m / 0.3, 0.0, 1.0) * clampf((1.0 - m) / 0.4, 0.0, 1.0)
+		if mk > 0.0:
+			_ci.draw_colored_polygon(PackedVector2Array([Vector2(xx, -10), Vector2(xx + 2.0, -10), Vector2(xx + 2.0 + vs.y * tk, vs.y + 10), Vector2(xx + vs.y * tk, vs.y + 10)]), Color(1, 1, 1, 0.7 * a * mk))
+		x += 60.0
+
+## the book switch wiper: one fan of the new colour around the band's left end, rising from under the page
+func _draw_wipe(vs: Vector2) -> void:
+	if wipe_t < 0.0: return
+	var deg := -4.0
+	var th := deg_to_rad(deg)
+	var W := vs.x
+	var mx := W / 2.0 - 60.0 * sin(th)
+	var my := 30.0 + 60.0 * cos(th)
+	var py := my + (0.0 - mx) * tan(th)
+	var D := 1140.0
+	var rot: float = UIA.kf(wipe_t, [[0.0, 270.0, [0.55, 0.0, 0.8, 0.4]], [0.36, 176.0, [0.35, 0.0, 0.65, 1.0]], [0.64, 86.0, [0.2, 0.7, 0.25, 1.0]], [0.9, deg - 4.5, "ease-out"], [1.0, deg]], D)
+	var H := 3200.0
+	var r := Rect2(-3.2 * W, py - H, 6.4 * W, H)
+	var piv := Vector2(0.0, py)
+	var to: Color = BOOKCOL.get(wipe_to, Color.WHITE)
+	_ci.draw_colored_polygon(UIA.xf(piv, Vector2.ZERO, deg_to_rad(rot)) * PackedVector2Array([r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]), to)
 
 
 # ---------- chrome ----------
@@ -255,31 +644,61 @@ func _draw_tabs(vs: Vector2, fa: Color) -> void:
 	var x := maxf(190.0, vs.x * 0.22)
 	var bf := S.bhs()
 	var fs := 18 if vs.x > 1000.0 else 16
+	# layout first (the cursor plates need the chosen tab's place)
+	var R: Array = []
+	var on_i := 0
+	for i in L.size():
+		var on: bool = L[i][0] == cur_tab()
+		if on: on_i = i
+		var w := S.tw(bf, L[i][1], fs) + 22.0
+		R.append(Rect2(x, 16.0, w, 30.0))
+		x += w * (1.16 if on else 1.0) + 4.0
+	var tr: Rect2 = R[on_i]
+	var tw2 := tr.size.x * 1.16
+	var tl := tr.position.x - (tw2 - tr.size.x) / 2.0
+	if not ind_init:
+		ind_init = true
+		for sp in [ind_l, ind2_l]: sp.snap(tl)
+		for sp in [ind_w, ind2_w]: sp.snap(tw2)
+	ind_l.to(tl)
+	ind2_l.to(tl)
+	ind_w.to(tw2)
+	ind2_w.to(tw2)
+	# the cursor: a black plate lagging behind a white one (tabInd springs)
+	var hi := _hdr(40.0 + on_i * 45.0, 420.0)
+	var ho := _hdr_out(on_i)
+	var iy: float = -40.0 * (1.0 - hi[0]) + ho[0]
+	pen.group(Transform2D(0.0, Vector2(0, iy)), hi[1] * ho[1] * 0.9)
+	_ci.draw_colored_polygon(S.clip(Rect2(ind2_l.x, 14.0 + 2.0, ind2_w.x, 32.0), [[0, 34], [100, 8], [94, 100], [5, 84]]), Color.BLACK)
+	pen.group(Transform2D(0.0, Vector2(0, iy)), hi[1] * ho[1])
+	_ci.draw_colored_polygon(S.clip(Rect2(ind_l.x, 14.0, ind_w.x, 32.0), [[3, 20], [97, 0], [100, 74], [7, 100]]), Color.WHITE)
 	for i in L.size():
 		var on: bool = L[i][0] == cur_tab()
 		var s: String = L[i][1]
-		var w := S.tw(bf, s, fs) + 22.0
-		var r := Rect2(x, 16.0, w, 30.0)
-		var sc := 1.16 if on else 1.0
-		draw_set_transform_matrix(Transform2D(0.0, Vector2(sc, sc), deg_to_rad(-8.0), r.get_center() + Vector2(0, -2 if on else 0)))
-		var lr := Rect2(-w / 2.0, -15.0, w, 30.0)
+		var r: Rect2 = R[i]
+		var w := r.size.x
 		var hv := r.has_point(hover) and not on
-		if on:
-			draw_colored_polygon(S.clip(lr, [[3, 20], [97, 0], [100, 74], [7, 100]]), Color.WHITE)
-			draw_string(S.anton(false, 2), Vector2(lr.position.x + 10.0, lr.position.y - 2.0), L[i][2], HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color.BLACK)
-			draw_string(bf, Vector2(lr.position.x + 11.0, 7.0), s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color.BLACK)
-		else:
-			draw_string_outline(bf, Vector2(lr.position.x + 11.0, 7.0 - (2.0 if hv else 0.0)), s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 6, Color.BLACK)
-			draw_string(bf, Vector2(lr.position.x + 11.0, 7.0 - (2.0 if hv else 0.0)), s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, 1.0 if hv else 0.85))
+		var sc: float = trn.get_v("tab%d" % i, 1.16 if on else 1.0, 350.0, BK)
+		var lift: float = trn.get_v("tabl%d" % i, -2.0 if (on or hv) else 0.0, 350.0, BK)
+		var ink: float = trn.get_v("tabc%d" % i, 1.0 if on else 0.0, 250.0, "ease")
+		var h := _hdr(40.0 + i * 45.0, 420.0)
+		var o := _hdr_out(i)
+		pen.group(Transform2D(0.0, Vector2(0, -34.0 * (1.0 - h[0]) + o[0])), h[1] * o[1] * (1.0 if on or hv else 0.85))
+		_ci.draw_set_transform_matrix(Transform2D(0.0, Vector2(sc, sc), deg_to_rad(-8.0), r.get_center() + Vector2(0, lift)))
+		var lr := Rect2(-w / 2.0, -15.0, w, 30.0)
+		_ci.draw_string(S.anton(false, 2), Vector2(lr.position.x + 10.0, lr.position.y - 2.0 + 4.0 * (1.0 - ink)), L[i][2], HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0, 0, 0, ink))
+		if ink < 1.0:
+			_ci.draw_string_outline(bf, Vector2(lr.position.x + 11.0, 7.0), s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 6, Color(0, 0, 0, 1.0 - ink))
+		_ci.draw_string(bf, Vector2(lr.position.x + 11.0, 7.0), s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1.0 - ink, 1.0 - ink, 1.0 - ink, 1.0))
 		var badge := _badge(L[i][0])
 		if badge > 0:
-			draw_circle(Vector2(lr.end.x - 2.0, lr.position.y + 2.0), 8.0, Color("#ff3d5a"))
+			_ci.draw_circle(Vector2(lr.end.x - 2.0, lr.position.y + 2.0), 8.0, Color("#ff3d5a"))
 			var bs := str(badge)
-			draw_string(S.noto(), Vector2(lr.end.x - 2.0 - S.tw(S.noto(), bs, 10) / 2.0, lr.position.y + 6.0), bs, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color.WHITE)
-		draw_set_transform(Vector2.ZERO)
+			_ci.draw_string(S.noto(), Vector2(lr.end.x - 2.0 - S.tw(S.noto(), bs, 10) / 2.0, lr.position.y + 6.0), bs, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color.WHITE)
+		_ci.draw_set_transform(Vector2.ZERO)
 		var tb: String = L[i][0]
 		_hit(r, func(): _go_tab(tb))
-		x += w * sc + 4.0
+	pen.reset()
 
 ## tabBadges
 func _badge(tb: String) -> int:
@@ -298,15 +717,22 @@ func _draw_purse(vs: Vector2, fa: Color) -> void:
 		var it: Array = items[j]
 		var w := 30.0 + S.tw(S.noto(), it[0], 9) + 6.0 + maxf(24.0, S.tw(S.anton(), it[1], 15)) + 10.0
 		x -= w - 7.0
-		draw_set_transform(Vector2(x + w / 2.0, 70.0 + (6.0 if j == 1 else (2.0 if j == 2 else 0.0))), deg_to_rad(rots[j]))
+		var h := _hdr(160.0 + j * 60.0, 460.0)
+		var o := _hdr_out(5 + j)
+		var bump: float = UIA.kf(bump_t, [[0.0, 0.0], [0.3, -8.0], [1.0, 0.0]], 550.0, 0.0, BK)
+		purse_at[j] = Vector2(x + w / 2.0, 70.0)
+		var hs: float = UIA.kf(hot_t[j], [[0.0, 1.35], [1.0, 1.0]], 500.0, 0.0, [0.2, 1.6, 0.4, 1.0])
+		pen.group(Transform2D(0.0, Vector2(0, -46.0 * (1.0 - h[0]) + o[0] + bump)), h[1] * o[1])
+		_ci.draw_set_transform(Vector2(x + w / 2.0, 70.0 + (6.0 if j == 1 else (2.0 if j == 2 else 0.0))), deg_to_rad(rots[j]), Vector2(hs, hs))
 		var r := Rect2(-w / 2.0, -12.0, w, 24.0)
-		draw_colored_polygon(S.clip(Rect2(r.position + Vector2(3, 3), r.size), [[9, 0], [100, 0], [91, 100], [0, 100]]), Color.BLACK)
-		draw_colored_polygon(S.clip(r, [[9, 0], [100, 0], [91, 100], [0, 100]]), Color.WHITE)
-		draw_circle(r.position + Vector2(16, 12), 9.0, Color.BLACK)
-		draw_string(S.noto(), r.position + Vector2(16 - S.tw(S.noto(), it[2], 10) / 2.0, 16), it[2], HORIZONTAL_ALIGNMENT_LEFT, -1, 10, fa)
-		draw_string(S.noto(), r.position + Vector2(30, 15), it[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0, 0, 0, 0.75))
-		draw_string(S.anton(), Vector2(r.end.x - 12.0 - S.tw(S.anton(), it[1], 15), r.position.y + 18.0), it[1], HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color.BLACK)
-		draw_set_transform(Vector2.ZERO)
+		_ci.draw_colored_polygon(S.clip(Rect2(r.position + Vector2(3, 3), r.size), [[9, 0], [100, 0], [91, 100], [0, 100]]), Color.BLACK)
+		_ci.draw_colored_polygon(S.clip(r, [[9, 0], [100, 0], [91, 100], [0, 100]]), Color.WHITE)
+		_ci.draw_circle(r.position + Vector2(16, 12), 9.0, Color.BLACK)
+		_ci.draw_string(S.noto(), r.position + Vector2(16 - S.tw(S.noto(), it[2], 10) / 2.0, 16), it[2], HORIZONTAL_ALIGNMENT_LEFT, -1, 10, fa)
+		_ci.draw_string(S.noto(), r.position + Vector2(30, 15), it[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0, 0, 0, 0.75))
+		_ci.draw_string(S.anton(), Vector2(r.end.x - 12.0 - S.tw(S.anton(), it[1], 15), r.position.y + 18.0), it[1], HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color.BLACK)
+		_ci.draw_set_transform(Vector2.ZERO)
+	pen.reset()
 
 ## the other book's bookmark, hanging under the band on the right
 func _draw_bookmark(vs: Vector2) -> void:
@@ -317,41 +743,93 @@ func _draw_bookmark(vs: Vector2) -> void:
 	var w := S.tw(S.bhs(), kr, 14) + 24.0
 	var r := Rect2(vs.x - 16.0 - w, 58.0, w, 52.0)
 	var hv := r.has_point(hover)
-	draw_set_transform(Vector2(r.get_center().x, r.position.y), deg_to_rad(-2.0 if hv else -5.0))
-	var lr := Rect2(-w / 2.0, 4.0 if hv else 0.0, w, 52.0)
-	draw_colored_polygon(S.clip(lr, [[0, 0], [100, 0], [100, 82], [50, 100], [0, 82]]), Color.BLACK)
-	draw_rect(Rect2(lr.position, Vector2(w, 5)), oc)
-	draw_string(S.anton(false, 2), Vector2(-S.tw(S.anton(false, 2), en, 9) / 2.0, lr.position.y + 19.0), en, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, oc)
-	draw_string(S.bhs(), Vector2(-S.tw(S.bhs(), kr, 14) / 2.0, lr.position.y + 36.0), kr, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color.WHITE)
-	draw_set_transform(Vector2.ZERO)
+	var h := _hdr(220.0, 560.0)
+	var o := _hdr_out(8)
+	var rot: float = trn.get_v("bmr", -2.0 if hv else -5.0, 300.0, BK)
+	var dy: float = trn.get_v("bmy", 4.0 if hv else 0.0, 300.0, BK)
+	if closing < 0.0 and h[0] < 1.0: rot = lerpf(-60.0, -5.0, h[0])
+	var sw: Array = UIA.kf(bump_t, [[0.0, [0.0, 0.0]], [0.3, [-9.0, 4.0]], [1.0, [0.0, 0.0]]], 700.0, 0.0, BK)
+	pen.group(Transform2D(0.0, Vector2(0, o[0])), h[1] * o[1])
+	_ci.draw_set_transform(Vector2(r.get_center().x, r.position.y), deg_to_rad(rot + sw[0]))
+	var lr := Rect2(-w / 2.0, dy + sw[1], w, 52.0)
+	_ci.draw_colored_polygon(S.clip(lr, [[0, 0], [100, 0], [100, 82], [50, 100], [0, 82]]), Color.BLACK)
+	_ci.draw_rect(Rect2(lr.position, Vector2(w, 5)), oc)
+	_ci.draw_string(S.anton(false, 2), Vector2(-S.tw(S.anton(false, 2), en, 9) / 2.0, lr.position.y + 19.0), en, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, oc)
+	_ci.draw_string(S.bhs(), Vector2(-S.tw(S.bhs(), kr, 14) / 2.0, lr.position.y + 36.0), kr, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color.WHITE)
+	pen.reset()
 	_hit(r, func(): _switch_book())
 
 func _draw_close(vs: Vector2, fa: Color) -> void:
 	var c := Vector2(vs.x - 14.0 - 18.0, 10.0 + 18.0)
-	draw_circle(c + Vector2(3, 3), 18.0, fa)
-	draw_circle(c, 18.0, Color.BLACK)
-	draw_arc(c, 17.0, 0, TAU, 32, Color.WHITE, 2.0, true)
-	draw_line(c + Vector2(-5, -5), c + Vector2(5, 5), Color.WHITE, 2.0, true)
-	draw_line(c + Vector2(5, -5), c + Vector2(-5, 5), Color.WHITE, 2.0, true)
-	_hit(Rect2(c - Vector2(20, 20), Vector2(40, 40)), func(): menu.close_page())
+	var h := _hdr(260.0, 380.0)
+	var o := _hdr_out(9)
+	pen.group(UIA.xf(c, Vector2(0, o[0]), deg_to_rad(-90.0) * (1.0 - h[0]), Vector2.ONE * maxf(0.001, h[0])), o[1])
+	_ci.draw_circle(c, 18.0, Color.BLACK)
+	_ci.draw_arc(c, 17.0, 0, TAU, 32, Color.WHITE, 2.0, true)
+	_ci.draw_line(c + Vector2(-5, -5), c + Vector2(5, 5), Color.WHITE, 2.0, true)
+	_ci.draw_line(c + Vector2(5, -5), c + Vector2(-5, 5), Color.WHITE, 2.0, true)
+	pen.reset()
+	_hit(Rect2(c - Vector2(20, 20), Vector2(40, 40)), func(): close_fx())
 
 ## the paper sheet: cream, a red margin line, faint rules, a hard black drop
 func _draw_paper(r: Rect2, e: float) -> void:
 	var rot := deg_to_rad(-0.6)
-	draw_set_transform(r.get_center(), rot)
+	_ci.draw_set_transform(r.get_center(), rot)
 	var lr := Rect2(-r.size / 2.0, r.size)
-	draw_rect(Rect2(lr.position + Vector2(7, 9), lr.size), Color(0, 0, 0, e))
-	draw_rect(lr, Color(PAPER, 1.0))
+	_ci.draw_rect(Rect2(lr.position + Vector2(7, 9), lr.size), Color(0, 0, 0, e))
+	_ci.draw_rect(lr, Color(PAPER, 1.0))
 	var y := lr.position.y + 27.0
 	while y < lr.end.y:
-		draw_rect(Rect2(lr.position.x, y, lr.size.x, 1.0), Color(0.24, 0.16, 0.08, 0.075))
+		_ci.draw_rect(Rect2(lr.position.x, y, lr.size.x, 1.0), Color(0.24, 0.16, 0.08, 0.075))
 		y += 28.0
-	draw_rect(Rect2(lr.position.x + 30.0, lr.position.y, 1.0, lr.size.y), Color(0.78, 0.27, 0.27, 0.22))
-	draw_rect(Rect2(lr.position, Vector2(10, lr.size.y)), Color(0, 0, 0, 0.08))
-	draw_set_transform(Vector2.ZERO)
+	_ci.draw_rect(Rect2(lr.position.x + 30.0, lr.position.y, 1.0, lr.size.y), Color(0.78, 0.27, 0.27, 0.22))
+	_ci.draw_rect(Rect2(lr.position, Vector2(10, lr.size.y)), Color(0, 0, 0, 0.08))
+	_ci.draw_set_transform(Vector2.ZERO)
 
 
 # ---------- the big number (hero) ----------
+func _hero_l(lc: Rect2) -> float:
+	return _hero_at(lc, false)
+
+## the hero floats over the pages: it glides between its docks on springs (heroSync), slides in late on open,
+## and drifts off left on close
+func _hero_at(r: Rect2, small: bool) -> float:
+	var dk := "R" if small else "L"
+	var keep_xf: Transform2D = pen.xf
+	var keep_a: float = pen.a
+	if hero_dock == "":
+		hero_dock = dk
+		hero_last = r
+		hero_sp[0].snap(-120.0)
+		hero_sp[1].snap(0.0)
+		hero_sp[2].snap(-8.0)
+		hero_sp[3].snap(1.0)
+	elif dk != hero_dock and closing < 0.0:
+		var far := (r.position - hero_last.position).length() > 120.0
+		hero_sp[0].snap(hero_sp[0].x + hero_last.position.x - r.position.x)
+		hero_sp[1].snap(hero_sp[1].x + hero_last.position.y - r.position.y)
+		hero_sp[3].snap(hero_last.size.x / maxf(1.0, r.size.x) * hero_sp[3].x)
+		hero_sp[2].v += (-60.0 if r.position.x > hero_last.position.x else 60.0) if far else 0.0
+		hero_dock = dk
+	hero_last = r
+	var a := 1.0
+	if t < 260.0:
+		hero_sp[0].snap(-120.0)
+		hero_sp[2].snap(-8.0)
+		a = 0.0
+	else:
+		a = clampf((t - 260.0) / 400.0, 0.0, 1.0)
+	for i in 4: hero_sp[i].to(1.0 if i == 3 else 0.0)
+	var off := Vector2(hero_sp[0].x, hero_sp[1].x)
+	if closing >= 0.0:
+		var u := UIA.lin(closing, 0.0, 300.0)
+		off.x -= 80.0 * u
+		a *= 1.0 - u
+	pen.group(UIA.xf(r.position, off, deg_to_rad(hero_sp[2].x), Vector2.ONE * hero_sp[3].x), a * (keep_a if not small else 1.0))
+	var y := _hero(r, small)
+	pen.group(keep_xf, keep_a)
+	return y
+
 ## returns the bottom y
 func _hero(r: Rect2, small: bool) -> float:
 	var adv := book() == "abk"
@@ -379,45 +857,45 @@ func _hero(r: Rect2, small: bool) -> float:
 	var w := r.size.x if not small else r.size.x
 	var p := r.position
 	var nfs := 54 if small else 76
-	draw_set_transform(p + Vector2(0, 4), deg_to_rad(-1.5 if not small else 7.0 * 0.0 - 3.0))
+	_ci.draw_set_transform(p + Vector2(0, 4), deg_to_rad(-1.5 if not small else 7.0 * 0.0 - 3.0))
 	var lr := Rect2(0, 0, w, h)
-	draw_colored_polygon(S.clip(Rect2(lr.position + Vector2(5, 5), lr.size), [[0, 0], [100, 3], [97, 100], [2, 95]]), fa)
-	draw_colored_polygon(S.clip(lr, [[0, 0], [100, 3], [97, 100], [2, 95]]), Color("#0d0b10"))
+	_ci.draw_colored_polygon(S.clip(Rect2(lr.position + Vector2(5, 5), lr.size), [[0, 0], [100, 3], [97, 100], [2, 95]]), fa)
+	_ci.draw_colored_polygon(S.clip(lr, [[0, 0], [100, 3], [97, 100], [2, 95]]), Color("#0d0b10"))
 	var fi := S.anton(true)
 	var nw := S.tw(fi, num, nfs)
-	draw_string(fi, Vector2(16 + 4, nfs * 0.86 + 4), num, HORIZONTAL_ALIGNMENT_LEFT, -1, nfs, Color.BLACK)
-	draw_string(fi, Vector2(16, nfs * 0.86), num, HORIZONTAL_ALIGNMENT_LEFT, -1, nfs, fa)
+	_ci.draw_string(fi, Vector2(16 + 4, nfs * 0.86 + 4), num, HORIZONTAL_ALIGNMENT_LEFT, -1, nfs, Color.BLACK)
+	_ci.draw_string(fi, Vector2(16, nfs * 0.86), num, HORIZONTAL_ALIGNMENT_LEFT, -1, nfs, fa)
 	var tx := 16.0 + nw + 10.0
-	draw_string(S.anton(false, 1), Vector2(tx, nfs * 0.5), en, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.73, 0.73, 0.73))
+	_ci.draw_string(S.anton(false, 1), Vector2(tx, nfs * 0.5), en, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.73, 0.73, 0.73))
 	var nmfs := S.fit_size(S.bhs(), nm, 18 if small else 22, w - tx - 10.0)
-	draw_string(S.bhs(), Vector2(tx, nfs * 0.5 + nmfs + 2.0), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, nmfs, Color.WHITE)
+	_ci.draw_string(S.bhs(), Vector2(tx, nfs * 0.5 + nmfs + 2.0), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, nmfs, Color.WHITE)
 	if not small:
 		var gy := nfs * 0.98 + 6.0
 		var gr := Rect2(16, gy, w - 36.0, 12.0)
-		S.para(self, gr, -3.0, Color("#2a2630"))
+		S.para(_ci, gr, -3.0, Color("#2a2630"))
 		var f := clampf(cur / maxf(1.0, need), 0.0, 1.0)
-		if f > 0.0: S.para(self, Rect2(gr.position, Vector2(gr.size.x * f, gr.size.y)), -3.0, fa)
-		draw_string(S.noto(), Vector2(16, gy + 30.0), l1, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.87, 0.87, 0.87))
-		draw_string(S.noto(), Vector2(w - 20.0 - S.tw(S.noto(), l2, 12), gy + 30.0), l2, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.87, 0.87, 0.87))
-	draw_set_transform(Vector2.ZERO)
+		if f > 0.0: S.para(_ci, Rect2(gr.position, Vector2(gr.size.x * f, gr.size.y)), -3.0, fa)
+		_ci.draw_string(S.noto(), Vector2(16, gy + 30.0), l1, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.87, 0.87, 0.87))
+		_ci.draw_string(S.noto(), Vector2(w - 20.0 - S.tw(S.noto(), l2, 12), gy + 30.0), l2, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.87, 0.87, 0.87))
+	_ci.draw_set_transform(Vector2.ZERO)
 	return p.y + h + 8.0
 
 ## a goal button (abHome .goal)
 func _goal(r: Rect2, title: String, sub: String, gc: Color, cb: Callable, tag := "", on_paper := false) -> float:
 	var hv := r.has_point(hover)
 	var bg := Color(1, 1, 1, 0.6) if on_paper else Color("#16131b")
-	draw_rect(r, bg if not hv else (Color(1, 1, 1, 0.85) if on_paper else Color("#221d29")))
-	draw_rect(Rect2(r.position, Vector2(4, r.size.y)), gc)
+	_ci.draw_rect(r, bg if not hv else (Color(1, 1, 1, 0.85) if on_paper else Color("#221d29")))
+	_ci.draw_rect(Rect2(r.position, Vector2(4, r.size.y)), gc)
 	var x := r.position.x + 12.0
 	var ink := INK if on_paper else Color.WHITE
 	if tag != "":
 		var tw := S.tw(S.noto(), tag, 10) + 12.0
-		S.para(self, Rect2(x, r.position.y + 8.0, tw, 16.0), 3.0, gc)
-		draw_string(S.noto(), Vector2(x + 6.0, r.position.y + 20.0), tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color.BLACK)
+		S.para(_ci, Rect2(x, r.position.y + 8.0, tw, 16.0), 3.0, gc)
+		_ci.draw_string(S.noto(), Vector2(x + 6.0, r.position.y + 20.0), tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color.BLACK)
 		x += tw + 6.0
-	draw_string(S.bhs(), Vector2(x, r.position.y + 21.0), title, HORIZONTAL_ALIGNMENT_LEFT, r.end.x - x - 24.0, 15, ink)
-	draw_string(S.noto(), Vector2(r.position.x + 12.0, r.position.y + 38.0), sub, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 40.0, 11, INK2 if on_paper else Color(0.79, 0.76, 0.82))
-	draw_string(S.anton(), Vector2(r.end.x - 16.0, r.position.y + r.size.y / 2.0 + 6.0), "›", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, gc)
+	_ci.draw_string(S.bhs(), Vector2(x, r.position.y + 21.0), title, HORIZONTAL_ALIGNMENT_LEFT, r.end.x - x - 24.0, 15, ink)
+	_ci.draw_string(S.noto(), Vector2(r.position.x + 12.0, r.position.y + 38.0), sub, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 40.0, 11, INK2 if on_paper else Color(0.79, 0.76, 0.82))
+	_ci.draw_string(S.anton(), Vector2(r.end.x - 16.0, r.position.y + r.size.y / 2.0 + 6.0), "›", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, gc)
 	_hit(r, cb)
 	return r.end.y
 
@@ -441,7 +919,7 @@ func _info_menu(r: Rect2, key: String, title: String) -> void:
 	var items := _imd(key)
 	var sel := mini(int(im.get(key, 0)), items.size() - 1)
 	var fa := col()
-	draw_string(S.bhs(), r.position + Vector2(4, 14), title, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, fa)
+	_ci.draw_string(S.bhs(), r.position + Vector2(4, 14), title, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, fa)
 	var xf := Transform2D(deg_to_rad(-4.0), r.position + Vector2(8, 26))
 	var y := 0.0
 	var bf := S.bhs()
@@ -456,18 +934,18 @@ func _info_menu(r: Rect2, key: String, title: String) -> void:
 		var base := xf * Transform2D(rot, Vector2(sc, sc), 0.0, Vector2(x, y + (8.0 if on else 0.0)))
 		if on:
 			var cw := lw * 1.0 + 26.0
-			draw_set_transform_matrix(xf * Transform2D(deg_to_rad(2.0), Vector2(x - 6.0, y + 14.0)))
-			draw_colored_polygon(S.clip(Rect2(0, 0, cw * 1.28 + 10.0, 30), [[0, 34], [100, 8], [94, 100], [5, 84]]), fa)
-			draw_set_transform_matrix(xf * Transform2D(deg_to_rad(-3.0), Vector2(x - 2.0, y + 10.0)))
-			draw_colored_polygon(S.clip(Rect2(0, 0, cw * 1.28, 30), [[3, 20], [97, 0], [100, 74], [7, 100]]), Color.WHITE)
-		draw_set_transform_matrix(base)
+			_ci.draw_set_transform_matrix(xf * Transform2D(deg_to_rad(2.0), Vector2(x - 6.0, y + 14.0)))
+			_ci.draw_colored_polygon(S.clip(Rect2(0, 0, cw * 1.28 + 10.0, 30), [[0, 34], [100, 8], [94, 100], [5, 84]]), fa)
+			_ci.draw_set_transform_matrix(xf * Transform2D(deg_to_rad(-3.0), Vector2(x - 2.0, y + 10.0)))
+			_ci.draw_colored_polygon(S.clip(Rect2(0, 0, cw * 1.28, 30), [[3, 20], [97, 0], [100, 74], [7, 100]]), Color.WHITE)
+		_ci.draw_set_transform_matrix(base)
 		if on:
-			draw_string(S.anton(false, 2), Vector2(2, 4), it[2], HORIZONTAL_ALIGNMENT_LEFT, -1, 8, fa.darkened(0.2))
-			draw_string(bf, Vector2(4, 22), it[1], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color.BLACK)
+			_ci.draw_string(S.anton(false, 2), Vector2(2, 4), it[2], HORIZONTAL_ALIGNMENT_LEFT, -1, 8, fa.darkened(0.2))
+			_ci.draw_string(bf, Vector2(4, 22), it[1], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color.BLACK)
 		else:
-			draw_string_outline(bf, Vector2(4, 22), it[1], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 6, Color.BLACK)
-			draw_string(bf, Vector2(4, 22), it[1], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, 0.82))
-		draw_set_transform(Vector2.ZERO)
+			_ci.draw_string_outline(bf, Vector2(4, 22), it[1], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 6, Color.BLACK)
+			_ci.draw_string(bf, Vector2(4, 22), it[1], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, 0.82))
+		_ci.draw_set_transform(Vector2.ZERO)
 		var hr := Rect2(xf * Vector2(x, y + 2.0), Vector2(lw * sc + 12.0, 26.0 * sc))
 		var kk: String = key
 		var ii := i
@@ -485,23 +963,23 @@ func _info_menu(r: Rect2, key: String, title: String) -> void:
 			var th := S.noto().get_multiline_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, pw - 26.0, 12).y
 			var ph := 50.0 + th + (30.0 if it[4] != null else 0.0)
 			var pp := xf * Vector2(0, y)
-			draw_set_transform(pp, deg_to_rad(2.5))
+			_ci.draw_set_transform(pp, deg_to_rad(2.5))
 			var pr := Rect2(0, 0, pw, ph)
-			draw_colored_polygon(S.clip(pr, [[0, 6], [5, 6], [8, 0], [11, 6], [100, 8], [98.5, 100], [1, 96]]), Color.BLACK)
-			draw_rect(Rect2(0, 6, 5, ph - 10.0), fa)
-			draw_string(S.anton(false, 2), Vector2(14, 24), it[2], HORIZONTAL_ALIGNMENT_LEFT, -1, 10, fa)
-			draw_string(bf, Vector2(14, 42), it[1], HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.WHITE)
+			_ci.draw_colored_polygon(S.clip(pr, [[0, 6], [5, 6], [8, 0], [11, 6], [100, 8], [98.5, 100], [1, 96]]), Color.BLACK)
+			_ci.draw_rect(Rect2(0, 6, 5, ph - 10.0), fa)
+			_ci.draw_string(S.anton(false, 2), Vector2(14, 24), it[2], HORIZONTAL_ALIGNMENT_LEFT, -1, 10, fa)
+			_ci.draw_string(bf, Vector2(14, 42), it[1], HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.WHITE)
 			var lk: bool = it.size() > 5 and it[5]
-			draw_multiline_string(S.noto(), Vector2(14, 60), text, HORIZONTAL_ALIGNMENT_LEFT, pw - 26.0, 12, -1, Color(0.54, 0.52, 0.57) if lk else Color(0.87, 0.87, 0.87))
+			_ci.draw_multiline_string(S.noto(), Vector2(14, 60), text, HORIZONTAL_ALIGNMENT_LEFT, pw - 26.0, 12, -1, Color(0.54, 0.52, 0.57) if lk else Color(0.87, 0.87, 0.87))
 			if it[4] != null:
 				var bl: String = it[4][0]
 				var bw := S.tw(S.bhs(), bl, 12) + 26.0
 				var brr := Rect2(14, ph - 30.0, bw, 22.0)
-				draw_colored_polygon(S.clip(brr, [[7, 0], [100, 0], [93, 100], [0, 100]]), fa)
-				draw_string(S.bhs(), brr.position + Vector2(13, 16), bl, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color.BLACK)
+				_ci.draw_colored_polygon(S.clip(brr, [[7, 0], [100, 0], [93, 100], [0, 100]]), fa)
+				_ci.draw_string(S.bhs(), brr.position + Vector2(13, 16), bl, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color.BLACK)
 				var sr := Rect2(pp + Vector2(14, ph - 30.0).rotated(deg_to_rad(2.5)), Vector2(bw, 22))
 				_hit(sr.grow(4), it[4][1])
-			draw_set_transform(Vector2.ZERO)
+			_ci.draw_set_transform(Vector2.ZERO)
 			y += ph * 1.02 + 8.0
 
 
@@ -532,34 +1010,34 @@ func _row(r: Rect2, o: Dictionary) -> void:
 	if dim:
 		bg = Color(0, 0, 0, 0.05)
 		border = Color(0, 0, 0, 0.18)
-	draw_rect(Rect2(r.position + Vector2(0, 1), r.size), Color(0.24, 0.16, 0.08, 0.15 * a))
-	draw_rect(r, Color(bg, bg.a * a))
-	draw_rect(Rect2(r.position, Vector2(4, r.size.y)), Color(border, a))
+	_ci.draw_rect(Rect2(r.position + Vector2(0, 1), r.size), Color(0.24, 0.16, 0.08, 0.15 * a))
+	_ci.draw_rect(r, Color(bg, bg.a * a))
+	_ci.draw_rect(Rect2(r.position, Vector2(4, r.size.y)), Color(border, a))
 	var x := r.position.x + 12.0
 	var ink := Color(INK3 if dim else INK, a)
 	if o.get("lock", false):
-		S.lock(self, Vector2(x, r.position.y + 8.0), 13.0, Color(INK3, a))
+		S.lock(_ci, Vector2(x, r.position.y + 8.0), 13.0, Color(INK3, a))
 		x += 18.0
 	var tag: String = o.get("tag", "")
 	if tag != "":
 		var tw := S.tw(S.noto(), tag, 10) + 12.0
-		S.para(self, Rect2(x, r.position.y + 8.0, tw, 16.0), 3.0, Color(o.get("tagc", Color("#3a2f26")), a))
-		draw_string(S.noto(), Vector2(x + 6.0, r.position.y + 20.0), tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1, 1, 1, a))
+		S.para(_ci, Rect2(x, r.position.y + 8.0, tw, 16.0), 3.0, Color(o.get("tagc", Color("#3a2f26")), a))
+		_ci.draw_string(S.noto(), Vector2(x + 6.0, r.position.y + 20.0), tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1, 1, 1, a))
 		x += tw + 6.0
 	var title: String = o.get("title", "")
-	draw_string(S.bhs(), Vector2(x, r.position.y + 22.0), title, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, ink)
+	_ci.draw_string(S.bhs(), Vector2(x, r.position.y + 22.0), title, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, ink)
 	var fr: String = o.get("from", "")
 	if fr != "":
-		draw_string(S.noto(), Vector2(x + S.tw(S.bhs(), title, 15) + 6.0, r.position.y + 21.0), fr, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(INK3, a))
+		_ci.draw_string(S.noto(), Vector2(x + S.tw(S.bhs(), title, 15) + 6.0, r.position.y + 21.0), fr, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(INK3, a))
 	var sub: String = o.get("sub", "")
 	var sw := r.size.x - 120.0
 	if sub != "":
-		draw_multiline_string(S.noto(), Vector2(r.position.x + 12.0, r.position.y + 41.0), sub, HORIZONTAL_ALIGNMENT_LEFT, sw, 12, 3, Color(INK3 if dim else INK2, a))
+		_ci.draw_multiline_string(S.noto(), Vector2(r.position.x + 12.0, r.position.y + 41.0), sub, HORIZONTAL_ALIGNMENT_LEFT, sw, 12, 3, Color(INK3 if dim else INK2, a))
 	var bar: float = o.get("bar", -1.0)
 	if bar >= 0.0:
 		var by := r.end.y - 12.0
-		draw_rect(Rect2(r.position.x + 12.0, by, sw, 4.0), Color(0, 0, 0, 0.12))
-		draw_rect(Rect2(r.position.x + 12.0, by, sw * clampf(bar, 0.0, 1.0), 4.0), Color("#3a2f26"))
+		_ci.draw_rect(Rect2(r.position.x + 12.0, by, sw, 4.0), Color(0, 0, 0, 0.12))
+		_ci.draw_rect(Rect2(r.position.x + 12.0, by, sw * clampf(bar, 0.0, 1.0), 4.0), Color("#3a2f26"))
 	# the right column
 	var rx := r.end.x - 10.0
 	var btn = o.get("btn", null)
@@ -571,43 +1049,50 @@ func _row(r: Rect2, o: Dictionary) -> void:
 		var brr := Rect2(rx - bw, r.position.y + 8.0, bw, 24.0)
 		var hv := brr.has_point(hover) and on
 		var pulse := 0.5 + 0.5 * sin(t / 240.0) if on else 0.0
-		if on: draw_colored_polygon(S.clip(Rect2(brr.position + Vector2(3, 3), brr.size), [[7, 0], [100, 0], [93, 100], [0, 100]]), Color(0, 0, 0, 0.8))
-		draw_colored_polygon(S.clip(brr.grow(1.0 if hv else 0.0), [[7, 0], [100, 0], [93, 100], [0, 100]]), (Color("#ffd34d").lightened(0.15 * pulse) if on else Color("#555")))
-		draw_string(S.bhs(), brr.position + Vector2(14, 17), bl, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color.BLACK if on else Color(0.73, 0.73, 0.73))
-		if on: _hit(brr.grow(3), btn[1])
+		if on: _ci.draw_colored_polygon(S.clip(Rect2(brr.position + Vector2(3, 3), brr.size), [[7, 0], [100, 0], [93, 100], [0, 100]]), Color(0, 0, 0, 0.8))
+		_ci.draw_colored_polygon(S.clip(brr.grow(1.0 if hv else 0.0), [[7, 0], [100, 0], [93, 100], [0, 100]]), (Color("#ffd34d").lightened(0.15 * pulse) if on else Color("#555")))
+		_ci.draw_string(S.bhs(), brr.position + Vector2(14, 17), bl, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color.BLACK if on else Color(0.73, 0.73, 0.73))
+		if on:
+			var cb: Callable = btn[1]
+			var rr := r
+			var rw: Array = [o.get("r1", ""), o.get("r2", "")]
+			var stp := "복구" if bl.begins_with("복구") else "완료"
+			_hit(brr.grow(3), func():
+				_claim_fx(rr, rw, stp, rx)
+				cb.call())
 		ry = brr.end.y + 14.0
 	var r1: String = o.get("r1", "")
 	if r1 != "":
 		var f := S.anton()
-		draw_string(f, Vector2(rx - S.tw(f, r1, 14), ry), r1, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(INK, a))
+		_ci.draw_string(f, Vector2(rx - S.tw(f, r1, 14), ry), r1, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(INK, a))
 		ry += 15.0
 	var r2: String = o.get("r2", "")
 	if r2 != "":
 		var fs := 10
-		draw_string(S.noto(), Vector2(rx - S.tw(S.noto(), r2, fs), ry), r2, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(Color("#a87400") if not o.get("acc", false) else Color("#2f6d94"), a))
+		_ci.draw_string(S.noto(), Vector2(rx - S.tw(S.noto(), r2, fs), ry), r2, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(Color("#a87400") if not o.get("acc", false) else Color("#2f6d94"), a))
 	if o.get("envelope", false):
 		var wob := sin(t / 1600.0 * TAU) * 0.14
-		draw_set_transform(Vector2(rx - 16.0, r.position.y + r.size.y / 2.0), wob, Vector2.ONE * (1.0 + 0.1 * absf(sin(t / 800.0 * PI))))
-		S.envelope(self, Rect2(-13, -9, 26, 18), Color.WHITE)
-		draw_set_transform(Vector2.ZERO)
+		_ci.draw_set_transform(Vector2(rx - 16.0, r.position.y + r.size.y / 2.0), wob, Vector2.ONE * (1.0 + 0.1 * absf(sin(t / 800.0 * PI))))
+		S.envelope(_ci, Rect2(-13, -9, 26, 18), Color.WHITE)
+		_ci.draw_set_transform(Vector2.ZERO)
 	# the imprint of the stamp on rows that are done with
 	var imp: String = o.get("imprint", "")
 	if st == "got" and imp != "":
 		var c := Vector2(rx - 34.0, r.position.y + r.size.y / 2.0)
-		draw_set_transform(c, deg_to_rad(-12.0))
+		_ci.draw_set_transform(c, deg_to_rad(-12.0))
 		var iw := S.tw(S.bhs(), imp, 16) + 16.0
-		draw_rect(Rect2(-iw / 2.0, -14, iw, 28), Color(0.84, 0.16, 0.21, 0.7), false, 2.0)
-		draw_string(S.bhs(), Vector2(-iw / 2.0 + 8.0, 6), imp, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.84, 0.16, 0.21, 0.75))
-		draw_set_transform(Vector2.ZERO)
+		_ci.draw_rect(Rect2(-iw / 2.0, -14, iw, 28), Color(0.84, 0.16, 0.21, 0.7), false, 2.0)
+		_ci.draw_string(S.bhs(), Vector2(-iw / 2.0 + 8.0, 6), imp, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.84, 0.16, 0.21, 0.75))
+		_ci.draw_set_transform(Vector2.ZERO)
 	var cb = o.get("click", null)
 	if cb != null: _hit(r, cb)
 
 func _sec(p: Vector2, s: String) -> float:
 	var w := S.tw(S.bhs(), s, 13) + 20.0
-	draw_set_transform(p, deg_to_rad(-1.5))
-	S.para(self, Rect2(0, 0, w, 22), 4.0, Color("#2b2218"))
-	draw_string(S.bhs(), Vector2(10, 16), s, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color("#efe6d1"))
-	draw_set_transform(Vector2.ZERO)
+	_ci.draw_set_transform(p, deg_to_rad(-1.5))
+	S.para(_ci, Rect2(0, 0, w, 22), 4.0, Color("#2b2218"))
+	_ci.draw_string(S.bhs(), Vector2(10, 16), s, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color("#efe6d1"))
+	_ci.draw_set_transform(Vector2.ZERO)
 	return 30.0
 
 ## a scrolling list of blocks inside the content rect: ["row", o] / ["sec", s] / ["note", s] / ["log", time, s] / ["goal", ...]
@@ -628,10 +1113,13 @@ func _flow(cr: Rect2, blocks: Array) -> void:
 			"goal": h = 48.0
 			"gap": h = B[1]
 		# entrance: rows slide in one after another
-		var ia := S.k(tab_t, idx * 30.0, 300.0)
-		var dx := 26.0 * (1.0 - S.ez(ia))
+		var ia := S.k(tab_t, idx * 30.0, 500.0)
+		var dx := 26.0 * (1.0 if slide_dir > 0 or slide_t > 5000.0 else -1.0) * -1.0 * (1.0 - UIA.ez(FMIN, ia))
 		if y + h > cr.position.y - 4.0 and y < cr.end.y + 4.0:
+			var ka: float = pen.a
+			pen.a = ka * clampf(ia * 2.5, 0.0, 1.0)
 			_block(B, Rect2(cr.position.x + dx, y, w, h - 6.0), cr)
+			pen.a = ka
 		y += h
 		total += h
 		idx += 1
@@ -640,7 +1128,7 @@ func _flow(cr: Rect2, blocks: Array) -> void:
 	if total > cr.size.y:
 		var sbh := cr.size.y * cr.size.y / total
 		var sbp := cr.position.y + (cr.size.y - sbh) * clampf(sy / maxf(1.0, total - cr.size.y + 16.0), 0.0, 1.0)
-		draw_rect(Rect2(cr.end.x + 6.0, sbp, 3.0, sbh), Color(0, 0, 0, 0.25))
+		_ci.draw_rect(Rect2(cr.end.x + 6.0, sbp, 3.0, sbh), Color(0, 0, 0, 0.25))
 	if sy > _scroll_max(): scroll[cur_tab()] = _scroll_max()
 
 func _block(B: Array, r: Rect2, cr: Rect2) -> void:
@@ -649,11 +1137,11 @@ func _block(B: Array, r: Rect2, cr: Rect2) -> void:
 	match String(B[0]):
 		"row": _row(r, B[1])
 		"sec": _sec(r.position, B[1])
-		"note": draw_multiline_string(S.noto(), r.position + Vector2(0, 14), B[1], HORIZONTAL_ALIGNMENT_LEFT, r.size.x, 12, -1, INK2)
+		"note": _ci.draw_multiline_string(S.noto(), r.position + Vector2(0, 14), B[1], HORIZONTAL_ALIGNMENT_LEFT, r.size.x, 12, -1, INK2)
 		"log":
-			draw_string(S.anton(), r.position + Vector2(0, 15), B[1], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, INK3)
-			draw_string(S.noto(), r.position + Vector2(78, 15), B[2], HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 80.0, 12, INK)
-			draw_rect(Rect2(r.position.x, r.end.y + 1.0, r.size.x, 1.0), Color(0, 0, 0, 0.06))
+			_ci.draw_string(S.anton(), r.position + Vector2(0, 15), B[1], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, INK3)
+			_ci.draw_string(S.noto(), r.position + Vector2(78, 15), B[2], HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 80.0, 12, INK)
+			_ci.draw_rect(Rect2(r.position.x, r.end.y + 1.0, r.size.x, 1.0), Color(0, 0, 0, 0.06))
 		"goal": _goal(Rect2(r.position, Vector2(r.size.x, 42.0)), B[1], B[2], B[3], B[4], B[5], true)
 
 # =========================== 길드 수첩 ===========================
@@ -741,7 +1229,7 @@ func _p_people(cr: Rect2) -> void:
 		var clip_top := maxf(r.position.y, cr.position.y - 6.0)
 		var clip_bot := minf(r.end.y, cr.end.y + 8.0)
 		var vr := Rect2(r.position.x, clip_top, r.size.x, clip_bot - clip_top)
-		draw_colored_polygon(S.clip(vr, [[3, 0], [100, 2], [97, 100], [0, 98]]), Color("#1a1620"))
+		_ci.draw_colored_polygon(S.clip(vr, [[3, 0], [100, 2], [97, 100], [0, 98]]), Color("#1a1620"))
 		if p.has("por"):
 			var tx: Texture2D = _tex(p["por"])
 			var ih := ch * 0.96
@@ -760,36 +1248,36 @@ func _p_people(cr: Rect2) -> void:
 				src = Rect2((lo - ir.position.x) * sx, (top - ir.position.y) * syy, (hi - lo) * sx, (bot - top) * syy)
 				dst = Rect2(lo, top, hi - lo, bot - top)
 				if in_g:
-					draw_texture_rect_region(tx, Rect2(dst.position + Vector2(4, 0), dst.size), src, Color.BLACK)
-					draw_texture_rect_region(tx, dst, src, Color.WHITE)
+					_ci.draw_texture_rect_region(tx, Rect2(dst.position + Vector2(4, 0), dst.size), src, Color.BLACK)
+					_ci.draw_texture_rect_region(tx, dst, src, Color.WHITE)
 				else:
-					draw_texture_rect_region(tx, dst, src, Color(0.02, 0.02, 0.03))
+					_ci.draw_texture_rect_region(tx, dst, src, Color(0.02, 0.02, 0.03))
 		else:
 			# a silhouette: head and shoulders
 			var c := Vector2(cx + cw / 2.0, cy + ch * 0.18)
-			draw_circle(c + Vector2(0, ch * 0.18), cw * 0.17, Color.BLACK)
-			draw_colored_polygon(PackedVector2Array([Vector2(cx + cw * 0.16, cy + ch), Vector2(cx + cw * 0.3, cy + ch * 0.62), Vector2(cx + cw * 0.7, cy + ch * 0.62), Vector2(cx + cw * 0.84, cy + ch)]), Color.BLACK)
+			_ci.draw_circle(c + Vector2(0, ch * 0.18), cw * 0.17, Color.BLACK)
+			_ci.draw_colored_polygon(PackedVector2Array([Vector2(cx + cw * 0.16, cy + ch), Vector2(cx + cw * 0.3, cy + ch * 0.62), Vector2(cx + cw * 0.7, cy + ch * 0.62), Vector2(cx + cw * 0.84, cy + ch)]), Color.BLACK)
 			var stt := "%d등급" % p["r"]
-			draw_set_transform(Vector2(cx + cw - 30.0, cy + 14.0), deg_to_rad(6.0))
-			draw_rect(Rect2(-24, -9, S.tw(S.noto(), stt, 11) + 16.0, 18), Color.BLACK)
-			draw_string(S.noto(), Vector2(-16, 4), stt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color.WHITE)
-			draw_set_transform(Vector2.ZERO)
+			_ci.draw_set_transform(Vector2(cx + cw - 30.0, cy + 14.0), deg_to_rad(6.0))
+			_ci.draw_rect(Rect2(-24, -9, S.tw(S.noto(), stt, 11) + 16.0, 18), Color.BLACK)
+			_ci.draw_string(S.noto(), Vector2(-16, 4), stt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color.WHITE)
+			_ci.draw_set_transform(Vector2.ZERO)
 		if in_g:
 			var stt := "선배" if p.get("sr", false) else "길드원"
-			draw_set_transform(Vector2(cx + cw - 30.0, cy + 14.0), deg_to_rad(6.0))
-			draw_rect(Rect2(-24, -9, S.tw(S.noto(), stt, 11) + 16.0, 18), col())
-			draw_string(S.noto(), Vector2(-16, 4), stt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color.BLACK)
-			draw_set_transform(Vector2.ZERO)
+			_ci.draw_set_transform(Vector2(cx + cw - 30.0, cy + 14.0), deg_to_rad(6.0))
+			_ci.draw_rect(Rect2(-24, -9, S.tw(S.noto(), stt, 11) + 16.0, 18), col())
+			_ci.draw_string(S.noto(), Vector2(-16, 4), stt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color.BLACK)
+			_ci.draw_set_transform(Vector2.ZERO)
 		# label
 		var ly := cy + ch - 52.0
 		if ly + 52.0 <= cr.end.y + 8.0 and ly >= cr.position.y - 10.0:
 			for k in 6:
-				draw_rect(Rect2(cx, ly + k * 3.0, cw, 3.0), Color(0, 0, 0, 0.92 * k / 6.0))
-			draw_rect(Rect2(cx, ly + 18.0, cw, 34.0), Color(0, 0, 0, 0.92))
+				_ci.draw_rect(Rect2(cx, ly + k * 3.0, cw, 3.0), Color(0, 0, 0, 0.92 * k / 6.0))
+			_ci.draw_rect(Rect2(cx, ly + 18.0, cw, 34.0), Color(0, 0, 0, 0.92))
 			var nm: String = p["n"] if (in_g or not (p.has("c") or p.get("b", false))) else "???"
 			var role: String = p["role"] if in_g else ("첫 의뢰를 마치면 에일린이 소개해 준다" if (p.has("c") or p.get("b", false)) else "%s · %s" % [p["role"], p["hint"]])
-			draw_string(S.bhs(), Vector2(cx + 10.0, ly + 24.0), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color.WHITE)
-			draw_multiline_string(S.noto(), Vector2(cx + 10.0, ly + 40.0), role, HORIZONTAL_ALIGNMENT_LEFT, cw - 16.0, 11, 2, Color(0.81, 0.78, 0.85))
+			_ci.draw_string(S.bhs(), Vector2(cx + 10.0, ly + 24.0), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color.WHITE)
+			_ci.draw_multiline_string(S.noto(), Vector2(cx + 10.0, ly + 40.0), role, HORIZONTAL_ALIGNMENT_LEFT, cw - 16.0, 11, 2, Color(0.81, 0.78, 0.85))
 
 func _dun_list(lc: Rect2) -> void:
 	var y := lc.position.y + 4.0
@@ -798,12 +1286,12 @@ func _dun_list(lc: Rect2) -> void:
 		var on := i == dun_i
 		var lk: bool = not d["ok"] or FD.DUNRANK.get(d["id"], 1) > fame.r
 		var r := Rect2(lc.position.x + (6.0 if on else 0.0), y, lc.size.x - 8.0, 46.0)
-		draw_colored_polygon(S.clip(r, [[2, 0], [100, 0], [98, 100], [0, 100]]), Color.WHITE if on else Color(0.086, 0.075, 0.106, 0.9))
+		_ci.draw_colored_polygon(S.clip(r, [[2, 0], [100, 0], [98, 100], [0, 100]]), Color.WHITE if on else Color(0.086, 0.075, 0.106, 0.9))
 		var nm: String = d["name"] if d["ok"] else "???"
-		draw_string(S.bhs(), r.position + Vector2(12, 21), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.BLACK if on else Color.WHITE)
-		if lk: S.lock(self, r.position + Vector2(16 + S.tw(S.bhs(), nm, 16), 8), 12.0, Color.BLACK if on else Color(0.7, 0.7, 0.7))
+		_ci.draw_string(S.bhs(), r.position + Vector2(12, 21), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.BLACK if on else Color.WHITE)
+		if lk: S.lock(_ci, r.position + Vector2(16 + S.tw(S.bhs(), nm, 16), 8), 12.0, Color.BLACK if on else Color(0.7, 0.7, 0.7))
 		var sub: String = ("%s · 권장 Lv %d–%d" % [d["lv"], d["rec"][0], d["rec"][1]]) if d["ok"] else "미정"
-		draw_string(S.noto(), r.position + Vector2(12, 38), sub, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0, 0, 0, 0.75) if on else Color(1, 1, 1, 0.72))
+		_ci.draw_string(S.noto(), r.position + Vector2(12, 38), sub, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0, 0, 0, 0.75) if on else Color(1, 1, 1, 0.72))
 		var ii := i
 		_hit(r, func():
 			dun_i = ii
@@ -821,7 +1309,7 @@ func _p_dun(cr: Rect2) -> void:
 	var rk: int = FD.DUNRANK.get(D["id"], 1)
 	var ok: bool = D["ok"] and rk <= fame.r
 	if not D["ok"]:
-		draw_multiline_string(S.noto(), cr.position + Vector2(0, 20), "아직 아무것도 알려지지 않은 곳.\n이야기가 이어지면 길이 열린다.", HORIZONTAL_ALIGNMENT_LEFT, cr.size.x, 13, -1, INK2)
+		_ci.draw_multiline_string(S.noto(), cr.position + Vector2(0, 20), "아직 아무것도 알려지지 않은 곳.\n이야기가 이어지면 길이 열린다.", HORIZONTAL_ALIGNMENT_LEFT, cr.size.x, 13, -1, INK2)
 		return
 	var grades := []
 	for g in FD.GORD.duplicate():
@@ -851,46 +1339,46 @@ func _p_dun(cr: Rect2) -> void:
 		var vw := cr.size.x - 112.0
 		var th := S.noto().get_multiline_string_size(R[1], HORIZONTAL_ALIGNMENT_LEFT, vw, 12).y
 		h = maxf(26.0, th + 10.0)
-		draw_rect(Rect2(cr.position.x + dx, y, cr.size.x, h), Color(1, 1, 1, 0.5))
-		draw_string(S.noto(), Vector2(cr.position.x + dx + 10.0, y + 17.0), R[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 11, INK3)
+		_ci.draw_rect(Rect2(cr.position.x + dx, y, cr.size.x, h), Color(1, 1, 1, 0.5))
+		_ci.draw_string(S.noto(), Vector2(cr.position.x + dx + 10.0, y + 17.0), R[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 11, INK3)
 		var txt: String = R[1]
 		if i == 3:
 			# gems in their colours
 			var x := cr.position.x + dx + 112.0
 			for g in grades:
-				draw_set_transform(Vector2(x + 5.0, y + 13.0), PI / 4.0)
-				draw_rect(Rect2(-4, -4, 8, 8), FD.GRADE[g][1])
-				draw_set_transform(Vector2.ZERO)
-				draw_string(S.noto(), Vector2(x + 14.0, y + 17.0), FD.GRADE[g][0], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, INK)
+				_ci.draw_set_transform(Vector2(x + 5.0, y + 13.0), PI / 4.0)
+				_ci.draw_rect(Rect2(-4, -4, 8, 8), FD.GRADE[g][1])
+				_ci.draw_set_transform(Vector2.ZERO)
+				_ci.draw_string(S.noto(), Vector2(x + 14.0, y + 17.0), FD.GRADE[g][0], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, INK)
 				x += 20.0 + S.tw(S.noto(), FD.GRADE[g][0], 12)
 			var rest := "· 보스 상자 대박 "
-			draw_string(S.noto(), Vector2(x, y + 17.0), rest, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, INK)
+			_ci.draw_string(S.noto(), Vector2(x, y + 17.0), rest, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, INK)
 			x += S.tw(S.noto(), rest, 12)
-			draw_set_transform(Vector2(x + 5.0, y + 13.0), PI / 4.0)
-			draw_rect(Rect2(-4, -4, 8, 8), FD.GRADE[D["bonus"]][1])
-			draw_set_transform(Vector2.ZERO)
-			draw_string(S.noto(), Vector2(x + 14.0, y + 17.0), FD.GRADE[D["bonus"]][0], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, INK)
+			_ci.draw_set_transform(Vector2(x + 5.0, y + 13.0), PI / 4.0)
+			_ci.draw_rect(Rect2(-4, -4, 8, 8), FD.GRADE[D["bonus"]][1])
+			_ci.draw_set_transform(Vector2.ZERO)
+			_ci.draw_string(S.noto(), Vector2(x + 14.0, y + 17.0), FD.GRADE[D["bonus"]][0], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, INK)
 		else:
-			draw_multiline_string(S.noto(), Vector2(cr.position.x + dx + 112.0, y + 17.0), txt, HORIZONTAL_ALIGNMENT_LEFT, vw, 12, -1, INK)
+			_ci.draw_multiline_string(S.noto(), Vector2(cr.position.x + dx + 112.0, y + 17.0), txt, HORIZONTAL_ALIGNMENT_LEFT, vw, 12, -1, INK)
 		y += h + 4.0
 	y += 8.0
 	if ok:
 		var lbl := "출격하러 가기" if arena.level_kind() == "town" else "출격 마차에서 출발"
 		var bw := S.tw(S.bhs(), lbl, 15) + 40.0
 		var br := Rect2(cr.position.x, y, bw, 32.0)
-		draw_colored_polygon(S.clip(br, [[7, 0], [100, 0], [93, 100], [0, 100]]), col())
-		draw_string(S.bhs(), br.position + Vector2(20, 22), lbl, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color.BLACK)
+		_ci.draw_colored_polygon(S.clip(br, [[7, 0], [100, 0], [93, 100], [0, 100]]), col())
+		_ci.draw_string(S.bhs(), br.position + Vector2(20, 22), lbl, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color.BLACK)
 		_hit(br, func():
 			menu.close_page()
 			fame.notice("출격 마차로 · 마을 동쪽 끝", "던전", col()))   # PLACEHOLDER: the sortie (dungeon select) is agent C's
 	else:
-		S.lock(self, Vector2(cr.position.x, y + 4.0), 13.0, INK3)
-		draw_string(S.noto(), Vector2(cr.position.x + 18.0, y + 16.0), "명성 %d등급이 되면 열린다." % rk, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, INK2)
+		S.lock(_ci, Vector2(cr.position.x, y + 4.0), 13.0, INK3)
+		_ci.draw_string(S.noto(), Vector2(cr.position.x + 18.0, y + 16.0), "명성 %d등급이 되면 열린다." % rk, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, INK2)
 
 func _p_rune(cr: Rect2) -> void:
 	# PLACEHOLDER: the rune codex lives with the runes (agent B); this tab only says where it will be
-	draw_string(S.bhs(), cr.position + Vector2(0, 24), "룬 도감", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, INK)
-	draw_multiline_string(S.noto(), cr.position + Vector2(0, 52), "룬이 길드에 들어오면 이 장이 채워진다.\n발견한 룬 %d종" % fame.seen.size(), HORIZONTAL_ALIGNMENT_LEFT, cr.size.x, 13, -1, INK2)
+	_ci.draw_string(S.bhs(), cr.position + Vector2(0, 24), "룬 도감", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, INK)
+	_ci.draw_multiline_string(S.noto(), cr.position + Vector2(0, 52), "룬이 길드에 들어오면 이 장이 채워진다.\n발견한 룬 %d종" % fame.seen.size(), HORIZONTAL_ALIGNMENT_LEFT, cr.size.x, 13, -1, INK2)
 
 
 # =========================== 모험 수첩 ===========================
@@ -956,15 +1444,15 @@ func _p_lv(cr: Rect2) -> void:
 		var lbl := "모두 받기 (%d)" % n
 		var bw := S.tw(S.bhs(), lbl, 13) + 28.0
 		var br := Rect2(cr.end.x - bw, cr.position.y - 2.0, bw, 26.0)
-		draw_colored_polygon(S.clip(Rect2(br.position + Vector2(3, 3), br.size), [[7, 0], [100, 0], [93, 100], [0, 100]]), Color.BLACK)
-		draw_colored_polygon(S.clip(br, [[7, 0], [100, 0], [93, 100], [0, 100]]), Color("#ffd34d").lightened(0.15 * (0.5 + 0.5 * sin(t / 240.0))))
-		draw_string(S.bhs(), br.position + Vector2(14, 18), lbl, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color.BLACK)
+		_ci.draw_colored_polygon(S.clip(Rect2(br.position + Vector2(3, 3), br.size), [[7, 0], [100, 0], [93, 100], [0, 100]]), Color.BLACK)
+		_ci.draw_colored_polygon(S.clip(br, [[7, 0], [100, 0], [93, 100], [0, 100]]), Color("#ffd34d").lightened(0.15 * (0.5 + 0.5 * sin(t / 240.0))))
+		_ci.draw_string(S.bhs(), br.position + Vector2(14, 18), lbl, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color.BLACK)
 		_hit(br, func():
 			for i in fame.lv_can(): fame.lv_claim(i)
 			arena.sfx("heavy", 0.5))
 	else:
 		var nt := "끌어서 넘기기 · 휠로 넘기기"
-		draw_string(S.noto(), Vector2(cr.end.x - S.tw(S.noto(), nt, 11), cr.position.y + 15.0), nt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, INK3)
+		_ci.draw_string(S.noto(), Vector2(cr.end.x - S.tw(S.noto(), nt, 11), cr.position.y + 15.0), nt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, INK3)
 	# the road: one card per level, scrolled sideways (wheel / drag); opens at the current level
 	if not scroll.has("lv"): scroll["lv"] = clampf(maxi(0, L - 3) * 128.0, 0.0, maxf(0.0, (FD.AMAX - 1) * 128.0 - (paper_r.size.x - 60.0)))
 	var sx: float = scroll["lv"]
@@ -980,26 +1468,26 @@ func _p_lv(cr: Rect2) -> void:
 			var nxt := i == L + 1
 			var r := Rect2(x, y0 + (0.0 if i % 2 else 10.0), cw, hh - 14.0)
 			var bg := Color(1, 1, 1, 0.65) if can else (Color(1, 1, 1, 0.35) if gotit else Color(0, 0, 0, 0.05))
-			draw_colored_polygon(S.clip(r, [[0, 0], [100, 0], [96, 100], [3, 97]]), bg)
-			if i == L: draw_rect(Rect2(r.position, Vector2(r.size.x, 4)), Color("#7fd0ff"))
-			if can: draw_rect(Rect2(r.position, Vector2(4, r.size.y)), Color("#7fd0ff"))
+			_ci.draw_colored_polygon(S.clip(r, [[0, 0], [100, 0], [96, 100], [3, 97]]), bg)
+			if i == L: _ci.draw_rect(Rect2(r.position, Vector2(r.size.x, 4)), Color("#7fd0ff"))
+			if can: _ci.draw_rect(Rect2(r.position, Vector2(4, r.size.y)), Color("#7fd0ff"))
 			var a := 0.5 if gotit else 1.0
-			draw_string(S.anton(true), r.position + Vector2(10, 44), str(i), HORIZONTAL_ALIGNMENT_LEFT, -1, 40, Color(INK if (can or nxt or i == L) else INK3, a))
+			_ci.draw_string(S.anton(true), r.position + Vector2(10, 44), str(i), HORIZONTAL_ALIGNMENT_LEFT, -1, 40, Color(INK if (can or nxt or i == L) else INK3, a))
 			var stt := "받음" if gotit else ("받을 수 있음" if can else ("다음 레벨" if nxt else ("지금" if i == L else "")))
-			draw_string(S.noto(), r.position + Vector2(12, 62), stt, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(Color("#2f6d94"), a))
+			_ci.draw_string(S.noto(), r.position + Vector2(12, 62), stt, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(Color("#2f6d94"), a))
 			var ry := r.position.y + 88.0
 			for line in FD.rw_txt(R).split(" · "):
-				draw_string(S.noto(), Vector2(r.position.x + 12.0, ry), line, HORIZONTAL_ALIGNMENT_LEFT, cw - 18.0, 12, Color(INK, a))
+				_ci.draw_string(S.noto(), Vector2(r.position.x + 12.0, ry), line, HORIZONTAL_ALIGNMENT_LEFT, cw - 18.0, 12, Color(INK, a))
 				ry += 18.0
 			if gotit:
-				draw_set_transform(r.get_center() + Vector2(0, 30), deg_to_rad(-12.0))
-				draw_rect(Rect2(-26, -13, 52, 26), Color(0.84, 0.16, 0.21, 0.7), false, 2.0)
-				draw_string(S.bhs(), Vector2(-17, 7), "수령", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.84, 0.16, 0.21, 0.75))
-				draw_set_transform(Vector2.ZERO)
+				_ci.draw_set_transform(r.get_center() + Vector2(0, 30), deg_to_rad(-12.0))
+				_ci.draw_rect(Rect2(-26, -13, 52, 26), Color(0.84, 0.16, 0.21, 0.7), false, 2.0)
+				_ci.draw_string(S.bhs(), Vector2(-17, 7), "수령", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.84, 0.16, 0.21, 0.75))
+				_ci.draw_set_transform(Vector2.ZERO)
 			if can:
 				var br := Rect2(r.position.x + 12.0, r.end.y - 36.0, 62.0, 24.0)
-				draw_colored_polygon(S.clip(br, [[7, 0], [100, 0], [93, 100], [0, 100]]), Color("#ffd34d"))
-				draw_string(S.bhs(), br.position + Vector2(17, 17), "받기", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color.BLACK)
+				_ci.draw_colored_polygon(S.clip(br, [[7, 0], [100, 0], [93, 100], [0, 100]]), Color("#ffd34d"))
+				_ci.draw_string(S.bhs(), br.position + Vector2(17, 17), "받기", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color.BLACK)
 				var ii := i
 				_hit(br.grow(4), func():
 					fame.lv_claim(ii)
@@ -1007,8 +1495,8 @@ func _p_lv(cr: Rect2) -> void:
 		x += 128.0
 	# the marker under the road
 	var f := clampf(sx / maxf(1.0, (FD.AMAX - 1) * 128.0 - (paper_r.size.x - 60.0)), 0.0, 1.0)
-	draw_rect(Rect2(cr.position.x, cr.end.y - 4.0, cr.size.x, 2.0), Color(0, 0, 0, 0.12))
-	draw_rect(Rect2(cr.position.x + (cr.size.x - 60.0) * f, cr.end.y - 6.0, 60.0, 6.0), Color("#2f6d94"))
+	_ci.draw_rect(Rect2(cr.position.x, cr.end.y - 4.0, cr.size.x, 2.0), Color(0, 0, 0, 0.12))
+	_ci.draw_rect(Rect2(cr.position.x + (cr.size.x - 60.0) * f, cr.end.y - 6.0, 60.0, 6.0), Color("#2f6d94"))
 
 func _ch_list(lc: Rect2) -> void:
 	var ci: int = fame.ch_cur()
@@ -1027,17 +1515,17 @@ func _ch_list(lc: Rect2) -> void:
 				if fame.t_can(x, j): dot = true
 			if not fame.chc.has(X["id"]) and fame.ch_done(X): dot = true
 		var r := Rect2(lc.position.x + (6.0 if on else 0.0), y, lc.size.x - 8.0, 50.0)
-		draw_colored_polygon(S.clip(r, [[2, 0], [100, 0], [98, 100], [0, 100]]), Color.WHITE if on else Color(0.086, 0.075, 0.106, 0.88))
+		_ci.draw_colored_polygon(S.clip(r, [[2, 0], [100, 0], [98, 100], [0, 100]]), Color.WHITE if on else Color(0.086, 0.075, 0.106, 0.88))
 		var ink := Color.BLACK if on else Color.WHITE
-		draw_string(S.noto(), r.position + Vector2(12, 17), "제%d장" % (j + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(ink, 0.7))
+		_ci.draw_string(S.noto(), r.position + Vector2(12, 17), "제%d장" % (j + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(ink, 0.7))
 		var nm: String = X["n"]
 		var nfs := S.fit_size(S.bhs(), nm, 15, r.size.x - 70.0)
-		draw_string(S.bhs(), r.position + Vector2(12, 38), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, nfs, ink)
-		if not op: S.lock(self, r.position + Vector2(16 + S.tw(S.bhs(), nm, nfs), 26), 11.0, Color(ink, 0.7))
+		_ci.draw_string(S.bhs(), r.position + Vector2(12, 38), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, nfs, ink)
+		if not op: S.lock(_ci, r.position + Vector2(16 + S.tw(S.bhs(), nm, nfs), 26), 11.0, Color(ink, 0.7))
 		var pr := "%d/%d" % [nd, X["t"].size()]
-		draw_string(S.anton(), Vector2(r.end.x - 12.0 - S.tw(S.anton(), pr, 14), r.position.y + 30.0), pr, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, ink)
-		if dot: draw_circle(Vector2(r.end.x - 6.0, r.position.y + 6.0), 5.0, Color("#ff3d5a"))
-		if fame.chc.has(X["id"]): draw_rect(Rect2(r.position.x, r.end.y - 3.0, r.size.x, 3.0), Color("#7fd0ff"))
+		_ci.draw_string(S.anton(), Vector2(r.end.x - 12.0 - S.tw(S.anton(), pr, 14), r.position.y + 30.0), pr, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, ink)
+		if dot: _ci.draw_circle(Vector2(r.end.x - 6.0, r.position.y + 6.0), 5.0, Color("#ff3d5a"))
+		if fame.chc.has(X["id"]): _ci.draw_rect(Rect2(r.position.x, r.end.y - 3.0, r.size.x, 3.0), Color("#7fd0ff"))
 		var jj := j
 		_hit(r, func():
 			chi = jj
@@ -1083,10 +1571,10 @@ func _p_ch(cr: Rect2) -> void:
 		else: co["r2"] = "과제를 모두 받으면"
 	B.append(["row", co])
 	_flow(Rect2(cr.position + Vector2(0, 70), cr.size - Vector2(0, 70)), B)
-	draw_string(S.noto(), cr.position + Vector2(0, 12), "제%d장" % (i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("#2f6d94"))
-	draw_string(S.bhs(), cr.position + Vector2(0, 38), C["n"], HORIZONTAL_ALIGNMENT_LEFT, -1, 22, INK)
+	_ci.draw_string(S.noto(), cr.position + Vector2(0, 12), "제%d장" % (i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("#2f6d94"))
+	_ci.draw_string(S.bhs(), cr.position + Vector2(0, 38), C["n"], HORIZONTAL_ALIGNMENT_LEFT, -1, 22, INK)
 	var sub: String = C["d"] + ("" if op else " · 앞 장을 마치면 열린다 (진행도는 미리 쌓인다)")
-	draw_string(S.noto(), cr.position + Vector2(0, 58), sub, HORIZONTAL_ALIGNMENT_LEFT, cr.size.x, 12, INK2)
+	_ci.draw_string(S.noto(), cr.position + Vector2(0, 58), sub, HORIZONTAL_ALIGNMENT_LEFT, cr.size.x, 12, INK2)
 
 func _day_col(lc: Rect2) -> void:
 	var y := _hero(lc, false)
@@ -1094,13 +1582,13 @@ func _day_col(lc: Rect2) -> void:
 	var lk: bool = fame.alv < FD.DAYLV
 	var fa := Color("#7fd0ff")
 	var pt := int(D["pt"])
-	draw_string(S.anton(true), Vector2(lc.position.x + 6.0, y + 46.0), str(pt), HORIZONTAL_ALIGNMENT_LEFT, -1, 48, fa)
+	_ci.draw_string(S.anton(true), Vector2(lc.position.x + 6.0, y + 46.0), str(pt), HORIZONTAL_ALIGNMENT_LEFT, -1, 48, fa)
 	var nx := lc.position.x + 16.0 + S.tw(S.anton(true), str(pt), 48)
-	draw_string(S.anton(false, 1), Vector2(nx, y + 22.0), "ACTIVITY", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.73, 0.73, 0.73))
-	draw_string(S.bhs(), Vector2(nx, y + 44.0), "오늘의 활동도", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color.WHITE)
+	_ci.draw_string(S.anton(false, 1), Vector2(nx, y + 22.0), "ACTIVITY", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.73, 0.73, 0.73))
+	_ci.draw_string(S.bhs(), Vector2(nx, y + 44.0), "오늘의 활동도", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color.WHITE)
 	var gr := Rect2(lc.position.x + 6.0, y + 56.0, lc.size.x - 20.0, 10.0)
-	S.para(self, gr, -3.0, Color("#2a2630"))
-	S.para(self, Rect2(gr.position, Vector2(gr.size.x * minf(1.0, pt / 500.0), gr.size.y)), -3.0, fa)
+	S.para(_ci, gr, -3.0, Color("#2a2630"))
+	S.para(_ci, Rect2(gr.position, Vector2(gr.size.x * minf(1.0, pt / 500.0), gr.size.y)), -3.0, fa)
 	var bw := (lc.size.x - 14.0) / 5.0
 	for i in FD.DMS.size():
 		var M: Dictionary = FD.DMS[i]
@@ -1108,27 +1596,27 @@ func _day_col(lc: Rect2) -> void:
 		var can: bool = not lk and not gotit and pt >= M["p"]
 		var r := Rect2(lc.position.x + 6.0 + i * bw, y + 74.0, bw - 4.0, 64.0)
 		var wob := sin(t / 1300.0 * TAU * 2.0) * 0.06 if can else 0.0
-		draw_set_transform(r.get_center(), wob)
+		_ci.draw_set_transform(r.get_center(), wob)
 		var lr := Rect2(-r.size / 2.0, r.size)
-		draw_rect(lr, fa if can else (Color("#2a2630") if not gotit else Color("#1a1620")))
+		_ci.draw_rect(lr, fa if can else (Color("#2a2630") if not gotit else Color("#1a1620")))
 		var ink := Color.BLACK if can else Color.WHITE
-		draw_string(S.anton(), lr.position + Vector2(5, 16), str(M["p"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 13, ink)
+		_ci.draw_string(S.anton(), lr.position + Vector2(5, 16), str(M["p"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 13, ink)
 		var R: Dictionary = fame.d_ms_rw(i)
 		var ry := lr.position.y + 32.0
 		if gotit:
-			draw_string(S.noto(), Vector2(lr.position.x + 5.0, ry), "받음", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(1, 1, 1, 0.6))
+			_ci.draw_string(S.noto(), Vector2(lr.position.x + 5.0, ry), "받음", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(1, 1, 1, 0.6))
 		else:
 			for line in FD.rw_txt(R).split(" · "):
-				draw_string(S.noto(), Vector2(lr.position.x + 4.0, ry), line, HORIZONTAL_ALIGNMENT_LEFT, lr.size.x - 6.0, 9, Color(ink, 0.85))
+				_ci.draw_string(S.noto(), Vector2(lr.position.x + 4.0, ry), line, HORIZONTAL_ALIGNMENT_LEFT, lr.size.x - 6.0, 9, Color(ink, 0.85))
 				ry += 12.0
-		draw_set_transform(Vector2.ZERO)
+		_ci.draw_set_transform(Vector2.ZERO)
 		if can:
 			var ii := i
 			_hit(r, func():
 				fame.d_ms(ii)
 				arena.sfx("heavy", 0.5))
 	var note := "날짜가 바뀌면 새 과제가 붙는다." + ("\n로비 샹들리에 · 실링 +20%" if fame.fac_ok("chand") else "")
-	draw_multiline_string(S.noto(), Vector2(lc.position.x + 6.0, y + 156.0), note, HORIZONTAL_ALIGNMENT_LEFT, lc.size.x - 10.0, 11, -1, Color(0.73, 0.73, 0.73))
+	_ci.draw_multiline_string(S.noto(), Vector2(lc.position.x + 6.0, y + 156.0), note, HORIZONTAL_ALIGNMENT_LEFT, lc.size.x - 10.0, 11, -1, Color(0.73, 0.73, 0.73))
 
 func _p_day(cr: Rect2) -> void:
 	var D: Dictionary = fame.d_day()

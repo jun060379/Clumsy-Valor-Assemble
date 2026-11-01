@@ -6,6 +6,7 @@ extends Control
 
 const CH = preload("res://scripts/chars.gd")
 const UI := preload("res://scripts/ui_kit.gd")
+const UIA := preload("res://scripts/ui_anim.gd")
 const A0 := PI * 1.18
 const A1 := PI * 2.12
 const RR := 86.0
@@ -371,9 +372,21 @@ func _draw_loc(ci: CanvasItem, vs: Vector2) -> void:
 	ci.draw_set_transform(Vector2.ZERO)
 
 ## 피로도 chip (sortie.js #stm)
+var stm_last := -1
+var stm_hit_t := 1e9               # stmHit: the chip jolts and flashes when fatigue is spent
+var stm_drop := {}                 # segment -> ms since it emptied (stmDrop)
 func _draw_fatigue(ci: CanvasItem, at: Vector2) -> void:
 	var F = arena.fatigue
 	var v: int = F.value()
+	var now := Time.get_ticks_msec()
+	if stm_last >= 0 and v < stm_last:
+		stm_hit_t = now
+		for i in range(roundi(float(F.MAX) / F.COST)):
+			if v < (i + 1) * F.COST and stm_last > i * F.COST and v <= i * F.COST + F.COST: stm_drop[i] = now
+	stm_last = v
+	var ht := float(now - stm_hit_t)
+	var jx: float = UIA.kf(ht, [[0.0, 6.0], [1.0, 0.0]], 500.0, 0.0, [0.2, 0.8, 0.3, 1.0]) if ht < 500.0 else 0.0
+	at.x += jx
 	var full: bool = v >= F.MAX
 	var low: bool = v < F.COST
 	var sc := Color("#ff3d5a") if low else Color("#5fd4ff")
@@ -396,6 +409,9 @@ func _draw_fatigue(ci: CanvasItem, at: Vector2) -> void:
 	var bg0 := Color(13 / 255.0, 11 / 255.0, 16 / 255.0, 0.9)
 	var bg1 := Color(13 / 255.0, 11 / 255.0, 16 / 255.0, 0.72)
 	ci.draw_polygon(poly, PackedColorArray([bg0, bg1, bg1, bg0]))
+	if ht < 500.0:
+		var fl: float = UIA.kf(ht, [[0.0, 1.0], [0.25, 0.55], [1.0, 0.0]], 500.0, 0.0, [0.2, 0.8, 0.3, 1.0])
+		ci.draw_colored_polygon(poly, Color(1, 1, 1, fl))
 	var ba := 1.0
 	if low: ba = 0.25 + 0.75 * (0.5 + 0.5 * cos(clock / 1100.0 * TAU))
 	ci.draw_rect(Rect2(r.position.x, r.position.y, 6, h), Color(sc, 0.25 * ba))
@@ -416,7 +432,9 @@ func _draw_fatigue(ci: CanvasItem, at: Vector2) -> void:
 	for i in n:
 		var fr := clampf(float(v - i * F.COST) / F.COST, 0.0, 1.0)
 		var sx := x + i * 20.0
-		UI.para(ci, sx, my - 4.5, 17.0, 9.0, sk, Color(1, 1, 1, 0.13))
+		var dk := float(now - int(stm_drop.get(i, -100000)))
+		var sa := 0.13 + 0.87 * (1.0 - UIA.p(dk, 0.0, 600.0, "ease-out")) if dk < 600.0 else 0.13
+		UI.para(ci, sx, my - 4.5, 17.0, 9.0, sk, Color(1, 1, 1, sa))
 		if fr > 0.0:
 			UI.para(ci, sx, my - 4.5, 17.0 * fr, 9.0, sk, sc)
 			if fr >= 1.0:
