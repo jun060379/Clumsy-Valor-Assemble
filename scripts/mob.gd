@@ -100,8 +100,11 @@ func alive() -> bool:
 func hit(dmg: float, kb: float, mul := 1.0) -> void:
 	if not alive():
 		return
+	var R = arena.get("runes")
+	if R != null: mul *= R.out_mul(self)
 	var d := dmg * 10.0 * mul
 	hp -= d
+	if R != null: hp -= R.after_hit(self)
 	last_dmg = d
 	hit_now = true
 	flash = 120.0
@@ -114,6 +117,7 @@ func hit(dmg: float, kb: float, mul := 1.0) -> void:
 		set_a("die")
 		arena.sfx("break", 0.8)
 		arena.spark(position + Vector2(0, -40), 16)
+		if R != null: R.on_kill(self)
 
 
 func notice(call: bool) -> void:

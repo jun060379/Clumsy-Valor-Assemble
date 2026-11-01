@@ -298,6 +298,8 @@ func step(dt: float) -> void:
 			msg_t = 2200.0
 			if rm["type"] == "fight" and randf() < 0.55:
 				pay()
+			if rm["type"] == "boss" and arena.get("runes") != null:
+				arena.runes.boss_cleared(self)
 	var P = arena.player
 	var G: float = arena.ground_y
 	# camp fire / vault chest
@@ -312,9 +314,12 @@ func step(dt: float) -> void:
 	if chest != null and absf(P.position.x - chest["x"]) < 70.0 and absf(P.position.y - G) < 10.0:
 		rm["looted"] = true
 		chest = null
-		var g := 12 + randi() % 8
-		arena.shilling += g
-		arena.text(P.position + Vector2(0, -190), "보물방 · 실링 +%d" % g, Color("#ffd34d"))
+		if arena.get("runes") != null:
+			arena.runes.vault(P.position)
+		else:
+			var g := 12 + randi() % 8
+			arena.shilling += g
+			arena.text(P.position + Vector2(0, -190), "보물방 · 실링 +%d" % g, Color("#ffd34d"))
 		arena.ring(P.position + Vector2(0, -60), 40.0, Color("#ffd34d"))
 		arena.flash = 0.2
 	# doors
@@ -351,6 +356,8 @@ func try_interact() -> bool:
 	arena.player.vx = 0.0
 	arena.player.set_anim("idle")
 	if d["town"]:
+		if d["boss"] and arena.get("runes") != null and arena.runes.town_gate():
+			return true
 		arena.fade_then(func(): arena.leave_dungeon())
 	else:
 		var rm := room()
@@ -363,6 +370,9 @@ func try_interact() -> bool:
 func pay() -> void:
 	var P = arena.player
 	var rw: String = ["iron", "rune", "heal"][randi() % 3]
+	if arena.get("runes") != null:
+		arena.runes.pay(rw)        # dunPay: shilling, a rune (rollGrade(1), capped by the dungeon) or healing
+		return
 	if rw == "heal":
 		for c in P.party:
 			P.hpm[c] = minf(P.CH.STATS[c]["hp"], P.hpm[c] + P.CH.STATS[c]["hp"] * 0.35)

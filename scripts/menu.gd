@@ -5,6 +5,12 @@ extends Control
 
 const UI := preload("res://scripts/ui_kit.gd")
 const OPTIONS := preload("res://scripts/options.gd")
+## step 5-2 pages: 대장간, 가방, 캐릭터, the 도감 books, Bran's choices
+const FORGE := preload("res://scripts/ui_forge.gd")
+const BAG := preload("res://scripts/ui_bag.gd")
+const CHARP := preload("res://scripts/ui_char.gd")
+const CODEX := preload("res://scripts/ui_codex.gd")
+const CHOICE := preload("res://scripts/ui_choice.gd")
 const ICON := {
 	"fs": preload("res://assets/ui/icons/tb_fs.svg"), "gbk": preload("res://assets/ui/icons/tb_gbk.svg"), "abk": preload("res://assets/ui/icons/tb_abk.svg"),
 	"pty": preload("res://assets/ui/icons/tb_pty.svg"), "cxb": preload("res://assets/ui/icons/tb_cxb.svg"), "bgb": preload("res://assets/ui/icons/tb_bgb.svg"),
@@ -35,6 +41,10 @@ var art_sil: Control
 var art: Control
 var fg: Control
 var tex := {}
+var ext := {}                   # page key -> its own page Control (step 5-2)
+var forge
+var bran_page
+var codex
 
 # top bar
 var tb_rects := {}
@@ -75,6 +85,31 @@ func _ready() -> void:
 	opts.menu = self
 	add_child(opts)
 	opts.visible = false
+	forge = _ext(FORGE)
+	_ext(BAG)
+	_ext(CHARP)
+	codex = _ext(CODEX)
+	bran_page = _ext(CHOICE)
+
+## a step 5-2 page: drawn over everything, shown while menu.page is one of its keys
+func _ext(sc: Script) -> Control:
+	var c := Control.new()
+	c.set_script(sc)
+	c.arena = arena
+	c.menu = self
+	add_child(c)
+	for k in c.keys: ext[k] = c
+	return c
+
+## Bran's choices (after his greeting, after a chat, back from the forge)
+func open_bran(back: bool, line := "") -> void:
+	bran_page.setup(back, line)
+	open_page("bran")
+
+## the rune codex straight at an entry (for the guild book's 룬 도감 links)
+func open_codex(kind: String, at := "") -> void:
+	codex.open_at(at)
+	open_page("codex_rune" if kind == "rune" else "best")
 
 func _layer(solid: bool) -> Control:
 	var c := Control.new()
@@ -139,7 +174,10 @@ func _open_page(k: String, via_hub: bool) -> void:
 	page = k
 	from_hub = via_hub
 	hub_t = 0.0
-	if k == "opts" or k == "help":
+	if ext.has(k):
+		opts.visible = false
+		ext[k].open(k)
+	elif k == "opts" or k == "help":
 		opts.open(k)
 	else:
 		opts.visible = false
@@ -171,8 +209,8 @@ func _input(ev: InputEvent) -> void:
 	if page == "":
 		_input_bar(ev)
 		return
-	if page == "opts" or page == "help":
-		return                   # options.gd takes it
+	if page == "opts" or page == "help" or ext.has(page):
+		return                   # options.gd / the page takes it
 	var tap := _tap(ev)
 	var key := _key(ev)
 	if page == "hub":
@@ -310,7 +348,7 @@ func _draw() -> void:
 		_draw_bar(vs)
 	if page == "hub":
 		_draw_hub_bg(vs)
-	elif PAGE.has(page):
+	elif PAGE.has(page) and not ext.has(page):
 		_draw_page(vs)
 
 func _draw_bar(vs: Vector2) -> void:
@@ -392,6 +430,7 @@ func _ochar(vs: Vector2) -> Array:
 	return [t0, Rect2(-0.04 * vs.x, vs.y * 1.04 - h, h * t0.get_width() / t0.get_height(), h)]
 
 func _draw_art_sil() -> void:
+	if ext.has(page): return
 	if PAGE.has(page):
 		var O := _ochar(get_viewport_rect().size)
 		var r: Rect2 = O[1]
@@ -410,6 +449,7 @@ func _draw_art_sil() -> void:
 	art_sil.draw_set_transform(Vector2.ZERO)
 
 func _draw_art() -> void:
+	if ext.has(page): return
 	if PAGE.has(page):
 		var O := _ochar(get_viewport_rect().size)
 		art.draw_texture_rect(O[0], O[1], false)
@@ -436,6 +476,7 @@ func _cur_target(i: int, vs: Vector2) -> Array:
 	return [float(i * 10 + 2), y, w]
 
 func _draw_fg() -> void:
+	if ext.has(page): return
 	if PAGE.has(page):
 		_draw_page_fg(fg, get_viewport_rect().size)
 		return
@@ -541,7 +582,7 @@ func _draw_fg() -> void:
 	# money, bottom left
 	ci.draw_set_transform(Vector2(22, vs.y - 22.0), deg_to_rad(-3.0))
 	var cx := 0.0
-	for pair in [["실링 ", str(arena.shilling)], ["기억석 ", "0"]]:     # 기억석: PLACEHOLDER (no memory stones yet)
+	for pair in [["실링 ", str(arena.shilling)], ["기억석 ", str(arena.runes.mem) if arena.get("runes") != null else "0"]]:
 		var w0 := UI.text_w(bf, pair[0], 14)
 		var w1 := UI.text_w(bf, pair[1], 14)
 		UI.para(ci, cx, -10, w0 + w1 + 20.0, 22, 3.9, Color.BLACK)
@@ -554,6 +595,9 @@ func _draw_fg() -> void:
 func _info(k: String) -> String:
 	if k == "party": return "%d / 3 편성" % arena.player.party.size()
 	if k == "forge": return "실링 %d" % arena.shilling
+	if arena.get("runes") != null:
+		if k == "bag": return "장비 %d · 룬 %d" % [arena.runes.gearbag.size(), arena.runes.rune_count()]
+		if k == "best": return "%d / %d 등록" % [arena.runes.best_seen.size(), arena.runes.ENEMY.size()]
 	return ""
 
 func _poly_xf(ci: CanvasItem, xf: Transform2D, r: Rect2, pct: Array, c: Color) -> void:

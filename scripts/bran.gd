@@ -145,7 +145,9 @@ func greet() -> Array:
 		return ["엄, 브랜입니다. 그냥 브랜이에요. 브랜드 할 때처럼요.", "여기 대장간 빌려서 일하고 있습니다. 찌그러진 거 있으면 가져오십쇼. 흐흐."]
 	var hr: float = fposmod(arena.tod_h, 24.0)
 	var pool := []
-	# TODO(step 5): the legendary-rune line ('…잠깐, 그 가방에 든 거.') once runes exist
+	var R = arena.get("runes")
+	if R != null and R.runebag.keys().any(func(r): return int(R.runebag[r]) > 0 and R.RUNE.has(r) and R.RUNE[r]["g"] in ["legend", "unique"]):
+		pool.append(["…잠깐, 그 가방에 든 거. 그거 보통 룬이 아니지요?", "박을 거면 지금 하시죠. 화로는 달궈놨습니다. 흐흐."])
 	if arena.shilling < 3: pool.append(["실링이 바닥났군요.", "돈만 있다면야 못 할 게 없는데… 훈련장 유령들이 꽤 떨군다던데요. 흐흐."])
 	if hr >= 21.0 or hr < 5.0: pool.append(["이 시간까지 안 자고 뭐 합니까.", "…뭐, 저도 마찬가지지만요. 크흐흐."])
 	match arena.player.who:
@@ -165,9 +167,19 @@ func greet() -> Array:
 func talk() -> void:
 	talk_t = 2000.0
 	play("talk")
-	# TODO(step 5 · guild system): the prototype gates the forge until Bran has met you through Eilin (FAME.bran)
-	arena.open_dialog("bran", POR, "브랜", "길드 대장장이", greet(), func():
+	var M = arena.ui_root.menu if arena.ui_root != null else null
+	# before he joins the guild (fame.bran): only a word, then off to Eilin
+	if M != null and not M.bran_page.joined():
+		arena.open_dialog("bran", POR, "브랜", "길드 대장장이", ["…길드 쪽 사람이오? 처음 보는 얼굴인데."], func():
+			talk_t = 600.0
+			M.open_bran(false, "접수대의 에일린한테 먼저 인사부터 하고 오쇼. 일 하나 끝내고 오면, 그때 얘기합시다. 흐흐."))
+		return
+	var L := greet()
+	# his last line stays up with the choices (branTalk): 장비를 맡기고 싶어요 · 잡담한다 · 그만 가볼게요
+	var head: Array = L.slice(0, L.size() - 1)
+	var last: String = L[L.size() - 1]
+	var go := func():
 		talk_t = 600.0
-		# TODO forge menu: 장비를 맡기고 싶어요 (forge / gear screen) · 잡담한다 (CHAT / CHAT_C) · 그만 가볼게요 ('또 오십쇼. 필요하면요. 흐흐.')
-		arena.sfx("guard", 0.4)
-		arena.text(arena.player.position + Vector2(0, -170), "대장간 — 준비 중", Color("#ffe9a8")))
+		if M != null: M.open_bran(false, last)
+	if head.is_empty(): go.call()
+	else: arena.open_dialog("bran", POR, "브랜", "길드 대장장이", head, go)

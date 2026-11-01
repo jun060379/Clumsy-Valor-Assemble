@@ -17,6 +17,7 @@ const WEATHERS := ["clear", "rain", "snow"]
 const SETTINGS := preload("res://scripts/settings.gd")
 const FATIGUE := preload("res://scripts/fatigue.gd")
 const UIROOT := preload("res://scripts/ui_root.gd")
+const RUNES := preload("res://scripts/runes.gd")
 const WAVES := [["goblin", "goblin", "eye"], ["mush", "goblin", "goblin"], ["mush", "mush", "eye", "goblin"], ["skel", "goblin", "eye", "mush"], ["skel", "skel", "eye", "eye", "goblin"]]
 
 const H := 500.0
@@ -72,6 +73,7 @@ var fatigue                   # fatigue.gd: 피로도 160, +1 / 6 min (nothing s
 var ambient := true           # 환경음 (no ambient sound yet)
 var screen_fx := true         # 화면 효과 (no post effects yet)
 var ui_root                   # ui_root.gd: title, top-right buttons, main menu, transitions
+var runes                     # runes.gd: runes, gear, shillings' drops, the boss chest, the bestiary record
 
 var t_sky: Texture2D = preload("res://assets/bg/bg_sky.png")
 var t_mtn: Texture2D = preload("res://assets/bg/bg_mountains.png")
@@ -117,6 +119,9 @@ func _ready() -> void:
 	player.arena = self
 	player.position = Vector2(380, ground_y)
 	add_child(player)
+	runes = RUNES.new()
+	add_child(runes)
+	runes.setup(self)
 	fx_layer = Node2D.new()
 	fx_layer.z_index = 10
 	fx_layer.draw.connect(_draw_fx)

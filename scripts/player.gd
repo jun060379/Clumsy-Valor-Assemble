@@ -10,7 +10,7 @@ const GRAV := 0.0021
 const JUMPV := 0.74
 const DJUMPV := 0.80
 const FALLMAX := 1.15
-const RUN := 0.36
+var RUN := 0.36              # run speed (gear and 바람 걸음 scale it: runes.gd tick)
 const BUF := 170.0
 const MELEE_K := 0.86
 const CW := 224.0            # drawn cell size before scale (half the 448x352 source)
@@ -118,13 +118,13 @@ func _ready() -> void:
 func switch_char(c: String) -> void:
 	who = c
 	CSCALE = CH.SCALE[c]
-	MAX_HP = CH.STATS[c]["hp"]
+	MAX_HP = arena.runes.max_hp(c) if _rk() else CH.STATS[c]["hp"]
 
 static func is_fly(e) -> bool:
 	return e.get("M") != null and e.M.has("fly")
 
 func atk_mul() -> float:
-	return CH.STATS[who]["atk"]
+	return CH.STATS[who]["atk"] * (arena.runes.atk_k(who) if _rk() else 1.0)
 
 
 # ---------- helpers ----------
@@ -330,6 +330,8 @@ func check_hits() -> void:
 		hit_done = true
 		var heavy: bool = atk.get("heavy", false)
 		arena.sfx("heavy" if heavy else "hit")
+		if heavy: _rev("heavy")
+		if who == "aida" and _rk(): arena.runes.clone_hits(atk)
 		arena.hitstop = atk.get("stop", 55)
 		arena.shake(atk.get("shake", 4), dir)
 		if heavy:
@@ -463,6 +465,7 @@ func add_ghost(life: float, ox := 0.0) -> void:
 func step(dt: float) -> void:
 	xs = position.x
 	read_input()
+	if _rk(): arena.runes.tick(dt)
 	t += dt
 	if inv > 0.0: inv -= dt
 	if bash_t > 0.0: bash_t -= dt
@@ -500,6 +503,7 @@ func step(dt: float) -> void:
 		var dd := move_axis()
 		dir = dd if dd != 0 else dir
 		charges -= 1
+		_rev("dash")
 		if who == "aida" and aida_blink():
 			pass
 		elif on:
@@ -570,7 +574,9 @@ func step(dt: float) -> void:
 			else:
 				rift_enter(mx, my, false)
 				dig_air = true
-				tp_cd = 3000.0
+				tp_cd = 3000.0 * _cdk()
+				_rev("skill")
+				if _rk() and arena.runes.has("clone"): arena.runes.clone_start()
 	elif a in ["dash", "airdash", "backstep"]:
 		if a == "dash":
 			var sp1: Array = [0.7, 0.85, 0.8, 0.35]
@@ -600,8 +606,17 @@ func step(dt: float) -> void:
 	elif a == "heal":
 		vx = 0.0
 		heal_t += dt
+		if heal_t >= 700.0 and not fx_done and _rk() and arena.runes.has("aura"):
+			fx_done = true
+			arena.runes.aura_start()
+			heal_cd = 9000.0 * _cdk()
+			_rev("skill")
+			_rev("heal")
+			arena.sfx("ready", 0.9)
 		if heal_t >= 700.0 and not fx_done:
 			fx_done = true
+			_rev("skill")
+			_rev("heal")
 			var hv := 30.0
 			hp = minf(MAX_HP, hp + hv)
 			var al := 0
@@ -609,7 +624,7 @@ func step(dt: float) -> void:
 				if c != who and hpm[c] > 0.0 and hpm[c] < CH.STATS[c]["hp"]:
 					hpm[c] = minf(CH.STATS[c]["hp"], hpm[c] + hv)
 					al += 1
-			heal_cd = 9000.0
+			heal_cd = 9000.0 * _cdk()
 			arena.sfx("ready", 0.9)
 			arena.flash = 0.1
 			arena.ring(position + Vector2(0, -60.0 * CSCALE), 40.0, Color("#fff1b0"))
@@ -682,8 +697,10 @@ func step(dt: float) -> void:
 				lunge_assist()
 			if f >= 3 and want("guard") and who == "estelle":
 				take("guard")
-				set_anim("parry")
-				ghit = false
+				if _shield_throw(): pass
+				else:
+					set_anim("parry")
+					ghit = false
 		check_hits()
 	elif a == "guard" or a == "parry":
 		if bash_t > 0.0: vx = dir * 0.75 * minf(1.0, bash_t / 320.0)
@@ -741,6 +758,7 @@ func step(dt: float) -> void:
 ## guard key = each member's skill
 func use_skill(move: int) -> void:
 	if who == "estelle":
+		if _shield_throw(): return
 		set_anim("parry")
 		ghit = false
 		arena.sfx("guard")
@@ -862,6 +880,7 @@ func neutral_dodge() -> bool:
 		return false
 	dir = 1 if m.position.x > position.x else -1
 	charges -= 1
+	_rev("dash")
 	set_anim("backstep")
 	pd_back = true
 	arena.sfx("dash", 0.9)
@@ -1140,10 +1159,13 @@ func take_hit(m, raw: float) -> String:
 		if m.flared:
 			arena.perfect_parry(m)
 		qte_offer("parry")
+		_rev("parry")
+		_rev("skill")
 		return "parry"
 	if who == "estelle" and (anim == "guard" or anim == "parry" or anim == "backstep") and facing:
-		var tk := raw * 0.5 * 0.75
+		var tk := raw * 0.5 * 0.75 * _inm()
 		hp -= tk
+		_rev("block")
 		arena.sfx("guard", 0.9)
 		arena.hitstop = 60.0
 		arena.shake(4, -dir)
@@ -1156,7 +1178,7 @@ func take_hit(m, raw: float) -> String:
 		qte_offer("hit", {"raw": raw * 0.5, "taken": tk, "victim": who})
 		if hp <= 0.0: die()
 		return "guard"
-	var tk2 := raw * (0.75 if who == "estelle" else 1.0)    # Estelle's passive: 25% less damage taken
+	var tk2 := raw * (0.75 if who == "estelle" else 1.0) * _inm()    # Estelle's passive: 25% less damage taken
 	hp -= tk2
 	inv = 1200.0
 	arena.sfx("hurt", 0.8)
@@ -1298,6 +1320,7 @@ func swap(tag: bool, to = null) -> void:
 	if tag:
 		qte_end()
 		swap_cd = 900.0
+		_rev("tag")
 		# what each member brings when tagged in
 		if nx == "estelle" and q_hit != null and q_hit["victim"] == old:
 			hpm[old] = minf(CH.STATS[old]["hp"], hpm[old] + q_hit["taken"])
@@ -1497,3 +1520,23 @@ func draw_frame(c: String, an: String, fr: int, at: Vector2, d: int, col: Color,
 	ci.draw_set_transform(at, 0.0, Vector2(d, 1))
 	ci.draw_texture_rect_region(sheet, Rect2(-w / 2.0, -BASE * sc, w, h), src, col)
 	ci.draw_set_transform(Vector2.ZERO)
+
+
+# ---------- rune hooks (runes.gd; step 5-2) ----------
+func _rk() -> bool:
+	return arena != null and arena.get("runes") != null
+
+func _rev(e: String) -> void:
+	if _rk(): arena.runes.ev(e)
+
+func _cdk() -> float:
+	return arena.runes.cd_k() if _rk() else 1.0
+
+func _inm() -> float:
+	return arena.runes.in_mul() if _rk() else 1.0
+
+## 방패 던지기 replaces Estelle's shield skill
+func _shield_throw() -> bool:
+	if not _rk() or not arena.runes.has("shieldthrow", "estelle"): return false
+	if arena.runes.shield_cd <= 0.0: arena.runes.shield_throw()
+	return true
