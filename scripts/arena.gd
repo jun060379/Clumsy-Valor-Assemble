@@ -14,6 +14,9 @@ const EILIN := preload("res://scripts/eilin.gd")
 const DIALOG := preload("res://scripts/dialog.gd")
 const FOLK := preload("res://scripts/townsfolk.gd")
 const WEATHERS := ["clear", "rain", "snow"]
+const SETTINGS := preload("res://scripts/settings.gd")
+const FATIGUE := preload("res://scripts/fatigue.gd")
+const UIROOT := preload("res://scripts/ui_root.gd")
 const WAVES := [["goblin", "goblin", "eye"], ["mush", "goblin", "goblin"], ["mush", "mush", "eye", "goblin"], ["skel", "goblin", "eye", "mush"], ["skel", "skel", "eye", "eye", "goblin"]]
 
 const H := 500.0
@@ -63,6 +66,12 @@ var fade_cb = null
 var near_entry := false
 var near_exit := false
 var train_platforms: Array = []
+# front end (step 4): settings, 피로도, title / menus
+var cfg                       # settings.gd: device, stick, key bindings (saved)
+var fatigue                   # fatigue.gd: 피로도 160, +1 / 6 min (nothing spends it yet)
+var ambient := true           # 환경음 (no ambient sound yet)
+var screen_fx := true         # 화면 효과 (no post effects yet)
+var ui_root                   # ui_root.gd: title, top-right buttons, main menu, transitions
 
 var t_sky: Texture2D = preload("res://assets/bg/bg_sky.png")
 var t_mtn: Texture2D = preload("res://assets/bg/bg_mountains.png")
@@ -77,6 +86,9 @@ func _ready() -> void:
 	RenderingServer.set_default_clear_color(Color("#0d0b10"))
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	setup_input()
+	cfg = SETTINGS.new(self)
+	cfg.apply_keys()
+	fatigue = FATIGUE.new()
 	platforms = [
 		{"x": 520.0, "y": ground_y - 150.0, "w": 190.0},
 		{"x": 170.0, "y": ground_y - 120.0, "w": 150.0},
@@ -149,10 +161,18 @@ func _ready() -> void:
 	add_child(eil)
 	var tc := Control.new()
 	tc.set_script(TOUCH)
+	tc.arena = self
 	ui.add_child(tc)
+	var ui2 := CanvasLayer.new()
+	ui2.layer = 5
+	add_child(ui2)
+	ui_root = Control.new()
+	ui_root.set_script(UIROOT)
+	ui_root.arena = self
+	ui2.add_child(ui_root)
 	call_deferred("go_town", Vector2(700.0, ground_y), 1)
 	var stamp := Label.new()
-	stamp.text = "STEP 3 · 마을 · 본관 · 동굴  ·  " + _stamp()
+	stamp.text = "STEP 4 · UI  ·  " + _stamp()
 	stamp.add_theme_font_override("font", font_bold)
 	stamp.add_theme_font_size_override("font_size", 11)
 	stamp.modulate = Color(1, 1, 1, 0.45)
@@ -191,6 +211,11 @@ func setup_input() -> void:
 		m.axis = ax[1]
 		m.axis_value = ax[2]
 		InputMap.action_add_event(ax[0], m)
+	if not InputMap.has_action("ult"): InputMap.add_action("ult", 0.3)   # 궁극기: D (settings.gd binds the keys) / RT; no ult yet
+	var rt := InputEventJoypadMotion.new()
+	rt.axis = JOY_AXIS_TRIGGER_RIGHT
+	rt.axis_value = 1.0
+	InputMap.action_add_event("ult", rt)
 
 
 ## "town" / "hall" / "dungeon", or "" on the training ground
@@ -367,6 +392,8 @@ func platform_under(p: Vector2):
 
 
 func _process(delta: float) -> void:
+	if ui_root != null and ui_root.holds():
+		return            # the world holds still under the title, a menu page or a transition
 	var dt := minf(delta * 1000.0, 50.0)
 	if witch > 0.0:
 		witch -= dt
