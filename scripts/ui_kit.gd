@@ -194,15 +194,15 @@ static func cross(ci: CanvasItem, c: Vector2, r: float, col: Color, w := 2.0) ->
 	ci.draw_line(c + Vector2(r, -r), c + Vector2(-r, r), col, w, true)
 
 ## halftone dot tile (radial-gradient dots on an 11 px grid)
-static func dot_tile(a: float) -> Texture2D:
-	var key := "dots%.2f" % a
+static func dot_tile(a: float, col := Color.BLACK) -> Texture2D:
+	var key := "dots%.2f_%s" % [a, col.to_html(false)]
 	if not _cache.has(key):
 		var im := Image.create(11, 11, false, Image.FORMAT_RGBA8)
 		for y in 11:
 			for x in 11:
 				var d := Vector2(x + 0.5 - 5.5, y + 0.5 - 5.5).length() / 5.5
 				var v := clampf((0.33 - d) / 0.03, 0.0, 1.0)
-				im.set_pixel(x, y, Color(0, 0, 0, a * v))
+				im.set_pixel(x, y, Color(col.r, col.g, col.b, a * v))
 		_cache[key] = ImageTexture.create_from_image(im)
 	return _cache[key]
 
