@@ -38,10 +38,24 @@ var sp_py := UIA.Spring.new(0.0, 0.9, 0.9)
 var sil_out := false
 var slammed := false
 var specks: Array = []
+## the menu: 시작 · 불러오기 · 설정 · 끝내기 (no 끝내기 on the web, where a tab cannot close itself)
+var items: Array = []            # [key, label]
+var sel := 0
+var item_rects: Array = []       # Rect2 per item, as last drawn (taps)
+var has_save := false
+var confirm := false             # 시작 over a saved game: "지우고 새로 시작할까요?" row
+var confirm_sel := 1             # 0 = 새로 시작, 1 = 돌아가기
+var confirm_rects: Array = []
+var confirm_t := 0.0              # clock when the confirm card opened
+var fresh := false               # 시작 chosen: the save goes and the scene reloads into a new game
+var in_opts := false             # the settings page is open over the title
+static var pending_fresh := false   # set across the reload: the new game starts without the title
 
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
+	items = [["start", "시작"], ["load", "불러오기"], ["opts", "설정"]]
+	if not OS.has_feature("web"): items.append(["quit", "끝내기"])
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED     # halftone tiles through polygon uvs
@@ -63,8 +77,24 @@ func _ready() -> void:
 		specks.append([randf(), randf(), 0.5 + randf() * 0.7, 2600.0 + randf() * 3000.0])
 
 func _process(delta: float) -> void:
+	if pending_fresh and arena != null and arena.world_started:
+		# the reload after 시작: straight into the new game, no title
+		pending_fresh = false
+		active = false
+		visible = false
+		ui_root.start_game("estelle")
+		return
+	if in_opts:
+		# the settings page over the title: the title waits (input off) until it closes
+		if not ui_root.menu.is_open() and not ui_root.sweep.active:
+			in_opts = false
+			active = true
+			visible = true
+		return
 	if not active:
 		return
+	if not has_save and arena != null and arena.save != null and FileAccess.file_exists(arena.save.path):
+		has_save = true
 	var dt := minf(delta * 1000.0, 250.0)   # real time, like the prototype's CSS / rAF clocks
 	clock += dt
 	trn.step(dt)
@@ -119,14 +149,67 @@ func _input(ev: InputEvent) -> void:
 	get_viewport().set_input_as_handled()
 	if outro >= 0.0:
 		return
-	# Enter / Space (the pad's A sends Enter; Start is the in-game menu button and does nothing here)
-	var kb_ok := key in [KEY_ENTER, KEY_SPACE] or padb == JOY_BUTTON_A
-	if tap == Vector2.INF and not kb_ok:
-		return
 	if not intro_done:
 		_finish_intro()
-		if tap != Vector2.INF:
-			return         # a click only finishes the logo; a key finishes it and starts at once (two keydown listeners)
+		return             # the first press only settles the logo
+	var up := key in [KEY_UP, KEY_W] or padb == JOY_BUTTON_DPAD_UP
+	var down := key in [KEY_DOWN, KEY_S] or padb == JOY_BUTTON_DPAD_DOWN
+	var left := key in [KEY_LEFT, KEY_A] or padb == JOY_BUTTON_DPAD_LEFT
+	var right := key in [KEY_RIGHT, KEY_D] or padb == JOY_BUTTON_DPAD_RIGHT
+	var ok := key in [KEY_ENTER, KEY_SPACE] or padb == JOY_BUTTON_A
+	var back := key == KEY_ESCAPE or padb == JOY_BUTTON_B
+	if confirm:
+		if left or right or up or down:
+			confirm_sel = 1 - confirm_sel
+			arena.sfx("step", 0.4)
+		elif ok: _confirm_pick(confirm_sel)
+		elif back: _confirm_pick(1)
+		elif tap != Vector2.INF:
+			for k in confirm_rects.size():
+				if confirm_rects[k].has_point(tap): _confirm_pick(k)
+		return
+	if up or down:
+		sel = posmod(sel + (1 if down else -1), items.size())
+		arena.sfx("step", 0.4)
+	elif ok:
+		_pick(sel)
+	elif tap != Vector2.INF:
+		for k in item_rects.size():
+			if item_rects[k].has_point(tap):
+				sel = k
+				_pick(k)
+
+## a menu item chosen
+func _pick(k: int) -> void:
+	match String(items[k][0]):
+		"start":
+			if has_save:
+				confirm = true
+				confirm_sel = 1
+				confirm_t = clock
+				arena.sfx("ready", 0.4)
+			else: _begin()
+		"load":
+			if has_save: _begin()
+			else: arena.sfx("step", 0.2)
+		"opts":
+			in_opts = true
+			active = false
+			visible = false          # the settings page is drawn under this layer: step aside until it closes
+			arena.sfx("ready", 0.4)
+			ui_root.menu.open_page("opts")
+		"quit":
+			get_tree().quit()
+
+func _confirm_pick(k: int) -> void:
+	confirm = false
+	if k == 0:
+		fresh = true
+		_begin()
+	else: arena.sfx("step", 0.3)
+
+## the outro: the logo leaves, the field grows, the sweep carries on into the game
+func _begin() -> void:
 	outro = 0.0
 	sp_art.to(1.5, 1.5)
 	arena.sfx("parry", 1.0)
@@ -142,6 +225,14 @@ func _finish_intro() -> void:
 func _go() -> void:
 	active = false
 	visible = false
+	if fresh:
+		# 시작 over a saved game: the save goes, the scene reloads and starts the new game under the sweep
+		if arena.save != null and FileAccess.file_exists(arena.save.path):
+			DirAccess.remove_absolute(arena.save.path)
+		if get_tree().current_scene != null:
+			pending_fresh = true
+			get_tree().reload_current_scene()
+			return
 	var c: String = arena.player.who if arena.save != null and arena.save.loaded else "estelle"
 	ui_root.start_game(c)
 
@@ -373,26 +464,64 @@ func _prompt(ci: CanvasItem, vs: Vector2) -> void:
 	var H := vs.y
 	var lx := 0.089 * W
 	var o := UIA.p(outro, 0.0, 280.0, "in") if outro >= 0.0 else 0.0
+	# the motto, top left, under the travelling guide line
 	var ua := UIA.p(t, 1250.0, 400.0, "ease") * (1.0 - o)
 	if ua > 0.0:
 		var fn := UI.noto()
 		var motto := "서툴지만, 물러서지 않는다"
-		var fs := int(0.03 * H)
-		ci.draw_string(fn, Vector2(lx + 0.02 * W * (1.0 - ua), 0.85 * H + fs * 0.4), motto, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0.78, 0.78, 0.82, ua))
-	var u := UIA.p(t, 1300.0, 400.0, "bk")
-	if u <= 0.0 or o >= 1.0: return
+		var fs := int(0.026 * H)
+		ci.draw_string(fn, Vector2(lx + 0.02 * W * (1.0 - ua), 0.085 * H), motto, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0.78, 0.78, 0.82, ua))
+	# the menu: four slabs, each sliding in 70 ms after the one above; the picked one is pink, pushed right and a touch bigger
+	item_rects.clear()
+	confirm_rects.clear()
 	var fb := UI.bhs()
-	var ps := "탭하여 입장"
-	var fs2 := int(0.036 * H)
-	var sw := UI.text_w(fb, ps, fs2) + 0.044 * W
-	var sh := 0.05 * H
-	var r := Rect2(lx, 0.905 * H, sw, sh)
-	var pulse := UIA.pulse(clock, 1200.0) if intro_done else 0.0
-	var sc := 1.0 + 0.05 * pulse
-	ci.draw_set_transform_matrix(UIA.xf(r.get_center(), Vector2(-0.3 * W * (1.0 - u), 0.2 * H * o), deg_to_rad(-3.0 * (1.0 - u)), Vector2(sc, sc)))
-	UI.para(ci, r.position.x, r.position.y, sw, sh, -sh * 0.3, Color.WHITE.lerp(Color("#ffe0ea"), pulse))
-	ci.draw_string(fb, Vector2(r.position.x + 0.022 * W, r.position.y + sh * 0.5 + fs2 * 0.36), ps, HORIZONTAL_ALIGNMENT_LEFT, -1, fs2, INK)
+	var fs2 := int(0.03 * H)
+	var ih := 0.052 * H
+	var gap := 0.012 * H
+	var y0 := 0.96 * H - items.size() * (ih + gap) + gap
+	var pulse := UIA.pulse(clock, 1400.0) if intro_done else 0.0
+	for k in items.size():
+		var u := UIA.p(t, 1250.0 + k * 70.0, 400.0, "bk")
+		if u <= 0.0 or o >= 1.0:
+			item_rects.append(Rect2())
+			continue
+		var on := k == sel and not confirm
+		var dim: bool = items[k][0] == "load" and not has_save
+		var lab: String = items[k][1]
+		var sw := 0.19 * W
+		var r := Rect2(lx + (0.014 * W if on else 0.0), y0 + k * (ih + gap), sw, ih)
+		var sc := 1.0 + (0.04 * pulse if on else 0.0)
+		ci.draw_set_transform_matrix(UIA.xf(r.get_center(), Vector2(-0.3 * W * (1.0 - u), 0.25 * H * o), deg_to_rad(-3.0 * (1.0 - u)), Vector2(sc, sc)))
+		var bg := PINK.lerp(Color("#ff7aa8"), pulse) if on else Color.WHITE
+		if dim: bg = Color(1, 1, 1, 0.35)
+		UI.para(ci, r.position.x, r.position.y, sw, ih, -ih * 0.3, bg)
+		if on:
+			# a black tick on the left, the persona "you are here"
+			UI.para(ci, r.position.x - 0.012 * W, r.position.y + ih * 0.2, 0.006 * W, ih * 0.6, -ih * 0.18, INK)
+		var tc := Color.WHITE if on else INK
+		if dim: tc = Color(0.1, 0.1, 0.12, 0.5)
+		ci.draw_string(fb, Vector2(r.position.x + 0.022 * W, r.position.y + ih * 0.5 + fs2 * 0.36), lab, HORIZONTAL_ALIGNMENT_LEFT, -1, fs2, tc)
+		ci.draw_set_transform(Vector2.ZERO)
+		item_rects.append(Rect2(r.position + Vector2(-0.012 * W, 0), r.size + Vector2(0.024 * W, gap)))
+	if not confirm: return
+	# 시작 over a save: a black card beside the menu asks before the save goes
+	var cw := 0.36 * W
+	var chh := 0.2 * H
+	var cr := Rect2(lx + 0.24 * W, 0.96 * H - chh, cw, chh)
+	var cu := UIA.p(clock - confirm_t, 0.0, 260.0, "bk")
+	ci.draw_set_transform_matrix(UIA.xf(cr.get_center(), Vector2(0, 0.08 * H * (1.0 - cu)), deg_to_rad(-2.0), Vector2(cu, cu)))
+	ci.draw_colored_polygon(UI.clip(cr, [[0, 4], [100, 0], [99, 100], [1, 96]]), INK)
+	ci.draw_colored_polygon(UI.clip(Rect2(cr.position.x, cr.position.y, 0.006 * W, chh), [[0, 0], [100, 0], [100, 100], [0, 100]]), PINK)
+	var fn2 := UI.noto()
+	var fsq := int(0.03 * H)
+	ci.draw_string(fn2, Vector2(cr.position.x + 0.03 * W, cr.position.y + 0.06 * H), "저장된 진행이 있어요.", HORIZONTAL_ALIGNMENT_LEFT, -1, fsq, Color.WHITE)
+	ci.draw_string(fn2, Vector2(cr.position.x + 0.03 * W, cr.position.y + 0.1 * H), "지우고 처음부터 시작할까요?", HORIZONTAL_ALIGNMENT_LEFT, -1, fsq, Color(0.8, 0.8, 0.85))
+	var labs := ["새로 시작", "돌아가기"]
+	for k in 2:
+		var bw := 0.13 * W
+		var br := Rect2(cr.position.x + 0.03 * W + k * (bw + 0.02 * W), cr.end.y - 0.07 * H, bw, 0.05 * H)
+		var bon := k == confirm_sel
+		UI.para(ci, br.position.x, br.position.y, bw, br.size.y, -br.size.y * 0.3, PINK if bon else Color.WHITE)
+		ci.draw_string(fb, Vector2(br.position.x + 0.02 * W, br.position.y + br.size.y * 0.5 + fs2 * 0.36), labs[k], HORIZONTAL_ALIGNMENT_LEFT, -1, fs2, Color.WHITE if bon else INK)
+		confirm_rects.append(br.grow(6.0))
 	ci.draw_set_transform(Vector2.ZERO)
-
-
-# ---------- hero select ----------
