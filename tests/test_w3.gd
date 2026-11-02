@@ -303,6 +303,17 @@ func _initialize() -> void:
 	for i in 200: BK.road_sp.step(16.0)
 	check(absf(BK.road_sp.x - BK.road_sp.t) < 1.0, "the spring settles on it")
 	BK.road_sp = null
+	# the left column's EXP 획득처 menu scrolls by itself (drag / wheel over it)
+	BK.im_key = "exp"
+	BK.im_r = Rect2(0, 200, 200, 120)
+	BK.im_h = 500.0
+	BK.im_sc = {}
+	BK._im_scroll(100.0)
+	check(is_equal_approx(float(BK.im_sc["exp"]), 100.0), "EXP 획득처 scrolls")
+	BK._im_scroll(9999.0)
+	check(is_equal_approx(float(BK.im_sc["exp"]), 500.0 - 90.0), "…to its end and no further (%.0f)" % BK.im_sc["exp"])
+	BK._im_scroll(-9999.0)
+	check(float(BK.im_sc["exp"]) == 0.0, "…and back to its top")
 
 	# ---------- WP14: 상세 presence ----------
 	# with the original art (미숙한 결의: every face there) ...

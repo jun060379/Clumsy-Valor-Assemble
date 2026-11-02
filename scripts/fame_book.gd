@@ -36,6 +36,10 @@ var hits: Array = []            # [Rect2, Callable]
 var paper_r := Rect2()
 var content_h := 0.0
 var drag := {}
+var im_sc := {}                 # the left column's menu (등급 안내 / EXP 획득처): key -> scrolled y (drag / wheel over it)
+var im_r := Rect2()             # where that menu was last drawn, its key and its full height
+var im_key := ""
+var im_h := 0.0
 # the level road (roadInit): drag with rubber-banding at the ends, a flick carries on and snaps to a card, the wheel and
 # the keys step a card, it glides in on open and to a card that is claimed
 const ROAD_STEP := 178.0          # .lv: 168 px cards, 10 apart
@@ -242,6 +246,9 @@ func _input(ev: InputEvent) -> void:
 				var hs: Array = drag["hist"]
 				hs.append([float(t), ev.position.x])
 				if hs.size() > 7: hs.pop_front()
+			elif drag["moved"] and drag.get("left", false):
+				_im_scroll(-d.y)
+				drag["p"] = ev.position
 			elif drag["moved"]:
 				_scroll_by(-(d.x if cur_tab() == "lv" else d.y))
 				drag["p"] = ev.position
@@ -249,13 +256,18 @@ func _input(ev: InputEvent) -> void:
 		return
 	if ev is InputEventMouseButton:
 		get_viewport().set_input_as_handled()
-		if ev.button_index == MOUSE_BUTTON_WHEEL_DOWN and ev.pressed: _scroll_by(48.0)
-		elif ev.button_index == MOUSE_BUTTON_WHEEL_UP and ev.pressed: _scroll_by(-48.0)
+		var over_im: bool = im_key != "" and im_r.has_point(ev.position)
+		if ev.button_index == MOUSE_BUTTON_WHEEL_DOWN and ev.pressed:
+			if over_im: _im_scroll(48.0)
+			else: _scroll_by(48.0)
+		elif ev.button_index == MOUSE_BUTTON_WHEEL_UP and ev.pressed:
+			if over_im: _im_scroll(-48.0)
+			else: _scroll_by(-48.0)
 		elif ev.button_index in [MOUSE_BUTTON_WHEEL_RIGHT, MOUSE_BUTTON_WHEEL_LEFT] and ev.pressed: _scroll_by(48.0 if ev.button_index == MOUSE_BUTTON_WHEEL_RIGHT else -48.0)
 		elif ev.button_index == MOUSE_BUTTON_LEFT:
 			if ev.pressed:
-				drag = {"p": ev.position, "moved": false, "in": paper_r.has_point(ev.position)}
-				if cur_tab() == "lv":
+				drag = {"p": ev.position, "moved": false, "in": paper_r.has_point(ev.position), "left": im_key != "" and im_r.has_point(ev.position)}
+				if cur_tab() == "lv" and not drag["left"]:
 					drag["x0"] = ev.position.x
 					drag["sx0"] = float(scroll.get("lv", 0.0))
 					drag["hist"] = [[float(t), ev.position.x]]
@@ -363,6 +375,14 @@ func _goto(b: String, tb: String) -> void:
 	tab_t = 0.0
 	arena.sfx("step", 0.3)
 
+## the left column's menu scrolls on its own (it runs past the screen's foot on a phone)
+func _im_scroll(d: float) -> void:
+	if im_key == "": return
+	im_sc[im_key] = clampf(float(im_sc.get(im_key, 0.0)) + d, 0.0, _im_max())
+
+func _im_max() -> float:
+	return maxf(0.0, im_h - (im_r.size.y - 30.0))
+
 func _scroll_by(d: float) -> void:
 	var tb := cur_tab()
 	if tb == "lv":
@@ -415,6 +435,7 @@ func _scroll_max() -> float:
 # =====================================================================
 func _draw() -> void:
 	hits.clear()
+	im_key = ""
 	var b := book()
 	if b == "": return
 	var vs := get_viewport_rect().size
@@ -1035,7 +1056,10 @@ func _info_menu(r: Rect2, key: String, title: String) -> void:
 	var fa := col()
 	_ci.draw_string(S.bhs(), r.position + Vector2(4, 14), title, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, fa)
 	var xf := Transform2D(deg_to_rad(-4.0), r.position + Vector2(8, 26))
-	var y := 0.0
+	im_r = r
+	im_key = key
+	var sc0: float = minf(float(im_sc.get(key, 0.0)), _im_max())
+	var y := -sc0
 	var bf := S.bhs()
 	for i in items.size():
 		var it: Array = items[i]
@@ -1046,14 +1070,16 @@ func _info_menu(r: Rect2, key: String, title: String) -> void:
 		var lw := S.tw(bf, it[1], fs)
 		var rot := deg_to_rad(1.2 if i % 2 else -1.2)
 		var base := xf * Transform2D(rot, Vector2(sc, sc), 0.0, Vector2(x, y + (8.0 if on else 0.0)))
-		if on:
+		var vis := y >= -4.0          # scrolled up past the title: not written (and not tappable)
+		if on and vis:
 			var cw := lw * 1.0 + 26.0
 			_ci.draw_set_transform_matrix(xf * Transform2D(deg_to_rad(2.0), Vector2(x - 6.0, y + 14.0)))
 			_ci.draw_colored_polygon(S.clip(Rect2(0, 0, cw * 1.28 + 10.0, 30), [[0, 34], [100, 8], [94, 100], [5, 84]]), fa)
 			_ci.draw_set_transform_matrix(xf * Transform2D(deg_to_rad(-3.0), Vector2(x - 2.0, y + 10.0)))
 			_ci.draw_colored_polygon(S.clip(Rect2(0, 0, cw * 1.28, 30), [[3, 20], [97, 0], [100, 74], [7, 100]]), Color.WHITE)
 		_ci.draw_set_transform_matrix(base)
-		if on:
+		if not vis: pass
+		elif on:
 			_ci.draw_string(S.anton(false, 2), Vector2(2, 4), it[2], HORIZONTAL_ALIGNMENT_LEFT, -1, 8, fa.darkened(0.2))
 			_ci.draw_string(bf, Vector2(4, 22), it[1], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color.BLACK)
 		else:
@@ -1063,11 +1089,17 @@ func _info_menu(r: Rect2, key: String, title: String) -> void:
 		var hr := Rect2(xf * Vector2(x, y + 2.0), Vector2(lw * sc + 12.0, 26.0 * sc))
 		var kk: String = key
 		var ii := i
-		_hit(hr, func():
+		var pick := func():
 			im[kk] = ii
-			arena.sfx("step", 0.2))
+			arena.sfx("step", 0.2)
+		if vis: _hit(hr, pick)
 		y += 26.0 * sc + (10.0 if on else 0.0)
-		if on:
+		if on and y < -4.0:
+			# the tip panel scrolled up past the title: only its height counts
+			var lines0 := String(it[3])
+			var th0 := S.noto().get_multiline_string_size(lines0, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 48.0, 12).y
+			y += (50.0 + th0 + (30.0 if it[4] != null else 0.0)) * 1.02 + 8.0
+		elif on:
 			# the tip panel
 			var pw := r.size.x - 22.0
 			var lines: Array = []
@@ -1095,6 +1127,7 @@ func _info_menu(r: Rect2, key: String, title: String) -> void:
 				_hit(sr.grow(4), it[4][1])
 			_ci.draw_set_transform(Vector2.ZERO)
 			y += ph * 1.02 + 8.0
+	im_h = y + sc0
 
 
 # ---------- rows on the paper ----------
