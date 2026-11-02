@@ -1,3 +1,7 @@
-FameSymbols.otf: a few symbols (✓ › ‹ Ⅰ–Ⅳ █ ▓ ▒ ░ ╳ → ⚠ × ▼ ▲) subset from Noto Sans CJK KR Bold.
-NotoSerifKR-Black-sub.otf: Noto Serif CJK KR Black, subset to ASCII, Hangul KS X 1001 (2350 syllables), jamo and a few punctuation marks.
-Both Noto fonts: Copyright Google / Adobe, SIL Open Font License 1.1 (same terms as BlackHanSans-OFL.txt).
+NotoSansKR-Bold.woff2, NotoSansKR-Black.woff2, NotoSerifKR-Black.woff2, NotoSerifKR-Bold.woff2: Noto Sans KR / Noto Serif KR
+(noto-cjk SubsetOTF/KR) subset by tools/make_fonts.py to every modern Hangul syllable (11,172), Hangul Jamo and Compatibility
+Jamo, Latin-1 and the punctuation / arrow / box / shape / symbol blocks. Copyright Google / Adobe, SIL Open Font License 1.1
+(full text in NotoSerifKR-OFL.txt, same terms as BlackHanSans-OFL.txt).
+BlackHanSans.woff2: Black Han Sans as published on Google Fonts (2,581 syllables upstream), repacked as WOFF2.
+DejaVuSans-sym.ttf: DejaVu Sans Bold, only the arrows / Misc Symbols / Dingbats Noto Sans KR lacks (☠ ✉ …). DejaVu fonts are
+free (Bitstream Vera / Arev licence, public domain changes): https://dejavu-fonts.github.io/License.html

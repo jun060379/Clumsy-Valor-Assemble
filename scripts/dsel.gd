@@ -314,7 +314,7 @@ func _draw_req(vs: Vector2, D: Dictionary, acc: Color, e: Array) -> void:
 			draw_string(UI.noto_k(), Vector2(vx, ty), "실링 · 기억석", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0, 0, 0, a))
 		else:
 			if rw[0] == "RANK":
-				if _rank_ok(D):            # ✓ (the fonts lack the glyph)
+				if _rank_ok(D):            # ✓ drawn as a stroke (matches the prototype)
 					draw_polyline(PackedVector2Array([Vector2(vx, ty - 5.0), Vector2(vx + 3.5, ty - 1.5), Vector2(vx + 10.0, ty - 9.0)]), Color(0, 0, 0, a), 2.0)
 				else:                      # a small padlock
 					draw_rect(Rect2(vx, ty - 7.0, 9.0, 7.0), Color(0, 0, 0, a))

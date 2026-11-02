@@ -54,6 +54,7 @@
 ### 빌드와 테스트
 
 - 테스트: `godot --headless --import` 뒤 `godot --headless -s tests/test_*.gd` (디버그 빌드라 게이트가 열려 있다). 테스트 실행은 `user://save_test.json`을 쓰고 타이틀을 건너뛴다.
+- 글꼴: `assets/fonts`의 Noto Sans/Serif KR은 `tools/make_fonts.py`가 원본(noto-cjk)에서 현대 한글 11,172자·자모·기호 블록 전부로 다시 뽑은 WOFF2다. 블랙 한 산스는 원본에 2,581자뿐이라 나머지는 Noto Sans KR Black이 받는다. 대체 글꼴 사슬은 `ui_kit.gd`의 `chains()` 한 곳에서 걸고(글꼴 파일을 `duplicate()`하면 글리프 캐시를 같이 써서 글자가 깨진다), 시스템 글꼴 대체는 꺼 두어 데스크톱도 폰과 똑같이 보인다. `tests/test_fonts.gd`가 스크립트의 모든 문자열 글자와 한글 전체를 글꼴마다 확인한다.
 - 내보내기: `export_presets.cfg`의 Web·Windows 둘 다 `tests/`, `tools/`, `docs/`, `build/`를 뺀다. `build/`에는 `.gdignore`가 있어 고도가 내보낸 파일을 가져오지 않는다.
 
 ### 진행

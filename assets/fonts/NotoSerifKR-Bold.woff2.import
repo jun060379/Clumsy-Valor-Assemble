@@ -2,13 +2,13 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://2uqccnxkxld2"
-path="res://.godot/imported/DejaVuSans-env.ttf-bbe640d9db14230fe121da5191442daf.fontdata"
+uid="uid://bmqwwx2th14p4"
+path="res://.godot/imported/NotoSerifKR-Bold.woff2-6e3de3a8aee26fcc8c281c20b129dabb.fontdata"
 
 [deps]
 
-source_file="res://assets/fonts/DejaVuSans-env.ttf"
-dest_files=["res://.godot/imported/DejaVuSans-env.ttf-bbe640d9db14230fe121da5191442daf.fontdata"]
+source_file="res://assets/fonts/NotoSerifKR-Bold.woff2"
+dest_files=["res://.godot/imported/NotoSerifKR-Bold.woff2-6e3de3a8aee26fcc8c281c20b129dabb.fontdata"]
 
 [params]
 
@@ -19,7 +19,7 @@ disable_embedded_bitmaps=true
 multichannel_signed_distance_field=false
 msdf_pixel_range=8
 msdf_size=48
-allow_system_fallback=true
+allow_system_fallback=false
 force_autohinter=false
 hinting=1
 subpixel_positioning=4

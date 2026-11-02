@@ -767,7 +767,7 @@ func _rec(vs: Vector2, col: Color) -> void:
 		UI.para(p, lr.position.x - 2.0, lr.position.y - 2.0, lw + 4.0, 28, -4.0, Color.WHITE)
 		UI.para(p, lr.position.x, lr.position.y, lw, 24, -4.0, Color.BLACK)
 		if li == -1: p.draw_rect(Rect2(lr.position.x - 4.0, lr.end.y + 4.0, lw + 4.0, 3), col)
-		var oc := lr.position + Vector2(19, 12)            # ◎ (the fonts lack it)
+		var oc := lr.position + Vector2(19, 12)            # ◎ drawn as rings
 		p.draw_arc(oc, 6.0, 0, TAU, 20, Color.WHITE, 1.6, true)
 		p.draw_circle(oc, 2.6, Color.WHITE)
 		p.draw_string(UI.bhs(), lr.position + Vector2(30, 18), "감상", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color.WHITE)

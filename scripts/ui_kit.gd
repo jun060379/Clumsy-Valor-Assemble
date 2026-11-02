@@ -6,12 +6,48 @@ extends RefCounted
 const TXCOL := {"estelle": [Color("#ff3d7f"), Color("#ffe0ea")], "aida": [Color("#3ddc84"), Color("#e2ffe9")], "luce": [Color("#ffc21f"), Color("#fff3c8")]}
 const EN := {"estelle": "ESTELLE", "aida": "AYDA", "luce": "LUCE"}
 
-const _BHS := preload("res://assets/fonts/BlackHanSans.woff")
-const _NOTO_K := preload("res://assets/fonts/NotoSansKR-Black.otf")
-const _NOTO_B := preload("res://assets/fonts/NotoSansKR-Bold.otf")
+## Every font the game draws with (tools/make_fonts.py rebuilds them). The Noto ones carry all 11,172 Hangul syllables,
+## the jamo, Latin-1 and the symbol blocks; Black Han Sans only has 2,581 syllables upstream and Anton no Hangul, so each
+## falls back on a Noto of its weight. tests/test_fonts.gd checks every string the scripts can show against these.
+const _BHS := preload("res://assets/fonts/BlackHanSans.woff2")
+const _NOTO_K := preload("res://assets/fonts/NotoSansKR-Black.woff2")
+const _NOTO_B := preload("res://assets/fonts/NotoSansKR-Bold.woff2")
 const _ANTON := preload("res://assets/fonts/Anton.woff2")
+const _SERIF_K := preload("res://assets/fonts/NotoSerifKR-Black.woff2")     # guild titles (fame_skin.serif)
+const _SERIF_B := preload("res://assets/fonts/NotoSerifKR-Bold.woff2")      # the rune codex (ui_codex)
+const _SYM := preload("res://assets/fonts/DejaVuSans-sym.ttf")              # ☠ ✉ … that Noto lacks
 
 static var _cache := {}
+static var _chains_set := chains()
+
+
+## The fallback chains, set once on the shared resources (every preload of a path is the same object), so the fonts are
+## complete however they're reached: here, fame_skin.gd, arena.font_bold / font_black / font_anton, ui_codex's serif.
+static func chains() -> bool:
+	if _NOTO_B.fallbacks.has(_SYM): return true
+	for fb in [[_NOTO_B, _SYM], [_NOTO_K, _SYM], [_BHS, _NOTO_K], [_ANTON, _NOTO_B], [_SERIF_K, _NOTO_K], [_SERIF_B, _NOTO_B]]:
+		var f: Font = fb[0]
+		f.fallbacks = [fb[1]]
+	return true
+
+## every base font, for tests/test_fonts.gd
+static func all_fonts() -> Dictionary:
+	chains()
+	return {"BlackHanSans": _BHS, "NotoSansKR-Black": _NOTO_K, "NotoSansKR-Bold": _NOTO_B, "Anton": _ANTON,
+		"NotoSerifKR-Black": _SERIF_K, "NotoSerifKR-Bold": _SERIF_B}
+
+## plain Anton (no FontVariation: arena.gd's outlined words skew the canvas themselves)
+static func anton_file() -> Font:
+	chains()
+	return _ANTON
+
+static func serif() -> Font:
+	chains()
+	return _SERIF_K
+
+static func serif_b() -> Font:
+	chains()
+	return _SERIF_B
 static var _solid: ShaderMaterial
 static var _glow: Texture2D
 
@@ -23,30 +59,26 @@ static func col2(c: String) -> Color:
 	return TXCOL.get(c, TXCOL["estelle"])[1]
 
 
-## "Black Han Sans" with Noto Black behind it for the glyphs it lacks (· — ← …)
+## "Black Han Sans" with Noto Black behind it for the glyphs it lacks (· — ← … and the syllables outside its 2,581)
 static func bhs() -> Font:
-	if not _cache.has("bhs"):
-		var f: FontFile = _BHS.duplicate()
-		f.fallbacks = [_NOTO_K]
-		_cache["bhs"] = f
-	return _cache["bhs"]
+	chains()
+	return _BHS
 
 static func noto() -> Font:
+	chains()
 	return _NOTO_B
 
 static func noto_k() -> Font:
+	chains()
 	return _NOTO_K
 
 ## Anton, optionally italic (slanted outlines) and letter-spaced; Korean falls back to Noto Bold
 static func anton(italic := false, spacing := 0) -> Font:
 	var key := "anton%d_%d" % [int(italic), spacing]
 	if not _cache.has(key):
-		if not _cache.has("anton_base"):
-			var a: FontFile = _ANTON.duplicate()
-			a.fallbacks = [_NOTO_B]
-			_cache["anton_base"] = a
+		chains()
 		var v := FontVariation.new()
-		v.base_font = _cache["anton_base"]
+		v.base_font = _ANTON
 		if italic:
 			v.variation_transform = Transform2D(Vector2(1, 0), Vector2(0.2, 1), Vector2.ZERO)
 		v.spacing_glyph = spacing
@@ -59,8 +91,17 @@ static func spaced(f: Font, spacing: int) -> Font:
 		var v := FontVariation.new()
 		v.base_font = f
 		v.spacing_glyph = spacing
+		v.fallbacks = chain_of(f)
 		_cache[key] = v
 	return _cache[key]
+
+## the fallbacks a variation built on f needs: a FontVariation only follows its base's fallbacks one level down, so a
+## variation of a variation (spaced(anton())) would lose the Hangul behind Anton
+static func chain_of(f: Font) -> Array[Font]:
+	var b := f
+	while b is FontVariation and b.base_font != null:
+		b = b.base_font
+	return b.fallbacks
 
 
 ## draws every texture as one flat colour (the draw call's modulate) keeping its alpha: outlines and silhouettes
