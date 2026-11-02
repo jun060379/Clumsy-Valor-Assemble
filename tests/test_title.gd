@@ -1,7 +1,8 @@
 extends SceneTree
 ## The growing title: godot --headless --path . -s tests/test_title.gd
-## people() follows fame.rec (에스텔 always), the lit windows follow the restored facilities (+ Eilin's), the crowd
-## follows the guild rank; the sky stays in the pink family; a title with no fame (arena null) draws without errors.
+## people() follows fame.rec (에스텔 always), the light ladder follows the restored facilities (+ Eilin's window, 7 steps
+## at most), the crowd follows the guild rank; the sky stays in the pink family; a title with no fame (arena null)
+## draws without errors.
 
 var fails := 0
 
@@ -37,7 +38,12 @@ func _initialize() -> void:
 	var big := {}
 	for i in 20: big["f%d" % i] = 1
 	F.fac = big
-	check(T.lit_windows() == T.WINS.size(), "more facilities than windows: every window lit (%d)" % T.lit_windows())
+	check(T.lit_windows() == T.LIGHT_STEPS and T.LIGHT_STEPS == 7, "more facilities than steps: the whole ladder lit (%d)" % T.lit_windows())
+	F.fac = {"a": 1, "b": 1, "c": 1, "d": 1, "e": 1, "f": 1}
+	check(T.lit_windows() == 7, "6 facilities: all 7 steps (%d)" % T.lit_windows())
+	F.fac = {"a": 1, "b": 1}
+	check(T.lit_windows() == 3, "2 facilities: both windows and the door lantern (%d)" % T.lit_windows())
+	F.fac = big
 	# the springs and the crowd seeds follow the counts
 	T.active = true
 	T.visible = true
@@ -68,6 +74,10 @@ func _initialize() -> void:
 	bare._finish_intro()
 	for i in 5: await process_frame
 	check(bare.drops.size() == 1 and bare.intro_done, "no fame: the intro ran and settled, one drop spring")
+	bare.burst_t = bare.clock
+	bare.outro = 0.0
+	for i in 3: await process_frame
+	check(bare.outro > 0.0, "no fame: the burst and the outro draw")
 	bare.queue_free()
 	print("FAILS: %d" % fails)
 	quit()

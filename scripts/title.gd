@@ -1,17 +1,18 @@
 extends Control
 ## Title (prototype #title) in the persona skin; the hero select is gone (a fresh game is 에스텔 alone, the seniors join in play). docs/title_storyboard.md has the beats:
-## a pink band wipes in, the guild hall's front springs in and the members drop onto its steps with white cut-outs
-## trailing them, the logo slabs slam and the letters of 어설픈 용맹 drop one by one, then nothing ever holds still
-## (drifting halftone, travelling guide lines, a sheen over the letters, breathing people, candle windows, fog, the sign
-## swinging, pointer parallax); a tap grows the pink field over the screen and the menu sweep carries it on into the town.
+## a pink band wipes in, the painted guild hall springs in and the members drop onto its steps with white cut-outs
+## trailing them, paint splats pop and the brush logo lands on its blob, then nothing ever holds still (drifting
+## halftone, travelling guide lines, breathing people, candle windows, lanterns, chimney smoke, fog, the sign swinging,
+## pointer parallax); 시작 bursts from the logo, the pink field grows over the screen and the sweep carries it into the town.
 ##
-## The title grows with the save ("자라는 타이틀"): the hall is a dark cut-out over the pink sky (tinted by the world's
-## clock, arena.tod_h), one window is lit per restored facility (+ Eilin's), every member in fame.rec stands on the steps
-## and the guild's rank fills the steps behind them with a crowd of nameless paper silhouettes, each rimmed in its own hue.
+## The title grows with the save ("자라는 타이틀"): the hall sits in the pink sky (tinted by the world's clock,
+## arena.tod_h), its lights come on one per restored facility (a 7-step ladder: windows, lanterns, the door's crack,
+## chimney smoke), every member in fame.rec stands on the steps and the guild's rank fills the steps behind them with a
+## crowd of nameless paper silhouettes, each rimmed in its own hue.
 ##
-## Layers: this Control (nearest filtering) draws the ground: the fields, the hall plate, its windows and sign, the crowd
-## and the back fog; `sil` (UI.solid_mat) draws the people's white / ink cut-outs; `fg` draws the logo, the people,
-## the front fog and the prompt with linear filtering.
+## Layers: this Control (nearest filtering) draws the ground: the fields, the specks and the guide lines; `bg` (linear)
+## draws the hall plate with its lights and sign, the emblem watermark, the crowd and the back fog; `sil` (UI.solid_mat)
+## draws the people's white / ink cut-outs; `fg` draws the logo, the people, the front fog, the menu and the burst.
 
 const UI := preload("res://scripts/ui_kit.gd")
 const DEV := preload("res://scripts/dev.gd")
@@ -22,24 +23,38 @@ const PINK := Color("#ff3d7f")
 const INK := Color("#0d0b10")
 const LIT := preload("res://scripts/lit.gd")
 const INTRO_END := 1500.0
-const HALL := preload("res://assets/town/g_hall.png")
-const HALL_WIN := preload("res://assets/town/g_hall_win.png")
+const HALL := preload("res://assets/title/hall.png")      # the painted plate (1920×1088; the ground is its y 1000, the grass lies under it)
+const LOGO := preload("res://assets/title/logo.png")      # Clumsy Valor / 어설픈 용맹 / Assemble, brush
+const BLOB := preload("res://assets/title/blob.png")      # the pink blob the logo lands on
+const BRUSH := preload("res://assets/title/brush.png")    # the menu cursor
+const BURST := preload("res://assets/title/burst.png")    # 시작's burst, and the intro's small splats
+const EMBLEM := preload("res://assets/title/emblem.png")  # the guild's flower
 const GROUND := 0.86                 # the ground line (fraction of H): the hall's foot, the people's feet
-const PERSON_H := 0.46               # one common height for every standing picture, framed knee-up (fraction of H)
+const PERSON_H := 0.38               # one common height for every standing picture, framed knee-up (fraction of H)
 const FULL_CROP := 0.72              # a full-body st_full is cut to its knees (this much of its height) to match the st_base framing
 const KNEE_SINK := 0.1               # the knee line sits this far below the ground line (the fog and the screen's edge hide the cut)
-const HALL_TINT := Color(0.35, 0.3, 0.4)        # the hall sits behind the pink's mood: an ink cut-out with faint detail
-const HALL_TINT_NIGHT := Color(0.2, 0.17, 0.27)
+const HALL_NIGHT := Color(0.5, 0.43, 0.72)      # the plate keeps its own colours by day and cools toward violet at night
 ## the sky (the pink field) by the hour: never grey — day pink, dusk magenta, night plum
 const SKY_K := [[0.0, Color("#4a1740")], [4.5, Color("#4a1740")], [6.3, Color("#c8246c")], [8.0, Color("#ff3d7f")], [16.5, Color("#ff3d7f")], [18.5, Color("#c8246c")], [20.5, Color("#4a1740")], [24.0, Color("#4a1740")]]
-## the facade's windows (g_hall_win px rects) in lighting order: Eilin's first (the right wing's upper window), then one
-## per restored facility
-const WINS := [[548, 274, 22, 24], [474, 274, 22, 24], [152, 274, 22, 24], [78, 274, 22, 24], [386, 228, 22, 24], [238, 228, 22, 24], [314, 230, 22, 24],
-	[314, 126, 22, 24], [548, 342, 22, 24], [78, 342, 22, 24], [474, 342, 22, 24], [152, 342, 22, 24], [386, 342, 22, 24], [238, 342, 22, 24]]
-const SIGN := Rect2(253, 275, 142, 30)          # the CLUMSY VALOR board on the facade (g_hall px), hung from its top centre
-const DOOR_X := 322.0                            # the door's centre (g_hall px)
+## the plate's features (hall.png px)
+const HALL_GROUND := 1000.0                      # the plate's row that stands on the ground line
+const HALL_TOP := 90.0                           # the spire's tip (the building is HALL_GROUND - HALL_TOP tall)
+const WIN_R := Rect2(1348, 660, 117, 122)        # the right wing's panes (Eilin's)
+const WIN_L := Rect2(432, 660, 116, 122)         # the left wing's panes
+const LANT_DOOR := Vector2(1103, 722)            # the lantern by the door (its glass)
+const LANT_R := Vector2(1776, 715)               # the lantern on the right bracket
+const DOOR_CRACK := Rect2(931, 652, 8, 210)      # the seam between the door's leaves
+const CHIM_L := Vector2(340, 170)                # the chimney tops
+const CHIM_R := Vector2(1510, 172)
+const SIGN := Rect2(56, 616, 120, 150)           # the board hanging from the left bracket (with its chains)
+const SIGN_PIV := Vector2(116, 600)              # where it hangs from
+const DOOR_X := 935.0                            # the door's centre
+const LIGHT_STEPS := 7                           # the light ladder: right window, left window, door lantern, bracket lantern, door crack, left smoke, right smoke
 ## where the members stand: [x offset from the door in W, feet above the ground in H, parallax weight], by their place in the row
-const SPOTS := [[0.015, -0.01, 1.0], [-0.105, 0.03, 0.7], [0.135, 0.03, 0.7], [-0.23, 0.05, 0.55], [0.23, 0.05, 0.55], [-0.32, 0.06, 0.45], [0.32, 0.06, 0.45]]
+const SPOTS := [[0.0, -0.01, 1.0], [-0.115, 0.03, 0.7], [0.12, 0.03, 0.7], [-0.23, 0.05, 0.55], [0.23, 0.05, 0.55], [-0.32, 0.06, 0.45], [0.32, 0.06, 0.45]]
+## the intro's three paint splats behind the logo: [x, y] in logo-rect fractions, scale (of the logo width), rotation (deg), t0 (ms)
+const SPLATS := [[0.18, 0.3, 0.3, 25.0, 420.0], [0.8, 0.22, 0.22, -70.0, 510.0], [0.55, 0.85, 0.26, 140.0, 600.0]]
+const EMBLEM_WATERMARK := false                   # the flower: a faint large watermark behind the people (false: small by the menu)
 ## guide lines: [y, length] in fractions of the viewport, period (ms), phase (ms), where the right end stops (fraction of W)
 const LINES := [[0.15, 0.23, 5200.0, 0.0, 0.40], [0.47, 0.10, 6800.0, 1700.0, 0.44], [0.06, 0.17, 4400.0, 900.0, 0.30]]
 
@@ -52,8 +67,12 @@ var outro := -1.0                # outro clock, -1 = not running
 var handed := false              # the sweep into the game has been started
 var clock := 0.0
 var trn := UIA.Tr.new()          # .card transition: transform .3s --bk, background .15s
+var bg_layer: Control
 var sil_layer: Control
 var fg_layer: Control
+var sp_cur := UIA.Spring.new(0.0, 0.3, 0.8)    # the menu cursor's row (the brush slides between items)
+var burst_t := -1.0                            # clock when 시작's burst popped (-1: none)
+var smoke_seed: Array = []                     # chimney puffs: [chimney 0/1, phase, drift, size]
 ## the picture and its white cut-out: 1 = off to the right, 0 = home (the cut-out follows a softer spring, 100 ms late)
 var sp_art := UIA.Spring.new(1.0, 0.55, 0.72)
 var sp_sil := UIA.Spring.new(1.0, 0.75, 0.6)
@@ -85,13 +104,16 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED     # halftone tiles through polygon uvs
-	for i in 2:
+	for i in 3:
 		var c := Control.new()
 		c.set_anchors_preset(Control.PRESET_FULL_RECT)
 		c.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		c.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 		c.texture_repeat = CanvasItem.TEXTURE_REPEAT_DISABLED
 		if i == 0:
+			c.draw.connect(_draw_bg)
+			bg_layer = c
+		elif i == 1:
 			c.material = UI.solid_mat()
 			c.draw.connect(_draw_sil)
 			sil_layer = c
@@ -101,6 +123,8 @@ func _ready() -> void:
 		add_child(c)
 	for i in 12:
 		specks.append([randf(), randf(), 0.5 + randf() * 0.7, 2600.0 + randf() * 3000.0])
+	for i in 10:
+		smoke_seed.append([i % 2, float(i / 2) / 5.0, randf() * 2.0 - 1.0, 0.8 + randf() * 0.5])
 
 func _process(delta: float) -> void:
 	if pending_fresh and arena != null and arena.world_started:
@@ -158,7 +182,10 @@ func _process(delta: float) -> void:
 	sp_py.to(clampf((mp.y / maxf(1.0, vs.y) - 0.5) * 2.0, -1.0, 1.0))
 	sp_px.step(dt)
 	sp_py.step(dt)
+	sp_cur.to(float(sel))
+	sp_cur.step(dt)
 	queue_redraw()
+	bg_layer.queue_redraw()
 	sil_layer.queue_redraw()
 	fg_layer.queue_redraw()
 
@@ -245,6 +272,7 @@ func _begin() -> void:
 	outro = 0.0
 	sp_art.to(1.5, 1.5)
 	for d in drops: d[0].to(0.0, 0.6)           # the people hop as they leave right
+	burst_t = clock
 	arena.sfx("parry", 1.0)
 
 ## the logo settles at once (a tap during the intro)
@@ -299,12 +327,12 @@ func people() -> Array:
 			if not out.has(c): out.append(c)
 	return out
 
-## windows lit on the facade: Eilin's and one per restored facility
+## lights on the facade: Eilin's window and one more step of the ladder per restored facility (LIGHT_STEPS at most)
 func lit_windows() -> int:
 	var F = _fame()
 	var n := 1
 	if F != null and "fac" in F: n += F.fac.size()
-	return mini(n, WINS.size())
+	return mini(n, LIGHT_STEPS)
 
 ## the nameless crowd behind them: three per rank above the first, at most 18
 func crowd_n() -> int:
@@ -341,12 +369,13 @@ func _sync_drops() -> void:
 		crowd_seed.append([rs.randf(), i % 3, rs.randi_range(0, 3), fposmod(i * 47.0 + 20.0, 360.0), rs.randf() * TAU])
 	while crowd_seed.size() > m: crowd_seed.pop_back()
 
-## the hall plate's home rect: right-aligned, its foot on the ground line, ~0.78 H tall (narrower screens: ~0.6 W wide)
+## the hall plate's home rect: its right lantern a hair past the right edge, the ground row on the ground line, the
+## building ~0.74 H tall or the plate ~0.76 W wide, whichever is smaller
 func _hall_rect(vs: Vector2) -> Rect2:
-	var sc := minf(0.78 * vs.y / HALL.get_height(), 0.6 * vs.x / HALL.get_width())
+	var sc := minf(0.74 * vs.y / (HALL_GROUND - HALL_TOP), 0.76 * vs.x / HALL.get_width())
 	var w := HALL.get_width() * sc
 	var h := HALL.get_height() * sc
-	return Rect2(vs.x - 0.015 * vs.x - w, GROUND * vs.y - h, w, h)
+	return Rect2(vs.x + 0.06 * vs.x - w, GROUND * vs.y - HALL_GROUND * sc, w, h)
 
 ## member i's standing picture, its rect and the source region: one common knee-up height, the knee line just under the ground line
 func _person(vs: Vector2, i: int, c: String) -> Array:
@@ -408,7 +437,6 @@ func _draw() -> void:
 	_tiled(PackedVector2Array([Vector2.ZERO, Vector2(vs.x, 0), vs, Vector2(0, vs.y)]), UI.dot_tile(0.07, Color.WHITE), scr)
 	# the pink field with its dark halftone (the drift eases out in the outro so the select screen's fixed dots take over)
 	var f := _field(vs)
-	var nk := night()
 	# (the first wipe frames put both edges past the right side: no polygon then, a clamped one while only the top is)
 	var pts := PackedVector2Array([Vector2(minf(f[0], vs.x), 0), Vector2(vs.x, 0), Vector2(vs.x, vs.y), Vector2(minf(f[1], vs.x), vs.y)])
 	if minf(f[0], f[1]) < vs.x - 0.5:
@@ -416,9 +444,6 @@ func _draw() -> void:
 		draw_colored_polygon(pts, sky(hour()).lerp(PINK, UIA.p(outro, 150.0, 500.0, "ease") if outro >= 0.0 else 0.0))
 		var k := 1.0 - UIA.p(outro, 150.0, 500.0, "ease") if outro >= 0.0 else 1.0
 		_tiled(pts, UI.dot_tile(0.24), Vector2(-clock / 120.0, clock / 170.0) * k)
-	_hall(vs, nk)
-	_crowd(vs)
-	_fog(self, vs, 0)
 	# white specks rising through the pink
 	for s in specks:
 		var y: float = fposmod(s[1] - clock / s[3], 1.0) * vs.y
@@ -438,10 +463,20 @@ func _draw() -> void:
 		elif ph < 0.62: x = stop
 		else: x = lerpf(stop, vs.x + 20.0, UIA.ez("in", (ph - 0.62) / 0.38))
 		draw_rect(Rect2(x + ox, L[0] * vs.y, ln, 2.0), Color(1, 1, 1, 0.6))
-## the hall plate: the facade as an ink cut-out (HALL_TINT, deeper at night) sliding in on sp_art, the sign swinging on
-## its bracket, and the lit windows (candle flicker, a soft glow behind each)
+# ---------- draw: the plate, the lights, the crowd ----------
+func _draw_bg() -> void:
+	if not active or outro > 1050.0: return
+	var vs := get_viewport_rect().size
+	_hall(vs, night())
+	if EMBLEM_WATERMARK: _emblem(bg_layer, vs)
+	_crowd(vs)
+	_fog(bg_layer, vs, 0)
+
+## the hall plate sliding in on sp_art, its own colours by day and cooled toward violet at night, the sign board
+## swinging on its chains, and the light ladder (lit_windows() steps): the right window, the left window, the lantern by
+## the door, the bracket lantern, warm light through the door's crack, smoke from the left chimney, then the right
 func _hall(vs: Vector2, nk: float) -> void:
-	if outro > 1050.0: return
+	var ci := bg_layer
 	var a := clampf((t - 120.0) / 150.0, 0.0, 1.0)
 	if a <= 0.0: return
 	var r := _hall_rect(vs)
@@ -449,32 +484,76 @@ func _hall(vs: Vector2, nk: float) -> void:
 	var m: Array = _art_motion(vs, sp_art.x, 1.0)
 	var piv := Vector2(r.get_center().x, r.end.y)
 	var base := UIA.xf(piv, m[0], m[1], Vector2(m[2], m[2]))
-	draw_set_transform_matrix(base)
-	var tint := HALL_TINT.lerp(HALL_TINT_NIGHT, nk)
-	draw_texture_rect(HALL, r, false, Color(tint, a))
-	# the sign, hung from its top centre, swinging ±2°
-	var sw := deg_to_rad(2.0) * sin(clock / 2300.0 * TAU)
-	var sp := Vector2(r.position.x + (SIGN.position.x + SIGN.size.x / 2.0) * sc, r.position.y + SIGN.position.y * sc)
-	draw_set_transform_matrix(base * UIA.xf(sp, Vector2.ZERO, sw, Vector2(1.06, 1.06)))
-	draw_texture_rect_region(HALL, Rect2(r.position + SIGN.position * sc, SIGN.size * sc), SIGN, Color(tint, a))
-	draw_set_transform_matrix(base)
-	# the windows: one per restored facility and Eilin's, warm, each a candle
+	ci.draw_set_transform_matrix(base)
+	var tint := Color.WHITE.lerp(HALL_NIGHT, nk)
+	var col := Color(tint, a)
+	# the plate in three pieces around the sign's region (the sign comes separately, swinging)
+	var W := float(HALL.get_width())
+	var H := float(HALL.get_height())
+	var sx := SIGN.end.x
+	for reg in [Rect2(0, 0, sx, SIGN.position.y), Rect2(0, SIGN.end.y, sx, H - SIGN.end.y), Rect2(sx, 0, W - sx, H)]:
+		ci.draw_texture_rect_region(HALL, Rect2(r.position + reg.position * sc, reg.size * sc), reg, col)
 	var n := lit_windows()
-	var warm := Color(1.0, 0.86, 0.6)
+	var warm := Color("#ffcf7a")
 	var ts := clock / 1000.0
-	for i in n:
-		var w: Array = WINS[i]
-		var wr := Rect2(r.position + Vector2(w[0], w[1]) * sc, Vector2(w[2], w[3]) * sc)
-		var fl := 0.9 + 0.1 * LIT.fl(ts, i * 2.3)
-		var g := wr.grow(wr.size.y * (0.9 + 0.6 * nk))
-		draw_texture_rect(UI.glow(), g, false, Color(warm, (0.14 + 0.22 * nk) * fl * a))
-		draw_texture_rect_region(HALL_WIN, wr, Rect2(w[0], w[1], w[2], w[3]), Color(warm * (0.85 + 0.15 * fl), a))
-	draw_set_transform(Vector2.ZERO)
+	var glow := UI.glow()
+	# 1-2) the windows: a warm fill over the panes, a candle's flicker, a soft glow
+	for i in mini(n, 2):
+		var wr: Rect2 = WIN_R if i == 0 else WIN_L
+		var pr := Rect2(r.position + wr.position * sc, wr.size * sc)
+		var fl := 0.88 + 0.12 * LIT.fl(ts, i * 2.3)
+		ci.draw_texture_rect(glow, pr.grow(pr.size.y * (0.7 + 0.5 * nk)), false, Color(warm, (0.16 + 0.24 * nk) * fl * a))
+		ci.draw_rect(pr, Color(warm, (0.62 + 0.1 * fl) * a))
+	# 3-4) the lanterns: a warm dot and a halo
+	for i in [2, 3]:
+		if n <= i: continue
+		var c: Vector2 = r.position + (LANT_DOOR if i == 2 else LANT_R) * sc
+		var fl := 0.85 + 0.15 * LIT.fl(ts, i * 1.9)
+		var rad := 48.0 * sc
+		ci.draw_texture_rect(glow, Rect2(c - Vector2(rad, rad) * (2.6 + 1.4 * nk), Vector2(rad, rad) * (5.2 + 2.8 * nk)), false, Color(warm, (0.18 + 0.22 * nk) * fl * a))
+		ci.draw_texture_rect(glow, Rect2(c - Vector2(rad, rad), Vector2(rad, rad) * 2.0), false, Color(1.0, 0.93, 0.75, 0.9 * fl * a))
+	# 5) the door's crack: warm light leaking out
+	if n > 4:
+		var cr := Rect2(r.position + DOOR_CRACK.position * sc, DOOR_CRACK.size * sc)
+		var fl := 0.85 + 0.15 * LIT.fl(ts, 7.0)
+		ci.draw_texture_rect(glow, cr.grow_individual(cr.size.x * 4.0, cr.size.x * 2.0, cr.size.x * 4.0, cr.size.x * 2.0), false, Color(warm, (0.22 + 0.2 * nk) * fl * a))
+		ci.draw_rect(cr, Color(1.0, 0.9, 0.7, 0.85 * fl * a))
+	# the sign board on its chains, swinging ±2°
+	var sw := deg_to_rad(2.0) * sin(clock / 2300.0 * TAU)
+	ci.draw_set_transform_matrix(base * UIA.xf(r.position + SIGN_PIV * sc, Vector2.ZERO, sw))
+	ci.draw_texture_rect_region(HALL, Rect2(r.position + SIGN.position * sc, SIGN.size * sc), SIGN, col)
+	ci.draw_set_transform_matrix(base)
+	# 6-7) chimney smoke: soft puffs rising, drifting with the breeze, fading as they grow
+	var tx := LIT.soft_tex()
+	for sm in smoke_seed:
+		var ch: int = sm[0]
+		if n < 6 + ch: continue
+		var u: float = fposmod(ts / 4.2 + sm[1], 1.0)
+		var top: Vector2 = r.position + (CHIM_L if ch == 0 else CHIM_R) * sc
+		var rise := u * 0.26 * vs.y
+		var px: float = top.x + (sin(ts * 0.4 + sm[1] * 9.0) * 0.5 + 0.5 + sm[2] * 0.3) * 0.03 * vs.x * u + sin(ts * 1.3 + sm[1] * 20.0) * 3.0
+		var sz: float = (0.035 + 0.06 * u) * vs.y * sm[3]
+		var al: float = (0.26 if u < 0.15 else 0.26 * (1.0 - (u - 0.15) / 0.85)) * (1.0 - 0.2 * nk)
+		ci.draw_texture_rect(tx, Rect2(px - sz, top.y - rise - sz, sz * 2.0, sz * 2.0), false, Color(0.96, 0.92, 0.97, al * a))
+	ci.draw_set_transform(Vector2.ZERO)
+
+## the guild's flower as a faint watermark behind the people, over the hall's door, breathing with the hall
+func _emblem(ci: CanvasItem, vs: Vector2) -> void:
+	var a := clampf((t - 600.0) / 400.0, 0.0, 1.0) * 0.18
+	if a <= 0.0: return
+	var r := _hall_rect(vs)
+	var m: Array = _art_motion(vs, sp_art.x, 1.2)
+	var h := 0.62 * vs.y
+	var w := h * EMBLEM.get_width() / EMBLEM.get_height()
+	var c := Vector2(r.position.x + DOOR_X * r.size.x / HALL.get_width(), GROUND * vs.y - h * 0.48)
+	ci.draw_set_transform_matrix(UIA.xf(c, m[0], m[1], Vector2(m[2], m[2])))
+	ci.draw_texture_rect(EMBLEM, Rect2(c - Vector2(w, h) / 2.0, Vector2(w, h)), false, Color(1, 1, 1, a))
+	ci.draw_set_transform(Vector2.ZERO)
 
 ## the nameless members: paper cut-out silhouettes on the steps behind the people, flat ink, each with a thin rim in
 ## its own hue (same saturation and value: a crowd of colours), in three rows that drift a hair
 func _crowd(vs: Vector2) -> void:
-	if outro > 1050.0 or crowd_seed.is_empty(): return
+	if crowd_seed.is_empty(): return
 	var a := clampf((t - 700.0) / 300.0, 0.0, 1.0)
 	if a <= 0.0: return
 	var hr := _hall_rect(vs)
@@ -487,30 +566,31 @@ func _crowd(vs: Vector2) -> void:
 		var row: int = cs[1]
 		var x: float = hr.position.x + hr.size.x * (-0.02 + 1.04 * cs[0])
 		var fy: float = GROUND * vs.y - (0.02 + 0.03 * row) * vs.y
-		var h: float = (0.21 - 0.025 * row) * vs.y
+		var h: float = (0.18 - 0.022 * row) * vs.y
 		var bob := sin(clock / 2900.0 * TAU + cs[4]) * 1.2
 		var drop := 1.0 - UIA.p(t, 700.0 + row * 90.0, 420.0, "bk")
 		var xf := base * Transform2D(0.0, Vector2(x, fy + bob - 0.1 * vs.y * drop))
 		var rim := Color.from_hsv(cs[3] / 360.0, 0.7, 0.95)
 		_figure(xf, h, cs[2], Color(rim, a), 1.0 + 2.2 / h)
 		_figure(xf, h, cs[2], Color(INK, a), 1.0)
-	draw_set_transform(Vector2.ZERO)
+	bg_layer.draw_set_transform(Vector2.ZERO)
 
 ## one paper figure (feet at the origin, `h` tall): kind 0 plain, 1 pointed hat, 2 hood, 3 a staff
 func _figure(xf: Transform2D, h: float, kind: int, col: Color, grow: float) -> void:
-	draw_set_transform_matrix(xf * Transform2D(0.0, Vector2(grow, grow), 0.0, Vector2.ZERO))
+	var ci := bg_layer
+	ci.draw_set_transform_matrix(xf * Transform2D(0.0, Vector2(grow, grow), 0.0, Vector2.ZERO))
 	var sw := h * 0.17
 	var bh := h * 0.72
 	var body := PackedVector2Array([Vector2(-sw, 0), Vector2(sw, 0), Vector2(sw * 0.95, -bh * 0.55), Vector2(sw * 1.25, -bh * 0.8),
 		Vector2(sw * 0.55, -bh), Vector2(-sw * 0.55, -bh), Vector2(-sw * 1.25, -bh * 0.8), Vector2(-sw * 0.95, -bh * 0.55)])
-	draw_colored_polygon(body, col)
+	ci.draw_colored_polygon(body, col)
 	var hr := h * 0.11
 	var hc := Vector2(0, -bh - hr * 0.9)
-	draw_circle(hc, hr, col)
+	ci.draw_circle(hc, hr, col)
 	match kind:
-		1: draw_colored_polygon(PackedVector2Array([hc + Vector2(-hr * 1.4, -hr * 0.3), hc + Vector2(hr * 1.4, -hr * 0.3), hc + Vector2(hr * 0.2, -hr * 3.2)]), col)
-		2: draw_colored_polygon(PackedVector2Array([hc + Vector2(-hr * 1.3, hr * 0.8), hc + Vector2(-hr * 1.1, -hr * 1.3), hc + Vector2(0, -hr * 1.6), hc + Vector2(hr * 1.1, -hr * 1.3), hc + Vector2(hr * 1.3, hr * 0.8)]), col)
-		3: draw_rect(Rect2(sw * 1.15, -h * 1.02, h * 0.025, h * 1.02), col)
+		1: ci.draw_colored_polygon(PackedVector2Array([hc + Vector2(-hr * 1.4, -hr * 0.3), hc + Vector2(hr * 1.4, -hr * 0.3), hc + Vector2(hr * 0.2, -hr * 3.2)]), col)
+		2: ci.draw_colored_polygon(PackedVector2Array([hc + Vector2(-hr * 1.3, hr * 0.8), hc + Vector2(-hr * 1.1, -hr * 1.3), hc + Vector2(0, -hr * 1.6), hc + Vector2(hr * 1.1, -hr * 1.3), hc + Vector2(hr * 1.3, hr * 0.8)]), col)
+		3: ci.draw_rect(Rect2(sw * 1.15, -h * 1.02, h * 0.025, h * 1.02), col)
 
 ## drifting fog bands across the lower screen (layer 0 behind the people, 1 in front): soft blobs stretched wide,
 ## in the sky's whitened pink, thicker when the steps are still empty
@@ -571,11 +651,11 @@ func _draw_fg() -> void:
 	if not active or outro > 1050.0: return
 	var ci := fg_layer
 	var vs := get_viewport_rect().size
-	_logo(ci, vs)          # under the people: the bars sweep in from behind them
+	_logo(ci, vs)
 	_people(ci, vs)
 	_fog(ci, vs, 1)
-	_tag(ci, vs)           # the -ASSEMBLE- stamp lands over whoever stands at the hall's left
 	_prompt(ci, vs)
+	_burst(ci, vs)
 	# the white slash as the tag stamps (cx_flash)
 	if t >= 1050.0 and t < 1430.0:
 		var u := UIA.p(t, 1050.0, 380.0, "mv")
@@ -609,102 +689,58 @@ func _people(ci: CanvasItem, vs: Vector2) -> void:
 		ci.draw_texture_rect_region(tex, r, pr[2], Color(lit, lit, lit, a))
 	ci.draw_set_transform(Vector2.ZERO)
 
-## CLUMSY VALOR slab, 어설픈 / 용맹 with their bars, the -ASSEMBLE- tag
+## the logo's home rect: the left column, ~0.4 W wide (capped at 0.54 H tall), above the menu
+func _logo_rect(vs: Vector2) -> Rect2:
+	var w := 0.4 * vs.x
+	var h := w * LOGO.get_height() / LOGO.get_width()
+	if h > 0.54 * vs.y:
+		h = 0.54 * vs.y
+		w = h * LOGO.get_width() / LOGO.get_height()
+	return Rect2(0.04 * vs.x, 0.1 * vs.y, w, h)
+
+## the brush logo on its pink blob: three paint splats pop behind it 90 ms apart, then it lands from 1.25× with a short
+## overshoot (`bk`); the blob breathes a slow ±1° roll under it; the block leaves left in the outro
 func _logo(ci: CanvasItem, vs: Vector2) -> void:
-	var W := vs.x
-	var H := vs.y
-	var lx := 0.067 * W
+	var r := _logo_rect(vs)
 	var base := _logo_xf(vs)
-	# 1) CLUMSY VALOR: black Anton on a white slab, sliding in from the left
-	var u1 := UIA.p(t, 380.0, 420.0, "bk")
-	var o1 := _out(0)
-	if u1 > 0.0 and o1 < 1.0:
-		var af := UI.anton(true, 1)
-		var s := "CLUMSY VALOR"
-		var fs := int(0.078 * H)
-		var sh := 0.092 * H
-		var tw := UI.text_w(af, s, fs)
-		var sw := tw + 0.05 * W
-		var c := Vector2(lx + sw / 2.0, 0.13 * H + sh / 2.0)
-		var sc := 1.0 + 0.15 * (1.0 - u1)
-		ci.draw_set_transform_matrix(base * UIA.xf(c, Vector2(-0.4 * W * (1.0 - u1) - 0.7 * W * o1, 0), deg_to_rad(-2.0 - 7.0 * (1.0 - u1) - 6.0 * o1), Vector2(sc, sc)))
-		UI.para(ci, c.x - sw / 2.0, c.y - sh / 2.0, sw, sh, sh * 0.16, Color.WHITE)
-		ci.draw_string(af, Vector2(c.x - tw / 2.0 + sh * 0.08, c.y + fs * 0.38), s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, INK)
-	# 2) 어설픈: white with a pink copy behind, a back-leaning pink bar through its lower third
-	var by := 0.23 * H
-	var fs1 := int(0.23 * H)
-	var o2 := _out(1)
-	_bar(ci, base, Rect2(lx - 0.017 * W, by + 0.118 * H, 0.36 * W, 0.054 * H), PINK, UIA.p(t, 700.0, 350.0, "mv"), -1.0, _out(2))
-	_word(ci, base, "어설픈", fs1, Vector2(lx - 0.7 * W * o2, by + fs1 * 0.86), Color.WHITE, PINK, 520.0, 0, o2)
-	# 3) 용맹: pink with a black copy, a white bar
-	var by2 := 0.48 * H
-	var fs2 := int(0.25 * H)
-	var o3 := _out(3)
-	_bar(ci, base, Rect2(lx + 0.067 * W, by2 + 0.12 * H, 0.32 * W, 0.056 * H), Color.WHITE, UIA.p(t, 940.0, 350.0, "mv"), 1.0, _out(4))
-	_word(ci, base, "용맹", fs2, Vector2(lx + 0.078 * W - 0.7 * W * o3, by2 + fs2 * 0.86), PINK, INK, 760.0, 3, o3)
-	ci.draw_set_transform(Vector2.ZERO)
-
-## the -ASSEMBLE- tag stamps in (over the people)
-func _tag(ci: CanvasItem, vs: Vector2) -> void:
-	if outro > 1050.0: return
-	var W := vs.x
-	var H := vs.y
-	var base := _logo_xf(vs)
-	var u4 := UIA.p(t, 1050.0, 380.0, "bk")
-	var o4 := _out(5)
-	if u4 > 0.0 and o4 < 1.0:
-		var af2 := UI.anton(true, 7)
-		var s2 := "-ASSEMBLE-"
-		var fs4 := int(0.046 * H)
-		var th := 0.062 * H
-		var tw2 := UI.text_w(af2, s2, fs4)
-		var tww := tw2 + 0.04 * W
-		var c2 := Vector2(0.378 * W + tww / 2.0, 0.68 * H + th / 2.0)
-		var sc2 := 1.0 + 1.4 * (1.0 - u4)
-		var ta := clampf((t - 1050.0) / 60.0, 0.0, 1.0)
-		ci.draw_set_transform_matrix(base * UIA.xf(c2, Vector2(-0.7 * W * o4, 0), deg_to_rad(-2.0 - 12.0 * (1.0 - u4) - 5.0 * o4), Vector2(sc2, sc2)))
-		UI.para(ci, c2.x - tww / 2.0 + 5.0, c2.y - th / 2.0 + 5.0, tww, th, th * 0.3, Color(1, 1, 1, 0.9 * ta))
-		UI.para(ci, c2.x - tww / 2.0, c2.y - th / 2.0, tww, th, th * 0.3, Color(PINK, ta))
-		ci.draw_string(af2, Vector2(c2.x - tw2 / 2.0 + th * 0.12, c2.y + fs4 * 0.37), s2, HORIZONTAL_ALIGNMENT_LEFT, -1, fs4, Color(1, 1, 1, ta))
-	ci.draw_set_transform(Vector2.ZERO)
-
-## a back-leaning bar behind a word, sweeping in from side `d` (-1 left / 1 right)
-func _bar(ci: CanvasItem, base: Transform2D, r: Rect2, col: Color, u: float, d: float, o: float) -> void:
-	if u <= 0.0 or o >= 1.0: return
-	var c := r.get_center()
-	ci.draw_set_transform_matrix(base * UIA.xf(c, Vector2(d * 0.5 * get_viewport_rect().size.x * (1.0 - u) - 0.7 * get_viewport_rect().size.x * o, 0), deg_to_rad(-2.3)))
-	UI.para(ci, r.position.x, r.position.y, r.size.x, r.size.y, -r.size.y * 0.35, col)
-
-## a word in Black Han Sans, slanted, each glyph dropping in with squash (step 90 ms) and an offset copy behind that
-## lags it; `si` is the glyph's place in the sheen that runs across both words every 3.6 s
-func _word(ci: CanvasItem, base: Transform2D, s: String, fs: int, at: Vector2, col: Color, back: Color, t0: float, si: int, o: float) -> void:
+	var o := _out(0)
 	if o >= 1.0: return
-	var f := UI.bhs()
-	var rot := deg_to_rad(-2.5)
-	var dir := Vector2(cos(rot), sin(rot))
-	var bo := Vector2(0.052, 0.044) * fs
-	var sh := fmod(clock, 3600.0) / 3600.0
-	var sg := lerpf(-1.5, 6.5, sh / 0.45) if sh < 0.45 else -9.0
-	var x := 0.0
-	for i in s.length():
-		var ch := s.substr(i, 1)
-		var gw := UI.text_w(f, ch, fs)
-		var tt := t - t0 - i * 90.0
-		var la := clampf(tt / 120.0, 0.0, 1.0)
-		if la > 0.0:
-			var u := UIA.ez("bk", tt / 520.0)
-			var sx: float = UIA.kf(tt, [[0.0, 0.8], [0.55, 1.08], [1.0, 1.0]], 520.0)
-			var sy: float = UIA.kf(tt, [[0.0, 1.3], [0.55, 0.94], [1.0, 1.0]], 520.0)
-			var dy := -0.16 * get_viewport_rect().size.y * (1.0 - u) + 0.1 * fs * o
-			var piv := at + dir * (x + gw / 2.0) + Vector2(0, dy)
-			ci.draw_set_transform_matrix(base * Transform2D(rot, piv) * Transform2D(Vector2(sx, 0), Vector2(-0.12 * sx, sy), Vector2.ZERO))
-			var lag := Vector2(0.06 * fs * (1.0 - u), 0.03 * fs * (1.0 - u))
-			ci.draw_string(f, Vector2(-gw / 2.0, 0) + bo + lag, ch, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(back, la))
-			ci.draw_string(f, Vector2(-gw / 2.0, 0), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(col, la))
-			var gl := maxf(0.0, 1.0 - absf(float(si + i) - sg)) * 0.7
-			if gl > 0.0 and tt > 520.0:
-				ci.draw_string(f, Vector2(-gw / 2.0, 0), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, gl))
-		x += gw
+	var c := r.get_center()
+	var leave := Vector2(-0.7 * vs.x * o, 0)
+	# the splats
+	for sp in SPLATS:
+		var u := UIA.p(t, sp[4], 260.0, "bk")
+		if u <= 0.0: continue
+		var sz: float = r.size.x * sp[2] * u
+		var at := r.position + Vector2(sp[0], sp[1]) * r.size + leave
+		ci.draw_set_transform_matrix(base * UIA.xf(at, Vector2.ZERO, deg_to_rad(sp[3]) + deg_to_rad(-4.0 * o)))
+		ci.draw_texture_rect(BURST, Rect2(at - Vector2(sz, sz) / 2.0, Vector2(sz, sz)), false, Color(1, 1, 1, 0.9))
+	# the blob and the logo land together
+	var u := UIA.p(t, 650.0, 420.0, "bk")
+	if u <= 0.0:
+		ci.draw_set_transform(Vector2.ZERO)
+		return
+	var al := clampf((t - 650.0) / 100.0, 0.0, 1.0)
+	var sc := 1.0 + 0.25 * (1.0 - u)
+	var roll := deg_to_rad(1.0) * sin(clock / 6400.0 * TAU)
+	var bw := r.size.x * 1.15
+	var bh := bw * BLOB.get_height() / BLOB.get_width()
+	ci.draw_set_transform_matrix(base * UIA.xf(c, leave, roll - deg_to_rad(6.0 * o), Vector2(sc * 1.02, sc * 1.02)))
+	ci.draw_texture_rect(BLOB, Rect2(c - Vector2(bw, bh) / 2.0, Vector2(bw, bh)), false, Color(1, 1, 1, al))
+	ci.draw_set_transform_matrix(base * UIA.xf(c, leave, deg_to_rad(-6.0 * o), Vector2(sc, sc)))
+	ci.draw_texture_rect(LOGO, r, false, Color(1, 1, 1, al))
+	ci.draw_set_transform(Vector2.ZERO)
+
+## 시작's burst: the splash pops from the logo's centre, 0.2× → 2.4× over 350 ms, fading out at the end
+func _burst(ci: CanvasItem, vs: Vector2) -> void:
+	if burst_t < 0.0: return
+	var u := UIA.p(clock - burst_t, 0.0, 350.0, "out")
+	if u >= 1.0: return
+	var c := _logo_rect(vs).get_center()
+	var sz: float = _logo_rect(vs).size.x * lerpf(0.2, 2.4, u)
+	var al := 1.0 if u < 0.6 else 1.0 - (u - 0.6) / 0.4
+	ci.draw_set_transform_matrix(UIA.xf(c, Vector2.ZERO, deg_to_rad(-20.0 * u)))
+	ci.draw_texture_rect(BURST, Rect2(c - Vector2(sz, sz) / 2.0, Vector2(sz, sz)), false, Color(1, 1, 1, al))
 	ci.draw_set_transform(Vector2.ZERO)
 
 ## the tagline and the 탭하여 입장 slab (pulsing once the intro has settled)
@@ -713,13 +749,20 @@ func _prompt(ci: CanvasItem, vs: Vector2) -> void:
 	var H := vs.y
 	var lx := 0.089 * W
 	var o := UIA.p(outro, 0.0, 280.0, "in") if outro >= 0.0 else 0.0
-	# the motto, top left, under the travelling guide line
+	# the motto, small above the logo, under the travelling guide line
 	var ua := UIA.p(t, 1250.0, 400.0, "ease") * (1.0 - o)
 	if ua > 0.0:
 		var fn := UI.noto()
 		var motto := "서툴지만, 물러서지 않는다"
 		var fs := int(0.026 * H)
-		ci.draw_string(fn, Vector2(lx + 0.02 * W * (1.0 - ua), 0.085 * H), motto, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0.78, 0.78, 0.82, ua))
+		ci.draw_string(fn, Vector2(lx + 0.02 * W * (1.0 - ua), 0.082 * H), motto, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0.78, 0.78, 0.82, ua))
+	if not EMBLEM_WATERMARK:
+		# the guild's flower, small at the menu column's top right
+		var ea := UIA.p(t, 1300.0, 400.0, "ease") * (1.0 - o)
+		if ea > 0.0:
+			var eh := 0.16 * H
+			var ew := eh * EMBLEM.get_width() / EMBLEM.get_height()
+			ci.draw_texture_rect(EMBLEM, Rect2(lx + 0.19 * W + 0.012 * W, 0.96 * H - items.size() * 0.064 * H - eh * 0.1, ew, eh), false, Color(1, 1, 1, ea))
 	# the menu: four slabs, each sliding in 70 ms after the one above; the picked one is pink, pushed right and a touch bigger
 	item_rects.clear()
 	confirm_rects.clear()
@@ -729,6 +772,18 @@ func _prompt(ci: CanvasItem, vs: Vector2) -> void:
 	var gap := 0.012 * H
 	var y0 := 0.96 * H - items.size() * (ih + gap) + gap
 	var pulse := UIA.pulse(clock, 1400.0) if intro_done else 0.0
+	# the cursor: the brush stroke is the picked row's slab, sliding between rows on its spring
+	var ucur := UIA.p(t, 1250.0, 400.0, "bk")
+	if ucur > 0.0 and o < 1.0 and not confirm:
+		var sw0 := 0.19 * W
+		var bw := sw0 * 1.3
+		var bh := ih * 2.3
+		var cy := y0 + sp_cur.x * (ih + gap) + ih * 0.5
+		var cc := Vector2(lx + 0.014 * W + sw0 * 0.5, cy)
+		var psc := 1.0 + 0.04 * pulse
+		ci.draw_set_transform_matrix(UIA.xf(cc, Vector2(-0.3 * W * (1.0 - ucur), 0.25 * H * o), 0.0, Vector2(psc, psc)))
+		ci.draw_texture_rect(BRUSH, Rect2(cc - Vector2(bw, bh) / 2.0, Vector2(bw, bh)), false, Color(1, 1, 1, ucur))
+		ci.draw_set_transform(Vector2.ZERO)
 	for k in items.size():
 		var u := UIA.p(t, 1250.0 + k * 70.0, 400.0, "bk")
 		if u <= 0.0 or o >= 1.0:
@@ -741,15 +796,15 @@ func _prompt(ci: CanvasItem, vs: Vector2) -> void:
 		var r := Rect2(lx + (0.014 * W if on else 0.0), y0 + k * (ih + gap), sw, ih)
 		var sc := 1.0 + (0.04 * pulse if on else 0.0)
 		ci.draw_set_transform_matrix(UIA.xf(r.get_center(), Vector2(-0.3 * W * (1.0 - u), 0.25 * H * o), deg_to_rad(-3.0 * (1.0 - u)), Vector2(sc, sc)))
-		var bg := PINK.lerp(Color("#ff7aa8"), pulse) if on else Color.WHITE
-		if dim: bg = Color(1, 1, 1, 0.35)
-		UI.para(ci, r.position.x, r.position.y, sw, ih, -ih * 0.3, bg)
-		if on:
-			# a black tick on the left, the persona "you are here"
-			UI.para(ci, r.position.x - 0.012 * W, r.position.y + ih * 0.2, 0.006 * W, ih * 0.6, -ih * 0.18, INK)
+		if not on:
+			# a white slab; the picked row rides the brush stroke instead, its label white with an ink shadow
+			UI.para(ci, r.position.x, r.position.y, sw, ih, -ih * 0.3, Color(1, 1, 1, 0.35) if dim else Color.WHITE)
 		var tc := Color.WHITE if on else INK
 		if dim: tc = Color(0.1, 0.1, 0.12, 0.5)
-		ci.draw_string(fb, Vector2(r.position.x + 0.022 * W, r.position.y + ih * 0.5 + fs2 * 0.36), lab, HORIZONTAL_ALIGNMENT_LEFT, -1, fs2, tc)
+		var tp := Vector2(r.position.x + 0.022 * W, r.position.y + ih * 0.5 + fs2 * 0.36)
+		if on: tp.x = r.position.x + sw * 0.5 - UI.text_w(fb, lab, fs2) * 0.5 + 0.01 * W    # on the stroke's thick middle
+		if on: ci.draw_string(fb, tp + Vector2(1.5, 1.5), lab, HORIZONTAL_ALIGNMENT_LEFT, -1, fs2, Color(INK, 0.8))
+		ci.draw_string(fb, tp, lab, HORIZONTAL_ALIGNMENT_LEFT, -1, fs2, tc)
 		ci.draw_set_transform(Vector2.ZERO)
 		item_rects.append(Rect2(r.position + Vector2(-0.012 * W, 0), r.size + Vector2(0.024 * W, gap)))
 	if not confirm: return
