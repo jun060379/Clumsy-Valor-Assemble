@@ -96,7 +96,8 @@ GROUND1 = {}                            # v1 rows off the ground: none left (jum
 #   y      'ground' / 'air'               ground  for 'air': the frames standing on the floor
 #   x      'hip' / 'plant' / 'body'       plant   for 'plant': the frames that keep frame 0's back foot
 #   pick   source frame per game frame (default: all, in order)
-RUN_PICK = [7, 0, 1, 2, 3, 4, 5, 6]     # run_8f (sword version): heel contacts are its frames 0 and 4 (by eye) → game frames 1 and 5
+RUN_PICK = [2, 3, 4, 5, 6, 0, 1]        # run_7f (fourth delivery, sword at the side, hair / armour fringes cleaned by tools/fix_run7.py):
+                                        # its contacts are frames 3 and 6 (by eye) → game frames 1 and 4 (3 + 4 frames a step)
 SPEC2 = {
     'attack1': dict(file='attack1_5f.png', n=5, row=8, smear=True, x='plant', plant=[1, 2, 3]),
     'attack2': dict(file='attack2_rising_5f.png', n=5, row=9, smear=True, x='plant', plant=[1, 2, 3]),
@@ -129,7 +130,7 @@ if not V1_LOCO:
         'turn': dict(file='turn_4f.png', n=4, row=5),
         # 8 frames for two steps (contact, down, passing, flight each); rotated so the contacts are game frames 1 and 5
         # like 기본's run (skins.steps' default) and the bob's dip (skin_data.gd) lands on them
-        'run': dict(file='run_8f.png', n=8, row=35, src=3, pick=RUN_PICK),
+        'run': dict(file='run_7f.png', n=7, row=35, src=3, key=None, pick=RUN_PICK),
     })
 # rows with no art of their own: [anim, game frame] cells of the rows above
 COMPOSE = {

@@ -25,20 +25,19 @@ extends RefCounted
 
 const BASE := {"estelle": "estelle_base", "aida": "aida_base", "luce": "luce_base"}
 ## 초심's run and walk, played at sprite timing (tools/make_skin_chosim.py):
-##   run: run_8f (third delivery), 8 frames for two steps, rotated so its footfalls (its frames 3 and 7) are frames 1 and
-##        5; Aida's timing (80 / 75 ms, 620 ms a cycle, about 3.2 steps a second) and Aida's bounce (BOB_RUN: 3 px down
-##        on the contact, 4 up on the push-off, chars.gd BOB aida run — her only run bounce). The art's stride is short
-##        for player.gd RUN 0.36 px/ms, so the soles slide a little (pinning them would take a 439 ms cycle)
+##   run: run_7f (fourth delivery, fringes cleaned by tools/fix_run7.py), 7 frames for two steps, rotated so its
+##        footfalls (its frames 3 and 6) are frames 1 and 4; 620 ms a cycle (each step 310 ms) and a dip on each contact
+##        (BOB_RUN). The art's stride is short for player.gd RUN 0.36 px/ms, so the soles slide a little
 ##   walk: 10 of walk_43f's frames, 1050 ms a cycle, about 1.9 steps a second; the soles slide (the art's steps are
 ##        short for townsfolk.gd WALKSP 0.2), as before
-const RUN8 := [80, 75, 80, 75, 80, 75, 80, 75]          # flight, contact, down, passing × 2
-const BOB_RUN := [-5, 3, -1, 0, 5, 3, -1, 0]           # world px, + = down: dip on the contacts (1, 5); frame 4 is drawn airborne (feet ~14 px up after the head alignment), so it gives a little back and frame 0 rises to match, an even hop on both strides
+const RUN7 := [103, 103, 103, 78, 78, 78, 77]         # contact (1) → contact (4) is 3 frames, 4 → 1 is 4: each step 310 ms, 620 ms a cycle
+const BOB_RUN := [-4, 3, 1, -2, 3, 1, -3]              # world px, + = down: dip on the contacts (1, 4), up in the flights (0, 3, 6)
 ## parry / air_parry have no art: attack2's rising cut and air_combo's (make_skin_chosim.py COMPOSE). Frames 0-1 keep the
 ## parry window (180 + 35 ms; drawn as guard frame 1 until a parry lands, player.gd _draw); after a parry lands the cut
 ## shows 110 ms and the raised blade 240 ms (기본's 200 + 150: the same 350 ms, a smear frame shouldn't hang)
 const PARRY4 := [180, 35, 110, 240]
 const WALK10 := [105, 105, 105, 105, 105, 105, 105, 105, 105, 105]
-const STEP_RUN8 := [1, 5]       # the frames a foot lands (dust puffs, footstep sounds): 기본's too
+const STEP_RUN7 := [1, 4]       # the frames a foot lands (dust puffs, footstep sounds)
 const ROOT := "res://assets/skins/"
 
 const SKINS := [
@@ -51,9 +50,9 @@ const SKINS := [
 		# 13 attack_high · 14 guard · 15 parry · 16 air_combo · 17 dive · 18 double_jump · 19 hurt · 20 death · 21 dash ·
 		# 22 vow · 23 air_guard · 24 air_parry · 26 tag_in · 27 tag_out · 28 teeter · 35 run (8) · 36-37 walk (10)
 		"rows": [0, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 26, 27, 28, 35, 36, 37],
-		"anims": {"run": [35, RUN8], "walk": [36, WALK10], "parry": [15, PARRY4], "air_parry": [24, PARRY4]},
+		"anims": {"run": [35, RUN7], "walk": [36, WALK10], "parry": [15, PARRY4], "air_parry": [24, PARRY4]},
 		"bob": {"run": BOB_RUN, "walk": []},      # run: Aida's bounce on top of the frames' own; walk: the frames' own
-		"steps": {"run": STEP_RUN8},
+		"steps": {"run": STEP_RUN7},
 		"breath_top": 158,                         # the head's top in the idle cells (player.gd idle breathing)
 		"done": ["idle", "start", "stop", "turn", "jump", "runjump", "run", "walk", "attack1", "attack2", "attack3", "kneel",
 			"kneel_attack", "attack_high", "guard", "parry", "air_combo", "dive", "double_jump", "hurt", "death", "dash", "vow",

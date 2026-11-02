@@ -85,7 +85,7 @@ func _initialize() -> void:
 	check(SK.sheet_row("estelle", 8).resource_path == "res://assets/skins/estelle_base/sheet_1.png" and SK.sheet_row("estelle", 28).resource_path == "res://assets/skins/estelle_base/sheet_4.png", "attack1 (row 8) and teeter (row 28) from 초심's sheets")
 	check(SK.entry("estelle", "parry")[0] == 15 and (SK.entry("estelle", "parry")[1] as Array).size() == 4 and int(SK.entry("estelle", "parry")[1][0]) + int(SK.entry("estelle", "parry")[1][1]) == 215, "parry: 4 frames, the same 215 ms parry window")
 	check(SK.sheet_row("estelle", 7).resource_path == "res://assets/skins/estelle_base/sheet_1.png" and SK.sheet_row("estelle", 36).resource_path == "res://assets/skins/estelle_base/sheet_5.png", "runjump and run rows from its own sheets")
-	check((SK.entry("estelle", "run")[1] as Array).size() == 8 and (SK.entry("estelle", "walk")[1] as Array).size() == 10, "its own run (8 key frames) and walk (10)")
+	check((SK.entry("estelle", "run")[1] as Array).size() == 7 and (SK.entry("estelle", "walk")[1] as Array).size() == 10, "its own run (7 frames) and walk (10)")
 	var rs := 0
 	for ms in SK.entry("estelle", "run")[1]: rs += int(ms)
 	var ws := 0
@@ -94,8 +94,8 @@ func _initialize() -> void:
 	check(SK.resolve("estelle", "run", 7) == [35, 7] and SK.resolve("estelle", "walk", 9) == [37, 0], "frames past nine run on into the next row")
 	check(SK.resolve("estelle", "swap_in", 2)[0] == 35, "composite moves built from run use 초심's run")
 	check(SK.resolve("estelle", "attack1", 2) == [8, 2] and SK.resolve("aida", "run", 3) == [1, 3], "everything else as before")
-	check(SK.bob("estelle", "run") == load("res://scripts/skin_data.gd").BOB_RUN and SK.bob("estelle", "run").size() == 8 and SK.bob("estelle", "walk").is_empty() and SK.bob("estelle", "attack1").is_empty() and SK.bob("aida", "run") == load("res://scripts/chars.gd").BOB["aida"]["run"], "초심's run has its own bounce (matched to its airborne frame); its walk carries its own")
-	check(SK.steps("estelle") == [1, 5] and SK.steps("luce") == [1, 5], "footfalls")
+	check(SK.bob("estelle", "run") == load("res://scripts/skin_data.gd").BOB_RUN and SK.bob("estelle", "run").size() == 7 and SK.bob("estelle", "walk").is_empty() and SK.bob("estelle", "attack1").is_empty() and SK.bob("aida", "run") == load("res://scripts/chars.gd").BOB["aida"]["run"], "초심's run has its own bounce (matched to its airborne frame); its walk carries its own")
+	check(SK.steps("estelle") == [1, 4] and SK.steps("luce") == [1, 5], "footfalls")
 	var B0: Array = SK.bounds("estelle")
 	check(B0.size() >= 38 * 18 and B0[35 * 18] >= 0 and B0[25 * 18] == CB0[25 * 18], "bounds: 초심's rows merged over the original's")
 	check(SK.path("estelle", "st_base").begins_with("res://assets/skins/estelle_base/st_base.") and SK.path("estelle", "st_cl").begins_with("res://assets/skins/estelle_base/st_cl.") and SK.path("estelle", "st_smile") == SK.path("estelle", "st_base"), "its standing picture and its own blink; a face it lacks shows the same picture, never the old costume")

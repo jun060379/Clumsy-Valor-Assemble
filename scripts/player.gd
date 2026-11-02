@@ -1074,7 +1074,7 @@ func physics(dt: float, a: String) -> void:
 			vy = 0.0
 			air = 0
 			if a in ["jump", "runjump", "double_jump"]:
-				set_anim("jump", 6)
+				land_anim()
 				arena.sfx("step")
 				arena.dust(position, 0, false)
 		elif landed:
@@ -1106,7 +1106,7 @@ func physics(dt: float, a: String) -> void:
 		vy = 0.0
 		air = 0
 		if a in ["jump", "runjump", "double_jump"]:
-			set_anim("jump", 6)
+			land_anim()
 			arena.sfx("step")
 			arena.dust(position, 0, false)
 	elif landed:
@@ -1121,11 +1121,25 @@ func physics(dt: float, a: String) -> void:
 				set_anim("jump", 4)
 
 
+## a jump touching down: still running (a direction held, moving that way) lands straight into the run on a contact
+## frame; the standing landing → idle → start → run stopped her and set off again after every run jump
+func land_anim() -> void:
+	var held := (1 if keys.get("right", false) else 0) - (1 if keys.get("left", false) else 0)
+	if held != 0 and held == dir and absf(vx) > 0.2:
+		set_anim("run", 1)
+	else:
+		set_anim("jump", 6)
+
 func advance(dt: float, move: int) -> void:
 	ft += dt
 	var loops := 0
 	while ft >= dur() and loops < 20:
 		loops += 1
+		# in the air a jump holds its fall frame (jump 5, runjump 4): stepping on would flash the landing frame for a tick
+		# before the hold put it back, over and over while she falls
+		if not on and ((anim == "runjump" and f >= 4) or (anim == "jump" and f >= 5)):
+			ft = 0.0
+			break
 		ft -= dur()
 		f += 1
 		if f >= frames():
