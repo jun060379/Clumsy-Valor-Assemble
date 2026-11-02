@@ -367,7 +367,8 @@ cv = np.asarray(can).copy()           # resampling brings a faint green back on 
 edge = cv[..., 3] < 255
 cv[..., 1] = np.where(edge, np.minimum(cv[..., 1], np.maximum(cv[..., 0], cv[..., 2]) + 8), cv[..., 1])
 can = Image.fromarray(cv)
-can.save(os.path.join(OUT, 'st_base.png'), optimize=True)
+# st_base.png is now the user's own character-screen picture (상세): only write the keyed reference with --write-st
+if '--write-st' in FLAGS: can.save(os.path.join(OUT, 'st_base.png'), optimize=True)
 ca = np.asarray(can).astype(int)
 info['st_green_fringe_px'] = int(((ca[..., 3] > 0) & (ca[..., 1] > np.maximum(ca[..., 0], ca[..., 2]) + 24)).sum())
 print(json.dumps(info, indent=1, default=str))

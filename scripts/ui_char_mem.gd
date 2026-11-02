@@ -878,7 +878,13 @@ func _stand(vs: Vector2) -> void:
 		j.x += k2[0]
 		jr = k2[1]
 	var xx := Transform2D(0.0, j + Vector2(0.2 * box.size.x * (1.0 - e), 0)) * UIA.xf(box.get_center() + Vector2(0, box.size.y / 2.0), Vector2.ZERO, deg_to_rad(jr))
-	var r := cutout(ST + c + "_old_" + face + ".webp", ST + c + "_old_base_sil.webp", box, 2.0 + 8.0 * (1.0 - e), Vector2(18, 10), clampf(e, 0.0, 1.0), xx)
+	# a costume with its own record picture (초심's full-body shot) shows it; 기본 art keeps the old talking faces
+	var own_rec: String = SK.path(c, "st_rec")
+	var r: Rect2
+	if own_rec != "" and not own_rec.begins_with(ST):
+		r = cutout(own_rec, SK.path(c, "st_rec_sil"), box, 2.0 + 8.0 * (1.0 - e), Vector2(18, 10), clampf(e, 0.0, 1.0), xx)
+	else:
+		r = cutout(ST + c + "_old_" + face + ".webp", ST + c + "_old_base_sil.webp", box, 2.0 + 8.0 * (1.0 - e), Vector2(18, 10), clampf(e, 0.0, 1.0), xx)
 	p.hit(Rect2(r.position.x + r.size.x * 0.15, r.position.y, r.size.x * 0.7, r.size.y), func(): talk())
 	# cx_emo: a white star with ♪ (or !! after three quick taps) pops off her head (1.2s --bk)
 	if jolt_t < 1200.0:

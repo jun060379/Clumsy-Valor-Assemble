@@ -99,7 +99,9 @@ func _initialize() -> void:
 	var B0: Array = SK.bounds("estelle")
 	check(B0.size() >= 38 * 18 and B0[35 * 18] >= 0 and B0[25 * 18] == CB0[25 * 18], "bounds: 초심's rows merged over the original's")
 	check(SK.path("estelle", "st_base").begins_with("res://assets/skins/estelle_base/st_base.") and SK.path("estelle", "st_cl") == SK.path("estelle", "st_base"), "its standing picture; a blink it lacks shows the same picture, never the old costume")
-	check(SK.path("estelle", "face") == SK.base_path("estelle", "face") and SK.path("estelle", "st_gear") == SK.base_path("estelle", "st_gear"), "face / gear art still the original's")
+	check(SK.path("estelle", "face") == SK.base_path("estelle", "face"), "face art still the original's")
+	for k in ["st_gear", "st_skill", "st_skill_sil", "st_rec", "st_rec_sil"]:
+		check(SK.path("estelle", k).begins_with("res://assets/skins/estelle_base/" + k + "."), "초심 has its own %s" % k)
 
 	# ---- the missing-asset guard ----
 	var wip: Array = ["estelle_s2", "aida_s1", "aida_s2", "luce_s1", "luce_s2"] + ([] if e2e else ["estelle_s1"])
