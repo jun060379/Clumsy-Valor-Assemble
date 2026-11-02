@@ -18,6 +18,7 @@ const WEATHERS := ["clear", "rain", "snow"]
 const SETTINGS := preload("res://scripts/settings.gd")
 const AMBIENCE := preload("res://scripts/ambience.gd")
 const SLOWBUS := preload("res://scripts/slow_bus.gd")
+const BGM := preload("res://scripts/bgm.gd")
 const DEV := preload("res://scripts/dev.gd")
 const POSTFX := preload("res://scripts/post_fx.gd")
 const PFX := preload("res://scripts/pfx.gd")
@@ -88,6 +89,8 @@ var train_platforms: Array = []
 var cfg                       # settings.gd: device, stick, key bindings (saved)
 var fatigue                   # fatigue.gd: 피로도 160, +1 / 6 min (nothing spends it yet)
 var ambient := true           # 환경음 (ambience.gd)
+var music := true             # 배경음 (bgm.gd)
+var bgm                       # bgm.gd: the town music (town + guild hall), faded out elsewhere
 var post                      # post_fx.gd: shockwaves, colour fringes, vignette, the dodge grade (화면 효과)
 var low_end := false          # a phone (web + touch-first): fewer, wider lights
 var amb                       # ambience.gd: wind / rain / water loops, birds, crickets, fires, the hall's creaks and clock
@@ -270,6 +273,10 @@ func _ready() -> void:
 	slow_bus.set_script(SLOWBUS)
 	slow_bus.arena = self
 	add_child(slow_bus)
+	bgm = Node.new()
+	bgm.set_script(BGM)
+	bgm.arena = self
+	add_child(bgm)
 	save = SAVE.new(self)
 	if get_tree().get_script() != null:
 		save.path = "user://save_test.json"     # test runs never touch the real save

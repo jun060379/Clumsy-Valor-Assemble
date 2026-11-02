@@ -97,6 +97,8 @@ func _rows() -> Array:
 			"set": func(i): arena.weather = ["clear", "rain", "snow"][i]})
 		R.append({"k": "tog", "lab": "환경음", "o": ["켜기", "끄기"], "on": 0 if arena.ambient else 1,
 			"set": func(i): arena.ambient = i == 0})
+		R.append({"k": "tog", "lab": "배경음", "o": ["켜기", "끄기"], "on": 0 if arena.music else 1,
+			"set": func(i): arena.music = i == 0})
 	# ctrlGuide
 	var d: String = C.act_dev()
 	var nm: String = {"kbm": "키보드 · 마우스", "pad": "패드", "touch": "터치"}[d]

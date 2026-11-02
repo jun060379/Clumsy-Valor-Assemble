@@ -9,16 +9,21 @@ const PIXP := preload("res://scripts/player.gd")
 
 const HD := preload("res://scripts/hall_data.gd")
 const EILM := {"idleA": [4, 154, 320], "idleB": [4, 152, 320], "idleC": [4, 154, 320], "greet": [4, 158, 320], "talk": [4, 156, 320], "stamp": [5, 160, 320],
-	"sew": [6, 178, 320], "sit": [4, 144, 256], "eat": [4, 148, 256], "idleS": [4, 140, 320], "run": [8, 276, 316], "walkL": [8, 210, 316],
+	"sew": [6, 178, 320], "sit": [4, 144, 256], "eat": [4, 148, 256], "idleS": [4, 140, 320], "run": [8, 276, 316], "walkL": [14, 158, 316],
 	"start": [4, 206, 320], "stop": [4, 204, 320], "turn": [4, 218, 314], "wave": [4, 142, 320], "stretch": [5, 172, 360]}
 const EILSPD := {"idleA": 300.0, "idleB": 300.0, "idleC": 300.0, "greet": 190.0, "talk": 170.0, "stamp": 150.0, "sew": 360.0, "idleS": 320.0, "wave": 190.0,
-	"stretch": 230.0, "sit": 480.0, "eat": 430.0, "run": 85.0, "walkL": 135.0, "start": 80.0, "stop": 95.0, "turn": 85.0}
+	"stretch": 230.0, "sit": 480.0, "eat": 430.0, "run": 85.0, "walkL": 65.0, "start": 80.0, "stop": 95.0, "turn": 85.0}
 const EFRONT := ["idleA", "idleB", "idleC", "greet", "talk", "stamp", "sew", "stretch"]
 const EILS := 0.79            # sized by body bulk (head and shoulders close to Estelle's)
 const EILS_SIDE := 0.79
 const EILSC := {"sit": 1.22, "eat": 1.22}   # seated sheets were drawn smaller: bring the head back to the standing size
 const EILX := 2006.0
 const EIL_SPD := 0.075
+## her gait: walkL (tools/make_eilin_walk.py) is a calm stroll, 14 frames x 65 ms = one two-step cycle per 0.91 s, which
+## carries her 68.5 px (her planted foot keeps still on the floor at EIL_SPD). WALK_IN: the frame she steps off on (the
+## passing pose, legs together: closest to standing, so no start / stop sheet is needed).
+const WALK := "walkL"
+const WALK_IN := 3
 const EMAPS := ["town", "h0", "h1", "h2", "room"]
 const HDOOR := 3024.0         # town: the hall's front door (town.gd HDOOR) on the terrace
 const TTOP := 235.0
@@ -287,23 +292,20 @@ func upd(dt: float) -> void:
 		if hold < need: return
 		mode = "loop"
 		a = ""
-	# transitions while walking
+	# into / out of the walk: the stroll steps off from its passing pose and turns on the spot (the start / stop / turn
+	# sheets are the hurried trot's, "run": a lunge into a run reads wrong before a calm walk)
 	if walk != was_w:
 		was_w = walk
 		face0 = face
 		if walk:
-			play("start", "one")
-			return
-		elif spot != "counter":
-			play("stop", "one")
-			return
+			play(WALK)
+			mode = "loop"
+			f = WALK_IN
 	if walk and face != face0:
 		turn_from = face0
 		face0 = face
-		play("turn", "one")
-		return
 	var loop: String
-	if walk: loop = "run"     # one gait for the whole cast: the hurried trot
+	if walk: loop = WALK
 	elif desk: loop = "talk" if tk else (idle_v if idle_v != "" else "idleA")
 	else:
 		var T: Dictionary = ESPOT.get(spot, {})
