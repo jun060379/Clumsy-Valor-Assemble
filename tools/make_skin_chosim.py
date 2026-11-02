@@ -48,7 +48,7 @@ Normalisation, the same for every row so 초심 is one character:
             the centre of the dark pixels (sleeves, belt, stockings, bow), set by frame 0's hips, so the turn spins about the
             body instead of jumping around a hip band that isn't there upside down.
   frames    PICK: which source frame each game frame shows (the game's frame count and hit frames, chars.gd A_EST / ATK).
-Writes sheet_0..5.png, st_base.png, bounds.gd, prints the measurements (scale, head matches, run gait) as JSON.
+Then tools/color_match_chosim.py evens out the colours. Writes sheet_0..5.png, st_base.png, bounds.gd, prints the measurements (scale, head matches, run gait) as JSON.
 """
 import os, sys, json
 import numpy as np
