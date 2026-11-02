@@ -90,6 +90,8 @@ const ASSETS := {
 	"st_skill_sil": {"base": "res://assets/ui/st/{c}_skill_sil.webp", "file": "st_skill_sil", "pair": "st_skill"},
 	"st_rec": {"base": "res://assets/ui/st/{c}_rec.webp", "file": "st_rec"},
 	"st_rec_sil": {"base": "res://assets/ui/st/{c}_rec_sil.webp", "file": "st_rec_sil", "pair": "st_rec"},
+	"st_full": {"base": "", "file": "st_full"},                                  # 기록's full-body shot (the original art has none: its talking faces)
+	"st_full_sil": {"base": "", "file": "st_full_sil", "pair": "st_full"},
 	"bust": {"base": "res://assets/fame/{p}.png", "file": "bust"},
 	"ult_art": {"base": "res://assets/ult/ult_art_{c}.png", "file": "ult_art"},
 	"doll": {"base": "res://assets/hall/{p}.png", "file": "doll"},

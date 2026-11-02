@@ -66,7 +66,7 @@ func _initialize() -> void:
 		for k in SD.ASSETS:
 			for i in int(SD.ASSETS[k].get("n", 1)):
 				var bp: String = SK.base_path(c, k, i)
-				check(ResourceLoader.exists(bp), "기본 %s %s %d exists (%s)" % [c, k, i, bp])
+				if SD.ASSETS[k]["base"] != "": check(ResourceLoader.exists(bp), "기본 %s %s %d exists (%s)" % [c, k, i, bp])
 	check(SK.base_path("estelle", "sheet", 3) == "res://assets/chars/estelle/estelle_3.png" and SK.base_path("aida", "bust") == "res://assets/fame/por_aida.png" and SK.base_path("luce", "doll") == "res://assets/hall/dollC.png", "기본 paths")
 	check(SK.path("luce", "sheet", 0) == SK.base_path("luce", "sheet", 0) and SK.sheet("luce", 0) != null and SK.face("luce") != null, "worn 기본 resolves to the 기본 files")
 	check(SK.path_of("aida_s1", "aida", "st_gear") == SK.base_path("aida", "st_gear"), "a key the costume lacks falls back to 기본")
@@ -100,8 +100,9 @@ func _initialize() -> void:
 	check(B0.size() >= 38 * 18 and B0[35 * 18] >= 0 and B0[25 * 18] == CB0[25 * 18], "bounds: 초심's rows merged over the original's")
 	check(SK.path("estelle", "st_base").begins_with("res://assets/skins/estelle_base/st_base.") and SK.path("estelle", "st_cl") == SK.path("estelle", "st_base"), "its standing picture; a blink it lacks shows the same picture, never the old costume")
 	check(SK.path("estelle", "face") == SK.base_path("estelle", "face"), "face art still the original's")
-	for k in ["st_gear", "st_skill", "st_skill_sil", "st_rec", "st_rec_sil"]:
+	for k in ["st_gear", "st_skill", "st_skill_sil", "st_full", "st_full_sil"]:
 		check(SK.path("estelle", k).begins_with("res://assets/skins/estelle_base/" + k + "."), "초심 has its own %s" % k)
+	check(SK.path("estelle", "st_rec") == SK.base_path("estelle", "st_rec") and SK.path("luce", "st_full") == "", "기억 keeps the square rec art; 기록's full-body shot is 초심's own")
 
 	# ---- the missing-asset guard ----
 	var wip: Array = ["estelle_s2", "aida_s1", "aida_s2", "luce_s1", "luce_s2"] + ([] if e2e else ["estelle_s1"])

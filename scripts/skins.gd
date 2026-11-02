@@ -5,7 +5,7 @@ extends RefCounted
 ##
 ## Resolver (static):
 ##   tex(c, key, i)      member c's picture for key in the costume she wears ("sheet" 0..4, "st_base", "st_cl", "st_smile", "st_sup",
-##                       "st_gear", "st_skill", "st_skill_sil", "st_rec", "st_rec_sil", "face", "bust", "ult_art", "doll")
+##                       "st_gear", "st_skill", "st_skill_sil", "st_rec", "st_rec_sil", "st_full", "st_full_sil", "face", "bust", "ult_art", "doll")
 ##   sheet(c, i) / face(c)            the same for the sheets and the round face
 ##   path(c, key, i)     its res:// path ("" = none, only for a silhouette the skin leaves out on purpose)
 ##   tex_of(id, key, i)  a given skin's picture (the wardrobe's preview), whether worn or not

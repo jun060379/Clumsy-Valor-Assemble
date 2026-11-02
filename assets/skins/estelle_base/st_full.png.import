@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://peittxq3mkrh"
-path="res://.godot/imported/st_rec_sil.png-45488185e0fb18949d5eeba2227343a8.ctex"
+uid="uid://cn5x27tq1eo0v"
+path="res://.godot/imported/st_full.png-fb10ccb53839df737ccc025910ee9423.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/skins/estelle_base/st_rec_sil.png"
-dest_files=["res://.godot/imported/st_rec_sil.png-45488185e0fb18949d5eeba2227343a8.ctex"]
+source_file="res://assets/skins/estelle_base/st_full.png"
+dest_files=["res://.godot/imported/st_full.png-fb10ccb53839df737ccc025910ee9423.ctex"]
 
 [params]
 
