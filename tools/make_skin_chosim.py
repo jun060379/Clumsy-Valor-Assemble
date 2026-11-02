@@ -27,14 +27,21 @@ Keying: magenta / green by colour unmixing (skin_slice.key_out); the attack rows
   white (key_out smear=True). Frames of a v2 strip are found from body cores (skin_slice.split_frames), not grid slots: the
   frames sit unevenly and touch.
 Normalisation, the same for every row so 초심 is one character:
-  scale     one factor per delivery image from the HEAD (idle's crown, face and chin, matched at many scales / tilts), so a
-            crouch, a lean, a somersault or a body lying on the floor is never blown up to a standing height. Idle keeps its
-            factor (its median height on 기본's). v2 strips: the best-scoring frame's size, with the good matches that agree with it
-            (a turned-away, tumbling or lying head can score well at a wrong size and is left out).
+  scale     one factor per delivery image from the BODY: every row is one standing height, T_BODY px crown (no ahoge) to
+            sole. The deliveries come from different generator runs with different head-to-body ratios, so matching heads
+            (as before) left stop / turn / idle visibly different sizes. BODY holds each image's standing height in its own
+            pixels, read by eye on a gridded frame (crown, hip = the lower belt's bottom, knee, sole): an upright frame's
+            crown-to-sole, else the length along the body (crown→hip + hip→knee + knee→sole of the straighter leg), which
+            equals crown-to-sole on the upright frames (idle 834 / 833, stop 597 / 597). Where the legs are foreshortened
+            (kneeling, tucked in the air, lying) that reading is loose: 'blend' rows take the mean of its head size and the
+            measured rows' median head size (relative to idle's head, skin_slice.head_match), at most HEAD_MAX. A crouch, a
+            lean, a somersault or a body lying on the floor is never blown up: the factor is per image, from its upright
+            length, not from the frame's box. Rows not in BODY (the --v1-* rebuilds) fall back to the median head size.
   baseline  'ground' rows: each frame's lowest solid row (24+ solid source pixels wide, so a blade tip or a smear under the
             boots doesn't count) on the feet line (340). 'air' rows keep the image's own vertical layout: frames listed as
             standing are on the line, the others rise by how far their feet are above those (jump, dive's take-off, the
-            somersault); with none listed the lowest frame is on the line.
+            somersault); with none listed the lowest frame is on the line. If a raised blade or smear would cross the cell's
+            top, the row's rise is lowered just enough (never below the line).
   anchor    'hip': the hips (dark belt / skirt-hem / stocking pixels in the hip band, the band found from the head's match so a
             raised sword doesn't move it) on x 224. 'plant' (lunges): the listed frames keep the back foot where frame 0 has
             it, so the body drives forward off a planted foot and is back on the hips by the last frame. 'body' (somersault):
@@ -142,7 +149,53 @@ def put(row, col, cell):
     sheet.alpha_composite(cell, (col * 448, (row % 7) * 352))
 
 
-IDLE_SY = 0.94    # the user found the v2 standing picture a little tall: idle alone is squashed vertically by this (feet stay put)
+# idle's 6 % vertical squash (the standing picture looked tall) is dropped: with every row at one body height it made idle
+# the one short figure. render() keeps the parameter for a shape tweak.
+IDLE_SY = 1.0
+
+# standing height in each image's own pixels and how it was read (frame, crown / hip / knee / sole by eye on a gridded frame)
+T_BODY = 178          # px in the cell, crown to sole: stop f3, the largest well-proportioned upright frame (was 177)
+HEAD_MAX = 1.12       # a 'blend' row's head at most this × idle's (the largest head among the measured upright rows, teeter)
+BODY = {
+    'idle': (833, 'measured'),        # upright: crown 20, sole 853 (ahoge above 20)
+    'stop': (597, 'measured'),        # f3 upright: 11 → 608
+    'start': (555, 'measured'),       # f0, knees a little bent: crown 20, hip 260, knee 382, sole 566
+    'turn': (573, 'measured'),        # f1 (stride): crown→hip 239, hip→knee 149, knee→sole 185
+    'run': (387, 'measured'),         # sword run f0: 107 + 162 + 118 (front leg)
+    'walk': (382, 'measured'),        # v1 walk f2 upright: 156 + 96 + 130
+    'vow': (601, 'measured'),         # f0 upright: 19 → 620
+    'teeter': (522, 'measured'),      # f3 upright: 26 → 548
+    'hurt': (700, 'measured'),        # f1, wide stance: 22 → 708 vertical, legs splayed
+    'dive': (458, 'measured'),        # f5 standing: 12 → 470
+    'jump': (391, 'measured'),        # f6 standing: 13 → 404
+    'dash': (392, 'measured'),        # f5 standing: 11 → 403
+    'attack1': (485, 'measured'),     # f0 wide stance: 202 + 137 + 147 (front leg)
+    'attack2': (490, 'measured'),     # f0: 211 + 140 + 140
+    'attack3': (393, 'measured'),     # f0 lunge stance: 163 + 109 + 121 (back leg)
+    'attack_high': (479, 'measured'), # f0: 203 + 136 + 140
+    'guard': (646, 'measured'),       # f1 wide stance: 277 + 189 + 180
+    'kneel': (565, 'blend'),          # f0 kneeling: torso 195, back thigh ~180, front shin 183
+    'kneel_attack': (410, 'blend'),   # f0 kneeling: torso 166, back thigh 108, front shin 127
+    'air_combo': (284, 'blend'),      # f0 tucked: torso 114 (legs foreshortened)
+    'air_guard': (636, 'blend'),      # f0 tucked: 266 + 173 + 199
+    'double_jump': (425, 'blend'),    # f5 legs out, hair flying: torso 173, thigh 86 (foreshortened), shin 180
+    'death': (520, 'blend'),          # f0 stooped: 216 + 127 + 180
+    'runjump': (359, 'blend'),        # f0 take-off: torso 142, front leg 88 + 150
+}
+K_IDLE = T_BODY / BODY['idle'][0]
+
+
+def head_ratio(nm, rel):
+    """the head's on-screen size relative to idle's if this image stood T_BODY tall"""
+    return rel * (T_BODY / BODY[nm][0]) / K_IDLE
+
+
+def body_k(nm, rel, med):
+    """the image's scale: T_BODY over its standing height; 'blend' rows meet the median head halfway"""
+    if nm in BODY and BODY[nm][1] == 'measured':
+        return T_BODY / BODY[nm][0]
+    h = min(HEAD_MAX, (head_ratio(nm, rel) + med) / 2) if nm in BODY else med
+    return h * K_IDLE / rel
 
 
 def render(f, k, ax, lift=0.0, sy=1.0):
@@ -155,7 +208,8 @@ def render(f, k, ax, lift=0.0, sy=1.0):
     oy = round(S.FEET - f['bottom'] * k * sy - lift * k * sy)
     cell = Image.new('RGBA', (448, 352), (0, 0, 0, 0))
     cell.alpha_composite(im, (max(0, ox), max(0, oy)), (max(0, -ox), max(0, -oy)))
-    return cell, (ox < 0 or oy < 0 or ox + sw > 448 or oy + sh > 352)
+    over = (max(0, -ox), max(0, -oy), max(0, ox + sw - 448), max(0, oy + sh - 352))     # px outside: left, top, right, bottom
+    return cell, over if any(over) else False
 
 
 # ---- v1 ----
@@ -177,35 +231,10 @@ for nm, fn, key, cols, n, row, grounded in SPEC1:
 scale, head = {}, {}
 idle_fr = strips['idle'][0]
 REF = idle_fr[0]['rgba']
-k_idle = base_h(0) / float(np.median([f['height'] for f in idle_fr]))
 for nm, (fr, row, grounded, sh) in strips.items():
     rel, per = S.head_size(REF, HEAD_BOX, fr, every=max(1, len(fr) // 6), scales=HEAD_SCALES)
     if nm == 'idle': rel = 1.0
     head[nm] = {'head_vs_idle': round(rel, 3), 'frames': per}
-    scale[nm] = k_idle / rel
-
-full_cells = {}
-if V1_LOCO:
-    scratch = {}
-    S.place(strips['run'][0], scale['run'], scratch, 35)
-    full_cells['run'] = [f['cell'] for f in strips['run'][0]]
-for nm, keep in KEEP.items():
-    fr, row, grounded, sh = strips[nm]
-    strips[nm] = ([fr[i] for i in keep], row, grounded, sh)
-
-for nm, (fr, row, grounded, sh) in strips.items():
-    k = scale[nm]
-    if not grounded:
-        g = max(fr[i]['slot_bottom'] for i in GROUND1[nm])
-        for f in fr: f['lift'] = g - f['slot_bottom']
-    for i, f in enumerate(fr):
-        f['cell'], f['clipped'] = render(f, k, f['hip'], f.get('lift', 0.0), IDLE_SY if nm == 'idle' and not V1_IDLE else 1.0)
-        put(row + i // 9, i % 9, f['cell'])
-    cells[nm] = [f['cell'] for f in fr]
-    info[nm] = {'src': 'v2 ref' if nm == 'idle' and not V1_IDLE else 'v1', 'row': row, 'n': len(fr), 'scale': round(k, 4), 'head_vs_idle': head[nm]['head_vs_idle'],
-                'median_h': round(float(np.median([f['height'] for f in fr])) * k, 1), 'keep': KEEP.get(nm),
-                'clipped': [i for i, f in enumerate(fr) if f['clipped']]}
-
 
 # ---- v2 ----
 def measure2(f):
@@ -231,7 +260,7 @@ def measure2(f):
     return f
 
 
-raw2 = {}
+raw2, rel2 = {}, {}
 for nm, o in SPEC2.items():
     path = os.path.join(SRC3 if o.get('src') == 3 else SRC2, o['file'])
     key = o.get('key', 'magenta')
@@ -244,9 +273,42 @@ for nm, o in SPEC2.items():
     bi = int(np.argmax([f['head'][0] for f in fr]))
     s0, v0 = fr[bi]['head'][1], fr[bi]['head'][0]
     good = [f['head'][1] for f in fr if f['head'][0] >= v0 - 0.08 and abs(f['head'][1] / s0 - 1) <= 0.12]
-    rel = float(np.median(good))
-    k = k_idle / rel
+    rel2[nm] = float(np.median(good))
     raw2[nm] = fr
+
+# the measured rows' median head size (relative to idle's), for the 'blend' rows and the rows not in BODY
+rels = {**{nm: head[nm]['head_vs_idle'] for nm in strips}, **rel2}
+MED = float(np.median([head_ratio(nm, r) for nm, r in rels.items() if nm in BODY and BODY[nm][1] == 'measured']))
+for nm in strips: scale[nm] = body_k(nm, rels[nm], MED)
+
+# ---- v1 rows on the sheets ----
+full_cells = {}
+if V1_LOCO:
+    scratch = {}
+    S.place(strips['run'][0], scale['run'], scratch, 35)
+    full_cells['run'] = [f['cell'] for f in strips['run'][0]]
+for nm, keep in KEEP.items():
+    fr, row, grounded, sh = strips[nm]
+    strips[nm] = ([fr[i] for i in keep], row, grounded, sh)
+
+for nm, (fr, row, grounded, sh) in strips.items():
+    k = scale[nm]
+    if not grounded:
+        g = max(fr[i]['slot_bottom'] for i in GROUND1[nm])
+        for f in fr: f['lift'] = g - f['slot_bottom']
+    for i, f in enumerate(fr):
+        f['cell'], f['clipped'] = render(f, k, f['hip'], f.get('lift', 0.0), IDLE_SY if nm == 'idle' and not V1_IDLE else 1.0)
+        put(row + i // 9, i % 9, f['cell'])
+    cells[nm] = [f['cell'] for f in fr]
+    info[nm] = {'src': 'v2 ref' if nm == 'idle' and not V1_IDLE else 'v1', 'row': row, 'n': len(fr), 'scale': round(k, 4), 'head_vs_idle': head[nm]['head_vs_idle'],
+                'median_h': round(float(np.median([f['height'] for f in fr])) * k, 1), 'keep': KEEP.get(nm),
+                'clipped': [i for i, f in enumerate(fr) if f['clipped']]}
+
+
+
+for nm, o in SPEC2.items():
+    fr, rel = raw2[nm], rel2[nm]
+    k = body_k(nm, rel, MED)
     # anchors
     ax = [f['hip'] for f in fr]
     if o.get('x') == 'plant':
@@ -258,6 +320,12 @@ for nm, o in SPEC2.items():
         gr = o.get('ground')
         g = float(np.median([fr[i]['slot_bottom'] for i in gr])) if gr else max(f['slot_bottom'] for f in fr)
         lift = [0.0 if gr and i in gr else max(0.0, g - f['slot_bottom']) for i, f in enumerate(fr)]
+        # a smear or blade reaching more than 12 px under the soles (the cell's room below the feet line): raise the whole row
+        under = max((f['rgba'].shape[0] - f['bottom'] - lift[i]) * k - (352 - S.FEET) for i, f in enumerate(fr))
+        if under > 0: lift = [l + under / k for l in lift]
+        # a raised blade or smear must stay inside the cell: lower the rise just enough (2 px margin)
+        over = max(2 - (S.FEET - (f['bottom'] + lift[i]) * k) for i, f in enumerate(fr))
+        if over > 0: lift = [max(0.0, l - over / k) for l in lift]
     rendered = [render(f, k, ax[i], lift[i]) for i, f in enumerate(fr)]
     if nm == 'run':
         # the frame with both feet off the ground is drawn crouched with its low foot on the floor, so the whole body
@@ -281,7 +349,7 @@ for nm, o in SPEC2.items():
                 'head': [(f['head'][0], f['head'][1], f['head'][2]) for f in fr],
                 'h': [round(f['height'] * k) for f in fr], 'lift_px': [round(l * k) for l in lift],
                 'anchor_vs_hip_px': [round((ax[i] - f['hip']) * k) for i, f in enumerate(fr)],
-                'clipped': [i for i in range(len(fr)) if rendered[i][1]]}
+                'clipped': {i: rendered[i][1] for i in range(len(fr)) if rendered[i][1]}}
 
 for nm, (row, L) in COMPOSE.items():
     cells[nm] = [cells[a][j] for a, j in L]

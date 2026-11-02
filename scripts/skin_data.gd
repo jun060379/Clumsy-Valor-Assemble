@@ -54,7 +54,7 @@ const SKINS := [
 		"anims": {"run": [35, RUN8], "walk": [36, WALK10], "parry": [15, PARRY4], "air_parry": [24, PARRY4]},
 		"bob": {"run": BOB_RUN, "walk": []},      # run: Aida's bounce on top of the frames' own; walk: the frames' own
 		"steps": {"run": STEP_RUN8},
-		"breath_top": 176,                         # the head's top in the idle cells (player.gd idle breathing)
+		"breath_top": 158,                         # the head's top in the idle cells (player.gd idle breathing)
 		"done": ["idle", "start", "stop", "turn", "jump", "runjump", "run", "walk", "attack1", "attack2", "attack3", "kneel",
 			"kneel_attack", "attack_high", "guard", "parry", "air_combo", "dive", "double_jump", "hurt", "death", "dash", "vow",
 			"air_guard", "air_parry", "tag_in", "tag_out", "teeter"]},
