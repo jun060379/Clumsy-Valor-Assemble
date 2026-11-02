@@ -89,7 +89,7 @@ GROUND1 = {}                            # v1 rows off the ground: none left (jum
 #   y      'ground' / 'air'               ground  for 'air': the frames standing on the floor
 #   x      'hip' / 'plant' / 'body'       plant   for 'plant': the frames that keep frame 0's back foot
 #   pick   source frame per game frame (default: all, in order)
-RUN_PICK = [2, 3, 4, 5, 6, 7, 0, 1]     # run_8f's footfalls are its frames 3 and 7 (gait below): on game frames 1 and 5
+RUN_PICK = [7, 0, 1, 2, 3, 4, 5, 6]     # run_8f (sword version): heel contacts are its frames 0 and 4 (by eye) → game frames 1 and 5
 SPEC2 = {
     'attack1': dict(file='attack1_5f.png', n=5, row=8, smear=True, x='plant', plant=[1, 2, 3]),
     'attack2': dict(file='attack2_rising_5f.png', n=5, row=9, smear=True, x='plant', plant=[1, 2, 3]),
