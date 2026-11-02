@@ -48,6 +48,7 @@ func _init(a) -> void:
 	arena.tod_auto = bool(cf.get_value("ui", "tod_auto", true))
 	arena.weather = String(cf.get_value("ui", "weather", "clear"))
 	arena.ambient = bool(cf.get_value("ui", "ambient", true))
+	arena.music = bool(cf.get_value("ui", "bgm", true))
 	qk = clampf(float(cf.get_value("ui", "qk", 1.0)), 0.6, 1.0)
 	rmb = String(cf.get_value("keys", "rmb", "guard"))
 	for a2 in ACTS:
@@ -65,6 +66,7 @@ func save() -> void:
 	cf.set_value("ui", "tod_auto", arena.tod_auto)
 	cf.set_value("ui", "weather", arena.weather)
 	cf.set_value("ui", "ambient", arena.ambient)
+	cf.set_value("ui", "bgm", arena.music)
 	cf.set_value("ui", "qk", qk)
 	cf.set_value("keys", "rmb", rmb)
 	for a in ACTS:
