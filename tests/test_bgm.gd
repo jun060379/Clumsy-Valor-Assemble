@@ -1,6 +1,7 @@
 extends SceneTree
 ## town music (bgm.gd): town.ogg loads and loops, plays in town, carries on into the guild hall without restarting,
-## fades out in the dungeon, comes back in town where it left off; the 배경음 setting mutes it
+## fades out in the dungeon, comes back in town where it left off; the 배경음 setting mutes it. The title track
+## (title.ogg) loads and loops on its own player; tests/test_title.gd covers the title → town cross-fade.
 var fails := 0
 
 func ok(c: bool, what: String) -> void:
@@ -28,7 +29,10 @@ func _initialize() -> void:
 	ok(B.ap.stream == st and B.ap.stream.loop, "the player has the looping stream")
 	var bi := AudioServer.get_bus_index(&"BGM")
 	ok(bi > 0 and AudioServer.get_bus_send(bi) == &"Master", "BGM bus into Master")
-	ok(AudioServer.get_bus_volume_db(bi) <= -6.0, "BGM bus sits under the sfx (%.1f dB)" % AudioServer.get_bus_volume_db(bi))
+	ok(AudioServer.get_bus_volume_db(bi) <= -0.5, "BGM bus sits a touch under the sfx (%.1f dB; both tracks are at -14 LUFS)" % AudioServer.get_bus_volume_db(bi))
+	var tt = load("res://assets/bgm/title.ogg")
+	ok(tt is AudioStreamOggVorbis and tt.loop and absf(tt.get_length() - 164.44) < 0.2, "title.ogg loops, 164.44 s long (%.2f)" % tt.get_length())
+	ok(B.tap.stream == tt and B.tap.bus == &"BGM" and not B.tap.playing, "the title player holds it on the BGM bus, silent in a test run (the title is off)")
 	ok(B.ap.bus == &"BGM", "player on the BGM bus (not the slow bus)")
 	arena.go_town(Vector2(900.0, arena.ground_y), 1)
 	await run(arena, 1.2)
