@@ -76,8 +76,20 @@ func _ready() -> void:
 func holds() -> bool:
 	return fx != null and fx.blocking()
 
+## a level-up earned inside a dungeon: the level it started from, shown when the run is over (-1: none waiting)
+var lv_held := -1
+
+func _lv_flush() -> void:
+	if lv_held < 0 or fx == null or arena.level_kind() == "dungeon" or holds(): return
+	if arena.sortie != null and (arena.sortie.holds() or arena.sortie.covers()): return
+	if arena.ui_root != null and arena.ui_root.holds(): return
+	var lv0 := lv_held
+	lv_held = -1
+	if lv0 < alv: fx.lv_cut(lv0, alv)
+
 func _process(delta: float) -> void:
 	var dt := minf(delta * 1000.0, 250.0)
+	_lv_flush()
 	for L in later: L[0] -= dt
 	var due := later.filter(func(L): return L[0] <= 0.0)
 	later = later.filter(func(L): return L[0] > 0.0)
@@ -131,7 +143,10 @@ func a_gain(n: int) -> void:
 		log_add("모험가 Lv %d 달성" % alv, "lv")
 		if alv == 3: log_add("일일 훈련이 열렸다", "day")
 	if up:
-		if init and fx != null:
+		if init and fx != null and arena.level_kind() == "dungeon":
+			# mid-run: no cut over the fight; it plays once the run is over (clear screen closed, back in town)
+			lv_held = lv0 if lv_held < 0 else mini(lv_held, lv0)
+		elif init and fx != null:
 			fx.lv_cut(lv0, alv)
 		else:
 			notice("모험가 Lv %d · 모험 수첩에서 보상 받기" % alv, "LEVEL UP", Color("#7fd0ff"), true, 3600.0)

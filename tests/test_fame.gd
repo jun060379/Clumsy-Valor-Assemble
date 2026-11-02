@@ -47,6 +47,19 @@ func _initialize() -> void:
 	F.init = true
 	F.a_gain(F.FD.a_need(6))
 	check(F.alv == 7 and not F.fx.lv.is_empty(), "a level-up after start plays the level cut")
+	# a level-up inside a dungeon waits until the run is over
+	F.fx.lv = {}
+	arena.enter_dungeon()
+	for i in 30: await process_frame
+	var lvd: int = F.alv
+	F.a_gain(F.FD.a_need(F.alv))
+	F._lv_flush()
+	check(F.alv == lvd + 1 and F.fx.lv.is_empty() and F.lv_held == lvd, "in the dungeon: level rises, no cut, held from Lv %d" % lvd)
+	arena.go_town(Vector2(700.0, arena.ground_y), 1)
+	for i in 30: await process_frame
+	F._lv_flush()
+	check(F.lv_held == -1 and not F.fx.lv.is_empty() and int(F.fx.lv["a"]) == lvd, "back in town: the held level cut plays")
+	F.fx.lv = {}
 	check(F.d_pick("2026-11-1") == ["kill", "rep", "enter", "boss"] and F.d_pick("2026-1-15") == ["boss", "enh", "bestv", "enter"] and F.d_pick("2027-12-31") == ["enter", "kill", "eil", "boss"], "daily picker matches the prototype")
 	# ---- rank 1 requests from play ----
 	var lv0: int = F.alv
