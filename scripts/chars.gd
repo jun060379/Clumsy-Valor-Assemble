@@ -8,7 +8,7 @@ const CELL_H := 352
 const ROWS_PER_SHEET := 7
 
 const NAME := {"estelle": "에스텔", "aida": "아이다", "luce": "루체"}
-const LATIN := {"estelle": "ESTELLE", "aida": "AIDA", "luce": "LUCE"}
+const LATIN := {"estelle": "ESTELLE", "aida": "AYDA", "luce": "LUCE"}
 const COLOR := {"estelle": Color("#ff4d9a"), "aida": Color("#9a5cff"), "luce": Color("#ffc94d")}
 const SCALE := {"estelle": 1.3, "aida": 1.25, "luce": 1.2}
 const STATS := {"estelle": {"hp": 70.0, "atk": 1.0, "as": 0.95}, "aida": {"hp": 50.0, "atk": 1.2, "as": 1.1}, "luce": {"hp": 40.0, "atk": 0.9, "as": 1.0}}

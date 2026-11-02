@@ -10,7 +10,7 @@ const CHEST := [preload("res://assets/loot/chest_0.png"), preload("res://assets/
 const CHK := 4.0
 const CGN := ["커먼", "레어", "에픽", "유니크", "레전더리"]
 const CGC := [Color("#d8d0bf"), Color("#5fa8ff"), Color("#b46cff"), Color("#ff8a3d"), Color("#ffe066")]
-const HP0 := 18
+const HP0 := 9
 
 var arena
 var runes
@@ -189,7 +189,7 @@ func hit_chest() -> void:
 	_vfx("hit", Vector2(C["x"] + (runes.rand() - 0.5) * 30.0, C["y"] - chest_dims(C["gi"]).y * 0.55), C["gi"], 7)
 	arena.shake(5, 1)
 	var left: int = C["goal"] - C["gi"]
-	if left > 0 and C["hits"] >= 3 and (runes.rand() < 0.45 or C["hp"] <= left * 3 + 1):
+	if left > 0 and C["hits"] >= 2 and (runes.rand() < 0.5 or C["hp"] <= left * 2 + 1):
 		C["gi"] += 1
 		C["hits"] = 0
 		C["kT"] = 260.0

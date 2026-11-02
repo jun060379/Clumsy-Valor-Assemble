@@ -4,7 +4,7 @@ extends RefCounted
 
 ## TXCOL: [theme colour, light partner] per member (the prototype calls Aida "shovel")
 const TXCOL := {"estelle": [Color("#ff3d7f"), Color("#ffe0ea")], "aida": [Color("#3ddc84"), Color("#e2ffe9")], "luce": [Color("#ffc21f"), Color("#fff3c8")]}
-const EN := {"estelle": "ESTELLE", "aida": "AIDA", "luce": "LUCE"}
+const EN := {"estelle": "ESTELLE", "aida": "AYDA", "luce": "LUCE"}
 
 const _BHS := preload("res://assets/fonts/BlackHanSans.woff")
 const _NOTO_K := preload("res://assets/fonts/NotoSansKR-Black.otf")

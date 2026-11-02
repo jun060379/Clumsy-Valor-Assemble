@@ -13,7 +13,7 @@ const CH := preload("res://scripts/chars.gd")
 const ULTMAX := {"estelle": 390.0, "aida": 300.0, "luce": 240.0}
 const INFO := {
 	"estelle": {"name": "수호의 맹세", "sub": "ESTELLE BELLACITA", "col": Color8(255, 110, 190), "col2": Color8(255, 220, 240)},
-	"aida": {"name": "땅 밑의 문", "sub": "SUNAGAWA AIDA", "col": Color8(120, 50, 220), "col2": Color8(210, 180, 255)},
+	"aida": {"name": "땅 밑의 문", "sub": "SUNAGAWA AYDA", "col": Color8(120, 50, 220), "col2": Color8(210, 180, 255)},
 	"luce": {"name": "루체 펀치", "sub": "LUCE LUMEN", "col": Color8(255, 200, 80), "col2": Color8(255, 248, 220)},
 }
 const PAL := {"estelle": ["#ffffff", "#ffd3ea", "#ff96d2", "#d650aa", "#7a2a66"], "aida": ["#ffffff", "#e9d2ff", "#b06cff", "#7a3ad0", "#3a1260"], "luce": ["#ffffff", "#ffe9a0", "#ffd34d", "#e8a33a", "#a8742a"]}
