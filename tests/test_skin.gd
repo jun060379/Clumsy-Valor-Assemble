@@ -98,7 +98,7 @@ func _initialize() -> void:
 	check(SK.steps("estelle") == [1, 5] and SK.steps("luce") == [1, 5], "footfalls")
 	var B0: Array = SK.bounds("estelle")
 	check(B0.size() >= 38 * 18 and B0[35 * 18] >= 0 and B0[25 * 18] == CB0[25 * 18], "bounds: 초심's rows merged over the original's")
-	check(SK.path("estelle", "st_base").begins_with("res://assets/skins/estelle_base/st_base.") and SK.path("estelle", "st_cl") == SK.path("estelle", "st_base"), "its standing picture; a blink it lacks shows the same picture, never the old costume")
+	check(SK.path("estelle", "st_base").begins_with("res://assets/skins/estelle_base/st_base.") and SK.path("estelle", "st_cl").begins_with("res://assets/skins/estelle_base/st_cl.") and SK.path("estelle", "st_smile") == SK.path("estelle", "st_base"), "its standing picture and its own blink; a face it lacks shows the same picture, never the old costume")
 	check(SK.path("estelle", "face") == SK.base_path("estelle", "face"), "face art still the original's")
 	for k in ["st_gear", "st_skill", "st_skill_sil", "st_full", "st_full_sil"]:
 		check(SK.path("estelle", k).begins_with("res://assets/skins/estelle_base/" + k + "."), "초심 has its own %s" % k)

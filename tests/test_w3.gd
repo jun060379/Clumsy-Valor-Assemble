@@ -339,7 +339,7 @@ func _initialize() -> void:
 	CH._tick(1800.0)
 	CH.blk_next = 1.0
 	CH._tick(2.0)
-	check(CH.blk <= 0.0 and CH.face_path() == CH.SK.path("estelle", "st_base"), "초심: no blink picture, no blink")
+	check(CH.blk > 0.0 and CH.face_path() == CH.SK.path("estelle", "st_cl") and CH.face_path().begins_with("res://assets/skins/estelle_base/st_cl."), "초심: blinks with its own closed-eyes picture")
 	CH.taps.clear()
 	CH.react_tap()
 	CH.react_tap()
