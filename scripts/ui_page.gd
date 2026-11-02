@@ -5,10 +5,6 @@ extends Control
 const UI := preload("res://scripts/ui_kit.gd")
 const RN := preload("res://scripts/runes.gd")
 const CH := preload("res://scripts/chars.gd")
-const SYM := preload("res://assets/fonts/NotoSansKR-sym.otf")      # − Ⅰ Ⅱ Ⅲ Ⅳ ★ … the UI fonts lack
-const SYM2 := preload("res://assets/fonts/DejaVuSans-env.ttf")     # ✉ (Eilin's "관리국 서신 받기 ✉")
-const SYM3 := preload("res://assets/fonts/NotoSansKR-kh.otf")      # Ⓧ (KH on a pad) and ≫ (건너뛰기 ≫), from Noto Sans CJK KR
-static var _sym_done := false
 
 var arena
 var menu
@@ -21,13 +17,6 @@ var tex := {}
 
 
 func _ready() -> void:
-	if not _sym_done:
-		_sym_done = true
-		for f in [UI.noto(), UI.noto_k()]:
-			var a: Array[Font] = f.fallbacks
-			for sf in [SYM, SYM2, SYM3]:
-				if not a.has(sf): a.append(sf)
-			f.fallbacks = a
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR

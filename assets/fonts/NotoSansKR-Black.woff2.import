@@ -2,13 +2,13 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://0elksk2un65k"
-path="res://.godot/imported/BlackHanSans.woff-b6b191d6a35d74dcd716f65d1c9956e1.fontdata"
+uid="uid://b08r7gxbm5guw"
+path="res://.godot/imported/NotoSansKR-Black.woff2-286c8b93c119a1661e4495d69bae7309.fontdata"
 
 [deps]
 
-source_file="res://assets/fonts/BlackHanSans.woff"
-dest_files=["res://.godot/imported/BlackHanSans.woff-b6b191d6a35d74dcd716f65d1c9956e1.fontdata"]
+source_file="res://assets/fonts/NotoSansKR-Black.woff2"
+dest_files=["res://.godot/imported/NotoSansKR-Black.woff2-286c8b93c119a1661e4495d69bae7309.fontdata"]
 
 [params]
 
@@ -19,7 +19,7 @@ disable_embedded_bitmaps=true
 multichannel_signed_distance_field=false
 msdf_pixel_range=8
 msdf_size=48
-allow_system_fallback=true
+allow_system_fallback=false
 force_autohinter=false
 hinting=1
 subpixel_positioning=4

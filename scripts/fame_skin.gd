@@ -1,55 +1,37 @@
 extends RefCounted
 ## Fonts and small drawing / sound helpers for the guild system's screens (fame_fx.gd, fame_book.gd).
-## Every font falls back on a tiny symbol subset (FameSymbols: ✓ › Ⅰ–Ⅳ █ ▓ ▒ ░ ╳ ⚠, from Noto Sans CJK KR) for the glyphs
-## Black Han Sans and the Noto Sans KR subset lack. Serif = Noto Serif CJK KR Black, Hangul KS X 1001 subset.
+## The fonts are ui_kit.gd's (one set of files, one fallback chain each: every Hangul syllable, jamo and the symbols).
+## Serif = Noto Serif KR Black.
 
-const _BHS := preload("res://assets/fonts/BlackHanSans.woff")
-const _NK := preload("res://assets/fonts/NotoSansKR-Black.otf")
-const _NB := preload("res://assets/fonts/NotoSansKR-Bold.otf")
-const _AN := preload("res://assets/fonts/Anton.woff2")
-const _SYM := preload("res://assets/fonts/FameSymbols.otf")
-const _SERIF := preload("res://assets/fonts/NotoSerifKR-Black-sub.otf")
+const UI := preload("res://scripts/ui_kit.gd")
 
 static var _c := {}
 
 
-static func _ff(key: String, base: FontFile, fb: Array) -> Font:
-	if not _c.has(key):
-		var f: FontFile = base.duplicate()
-		f.fallbacks = fb
-		_c[key] = f
-	return _c[key]
-
 static func bhs() -> Font:
-	return _ff("bhs", _BHS, [_NK, _SYM])
+	return UI.bhs()
 
 static func noto() -> Font:
-	return _ff("nb", _NB, [_SYM])
+	return UI.noto()
 
 static func noto_k() -> Font:
-	return _ff("nk", _NK, [_SYM])
+	return UI.noto_k()
 
 static func serif() -> Font:
-	return _ff("serif", _SERIF, [_NK, _SYM])
+	return UI.serif()
 
 static func anton(italic := false, spacing := 0) -> Font:
 	var key := "an%d_%d" % [int(italic), spacing]
 	if not _c.has(key):
 		var v := FontVariation.new()
-		v.base_font = _ff("an", _AN, [_NB, _SYM])
+		v.base_font = UI.anton_file()
 		if italic: v.variation_transform = Transform2D(Vector2(1, 0), Vector2(0.2, 1), Vector2.ZERO)
 		v.spacing_glyph = spacing
 		_c[key] = v
 	return _c[key]
 
 static func spaced(f: Font, sp: int) -> Font:
-	var key := "sp%d_%d" % [f.get_instance_id(), sp]
-	if not _c.has(key):
-		var v := FontVariation.new()
-		v.base_font = f
-		v.spacing_glyph = sp
-		_c[key] = v
-	return _c[key]
+	return UI.spaced(f, sp)
 
 static func tw(f: Font, s: String, fs: int) -> float:
 	return f.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x

@@ -10,7 +10,7 @@ from PIL import Image, ImageDraw, ImageFont
 ROOT = os.path.join(os.path.dirname(__file__), '..')
 OUT = os.path.join(ROOT, 'docs/skin_ref')
 os.makedirs(OUT, exist_ok=True)
-F = os.path.join(ROOT, 'assets/fonts/NotoSansKR-Bold.otf')
+F = os.path.join(ROOT, 'assets/fonts/NotoSansKR-Bold.woff2')
 font, small = ImageFont.truetype(F, 22), ImageFont.truetype(F, 17)
 SC = 0.4
 CW, CH = int(448 * SC), int(352 * SC)

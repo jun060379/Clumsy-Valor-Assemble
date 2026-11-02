@@ -9,7 +9,7 @@ const COVER := preload("res://assets/codex/cdx_cover.webp")
 const EMBLEM := preload("res://assets/codex/cdx_emblem.webp")
 const ENDPAPER := preload("res://assets/codex/cdx_endpaper.webp")
 const EDGE := preload("res://assets/codex/cdx_edge.webp")
-const SERIF := preload("res://assets/fonts/NotoSerifKR-cdx.otf")
+const SERIF := preload("res://assets/fonts/NotoSerifKR-Bold.woff2")     # Noto Serif KR Bold; its fallbacks are set in ui_kit.gd
 const DUMMY := preload("res://assets/props/dummy.png")
 const PAPER := Color("#efe3c6")
 const PAPER2 := Color("#e6d6b2")
@@ -62,8 +62,7 @@ var thud_done := false
 func _ready() -> void:
 	super()
 	keys = ["best", "codex_rune"]
-	var sf: FontFile = SERIF
-	if sf.fallbacks.is_empty(): sf.fallbacks = [UI.noto()]
+	UI.chains()
 	for n in ["pl", "pr", "fa", "fb", "cf", "cb"]:
 		var v := SubViewport.new()
 		v.transparent_bg = true

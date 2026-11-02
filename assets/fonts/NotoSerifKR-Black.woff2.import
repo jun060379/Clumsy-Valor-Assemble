@@ -2,13 +2,13 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://jcgye6485wyg"
-path="res://.godot/imported/NotoSansKR-sym.otf-c6f4e5c4c58133650399965e95225f42.fontdata"
+uid="uid://b3ida4s0b8f6f"
+path="res://.godot/imported/NotoSerifKR-Black.woff2-e495f388460c43cc8165bb0271ec9cf7.fontdata"
 
 [deps]
 
-source_file="res://assets/fonts/NotoSansKR-sym.otf"
-dest_files=["res://.godot/imported/NotoSansKR-sym.otf-c6f4e5c4c58133650399965e95225f42.fontdata"]
+source_file="res://assets/fonts/NotoSerifKR-Black.woff2"
+dest_files=["res://.godot/imported/NotoSerifKR-Black.woff2-e495f388460c43cc8165bb0271ec9cf7.fontdata"]
 
 [params]
 
@@ -19,7 +19,7 @@ disable_embedded_bitmaps=true
 multichannel_signed_distance_field=false
 msdf_pixel_range=8
 msdf_size=48
-allow_system_fallback=true
+allow_system_fallback=false
 force_autohinter=false
 hinting=1
 subpixel_positioning=4
