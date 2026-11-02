@@ -259,6 +259,20 @@ for nm, o in SPEC2.items():
         g = float(np.median([fr[i]['slot_bottom'] for i in gr])) if gr else max(f['slot_bottom'] for f in fr)
         lift = [0.0 if gr and i in gr else max(0.0, g - f['slot_bottom']) for i, f in enumerate(fr)]
     rendered = [render(f, k, ax[i], lift[i]) for i, f in enumerate(fr)]
+    if nm == 'run':
+        # the frame with both feet off the ground is drawn crouched with its low foot on the floor, so the whole body
+        # dropped there and the run limped: put every head at the same height instead (the airborne frame rises off
+        # the floor); the bounce on top comes from BOB_RUN in skin_data.gd
+        tops = [int(np.where(np.asarray(c)[:, :, 3].max(1) > 40)[0][0]) for c, _ in rendered]
+        t0 = int(np.median(tops))
+        sh = []
+        for i, (c, cl) in enumerate(rendered):
+            d = t0 - tops[i]
+            if d:
+                c2 = Image.new('RGBA', c.size, (0, 0, 0, 0)); c2.alpha_composite(c, (0, d) if d > 0 else (0, 0), (0, 0) if d > 0 else (0, -d))
+                rendered[i] = (c2, cl)
+            sh.append(d)
+        info['run_head_align_px'] = sh
     pick = o.get('pick', list(range(len(fr))))
     cells[nm] = [rendered[i][0] for i in pick]
     for j, c in enumerate(cells[nm]): put(o['row'] + j // 9, j % 9, c)

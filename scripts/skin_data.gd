@@ -32,7 +32,7 @@ const BASE := {"estelle": "estelle_base", "aida": "aida_base", "luce": "luce_bas
 ##   walk: 10 of walk_43f's frames, 1050 ms a cycle, about 1.9 steps a second; the soles slide (the art's steps are
 ##        short for townsfolk.gd WALKSP 0.2), as before
 const RUN8 := [80, 75, 80, 75, 80, 75, 80, 75]          # flight, contact, down, passing × 2
-const BOB_RUN := [0, 3, -4, -1, 0, 3, -4, -1]            # world px, + = down; the dip on the contacts (1, 5)
+const BOB_RUN := [-5, 3, -1, 0, 5, 3, -1, 0]           # world px, + = down: dip on the contacts (1, 5); frame 4 is drawn airborne (feet ~14 px up after the head alignment), so it gives a little back and frame 0 rises to match, an even hop on both strides
 ## parry / air_parry have no art: attack2's rising cut and air_combo's (make_skin_chosim.py COMPOSE). Frames 0-1 keep the
 ## parry window (180 + 35 ms; drawn as guard frame 1 until a parry lands, player.gd _draw); after a parry lands the cut
 ## shows 110 ms and the raised blade 240 ms (기본's 200 + 150: the same 350 ms, a smear frame shouldn't hang)
