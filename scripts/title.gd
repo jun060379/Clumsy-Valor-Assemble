@@ -1,11 +1,11 @@
 extends Control
-## Title and hero select (prototype #title / #select) in the persona skin. docs/title_storyboard.md has the beats:
+## Title (prototype #title) in the persona skin; the hero select is gone (a fresh game is 에스텔 alone, the seniors join in play). docs/title_storyboard.md has the beats:
 ## a pink band wipes in, Estelle's gear picture springs in with a white cut-out trailing it, the logo slabs slam and the
 ## letters of 어설픈 용맹 drop one by one, then nothing ever holds still (drifting halftone, travelling guide lines, a sheen
-## over the letters, the picture's parallax); a tap grows the pink field into the select screen's diagonal and the cards
-## slide in. 출격 drops the chosen leader into the guild town.
+## over the letters, the picture's parallax); a tap grows the pink field over the screen and the menu sweep carries it
+## on into the guild town.
 ##
-## Layers: this Control draws the ground (and the select screen); `sil` (UI.solid_mat) draws the picture's silhouettes;
+## Layers: this Control draws the ground; `sil` (UI.solid_mat) draws the picture's silhouettes;
 ## `fg` draws the picture, the logo and the prompt with linear filtering.
 
 const UI := preload("res://scripts/ui_kit.gd")
@@ -18,24 +18,14 @@ const INK := Color("#0d0b10")
 const INTRO_END := 1500.0
 ## guide lines: [y, length] in fractions of the viewport, period (ms), phase (ms), where the right end stops (fraction of W)
 const LINES := [[0.15, 0.23, 5200.0, 0.0, 0.40], [0.47, 0.10, 6800.0, 1700.0, 0.44], [0.06, 0.17, 4400.0, 900.0, 0.30]]
-## select cards (prototype #cards)
-const CARDS := [
-	{"c": "estelle", "col": Color("#ff6fb0"), "nm": "에스텔 벨라시타", "rl": "자칭 성기사", "kit": ["· 3단 베기 / 상단·하단", "· 패링(무효) · 가드(반감)", "· 차징 찌르기"]},
-	{"c": "aida", "col": Color("#c9a6ff"), "nm": "스나가와 아이다", "rl": "삽 든 암살자", "kit": ["· 등 뒤 순간이동 · 뒷치기", "· 균열: 문양 조준 텔포", "· 어두운 참격 (차징)"]},
-	{"c": "luce", "col": Color("#ffd36b"), "nm": "루체 루멘", "rl": "성녀 후보", "kit": ["· 대상 지정 유도 빛탄", "· 빛기둥 · 벼락 (차징)", "· 힐"]},
-]
 
 var arena
 var ui_root
 var active := true
-var mode := "title"              # title / select
 var t := 0.0                     # intro clock (ms)
 var intro_done := false
 var outro := -1.0                # outro clock, -1 = not running
-var sel := 0
-var sel_t := 0.0                 # ms since the select screen began (its entrance)
-var card_rects: Array = []
-var go_rect := Rect2()
+var handed := false              # the sweep into the game has been started
 var clock := 0.0
 var trn := UIA.Tr.new()          # .card transition: transform .3s --bk, background .15s
 var sil_layer: Control
@@ -92,11 +82,11 @@ func _process(delta: float) -> void:
 		if outro >= 80.0 and not sil_out:
 			sil_out = true
 			sp_sil.to(1.5, 2.0)
-		if outro > 1350.0:
-			outro = -1.0
-			mode = "select"
-	if outro >= 1050.0: sel_t = outro - 1050.0
-	elif mode == "select": sel_t += dt
+		# the field has swallowed the screen: the menu sweep carries the pink on into the town (no hero select —
+		# a fresh game is 에스텔 alone, a saved one keeps its leader)
+		if outro >= 650.0 and not handed:
+			handed = true
+			ui_root.sweep.run(func(): _go(), PINK)
 	sp_art.step(dt)
 	sp_sil.step(dt)
 	# parallax: the pointer (the last touch on a phone) as -1..1
@@ -127,37 +117,19 @@ func _input(ev: InputEvent) -> void:
 	if tap == Vector2.INF and key < 0 and padb < 0:
 		return
 	get_viewport().set_input_as_handled()
-	if mode == "title":
-		if outro >= 0.0:
-			return
-		# Enter / Space (the pad's A sends Enter; Start is the in-game menu button and does nothing here)
-		var kb_ok := key in [KEY_ENTER, KEY_SPACE] or padb == JOY_BUTTON_A
-		if tap == Vector2.INF and not kb_ok:
-			return
-		if not intro_done:
-			_finish_intro()
-			if tap != Vector2.INF:
-				return         # a click only finishes the logo; a key finishes it and starts at once (two keydown listeners)
-		outro = 0.0
-		sp_art.to(1.5, 1.5)
-		arena.sfx("parry", 1.0)
+	if outro >= 0.0:
 		return
-	# select
-	if key in [KEY_LEFT, KEY_A] or padb == JOY_BUTTON_DPAD_LEFT:
-		_set_sel(sel - 1)
-	elif key in [KEY_RIGHT, KEY_D] or padb == JOY_BUTTON_DPAD_RIGHT:
-		_set_sel(sel + 1)
-	elif key in [KEY_ENTER, KEY_SPACE] or padb == JOY_BUTTON_A:
-		_go()
-	elif tap != Vector2.INF:
-		if go_rect.has_point(tap):
-			_go()
-			return
-		for i in card_rects.size():
-			if card_rects[i].has_point(tap):
-				if i == sel: _go()
-				else: _set_sel(i)
-				return
+	# Enter / Space (the pad's A sends Enter; Start is the in-game menu button and does nothing here)
+	var kb_ok := key in [KEY_ENTER, KEY_SPACE] or padb == JOY_BUTTON_A
+	if tap == Vector2.INF and not kb_ok:
+		return
+	if not intro_done:
+		_finish_intro()
+		if tap != Vector2.INF:
+			return         # a click only finishes the logo; a key finishes it and starts at once (two keydown listeners)
+	outro = 0.0
+	sp_art.to(1.5, 1.5)
+	arena.sfx("parry", 1.0)
 
 ## the logo settles at once (a tap during the intro)
 func _finish_intro() -> void:
@@ -167,14 +139,11 @@ func _finish_intro() -> void:
 	sp_art.snap(0.0)
 	sp_sil.snap(0.0)
 
-func _set_sel(i: int) -> void:
-	sel = posmod(i, CARDS.size())
-	arena.sfx("step", 0.4)
-
 func _go() -> void:
 	active = false
 	visible = false
-	ui_root.start_game(CARDS[sel]["c"])
+	var c: String = arena.player.who if arena.save != null and arena.save.loaded else "estelle"
+	ui_root.start_game(c)
 
 
 # ---------- layout ----------
@@ -221,9 +190,6 @@ func _out(i: int) -> float:
 # ---------- draw: ground ----------
 func _draw() -> void:
 	var vs := get_viewport_rect().size
-	if mode == "select" or outro > 1050.0:
-		_draw_select(vs)
-		return
 	draw_rect(Rect2(Vector2.ZERO, vs), INK)
 	# faint white halftone over the black, drifting
 	var scr := Vector2(clock / 90.0, clock / 140.0)
@@ -253,13 +219,6 @@ func _draw() -> void:
 		elif ph < 0.62: x = stop
 		else: x = lerpf(stop, vs.x + 20.0, UIA.ez("in", (ph - 0.62) / 0.38))
 		draw_rect(Rect2(x + ox, L[0] * vs.y, ln, 2.0), Color(1, 1, 1, 0.6))
-	# the select screen's black shard arrives under the grown field
-	if outro >= 650.0:
-		var u := UIA.p(outro, 650.0, 400.0, "out")
-		var sr := Rect2(-0.1 * vs.x, -0.2 * vs.y, 0.58 * vs.x, 1.5 * vs.y)
-		var sp := UI.rot(UI.clip(sr, [[0, 0], [100, 0], [100, 100], [0, 100]]), sr.get_center(), deg_to_rad(-10.0))
-		draw_colored_polygon(Transform2D(0.0, Vector2(-0.9 * vs.x * (1.0 - u), 0)) * sp, Color.BLACK)
-
 ## a polygon filled with a repeating 11 px tile (uv = position / 11, scrolled)
 func _tiled(pts: PackedVector2Array, tex: Texture2D, scroll: Vector2) -> void:
 	var uvs := PackedVector2Array()
@@ -269,7 +228,7 @@ func _tiled(pts: PackedVector2Array, tex: Texture2D, scroll: Vector2) -> void:
 
 # ---------- draw: silhouettes ----------
 func _draw_sil() -> void:
-	if not active or mode != "title" or outro > 1050.0: return
+	if not active or outro > 1050.0: return
 	var ci := sil_layer
 	var vs := get_viewport_rect().size
 	var tex := SK.tex("estelle", "st_gear")
@@ -291,7 +250,7 @@ func _draw_sil() -> void:
 
 # ---------- draw: picture, logo, prompt ----------
 func _draw_fg() -> void:
-	if not active or mode != "title" or outro > 1050.0: return
+	if not active or outro > 1050.0: return
 	var ci := fg_layer
 	var vs := get_viewport_rect().size
 	_logo(ci, vs)          # under the picture: the bars sweep in from behind her
@@ -437,88 +396,3 @@ func _prompt(ci: CanvasItem, vs: Vector2) -> void:
 
 
 # ---------- hero select ----------
-func _draw_select(vs: Vector2) -> void:
-	var tc := UI.col("estelle")
-	draw_rect(Rect2(Vector2.ZERO, vs), tc)
-	UI.dots(self, Rect2(Vector2.ZERO, vs), 0.24)
-	var sr := Rect2(-0.1 * vs.x, -0.2 * vs.y, 0.58 * vs.x, 1.5 * vs.y)
-	draw_colored_polygon(UI.rot(UI.clip(sr, [[0, 0], [100, 0], [100, 100], [0, 100]]), sr.get_center(), deg_to_rad(-10.0)), Color.BLACK)
-	var cw := 150.0
-	var ch := 236.0
-	var gap := 14.0
-	var top := (vs.y - (44.0 + 12.0 + ch + 16.0 + 44.0 + 12.0 + 18.0)) / 2.0
-	var cx := vs.x / 2.0
-	# CHOOSE YOUR HERO (drops in from above as the screen arrives)
-	var hf := UI.anton(true, 2)
-	var hs := "CHOOSE YOUR HERO"
-	var hw := UI.text_w(hf, hs, 26) + 36.0
-	var eh := UIA.p(sel_t, 0.0, 450.0, "bk")
-	draw_set_transform(Vector2(cx, top + 18.0 - 0.15 * vs.y * (1.0 - eh)), deg_to_rad(-3.0))
-	UI.para(self, -hw / 2.0 + 5.0, -18.0 + 5.0, hw, 38, -6.7, Color.WHITE)
-	UI.para(self, -hw / 2.0, -18.0, hw, 38, -6.7, Color.BLACK)
-	draw_string(hf, Vector2(-hw / 2.0 + 16.0, 11.0), hs, HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color.WHITE)
-	draw_set_transform(Vector2.ZERO)
-	# cards (each slides up into place, 70 ms apart)
-	card_rects.clear()
-	var cy := top + 56.0
-	var x0 := cx - (cw * 3.0 + gap * 2.0) / 2.0
-	var fb := UI.bhs()
-	var fn := UI.noto()
-	for i in CARDS.size():
-		var C: Dictionary = CARDS[i]
-		var on := i == sel
-		var r := Rect2(x0 + i * (cw + gap), cy, cw, ch)
-		card_rects.append(r)
-		var sc: float = trn.get_v("s%d" % i, 1.06 if on else 1.0, 300.0, "bk")
-		var lift: float = trn.get_v("y%d" % i, -8.0 if on else 0.0, 300.0, "bk")
-		var wk: float = trn.get_v("w%d" % i, 1.0 if on else 0.0, 150.0, "ease")
-		var ec := UIA.p(sel_t, 80.0 + i * 70.0, 450.0, "bk")
-		if ec <= 0.0: continue
-		var c0 := r.get_center() + Vector2(0, lift + 60.0 * (1.0 - ec))
-		draw_set_transform(c0, 0.0, Vector2(sc, sc))
-		var lr := Rect2(-cw / 2.0, -ch / 2.0, cw, ch)
-		draw_colored_polygon(UI.clip(lr, [[7, 0], [100, 0], [93, 100], [0, 100]]), Color.BLACK.lerp(Color.WHITE, wk))
-		var tcol := Color.WHITE.lerp(Color.BLACK, wk)
-		var pr := Rect2(-60, lr.position.y + 8.0, 120, 120)
-		draw_rect(pr, Color(0, 0, 0, 0.25))
-		_preview(C["c"], pr)
-		var nw := UI.text_w(fb, C["nm"], 17)
-		draw_string(fb, Vector2(-nw / 2.0, pr.end.y + 22.0), C["nm"], HORIZONTAL_ALIGNMENT_LEFT, -1, 17, tcol)
-		var rw := UI.text_w(UI.noto_k(), C["rl"], 13)
-		draw_string(UI.noto_k(), Vector2(-rw / 2.0, pr.end.y + 41.0), C["rl"], HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color.BLACK if on else C["col"])
-		var ky := pr.end.y + 62.0
-		for line in C["kit"]:
-			draw_string(fn, Vector2(lr.position.x + 16.0, ky), line, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(tcol, 0.85))
-			ky += 16.0
-		draw_set_transform(Vector2.ZERO)
-	# 출격
-	var gy := cy + ch + 16.0
-	var gs := "출격"
-	var gw := UI.text_w(fb, gs, 22) + 80.0
-	go_rect = Rect2(cx - gw / 2.0, gy, gw, 42)
-	var eg := UIA.p(sel_t, 320.0, 450.0, "bk")
-	if eg > 0.0:
-		draw_set_transform(Vector2(cx, gy + 21.0 + 50.0 * (1.0 - eg)), deg_to_rad(-2.0))
-		UI.para(self, -gw / 2.0 + 6.0, -21.0 + 6.0, gw, 42, 9.0, Color.BLACK)
-		UI.para(self, -gw / 2.0, -21.0, gw, 42, 9.0, Color.WHITE)
-		draw_string(fb, Vector2(-UI.text_w(fb, gs, 22) / 2.0 + 4.0, 8.0), gs, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color.BLACK)
-		draw_set_transform(Vector2.ZERO)
-	var hint := "← → 선택 · Enter/탭 출격 · 게임 중 Tab으로 교체"
-	var ea := UIA.p(sel_t, 500.0, 300.0, "ease")
-	if ea > 0.0:
-		UI.shadow_text(self, fn, Vector2(cx - UI.text_w(fn, hint, 13) / 2.0, gy + 70.0), hint, 13, Color(1, 1, 1, 0.8 * ea))
-
-## idle loop of the member's sheet (row 0), cropped like the prototype's card canvas
-func _preview(c: String, r: Rect2) -> void:
-	var P = arena.player
-	if P == null or not CH.NAME.has(c): return
-	var tim: Array = CH.TABLE[c]["idle"][1]
-	var tot := 0.0
-	for v in tim: tot += v
-	var tm := fmod(clock, tot)
-	var f := 0
-	while tm > tim[f]:
-		tm -= tim[f]
-		f += 1
-	var sheet: Texture2D = P.SK.sheet_row(c, 0)
-	draw_texture_rect_region(sheet, Rect2(r.position, Vector2(120, 131)).intersection(r), Rect2(f * CH.CELL_W + 114, 105, 220, 240 * 120.0 / 131.0), Color.WHITE)
