@@ -61,10 +61,10 @@ const SKINS := [
 	{"id": "estelle_misuk", "c": "estelle", "n": "미숙한 결의", "d": "망토와 방패를 두르고 길드 문을 처음 두드리던 날의 차림.", "unlock": {"kind": "story", "value": "estelle_misuk"}, "dir": "", "placeholder": true},
 	{"id": "estelle_s1", "c": "estelle", "n": "순례자의 여행복", "d": "먼 길을 걷는 순례자의 차림. 방패는 등에 메고, 망토 자락엔 길 먼지가 앉았다.", "unlock": {"kind": "fame", "value": 2}, "dir": ROOT + "estelle_s1/", "placeholder": true},
 	{"id": "estelle_s2", "c": "estelle", "n": "축제의 밤 드레스", "d": "마을 축제 날 빌려 입은 드레스. 방패를 들어도 춤출 수 있게 치맛단을 줄였다.", "unlock": {"kind": "shop", "value": 300}, "dir": ROOT + "estelle_s2/", "placeholder": true},
-	{"id": "aida_base", "c": "aida", "n": "기본", "d": "묘지기 앞치마 원피스와 흙 묻은 장화.", "unlock": {"kind": "default", "value": 0}, "dir": "", "placeholder": true},
+	{"id": "aida_base", "c": "aida", "n": "기본", "d": "묘지기 앞치마 원피스와 흙 묻은 장화.", "unlock": {"kind": "default", "value": 0}, "dir": ROOT + "aida_base/", "placeholder": true, "partial": true, "rows": []},   # own standing art (st_base, st_cl); sprites are the original's
 	{"id": "aida_s1", "c": "aida", "n": "묘지기의 상복", "d": "검은 베일과 긴 상복. 동굴 깊은 곳 상자에서 나온, 누군가의 장례 차림.", "unlock": {"kind": "drop", "value": 2}, "dir": ROOT + "aida_s1/", "placeholder": true},
 	{"id": "aida_s2", "c": "aida", "n": "균열 너머의 옷", "d": "기억을 끝까지 따라간 끝에서 꺼내 온 옷.", "unlock": {"kind": "level", "value": 12}, "dir": ROOT + "aida_s2/", "placeholder": true},
-	{"id": "luce_base", "c": "luce", "n": "기본", "d": "수습 사제 로브와 헝겊 신.", "unlock": {"kind": "default", "value": 0}, "dir": "", "placeholder": true},
+	{"id": "luce_base", "c": "luce", "n": "기본", "d": "수습 사제 로브와 헝겊 신.", "unlock": {"kind": "default", "value": 0}, "dir": ROOT + "luce_base/", "placeholder": true, "partial": true, "rows": []},   # own standing art (st_base, st_cl); sprites are the original's
 	{"id": "luce_s1", "c": "luce", "n": "성가대 수습복", "d": "성가대 수습 시절의 흰 옷. 이야기가 이어지면 받을 수 있다.", "unlock": {"kind": "story", "value": "luce_choir"}, "dir": ROOT + "luce_s1/", "placeholder": true},
 	{"id": "luce_s2", "c": "luce", "n": "여름 휴가 차림", "d": "밀짚모자와 가벼운 원피스. 길드가 마을의 자랑이 된 기념.", "unlock": {"kind": "fame", "value": 3}, "dir": ROOT + "luce_s2/", "placeholder": true},
 ]

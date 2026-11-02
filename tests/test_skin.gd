@@ -52,7 +52,7 @@ func _initialize() -> void:
 			check(s.get("placeholder", false) == true, "invented names are flagged placeholder: " + s["id"])
 	for c in ["aida", "luce"]:
 		var L: Array = SD.of(c)
-		check(L.size() == 3 and L[0]["id"] == SD.BASE[c] and L[0]["n"] == "기본" and L[0]["dir"] == "", "%s: 기본 + two slots" % c)
+		check(L.size() == 3 and L[0]["id"] == SD.BASE[c] and L[0]["n"] == "기본" and L[0]["dir"] == "res://assets/skins/%s_base/" % c and SK.path(c, "st_base").begins_with("res://assets/skins/%s_base/st_base." % c) and SK.path(c, "st_cl").begins_with("res://assets/skins/%s_base/st_cl." % c) and SK.path(c, "st_smile") == SK.path(c, "st_base") and SK.sheet(c, 0) == SK.load_tex(SK.base_path(c, "sheet", 0)), "%s: 기본 (own standing art + blink, original sprites) + two slots" % c)
 	var LE: Array = SD.of("estelle")
 	check(LE.size() == 4 and LE[0]["id"] == "estelle_base" and LE[0]["n"] == "초심" and LE[0]["dir"] == "res://assets/skins/estelle_base/" and LE[0].get("partial", false), "Estelle: 초심 (default, partial) first")
 	check(LE[1]["id"] == "estelle_misuk" and LE[1]["n"] == "미숙한 결의" and LE[1]["dir"] == "" and LE[1]["unlock"]["kind"] == "story", "미숙한 결의: the original art, a story reward")
