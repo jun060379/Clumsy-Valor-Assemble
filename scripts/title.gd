@@ -1,12 +1,17 @@
 extends Control
 ## Title (prototype #title) in the persona skin; the hero select is gone (a fresh game is 에스텔 alone, the seniors join in play). docs/title_storyboard.md has the beats:
-## a pink band wipes in, Estelle's gear picture springs in with a white cut-out trailing it, the logo slabs slam and the
-## letters of 어설픈 용맹 drop one by one, then nothing ever holds still (drifting halftone, travelling guide lines, a sheen
-## over the letters, the picture's parallax); a tap grows the pink field over the screen and the menu sweep carries it
-## on into the guild town.
+## a pink band wipes in, the guild hall's front springs in and the members drop onto its steps with white cut-outs
+## trailing them, the logo slabs slam and the letters of 어설픈 용맹 drop one by one, then nothing ever holds still
+## (drifting halftone, travelling guide lines, a sheen over the letters, breathing people, candle windows, fog, the sign
+## swinging, pointer parallax); a tap grows the pink field over the screen and the menu sweep carries it on into the town.
 ##
-## Layers: this Control draws the ground; `sil` (UI.solid_mat) draws the picture's silhouettes;
-## `fg` draws the picture, the logo and the prompt with linear filtering.
+## The title grows with the save ("자라는 타이틀"): the hall is a dark cut-out over the pink sky (tinted by the world's
+## clock, arena.tod_h), one window is lit per restored facility (+ Eilin's), every member in fame.rec stands on the steps
+## and the guild's rank fills the steps behind them with a crowd of nameless paper silhouettes, each rimmed in its own hue.
+##
+## Layers: this Control (nearest filtering) draws the ground: the fields, the hall plate, its windows and sign, the crowd
+## and the back fog; `sil` (UI.solid_mat) draws the people's white / ink cut-outs; `fg` draws the logo, the people,
+## the front fog and the prompt with linear filtering.
 
 const UI := preload("res://scripts/ui_kit.gd")
 const DEV := preload("res://scripts/dev.gd")
@@ -15,7 +20,26 @@ const CH := preload("res://scripts/chars.gd")
 const SK := preload("res://scripts/skins.gd")
 const PINK := Color("#ff3d7f")
 const INK := Color("#0d0b10")
+const LIT := preload("res://scripts/lit.gd")
 const INTRO_END := 1500.0
+const HALL := preload("res://assets/town/g_hall.png")
+const HALL_WIN := preload("res://assets/town/g_hall_win.png")
+const GROUND := 0.86                 # the ground line (fraction of H): the hall's foot, the people's feet
+const PERSON_H := 0.46               # one common height for every standing picture, framed knee-up (fraction of H)
+const FULL_CROP := 0.72              # a full-body st_full is cut to its knees (this much of its height) to match the st_base framing
+const KNEE_SINK := 0.1               # the knee line sits this far below the ground line (the fog and the screen's edge hide the cut)
+const HALL_TINT := Color(0.35, 0.3, 0.4)        # the hall sits behind the pink's mood: an ink cut-out with faint detail
+const HALL_TINT_NIGHT := Color(0.2, 0.17, 0.27)
+## the sky (the pink field) by the hour: never grey — day pink, dusk magenta, night plum
+const SKY_K := [[0.0, Color("#4a1740")], [4.5, Color("#4a1740")], [6.3, Color("#c8246c")], [8.0, Color("#ff3d7f")], [16.5, Color("#ff3d7f")], [18.5, Color("#c8246c")], [20.5, Color("#4a1740")], [24.0, Color("#4a1740")]]
+## the facade's windows (g_hall_win px rects) in lighting order: Eilin's first (the right wing's upper window), then one
+## per restored facility
+const WINS := [[548, 274, 22, 24], [474, 274, 22, 24], [152, 274, 22, 24], [78, 274, 22, 24], [386, 228, 22, 24], [238, 228, 22, 24], [314, 230, 22, 24],
+	[314, 126, 22, 24], [548, 342, 22, 24], [78, 342, 22, 24], [474, 342, 22, 24], [152, 342, 22, 24], [386, 342, 22, 24], [238, 342, 22, 24]]
+const SIGN := Rect2(253, 275, 142, 30)          # the CLUMSY VALOR board on the facade (g_hall px), hung from its top centre
+const DOOR_X := 322.0                            # the door's centre (g_hall px)
+## where the members stand: [x offset from the door in W, feet above the ground in H, parallax weight], by their place in the row
+const SPOTS := [[0.015, -0.01, 1.0], [-0.105, 0.03, 0.7], [0.135, 0.03, 0.7], [-0.23, 0.05, 0.55], [0.23, 0.05, 0.55], [-0.32, 0.06, 0.45], [0.32, 0.06, 0.45]]
 ## guide lines: [y, length] in fractions of the viewport, period (ms), phase (ms), where the right end stops (fraction of W)
 const LINES := [[0.15, 0.23, 5200.0, 0.0, 0.40], [0.47, 0.10, 6800.0, 1700.0, 0.44], [0.06, 0.17, 4400.0, 900.0, 0.30]]
 
@@ -38,6 +62,8 @@ var sp_py := UIA.Spring.new(0.0, 0.9, 0.9)
 var sil_out := false
 var slammed := false
 var specks: Array = []
+var drops: Array = []            # per person: [Spring drop (1 = above, 0 = home), Spring cut-out lag]
+var crowd_seed: Array = []       # per crowd figure: [u (0..1 along the steps), row 0..2, kind, hue, phase]
 ## the menu: 시작 · 불러오기 · 설정 · 끝내기 (no 끝내기 on the web, where a tab cannot close itself)
 var items: Array = []            # [key, label]
 var sel := 0
@@ -104,9 +130,15 @@ func _process(delta: float) -> void:
 	if outro < 0.0:
 		if t >= 120.0: sp_art.to(0.0)
 		if t >= 220.0: sp_sil.to(0.0)
+	_sync_drops()
+	for i in drops.size():
+		if outro < 0.0 and t >= 900.0 + i * 120.0: drops[i][0].to(0.0)
+		if outro < 0.0 and t >= 980.0 + i * 120.0: drops[i][1].to(0.0)
+		drops[i][0].step(dt)
+		drops[i][1].step(dt)
 	if not slammed and t >= 1050.0 and t < 90000.0:
 		slammed = true
-		arena.sfx("slam", 0.5)
+		if arena != null: arena.sfx("slam", 0.5)
 	if outro >= 0.0:
 		outro += dt
 		if outro >= 80.0 and not sil_out:
@@ -212,6 +244,7 @@ func _confirm_pick(k: int) -> void:
 func _begin() -> void:
 	outro = 0.0
 	sp_art.to(1.5, 1.5)
+	for d in drops: d[0].to(0.0, 0.6)           # the people hop as they leave right
 	arena.sfx("parry", 1.0)
 
 ## the logo settles at once (a tap during the intro)
@@ -221,6 +254,10 @@ func _finish_intro() -> void:
 	slammed = true
 	sp_art.snap(0.0)
 	sp_sil.snap(0.0)
+	_sync_drops()
+	for d in drops:
+		d[0].snap(0.0)
+		d[1].snap(0.0)
 
 func _go() -> void:
 	active = false
@@ -249,18 +286,102 @@ func _field(vs: Vector2) -> Array:
 	sh += sin(clock / 7000.0 * TAU) * 6.0 + sp_px.x * 4.0
 	return [0.44 * vs.x + sh, 0.64 * vs.x + sh]
 
-## the picture's home rect: 1.12 H tall, cut by the right and bottom edges
-func _art_rect(vs: Vector2, tex: Texture2D) -> Rect2:
-	var h := 1.12 * vs.y
-	var w := h * tex.get_width() / tex.get_height()
-	return Rect2(vs.x - 0.78 * w, vs.y - 0.98 * h, w, h)
+# ---------- what the save shows ----------
+func _fame():
+	return arena.fame if arena != null and "fame" in arena else null
 
-## the picture's motion: [translation, rotation (rad), scale] for a spring value (1 = off right) and a parallax weight
+## the members on the steps: everyone in fame.rec, 에스텔 first (a fresh game: her alone)
+func people() -> Array:
+	var F = _fame()
+	var out: Array = ["estelle"]
+	if F != null and "rec" in F:
+		for c in F.rec:
+			if not out.has(c): out.append(c)
+	return out
+
+## windows lit on the facade: Eilin's and one per restored facility
+func lit_windows() -> int:
+	var F = _fame()
+	var n := 1
+	if F != null and "fac" in F: n += F.fac.size()
+	return mini(n, WINS.size())
+
+## the nameless crowd behind them: three per rank above the first, at most 18
+func crowd_n() -> int:
+	var F = _fame()
+	var r: int = F.rank() if F != null and F.has_method("rank") else 1
+	return mini(18, maxi(0, r - 1) * 3)
+
+## the hour the sky is painted for
+func hour() -> float:
+	return fposmod(arena.tod_h, 24.0) if arena != null and "tod_h" in arena else 12.0
+
+## the sky colour by the hour (SKY_K, piecewise)
+func sky(h: float) -> Color:
+	for i in SKY_K.size() - 1:
+		if h <= SKY_K[i + 1][0]:
+			var u: float = (h - SKY_K[i][0]) / (SKY_K[i + 1][0] - SKY_K[i][0])
+			return (SKY_K[i][1] as Color).lerp(SKY_K[i + 1][1], UIA.ez("ease-in-out", clampf(u, 0.0, 1.0)))
+	return PINK
+
+## how deep the night is (0 day .. 1 night): the hall darker, the windows brighter
+func night() -> float:
+	var h := hour()
+	return clampf((h - 17.0) / 3.5, 0.0, 1.0) if h >= 12.0 else clampf(1.0 - (h - 4.5) / 3.0, 0.0, 1.0)
+
+func _sync_drops() -> void:
+	var n := people().size()
+	while drops.size() < n: drops.append([UIA.Spring.new(1.0, 0.5, 0.7), UIA.Spring.new(1.0, 0.7, 0.55)])
+	while drops.size() > n: drops.pop_back()
+	var m := crowd_n()
+	while crowd_seed.size() < m:
+		var i := crowd_seed.size()
+		var rs := RandomNumberGenerator.new()
+		rs.seed = 7919 * (i + 1)
+		crowd_seed.append([rs.randf(), i % 3, rs.randi_range(0, 3), fposmod(i * 47.0 + 20.0, 360.0), rs.randf() * TAU])
+	while crowd_seed.size() > m: crowd_seed.pop_back()
+
+## the hall plate's home rect: right-aligned, its foot on the ground line, ~0.78 H tall (narrower screens: ~0.6 W wide)
+func _hall_rect(vs: Vector2) -> Rect2:
+	var sc := minf(0.78 * vs.y / HALL.get_height(), 0.6 * vs.x / HALL.get_width())
+	var w := HALL.get_width() * sc
+	var h := HALL.get_height() * sc
+	return Rect2(vs.x - 0.015 * vs.x - w, GROUND * vs.y - h, w, h)
+
+## member i's standing picture, its rect and the source region: one common knee-up height, the knee line just under the ground line
+func _person(vs: Vector2, i: int, c: String) -> Array:
+	var tex := SK.tex(c, "st_full")
+	var src := Rect2()
+	if tex != null: src = Rect2(0, 0, tex.get_width(), tex.get_height() * FULL_CROP)
+	else:
+		tex = SK.tex(c, "st_base")
+		if tex == null: return [null, Rect2(), Rect2()]
+		src = Rect2(0, 0, tex.get_width(), tex.get_height())
+	var sp: Array = SPOTS[mini(i, SPOTS.size() - 1)]
+	var hr := _hall_rect(vs)
+	var h := PERSON_H * vs.y
+	var w := h * src.size.x / src.size.y
+	var cx: float = hr.position.x + DOOR_X * (hr.size.x / HALL.get_width()) + sp[0] * vs.x
+	var fy: float = (GROUND - sp[1] + KNEE_SINK) * vs.y
+	return [tex, Rect2(cx - w / 2.0, fy - h, w, h), src]
+
+## member i's motion: [translation, rotation, scale] from its drop spring value (1 = above), the breathing, the parallax
+## and the outro exit; `par` scales the parallax, `lag` is the cut-out's extra share of the drop
+func _person_motion(vs: Vector2, i: int, s: float, par: float) -> Array:
+	var sp: Array = SPOTS[mini(i, SPOTS.size() - 1)]
+	var ph := i * 1.7
+	var br := 0.5 - 0.5 * cos(clock / (3400.0 + i * 310.0) * TAU + ph)
+	var tr: Vector2 = Vector2(0, -0.3 * vs.y * s) + Vector2(sp_px.x, sp_py.x) * Vector2(11.0, 5.0) * float(sp[2]) * par
+	tr.y -= 2.5 * br
+	if outro >= 0.0: tr.x += 0.7 * vs.x * UIA.p(outro, 40.0 + i * 40.0, 480.0, "in")
+	return [tr, deg_to_rad(-2.0 * s), Vector2(1.0 - 0.004 * br, 1.0 + 0.007 * br)]
+
+## the hall's motion: [translation, rotation (rad), scale] for a spring value (1 = off right) and a parallax weight;
+## at home it breathes a hair (1.0 ↔ 1.004) and follows the pointer less than the people
 func _art_motion(vs: Vector2, s: float, par: float) -> Array:
-	var sway := Vector2(sin(clock / 5200.0 * TAU) * 0.25, cos(clock / 6100.0 * TAU) * 0.2)
-	var tr := Vector2(0.5 * vs.x * s, 0) + (Vector2(sp_px.x, sp_py.x) + sway) * Vector2(8.0, 5.0) * par
-	tr.y -= 4.0 * (0.5 - 0.5 * cos(clock / 4200.0 * TAU))
-	return [tr, deg_to_rad(-8.0 * s), 1.0 + 0.12 * s]
+	var tr := Vector2(0.5 * vs.x * s, 0) + Vector2(sp_px.x, sp_py.x) * Vector2(4.0, 2.0) * par
+	var br := 0.004 * (0.5 - 0.5 * cos(clock / 5200.0 * TAU))
+	return [tr, deg_to_rad(-3.0 * s), 1.0 + 0.06 * s + br]
 
 ## the logo block's breathing and the slam jolt
 func _logo_xf(vs: Vector2) -> Transform2D:
@@ -287,10 +408,17 @@ func _draw() -> void:
 	_tiled(PackedVector2Array([Vector2.ZERO, Vector2(vs.x, 0), vs, Vector2(0, vs.y)]), UI.dot_tile(0.07, Color.WHITE), scr)
 	# the pink field with its dark halftone (the drift eases out in the outro so the select screen's fixed dots take over)
 	var f := _field(vs)
-	var pts := PackedVector2Array([Vector2(f[0], 0), Vector2(vs.x, 0), Vector2(vs.x, vs.y), Vector2(f[1], vs.y)])
-	draw_colored_polygon(pts, PINK)
-	var k := 1.0 - UIA.p(outro, 150.0, 500.0, "ease") if outro >= 0.0 else 1.0
-	_tiled(pts, UI.dot_tile(0.24), Vector2(-clock / 120.0, clock / 170.0) * k)
+	var nk := night()
+	# (the first wipe frames put both edges past the right side: no polygon then, a clamped one while only the top is)
+	var pts := PackedVector2Array([Vector2(minf(f[0], vs.x), 0), Vector2(vs.x, 0), Vector2(vs.x, vs.y), Vector2(minf(f[1], vs.x), vs.y)])
+	if minf(f[0], f[1]) < vs.x - 0.5:
+		# the sky: the field in the hour's pink, eased to the plain pink as the outro grows it (the sweep's colour)
+		draw_colored_polygon(pts, sky(hour()).lerp(PINK, UIA.p(outro, 150.0, 500.0, "ease") if outro >= 0.0 else 0.0))
+		var k := 1.0 - UIA.p(outro, 150.0, 500.0, "ease") if outro >= 0.0 else 1.0
+		_tiled(pts, UI.dot_tile(0.24), Vector2(-clock / 120.0, clock / 170.0) * k)
+	_hall(vs, nk)
+	_crowd(vs)
+	_fog(self, vs, 0)
 	# white specks rising through the pink
 	for s in specks:
 		var y: float = fposmod(s[1] - clock / s[3], 1.0) * vs.y
@@ -310,6 +438,100 @@ func _draw() -> void:
 		elif ph < 0.62: x = stop
 		else: x = lerpf(stop, vs.x + 20.0, UIA.ez("in", (ph - 0.62) / 0.38))
 		draw_rect(Rect2(x + ox, L[0] * vs.y, ln, 2.0), Color(1, 1, 1, 0.6))
+## the hall plate: the facade as an ink cut-out (HALL_TINT, deeper at night) sliding in on sp_art, the sign swinging on
+## its bracket, and the lit windows (candle flicker, a soft glow behind each)
+func _hall(vs: Vector2, nk: float) -> void:
+	if outro > 1050.0: return
+	var a := clampf((t - 120.0) / 150.0, 0.0, 1.0)
+	if a <= 0.0: return
+	var r := _hall_rect(vs)
+	var sc := r.size.x / HALL.get_width()
+	var m: Array = _art_motion(vs, sp_art.x, 1.0)
+	var piv := Vector2(r.get_center().x, r.end.y)
+	var base := UIA.xf(piv, m[0], m[1], Vector2(m[2], m[2]))
+	draw_set_transform_matrix(base)
+	var tint := HALL_TINT.lerp(HALL_TINT_NIGHT, nk)
+	draw_texture_rect(HALL, r, false, Color(tint, a))
+	# the sign, hung from its top centre, swinging ±2°
+	var sw := deg_to_rad(2.0) * sin(clock / 2300.0 * TAU)
+	var sp := Vector2(r.position.x + (SIGN.position.x + SIGN.size.x / 2.0) * sc, r.position.y + SIGN.position.y * sc)
+	draw_set_transform_matrix(base * UIA.xf(sp, Vector2.ZERO, sw, Vector2(1.06, 1.06)))
+	draw_texture_rect_region(HALL, Rect2(r.position + SIGN.position * sc, SIGN.size * sc), SIGN, Color(tint, a))
+	draw_set_transform_matrix(base)
+	# the windows: one per restored facility and Eilin's, warm, each a candle
+	var n := lit_windows()
+	var warm := Color(1.0, 0.86, 0.6)
+	var ts := clock / 1000.0
+	for i in n:
+		var w: Array = WINS[i]
+		var wr := Rect2(r.position + Vector2(w[0], w[1]) * sc, Vector2(w[2], w[3]) * sc)
+		var fl := 0.9 + 0.1 * LIT.fl(ts, i * 2.3)
+		var g := wr.grow(wr.size.y * (0.9 + 0.6 * nk))
+		draw_texture_rect(UI.glow(), g, false, Color(warm, (0.14 + 0.22 * nk) * fl * a))
+		draw_texture_rect_region(HALL_WIN, wr, Rect2(w[0], w[1], w[2], w[3]), Color(warm * (0.85 + 0.15 * fl), a))
+	draw_set_transform(Vector2.ZERO)
+
+## the nameless members: paper cut-out silhouettes on the steps behind the people, flat ink, each with a thin rim in
+## its own hue (same saturation and value: a crowd of colours), in three rows that drift a hair
+func _crowd(vs: Vector2) -> void:
+	if outro > 1050.0 or crowd_seed.is_empty(): return
+	var a := clampf((t - 700.0) / 300.0, 0.0, 1.0)
+	if a <= 0.0: return
+	var hr := _hall_rect(vs)
+	var m: Array = _art_motion(vs, sp_art.x, 1.4)
+	var piv := Vector2(hr.get_center().x, hr.end.y)
+	var base := UIA.xf(piv, m[0], m[1], Vector2(m[2], m[2]))
+	var order := crowd_seed.duplicate()
+	order.sort_custom(func(p, q): return p[1] > q[1])       # back rows first
+	for cs in order:
+		var row: int = cs[1]
+		var x: float = hr.position.x + hr.size.x * (-0.02 + 1.04 * cs[0])
+		var fy: float = GROUND * vs.y - (0.02 + 0.03 * row) * vs.y
+		var h: float = (0.21 - 0.025 * row) * vs.y
+		var bob := sin(clock / 2900.0 * TAU + cs[4]) * 1.2
+		var drop := 1.0 - UIA.p(t, 700.0 + row * 90.0, 420.0, "bk")
+		var xf := base * Transform2D(0.0, Vector2(x, fy + bob - 0.1 * vs.y * drop))
+		var rim := Color.from_hsv(cs[3] / 360.0, 0.7, 0.95)
+		_figure(xf, h, cs[2], Color(rim, a), 1.0 + 2.2 / h)
+		_figure(xf, h, cs[2], Color(INK, a), 1.0)
+	draw_set_transform(Vector2.ZERO)
+
+## one paper figure (feet at the origin, `h` tall): kind 0 plain, 1 pointed hat, 2 hood, 3 a staff
+func _figure(xf: Transform2D, h: float, kind: int, col: Color, grow: float) -> void:
+	draw_set_transform_matrix(xf * Transform2D(0.0, Vector2(grow, grow), 0.0, Vector2.ZERO))
+	var sw := h * 0.17
+	var bh := h * 0.72
+	var body := PackedVector2Array([Vector2(-sw, 0), Vector2(sw, 0), Vector2(sw * 0.95, -bh * 0.55), Vector2(sw * 1.25, -bh * 0.8),
+		Vector2(sw * 0.55, -bh), Vector2(-sw * 0.55, -bh), Vector2(-sw * 1.25, -bh * 0.8), Vector2(-sw * 0.95, -bh * 0.55)])
+	draw_colored_polygon(body, col)
+	var hr := h * 0.11
+	var hc := Vector2(0, -bh - hr * 0.9)
+	draw_circle(hc, hr, col)
+	match kind:
+		1: draw_colored_polygon(PackedVector2Array([hc + Vector2(-hr * 1.4, -hr * 0.3), hc + Vector2(hr * 1.4, -hr * 0.3), hc + Vector2(hr * 0.2, -hr * 3.2)]), col)
+		2: draw_colored_polygon(PackedVector2Array([hc + Vector2(-hr * 1.3, hr * 0.8), hc + Vector2(-hr * 1.1, -hr * 1.3), hc + Vector2(0, -hr * 1.6), hc + Vector2(hr * 1.1, -hr * 1.3), hc + Vector2(hr * 1.3, hr * 0.8)]), col)
+		3: draw_rect(Rect2(sw * 1.15, -h * 1.02, h * 0.025, h * 1.02), col)
+
+## drifting fog bands across the lower screen (layer 0 behind the people, 1 in front): soft blobs stretched wide,
+## in the sky's whitened pink, thicker when the steps are still empty
+func _fog(ci: CanvasItem, vs: Vector2, layer: int) -> void:
+	if outro > 1050.0: return
+	var a := clampf((t - 400.0) / 600.0, 0.0, 1.0) * (1.0 if people().size() <= 1 else 0.5)
+	if a <= 0.0: return
+	var tx := LIT.soft_tex()
+	var col := sky(hour()).lerp(Color.WHITE, 0.75)
+	var ts := clock / 1000.0
+	var bands: Array = [[0.84, 0.2, 7.0, 0.0], [0.93, 0.16, 11.0, 300.0]] if layer == 0 else [[0.9, 0.1, 5.0, 150.0]]
+	for b in bands:
+		var bw := 0.72 * vs.x
+		var off := fmod(ts * b[2] + b[3], bw)
+		var x := -bw + off
+		var cy: float = b[0] * vs.y + sin(ts * 0.3 + b[3]) * 4.0
+		while x < vs.x + bw:
+			ci.draw_texture_rect(tx, Rect2(x - bw * 0.5, cy - 0.11 * vs.y, bw, 0.22 * vs.y), false, Color(col, b[1] * a))
+			x += bw * 0.5
+	ci.draw_set_transform(Vector2.ZERO)
+
 ## a polygon filled with a repeating 11 px tile (uv = position / 11, scrolled)
 func _tiled(pts: PackedVector2Array, tex: Texture2D, scroll: Vector2) -> void:
 	var uvs := PackedVector2Array()
@@ -322,20 +544,25 @@ func _draw_sil() -> void:
 	if not active or outro > 1050.0: return
 	var ci := sil_layer
 	var vs := get_viewport_rect().size
-	var tex := SK.tex("estelle", "st_gear")
-	if tex == null: return
-	var r := _art_rect(vs, tex)
-	var a := clampf((t - 220.0) / 150.0, 0.0, 1.0)
-	if a <= 0.0: return
-	var piv := Vector2(r.position.x + r.size.x * 0.5, r.position.y + r.size.y * 0.75)
-	# the white cut-out, on its own lagging spring
-	var m: Array = _art_motion(vs, sp_sil.x, 1.7)
-	ci.draw_set_transform_matrix(UIA.xf(piv, m[0] + Vector2(0.034 * vs.x, 0.022 * vs.y), m[1], Vector2(m[2], m[2])))
-	ci.draw_texture_rect(tex, r, false, Color(1, 1, 1, a))
-	# the thin black copy, glued to the picture
-	var m2: Array = _art_motion(vs, sp_art.x, 1.0)
-	ci.draw_set_transform_matrix(UIA.xf(piv, m2[0] + Vector2(-0.0055 * vs.x, 0.006 * vs.y), m2[1], Vector2(m2[2], m2[2])))
-	ci.draw_texture_rect(tex, r, false, Color(0, 0, 0, a))
+	var P := people()
+	for i in P.size():
+		if i >= drops.size(): break
+		var pr: Array = _person(vs, i, P[i])
+		var tex: Texture2D = pr[0]
+		if tex == null: continue
+		var r: Rect2 = pr[1]
+		var a := clampf((t - 980.0 - i * 120.0) / 150.0, 0.0, 1.0)
+		if a <= 0.0: continue
+		var piv := Vector2(r.get_center().x, r.end.y)
+		# the white cut-out, on its own lagging spring (and the outro's trailing sp_sil)
+		var m: Array = _person_motion(vs, i, drops[i][1].x, 1.6)
+		var tr: Vector2 = m[0] + Vector2(0.022 * vs.x, 0.014 * vs.y) + Vector2(0.4 * vs.x * sp_sil.x if sil_out else 0.0, 0)
+		ci.draw_set_transform_matrix(UIA.xf(piv, tr, m[1], m[2]))
+		ci.draw_texture_rect_region(tex, r, pr[2], Color(1, 1, 1, a))
+		# the thin ink copy, glued to the picture
+		var m2: Array = _person_motion(vs, i, drops[i][0].x, 1.0)
+		ci.draw_set_transform_matrix(UIA.xf(piv, m2[0] + Vector2(-0.004 * vs.x, 0.004 * vs.y), m2[1], m2[2]))
+		ci.draw_texture_rect_region(tex, r, pr[2], Color(INK, a))
 	ci.draw_set_transform(Vector2.ZERO)
 
 
@@ -344,17 +571,10 @@ func _draw_fg() -> void:
 	if not active or outro > 1050.0: return
 	var ci := fg_layer
 	var vs := get_viewport_rect().size
-	_logo(ci, vs)          # under the picture: the bars sweep in from behind her
-	var tex := SK.tex("estelle", "st_gear")
-	if tex != null:
-		var r := _art_rect(vs, tex)
-		var a := clampf((t - 120.0) / 150.0, 0.0, 1.0)
-		var m: Array = _art_motion(vs, sp_art.x, 1.0)
-		var piv := Vector2(r.position.x + r.size.x * 0.5, r.position.y + r.size.y * 0.75)
-		var lit: float = UIA.kf(t, [[0.0, 0.0], [0.45, 0.0], [0.6, 1.0], [1.0, 1.0]], 700.0, 120.0)
-		ci.draw_set_transform_matrix(UIA.xf(piv, m[0], m[1], Vector2(m[2], m[2])))
-		ci.draw_texture_rect(tex, r, false, Color(lit, lit, lit, a))
-		ci.draw_set_transform(Vector2.ZERO)
+	_logo(ci, vs)          # under the people: the bars sweep in from behind them
+	_people(ci, vs)
+	_fog(ci, vs, 1)
+	_tag(ci, vs)           # the -ASSEMBLE- stamp lands over whoever stands at the hall's left
 	_prompt(ci, vs)
 	# the white slash as the tag stamps (cx_flash)
 	if t >= 1050.0 and t < 1430.0:
@@ -362,10 +582,32 @@ func _draw_fg() -> void:
 		var fr := Rect2(-0.2 * vs.x, vs.y * 0.5, vs.x * 1.4, 0.05 * vs.y)
 		var fm := UIA.xf(fr.get_center(), Vector2(lerpf(-1.2, 1.2, u) * fr.size.x, 0), deg_to_rad(-12.0))
 		ci.draw_colored_polygon(fm * UI.clip(fr, [[0, 45], [100, 0], [100, 25], [0, 100]]), Color.WHITE)
-	if not DEV.on: return                  # the build stamp: debug builds only (dev.gd)
+	if not DEV.on or arena == null: return   # the build stamp: debug builds only (dev.gd)
 	var ver: String = arena._stamp()
 	var sf := UI.spaced(UI.noto(), 1)
 	ci.draw_string(sf, Vector2(vs.x - 12.0 - UI.text_w(sf, ver, 11), vs.y - 12.0), ver, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1, 1, 1, 0.45))
+
+## the members on the steps: each drops in on its spring (120 ms apart after the hall settles), dark until it lands,
+## then breathes and follows the pointer (front more than back)
+func _people(ci: CanvasItem, vs: Vector2) -> void:
+	if outro > 1050.0: return
+	var P := people()
+	var order := range(P.size())
+	order.reverse()                                  # the back of the row first, 에스텔 (0) on top
+	for i in order:
+		if i >= drops.size(): break
+		var pr: Array = _person(vs, i, P[i])
+		var tex: Texture2D = pr[0]
+		if tex == null: continue
+		var r: Rect2 = pr[1]
+		var t0: float = 900.0 + i * 120.0
+		var a := clampf((t - t0) / 150.0, 0.0, 1.0)
+		if a <= 0.0: continue
+		var lit: float = UIA.kf(t, [[0.0, 0.0], [0.45, 0.0], [0.6, 1.0], [1.0, 1.0]], 600.0, t0)
+		var m: Array = _person_motion(vs, i, drops[i][0].x, 1.0)
+		ci.draw_set_transform_matrix(UIA.xf(Vector2(r.get_center().x, r.end.y), m[0], m[1], m[2]))
+		ci.draw_texture_rect_region(tex, r, pr[2], Color(lit, lit, lit, a))
+	ci.draw_set_transform(Vector2.ZERO)
 
 ## CLUMSY VALOR slab, 어설픈 / 용맹 with their bars, the -ASSEMBLE- tag
 func _logo(ci: CanvasItem, vs: Vector2) -> void:
@@ -400,7 +642,14 @@ func _logo(ci: CanvasItem, vs: Vector2) -> void:
 	var o3 := _out(3)
 	_bar(ci, base, Rect2(lx + 0.067 * W, by2 + 0.12 * H, 0.32 * W, 0.056 * H), Color.WHITE, UIA.p(t, 940.0, 350.0, "mv"), 1.0, _out(4))
 	_word(ci, base, "용맹", fs2, Vector2(lx + 0.078 * W - 0.7 * W * o3, by2 + fs2 * 0.86), PINK, INK, 760.0, 3, o3)
-	# 4) -ASSEMBLE- stamps in
+	ci.draw_set_transform(Vector2.ZERO)
+
+## the -ASSEMBLE- tag stamps in (over the people)
+func _tag(ci: CanvasItem, vs: Vector2) -> void:
+	if outro > 1050.0: return
+	var W := vs.x
+	var H := vs.y
+	var base := _logo_xf(vs)
 	var u4 := UIA.p(t, 1050.0, 380.0, "bk")
 	var o4 := _out(5)
 	if u4 > 0.0 and o4 < 1.0:
