@@ -269,6 +269,10 @@ func _input(ev: InputEvent) -> void:
 	if outro >= 0.0:
 		return
 	if gate:
+		# the gate's tap is the browser gesture that allows both audio and fullscreen: ask for the whole screen here
+		# (a later toggle is in the HUD / 설정); phones that refuse (iOS Safari) just stay as they are
+		if OS.has_feature("web") and DisplayServer.window_get_mode() != DisplayServer.WINDOW_MODE_FULLSCREEN:
+			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 		go_live()                # the gate's tap: the track and the timeline start
 		return
 	if not intro_done:
@@ -437,7 +441,7 @@ func _gate(vs: Vector2) -> void:
 	draw_texture_rect(EMBLEM, Rect2(c - Vector2(ew, eh) / 2.0, Vector2(ew, eh)), false)
 	draw_set_transform(Vector2.ZERO)
 	var fn := UI.noto()
-	var s := "터치하여 시작"
+	var s := "터치하여 시작 · 전체 화면"
 	var fs := int(0.03 * vs.y)
 	draw_string(fn, Vector2(vs.x * 0.5 - UI.text_w(fn, s, fs) / 2.0, vs.y * 0.44 + eh * 0.62 + fs), s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(CREAM, 0.7 + 0.3 * UIA.pulse(clock, 1300.0)))
 
