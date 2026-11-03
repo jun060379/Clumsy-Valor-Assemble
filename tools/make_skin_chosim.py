@@ -6,6 +6,7 @@ usage: python3 tools/make_skin_chosim.py <estelle_v1 folder> <estelle_v2 folder>
 
 estelle_v1 (the first delivery; magenta sheets on a loose grid, run / walk transparent):
   walk_43f.png              43-frame walk cycle (7 a row)                        → rows 36-37 walk, 10 of its frames (KEEP)
+                            (since 2026-11 the walk is tools/make_walk.py's 35 frames in rows 36-39: run it again after this)
   jump_8f_magenta.png, run6_magenta.png: the first jump / runjump, replaced by v3's
   idle_4f_magenta.png, walkstart / runstop / turn_4f_magenta.png, run_18f.png, ref_greenbg.png: the first idle, start,
                             stop, turn, run and standing art, replaced by v2's; --v1-idle / --v1-loco / --v1-st build them again

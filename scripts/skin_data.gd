@@ -20,6 +20,7 @@ extends RefCounted
 ##   anims    {anim: [row, [ms...]]}: its own frame count / timing / row for an animation (frames run 9 a row, then wrap
 ##            to the next row; rows past 34 live in sheet_5.png ...)
 ##   bob      {anim: [...]}: its own stride bob (empty = none: the frames carry it); steps {anim: [frames]}: footfalls
+##   stride   {anim: world px a cycle}: the ground its walk covers (townsfolk.gd natural_speed: stride / the cycle's ms)
 ##   partial  true: "부분 완성" on the screens; done = the animations it has
 ##   placeholder  true: the name / description were invented and wait for the user's own (the 기본 entries: only the description)
 
@@ -28,15 +29,27 @@ const BASE := {"estelle": "estelle_base", "aida": "aida_base", "luce": "luce_bas
 ##   run: run_7f (fourth delivery, fringes cleaned by tools/fix_run7.py), 7 frames for two steps, rotated so its
 ##        footfalls (its frames 3 and 6) are frames 1 and 4; 620 ms a cycle (each step 310 ms) and a dip on each contact
 ##        (BOB_RUN). The art's stride is short for player.gd RUN 0.36 px/ms, so the soles slide a little
-##   walk: 10 of walk_43f's frames, 1050 ms a cycle, about 1.9 steps a second; the soles slide (the art's steps are
-##        short for townsfolk.gd WALKSP 0.2), as before
+##   walk: the user's 35-frame walk (2026-11, tools/make_walk.py; replaces walk_43f's 10), rows 36-39, below
+## The members' own walk cycles (tools/make_walk.py, 2026-11): cut from the user's one-row walk sheets, every frame's
+## planted sole on the feet line and its head + torso on the cell's centre, scaled and colour-matched to the member's
+## in-game rows. Each frame's time is the planted sole's measured shift to the next frame over one ground speed, so a
+## walker moving at "stride" (world px a cycle) / the cycle keeps the foot under her still (townsfolk.gd natural_speed).
+## The art spaces its frames unevenly (아이다's is drawn on twos and threes: 11 poses), hence the uneven times; in
+## 아이다's frames 1-2 and 5 / 8-10 the planted boot barely moves, so those poses are held 50 ms and her sole slides
+## there by up to ~2.5 world px.
+const WALK_EST := [20, 25, 24, 36, 24, 36, 31, 39, 27, 33, 31, 46, 24, 38, 26, 39, 25, 37, 25, 37, 24, 37, 24, 37, 27, 42, 32, 44, 27, 37, 25, 36, 23, 32, 20]   # 1090 ms
+const WALK_AIDA := [136, 50, 204, 122, 163, 50, 201, 182, 50, 50, 50]               # 1258 ms (poses held >= 50 ms: drawn on twos)
+const WALK_LUCE := [64, 57, 48, 59, 52, 39, 64, 35, 31, 20, 20, 29, 57, 37, 46, 59, 50, 48, 42, 55, 34, 58, 43, 20, 21, 46, 50]   # 1184 ms
+## world px of ground a walk cycle covers (the planted sole's travel over the cycle × the member's draw scale)
+const STRIDE_EST := 55.9
+const STRIDE_AIDA := 45.5
+const STRIDE_LUCE := 58.7
 const RUN7 := [103, 103, 103, 78, 78, 78, 77]         # contact (1) → contact (4) is 3 frames, 4 → 1 is 4: each step 310 ms, 620 ms a cycle
 const BOB_RUN := [-4, 3, 1, -2, 3, 1, -3]              # world px, + = down: dip on the contacts (1, 4), up in the flights (0, 3, 6)
 ## parry / air_parry have no art: attack2's rising cut and air_combo's (make_skin_chosim.py COMPOSE). Frames 0-1 keep the
 ## parry window (180 + 35 ms; drawn as guard frame 1 until a parry lands, player.gd _draw); after a parry lands the cut
 ## shows 110 ms and the raised blade 240 ms (기본's 200 + 150: the same 350 ms, a smear frame shouldn't hang)
 const PARRY4 := [180, 35, 110, 240]
-const WALK10 := [105, 105, 105, 105, 105, 105, 105, 105, 105, 105]
 const STEP_RUN7 := [1, 4]       # the frames a foot lands (dust puffs, footstep sounds)
 const ROOT := "res://assets/skins/"
 
@@ -48,11 +61,11 @@ const SKINS := [
 		"dir": ROOT + "estelle_base/", "placeholder": true, "partial": true,
 		# own rows: 0 idle · 3 start · 4 stop · 5 turn · 6 jump · 7 runjump · 8-10 attack1-3 · 11 kneel · 12 kneel_attack ·
 		# 13 attack_high · 14 guard · 15 parry · 16 air_combo · 17 dive · 18 double_jump · 19 hurt · 20 death · 21 dash ·
-		# 22 vow · 23 air_guard · 24 air_parry · 26 tag_in · 27 tag_out · 28 teeter · 35 run (8) · 36-37 walk (10)
-		"rows": [0, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 26, 27, 28, 35, 36, 37],
-		"anims": {"run": [35, RUN7], "walk": [36, WALK10], "parry": [15, PARRY4], "air_parry": [24, PARRY4]},
+		# 22 vow · 23 air_guard · 24 air_parry · 26 tag_in · 27 tag_out · 28 teeter · 35 run (7) · 36-39 walk (35)
+		"rows": [0, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 26, 27, 28, 35, 36, 37, 38, 39],
+		"anims": {"run": [35, RUN7], "walk": [36, WALK_EST], "parry": [15, PARRY4], "air_parry": [24, PARRY4]},
 		"bob": {"run": BOB_RUN, "walk": []},      # run: Aida's bounce on top of the frames' own; walk: the frames' own
-		"steps": {"run": STEP_RUN7},
+		"steps": {"run": STEP_RUN7}, "stride": {"walk": STRIDE_EST},
 		"breath_top": 158,                         # the head's top in the idle cells (player.gd idle breathing)
 		"done": ["idle", "start", "stop", "turn", "jump", "runjump", "run", "walk", "attack1", "attack2", "attack3", "kneel",
 			"kneel_attack", "attack_high", "guard", "parry", "air_combo", "dive", "double_jump", "hurt", "death", "dash", "vow",
@@ -61,10 +74,14 @@ const SKINS := [
 	{"id": "estelle_misuk", "c": "estelle", "n": "미숙한 결의", "d": "망토와 방패를 두르고 길드 문을 처음 두드리던 날의 차림.", "unlock": {"kind": "story", "value": "estelle_misuk"}, "dir": "", "placeholder": true},
 	{"id": "estelle_s1", "c": "estelle", "n": "순례자의 여행복", "d": "먼 길을 걷는 순례자의 차림. 방패는 등에 메고, 망토 자락엔 길 먼지가 앉았다.", "unlock": {"kind": "fame", "value": 2}, "dir": ROOT + "estelle_s1/", "placeholder": true},
 	{"id": "estelle_s2", "c": "estelle", "n": "축제의 밤 드레스", "d": "마을 축제 날 빌려 입은 드레스. 방패를 들어도 춤출 수 있게 치맛단을 줄였다.", "unlock": {"kind": "shop", "value": 300}, "dir": ROOT + "estelle_s2/", "placeholder": true},
-	{"id": "aida_base", "c": "aida", "n": "기본", "d": "묘지기 앞치마 원피스와 흙 묻은 장화.", "unlock": {"kind": "default", "value": 0}, "dir": ROOT + "aida_base/", "placeholder": true, "partial": true, "rows": []},   # own standing art (st_base, st_cl); sprites are the original's
+	{"id": "aida_base", "c": "aida", "n": "기본", "d": "묘지기 앞치마 원피스와 흙 묻은 장화.", "unlock": {"kind": "default", "value": 0}, "dir": ROOT + "aida_base/", "placeholder": true, "partial": true,
+		# own standing art (st_base, st_cl) and walk (rows 35-36, sheet_5); the other sprites are the original's
+		"rows": [35, 36], "anims": {"walk": [35, WALK_AIDA]}, "bob": {"walk": []}, "stride": {"walk": STRIDE_AIDA}, "done": ["walk"]},
 	{"id": "aida_s1", "c": "aida", "n": "묘지기의 상복", "d": "검은 베일과 긴 상복. 동굴 깊은 곳 상자에서 나온, 누군가의 장례 차림.", "unlock": {"kind": "drop", "value": 2}, "dir": ROOT + "aida_s1/", "placeholder": true},
 	{"id": "aida_s2", "c": "aida", "n": "균열 너머의 옷", "d": "기억을 끝까지 따라간 끝에서 꺼내 온 옷.", "unlock": {"kind": "level", "value": 12}, "dir": ROOT + "aida_s2/", "placeholder": true},
-	{"id": "luce_base", "c": "luce", "n": "기본", "d": "수습 사제 로브와 헝겊 신.", "unlock": {"kind": "default", "value": 0}, "dir": ROOT + "luce_base/", "placeholder": true, "partial": true, "rows": []},   # own standing art (st_base, st_cl); sprites are the original's
+	{"id": "luce_base", "c": "luce", "n": "기본", "d": "수습 사제 로브와 헝겊 신.", "unlock": {"kind": "default", "value": 0}, "dir": ROOT + "luce_base/", "placeholder": true, "partial": true,
+		# own standing art (st_base, st_cl) and walk (rows 35-37, sheet_5); the other sprites are the original's
+		"rows": [35, 36, 37], "anims": {"walk": [35, WALK_LUCE]}, "bob": {"walk": []}, "stride": {"walk": STRIDE_LUCE}, "done": ["walk"]},
 	{"id": "luce_s1", "c": "luce", "n": "성가대 수습복", "d": "성가대 수습 시절의 흰 옷. 이야기가 이어지면 받을 수 있다.", "unlock": {"kind": "story", "value": "luce_choir"}, "dir": ROOT + "luce_s1/", "placeholder": true},
 	{"id": "luce_s2", "c": "luce", "n": "여름 휴가 차림", "d": "밀짚모자와 가벼운 원피스. 길드가 마을의 자랑이 된 기념.", "unlock": {"kind": "fame", "value": 3}, "dir": ROOT + "luce_s2/", "placeholder": true},
 ]

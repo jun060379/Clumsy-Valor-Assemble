@@ -148,6 +148,10 @@ static func steps(c: String, an := "run") -> Array:
 	var b: Dictionary = SD.get_skin(worn(c)).get("steps", {})
 	return b[an] if b.has(an) else [1, 5]
 
+## the ground (world px) one cycle of the worn costume's `an` covers, from its art (skin_data.gd "stride"); -1 = unknown
+static func stride(c: String, an := "walk") -> float:
+	return float(SD.get_skin(worn(c)).get("stride", {}).get(an, -1.0))
+
 static func breath_top(c: String) -> float:
 	return float(SD.get_skin(worn(c)).get("breath_top", CH.BREATH_TOP[c]))
 

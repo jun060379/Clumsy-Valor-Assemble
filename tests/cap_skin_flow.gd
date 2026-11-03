@@ -49,7 +49,7 @@ func _initialize() -> void:
 	for i in 60:
 		await process_frame
 		if i % 2 == 0: await shot("flow")
-	# walk (the player never walks: stepped by hand at townsfolk.gd WALKSP 0.2 px/ms, the costume's walk timing)
+	# walk (the player never walks: stepped by hand at the walk art's stride speed, townsfolk.gd natural_speed)
 	P.set_process(false)
 	P.set_physics_process(false)
 	P.anim = "walk"
@@ -57,7 +57,7 @@ func _initialize() -> void:
 	var ft := 0.0
 	for i in 70:
 		var dt := 1000.0 / 60.0
-		P.position.x += 0.2 * dt
+		P.position.x += arena.FOLK.of(arena).natural_speed("estelle") * dt
 		P.position.y = arena.level.floor_at(P.position.x)
 		ft += dt
 		var du: Array = arena.SKINS.entry("estelle", "walk")[1]

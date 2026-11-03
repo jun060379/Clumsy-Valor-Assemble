@@ -102,9 +102,12 @@ func _initialize() -> void:
 	var ge: Array = folk.title_gait("estelle")
 	var ga: Array = folk.title_gait("aida")
 	var gl: Array = folk.title_gait("luce")
-	check(near(folk.natural_speed("estelle"), 0.058, 0.001) and near(ge[0], 0.058, 0.001) and near(ge[1], 1.0), "에스텔's 초심 walk: 0.058 px/ms at its native cadence, the feet planted (%s)" % [ge])
-	check(near(ga[0], 0.09, 0.001) and near(ga[1], 0.62, 0.01), "아이다's run-row walk slowed to 0.09 px/ms, its frames slowed the same (%s)" % [ga])
-	check(near(gl[1], folk.TITLE_PACE, 0.001) and near(gl[0] / gl[1], 0.20, 0.001), "루체's: the frames at TITLE_PACE, the ground speed in the same ratio (%s)" % [gl])
+	check(near(folk.natural_speed("estelle"), 55.9 / 1090.0, 0.0005) and near(ge[0], folk.natural_speed("estelle"), 0.0001) and near(ge[1], 1.0), "에스텔's 초심 walk (35 frames): 0.0513 px/ms at its native cadence, the feet planted (%s)" % [ge])
+	check(near(ga[0], 45.5 / 1258.0, 0.0005) and near(ga[1], 1.0), "아이다's own walk: 0.0362 px/ms at its native cadence, not the run row slowed (%s)" % [ga])
+	check(near(gl[0], 58.7 / 1184.0, 0.0005) and near(gl[1], 1.0), "루체's own walk: 0.0496 px/ms at its native cadence (%s)" % [gl])
+	for c in ["estelle", "aida", "luce"]:
+		var row0: int = {"estelle": 36, "aida": 35, "luce": 35}[c]
+		check(int(arena.SKINS.entry(c, "walk")[0]) == row0 and arena.SKINS.sheet_row(c, row0).resource_path.ends_with("_base/sheet_5.png"), "%s's title walker plays her own walk row (%d, %s)" % [c, row0, arena.SKINS.sheet_row(c, row0).resource_path])
 	for c in ["estelle", "aida", "luce"]:
 		var g: Array = folk.title_gait(c)
 		check(near(g[0] / g[1], folk.natural_speed(c), 0.0001), "%s: ground speed / frame rate = the sheet's stride speed (no sliding feet)" % c)
@@ -122,7 +125,7 @@ func _initialize() -> void:
 	var x0: float = ne["x"]
 	var f0: int = ne["f"]
 	for i in 10: folk._upd(ne, 16.0)
-	check(near(ne["x"] - x0, 0.058 * 160.0, 0.5) and ne["anim"] == "walk" and ne["dir"] == 1, "under the title she walks at the art's pace, never runs (%.1f px in 160 ms, %s)" % [ne["x"] - x0, ne["anim"]])
+	check(near(ne["x"] - x0, folk.natural_speed("estelle") * 160.0, 0.5) and ne["anim"] == "walk" and ne["dir"] == 1, "under the title she walks at the art's pace, never runs (%.1f px in 160 ms, %s)" % [ne["x"] - x0, ne["anim"]])
 	var flips := 0
 	var d0: int = ne["dir"]
 	for i in 70:

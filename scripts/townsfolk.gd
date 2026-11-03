@@ -38,7 +38,10 @@ const CHAT := {
 		[[1, "안녕하세요, 루체님."], [0, "저는 루체에요! …아, 이미 아시죠?"], [1, "큭큭. 네, 알아요."]],
 		[[0, "잉, 아이다씨가 만든 건 이상한 느낌 나요."], [1, "흑주술 조금 섞었어요."], [0, "주여, 이 바보 같은 이를 용서하소서~"]],
 		[[1, "루체님, 머리에 잎 붙었어요."], [0, "어? 어디어디?"], [1, "…거기 말고요."]]]}
+## the pace town life would like (px/ms); a walk is played at most TOWN_RATE x its native cadence to get near it, and
+## always moves at the art's stride speed for that rate (town_gait), so the feet stay planted
 const WALKSP := {"estelle": 0.2, "aida": 0.18, "luce": 0.18}
+const TOWN_RATE := 1.3
 ## the title: the spots everyone leans toward (in place of their own favourites), the emotes, the passing distance,
 ## the pair cooldown
 const TITLE_FAV := {"hall": 4.0, "bench": 3.0, "fountain": 2.0, "lamp": 2.0, "board": 1.5, "store": 1.0, "yard": 1.0}
@@ -54,13 +57,14 @@ var title_mode := false       # the title is up: everyone is out in town, emotes
 const TITLE_PACE := 0.62      # the title's walkers: the slowest the walk art is played at (its fraction of the native frame time)
 const TITLE_SPEED := 0.09     # … aiming at this ground speed (world px/ms); a sheet whose natural pace is slower keeps its own
 ## the walk art's natural ground speed (world px/ms at the entry's native frame times): the speed at which the planted
-## foot keeps still on the ground, measured on the sheets — the sole's travel along the feet line (cell rows 334–340)
-## between frames while it is down, × 0.5 × the member's draw scale / the frame time. Keyed by member, then by the walk
-## entry's sheet row, since a costume may bring its own walk: 초심's 10-frame walk (row 36) is a short calm stride,
-## ~9 cell px a frame = 0.058 px/ms (61 world px a 1050 ms cycle); the original art's "walk" is its run row played slow
-## (rows 2 / 1, two flight frames in eight), a long stride: 에스텔 0.19, 아이다 ~33 cell px a frame = 0.145, 루체 ~49 =
-## 0.20 px/ms at 145 / 140 ms a frame. Walking faster than this slides the soles, slower makes them skate backwards.
-const STRIDE := {"estelle": {36: 0.058, 2: 0.19}, "aida": {1: 0.145}, "luce": {1: 0.20}}
+## foot keeps still on the ground. A costume with its own walk (tools/make_walk.py: 초심, 아이다 / 루체 기본) states
+## the ground a cycle covers (skin_data.gd "stride", measured on its cells) and its frame times follow the art's spacing:
+## stride / the cycle — 에스텔 55.9 px / 1090 ms = 0.0513, 아이다 45.5 / 1258 = 0.0362, 루체 58.7 / 1184 = 0.0496.
+## Otherwise STRIDE, keyed by member, then by the walk entry's sheet row: the original art's "walk" is its run row
+## played slow (rows 2 / 1, two flight frames in eight), a long stride: 에스텔 0.19, 아이다 ~33 cell px a frame = 0.145,
+## 루체 ~49 = 0.20 px/ms at 145 / 140 ms a frame (the sole's travel along the feet line between frames while it is down
+## × 0.5 × the draw scale / the frame time). Walking faster than this slides the soles, slower makes them skate backwards.
+const STRIDE := {"estelle": {2: 0.19}, "aida": {1: 0.145}, "luce": {1: 0.20}}
 const STRIDE_DEFAULT := 0.14
 var greet_cd := {}            # "a|b" -> ms until that pair may greet again
 var greets := 0               # greetings so far (tests)
@@ -87,8 +91,20 @@ func folk() -> Array:
 ## the walk art's natural ground speed for member c (STRIDE, by the worn costume's walk row)
 func natural_speed(c: String) -> float:
 	var e = SK.entry(c, "walk")
+	var st := SK.stride(c, "walk")
+	if st > 0.0 and e != null:
+		var cyc := 0.0
+		for ms in e[1]: cyc += float(ms)
+		return st / maxf(1.0, cyc)
 	var row: int = int(e[0]) if e != null else -1
 	return float(STRIDE.get(c, {}).get(row, STRIDE_DEFAULT))
+
+## town life's walk for member c: [ground speed, play rate] — WALKSP's pace as near as a cadence between native and
+## TOWN_RATE x native allows, the ground speed always the art's stride speed at that rate (the feet planted)
+func town_gait(c: String) -> Array:
+	var nat := natural_speed(c)
+	var k := clampf(float(WALKSP.get(c, 0.085)) / maxf(0.001, nat), 1.0, TOWN_RATE)
+	return [nat * k, k]
 
 ## the title's stroll for member c: [ground speed (px/ms), the walk's play rate] — the walk art played at a rate that
 ## plants the feet at TITLE_SPEED, never slower than TITLE_PACE of its native timing and never faster than native
@@ -392,7 +408,11 @@ func _upd(n: Dictionary, dt: float) -> void:
 			var dx: float = wp["x"] - n["x"]
 			# the title: an unhurried stroll, nobody runs, and the walk art decides the pace so the feet plant
 			var tk := 1.0
-			var sp: float = 0.34 if n["run"] else WALKSP.get(n["c"], 0.085)
+			var sp := 0.34
+			if not n["run"]:
+				var tg := town_gait(n["c"])
+				sp = tg[0]
+				tk = tg[1]
 			if title_mode:
 				var g := title_gait(n["c"])
 				sp = g[0]

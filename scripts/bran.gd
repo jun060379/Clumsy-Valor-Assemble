@@ -20,6 +20,23 @@ const HIT := 6
 ## [frames, ms per frame (one number or one per frame)]; hammer: wind-up, hold at the top, fast drop, impact held, settle
 const ANIM := {"idle": [[0, 1, 2, 3, 4, 5, 6], 190], "hammer": [[7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [150, 130, 110, 100, 170, 60, 170, 110, 120, 140]],
 	"inspect": [[17, 18, 19, 20, 21, 22, 23], [170, 160, 220, 240, 220, 160, 170]], "talk": [[24, 25, 26, 27, 28, 29, 30], 160]}
+## his walk (tools/make_walk.py bran: the user's 25-frame walk shrunk to his art pixels and snapped to px.png's palette):
+## cells of WCW x CHH art px, the body's column at WBX, the sole on row 69 like the forge cells. WALK_MS follows the
+## art's spacing (each frame's planted-sole shift / WALK_SPD), so at WALK_SPD (69.9 world px a 1260 ms cycle) the boot
+## under him stays put
+const WALK := preload("res://assets/bran/walk.png")
+const WCW := 59
+const WBX := 23
+const WALK_MS := [63, 62, 64, 76, 40, 62, 35, 20, 34, 43, 35, 56, 41, 60, 45, 65, 40, 62, 44, 68, 29, 50, 20, 33, 113]
+const WALK_STRIDE := 69.9
+const WALK_SPD := WALK_STRIDE / 1260.0
+## a stroll: now and then, after an idle spell, he wanders STROLL_MIN..STROLL_MAX world px away from the anvil, stands a
+## moment (STROLL_REST ms), and walks back to his spot to work again; someone near or talking stops him where he is
+## (he turns to them; is_near / talk follow him), and he finishes the stroll once they are gone
+const STROLL_P := 0.3
+const STROLL_MIN := 40.0
+const STROLL_MAX := 90.0
+const STROLL_REST := 1400.0
 const IDLE := ["흐흐, 오늘도 별일 없고.", "숯이 좀 모자란데… 내일 숯가마 돌려야겠군.", "덜떨어지게 탄 나무… 그게 숯이지요.", "염소 녀석, 또 마당 풀 다 뜯어먹었나.", "흠, 화로 온도 좋고.", "이 철은 쓸 만하겠는데. 흐흐."]
 ## small talk for the forge menu's "잡담한다" (the menu comes with the forge screen)
 const CHAT := [["크흐, 크흐흐… 크흠.", "아, 전 원래 이렇게 웃으니 신경 쓰지 마십쇼."],
@@ -49,6 +66,10 @@ var talk_t := 0.0
 var x := 0.0
 var y := 0.0
 var anvil_left := 0.0
+var home := 0.0               # his spot at the anvil
+var goal := NAN               # where the stroll is headed (NAN = not strolling)
+var rest := 0.0               # the stroll's pause at its far end (ms)
+var strolls := 0              # strolls begun (tests)
 
 
 func _init(tn) -> void:
@@ -59,6 +80,7 @@ func _init(tn) -> void:
 	var ax := 7790.0 + aw / 2.0
 	anvil_left = roundf(ax + (7790.0 - ax) * town.BS)
 	x = anvil_left + roundf(ANV_FACE * ANV_S) - HX
+	home = x
 	y = town.LOWF
 
 func play(a: String) -> void:
@@ -69,8 +91,23 @@ func play(a: String) -> void:
 		loops = 0
 
 func _dur(i: int) -> float:
+	if anim == "walk": return float(WALK_MS[i])
 	var d = ANIM[anim][1]
 	return float(d[i]) if d is Array else float(d)
+
+func _frames() -> Array:
+	return range(WALK_MS.size()) if anim == "walk" else ANIM[anim][0]
+
+## out for a stroll (walking, or resting at its far end, or on the way back)
+func strolling() -> bool:
+	return not is_nan(goal)
+
+## begin a stroll: out, away from the anvil (to the left, the way his back faces), then back home
+func stroll(d := -1.0) -> void:
+	goal = home + signf(d) * (STROLL_MIN + randf() * (STROLL_MAX - STROLL_MIN))
+	rest = STROLL_REST
+	strolls += 1
+	play("walk")
 
 func is_near(P) -> bool:
 	return absf(P.position.x - x - MID) < 95.0 and absf(P.position.y - y) < 30.0
@@ -85,11 +122,26 @@ func step(dt: float) -> void:
 	var busy := is_near(P) or talk_t > 0.0 or talking()
 	# the hammer only swings at his spot, facing the anvil; anyone near and he stops and turns to them
 	if busy:
-		if anim == "hammer" or anim == "inspect": play("talk")
+		if anim == "hammer" or anim == "inspect" or anim == "walk": play("talk")
 		dir = -1 if P.position.x < x + MID else 1
+	elif strolling():
+		# the stroll: walk to the goal at the art's pace, rest there, walk home; then back to work
+		if absf(goal - x) > 0.5:
+			play("walk")
+			dir = 1 if goal > x else -1
+			x = move_toward(x, goal, WALK_SPD * dt)
+		elif goal != home:
+			if anim != "idle": play("idle")
+			rest -= dt
+			if rest <= 0.0: goal = home
+		else:
+			x = home
+			goal = NAN
+			dir = 1
+			play("idle")
 	elif anim == "idle" and f == 0:
 		dir = 1
-	var frames: Array = ANIM[anim][0]
+	var frames: Array = _frames()
 	ft += dt
 	while ft >= _dur(f):
 		ft -= _dur(f)
@@ -100,13 +152,17 @@ func step(dt: float) -> void:
 			if v > 0.05: arena.sfx("hit", 0.25 * v)
 			for i in 8:
 				town.tfx.append({"k": "spark", "x": fxp + (randf() - 0.5) * 10.0, "y": y - 19.0, "vx": (randf() - 0.35) * 0.28, "vy": -0.08 - randf() * 0.16, "t": 0.0, "life": 420.0})
-		frames = ANIM[anim][0]
+		frames = _frames()
 		if f >= frames.size():
 			f = 0
 			loops += 1
 			var B := anim
 			if B == "talk":
 				play("idle")
+			elif B == "walk" or strolling():
+				pass                                   # the stroll steers itself (above)
+			elif B == "idle" and loops >= 2 and not busy and randf() < STROLL_P:
+				stroll()
 			elif B == "idle" and loops >= 2 and not busy:
 				dir = 1
 				swings = 3 + randi() % 3
@@ -126,6 +182,12 @@ func draw(ci: CanvasItem) -> void:
 	var aw := roundf(ANVIL.get_width() * ANV_S)
 	var ah := roundf(ANVIL.get_height() * ANV_S)
 	ci.draw_texture_rect(ANVIL, Rect2(anvil_left, town.LOWF - ah, aw, ah), false)
+	if anim == "walk":
+		# the walk's cells: the body's column on his body line (x + MID), mirrored about it walking left
+		ci.draw_set_transform(Vector2(roundf(x) + MID, roundf(y)), 0.0, Vector2(S * dir, S))
+		ci.draw_texture_rect_region(WALK, Rect2(-WBX, -FY, WCW, CHH), Rect2(mini(f, WALK_MS.size() - 1) * WCW, 0, WCW, CHH))
+		ci.draw_set_transform(Vector2.ZERO)
+		return
 	var frames: Array = ANIM[anim][0]
 	var fi: int = frames[mini(f, frames.size() - 1)]
 	ci.draw_set_transform(Vector2(roundf(x) + (2.0 * MID if dir < 0 else 0.0), roundf(y)), 0.0, Vector2(S * dir, S))
