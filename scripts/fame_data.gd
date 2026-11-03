@@ -92,7 +92,7 @@ const FAC := [
 const FPEOPLE := [{"c": "estelle", "n": "에스텔", "role": "전사", "por": "res://assets/fame/por_est.png"},
 	{"c": "aida", "n": "아이다", "role": "워락", "por": "res://assets/fame/por_aida.png", "sr": true},
 	{"c": "luce", "n": "루체", "role": "사제", "por": "res://assets/fame/por_luce.png", "sr": true},
-	{"b": true, "n": "브랜", "role": "길드 대장장이", "por": "res://assets/bran/por.png", "sr": true},
+	{"b": true, "n": "브랜", "role": "전사", "por": "res://assets/bran/por.png", "sr": true},
 	{"n": "???", "role": "언젠가 길드를 찾아올 사람", "r": 4, "hint": "명성 4등급 즈음"}, {"n": "???", "role": "언젠가 길드를 찾아올 사람", "r": 5, "hint": "명성 5등급 즈음"}]
 
 ## bestiary observation: Ⅰ met · Ⅱ first kill · Ⅲ 10 kills · Ⅳ 30 kills (bosses 3 / 10); EXP per stage
