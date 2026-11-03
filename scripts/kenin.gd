@@ -4,13 +4,13 @@ extends RefCounted
 ## The loop the owner set (2026-11-03): from the bench his QTE shoots a foe's head without swapping (a mark, the swap
 ## cooldown reset); out front he empties the cylinder and the bombs at high power, then he is weak until he reloads —
 ## and he reloads fast only off the field, so he goes back into the party to rearm.
-##   ammo   AMMO shots out front; empty = the "dry" shots (×DRY). On the field an empty pistol reloads after
-##          RELOAD_FIELD ms; on the bench one round comes back every RELOAD_BENCH ms.
-##   bombs  BOMBS charges; one back every BOMB_BENCH ms on the bench, BOMB_FIELD ms out front. A thrown bomb sticks to
+##   ammo   AMMO shots out front; empty = no shot at all (the trigger clicks, he looks at the pistol: anim "kdry").
+##          On the field an empty pistol reloads after RELOAD_FIELD ms; on the bench one round every RELOAD_BENCH ms.
+##   bombs  BOMBS charges; spent ones all come back BOMB_FIELD ms after the last throw (BOMB_BENCH on the bench). A thrown bomb sticks to
 ##          the first foe it touches (or rests on the floor) and blows after FUSE ms; a bullet hitting a foe that wears
 ##          one sets it off at once ×BOMB_HEAD.
-##   marks  stamps on a foe's body (several at once: the QTE headshot MARK_QTE, the heavy shots MARK_HEAVY, every ult shot
-##          one; at most MARK_MAX a foe). His charged attack (the detonator, chain_detonate) sets off every stamp and
+##   marks  stamps on a foe's body: every bullet that lands one, every bomb blast one on each foe it catches, the QTE
+##          headshot MARK_QTE, every ult shot one; at most MARK_MAX a foe (the ult has no cap). His charged attack (the detonator, chain_detonate) sets off every stamp and
 ##          every bomb one after another, nearest first, faster and faster — 파바바방 — and the ult ends on the same chain.
 ## Every number here is a PLACEHOLDER until the owner tunes it.
 
@@ -19,19 +19,17 @@ const PFX := preload("res://scripts/pfx.gd")
 
 const AMMO := 6
 const BOMBS := 3
-const RELOAD_FIELD := 2600.0
-const RELOAD_BENCH := 300.0
-const BOMB_BENCH := 1600.0
-const BOMB_FIELD := 7000.0
+const RELOAD_FIELD := 15000.0      # owner 2026-11-04: long on purpose
+const RELOAD_BENCH := 1000.0       # the bench refills faster (6 s for the cylinder)
+const BOMB_BENCH := 10000.0
+const BOMB_FIELD := 25000.0        # owner 2026-11-04
 const FUSE := 2500.0
-const DRY := 0.25
 const BOMB_DMG := 3.0
 const BOMB_R := 120.0
 const BOMB_HEAD := 1.5
 const HEAD_DMG := 4.0
 const MARK_DMG := 1.6           # one stamp popping
 const MARK_QTE := 3
-const MARK_HEAVY := 1
 const MARK_MAX := 8
 const CHAIN_GAP0 := 110.0       # the chain: the first gap, then each gap ×CHAIN_ACC down to CHAIN_GAP_MIN
 const CHAIN_ACC := 0.86
@@ -54,6 +52,7 @@ var chain: Array = []           # the detonation queue: {at, kind: "mark" / "bom
 var chain_t := 0.0
 var chain_n := 0                # pops so far in this chain
 var chain_tot := 0              # how many the chain holds
+var in_chain := false           # a bomb going off inside the chain stamps nothing (it would be left over)
 var assists: Array = []         # {x, y, dir, tg, t, fired}
 
 
@@ -119,7 +118,10 @@ func step(dt: float) -> void:
 		var need := BOMB_FIELD if field else BOMB_BENCH
 		if bomb_t >= need:
 			bomb_t = 0.0
-			bombs += 1
+			bombs = BOMBS
+			if field:
+				arena.sfx("ui_ok", 0.5, {"st": -3.0})
+				arena.text(P.position + Vector2(0, -150.0 * P.CSCALE), "폭탄 보충", Color("#e2f5b8"))
 	else:
 		bomb_t = 0.0
 	_step_shots(dt)
@@ -136,20 +138,18 @@ func step(dt: float) -> void:
 
 
 # ---------- the pistol ----------
-## one shot from the muzzle (o) along d (a unit vector); empty = a dry click with a weak ball
-func fire(o: Vector2, d: Vector2, dmg: float) -> void:
-	var is_dry := ammo <= 0
-	if not is_dry: ammo -= 1
-	var k := DRY if is_dry else 1.0
-	shots.append({"x": o.x, "y": o.y, "vx": d.x * SHOT_V, "vy": d.y * SHOT_V, "dmg": dmg * k, "dry": is_dry, "t": 0.0, "mul": _mul()})
-	# PLACEHOLDER sounds: there is no gunshot in the packs yet (the stab, pitched up); a dry pistol clicks
-	if is_dry:
+## one shot from the muzzle (o) along d (a unit vector); empty = nothing comes out, the trigger clicks (returns false)
+func fire(o: Vector2, d: Vector2, dmg: float) -> bool:
+	if ammo <= 0:
 		arena.sfx("ui_move", 0.7, {"st": -4.0})
-		if ammo <= 0 and reload_t < 200.0 and on_field():
-			arena.text(_P().position + Vector2(0, -150.0 * _P().CSCALE), "탄창 비었음", Color("#b9bfa8"))
-	else:
-		arena.sfx("thrust", 0.75, {"st": 5.0})
-	arena.pfx.hit(o.x, o.y, int(signf(d.x)) if d.x != 0.0 else 1, 0.55 if is_dry else 0.8)
+		arena.text(_P().position + Vector2(0, -150.0 * _P().CSCALE), "찰칵… 탄창 비었음", Color("#b9bfa8"))
+		return false
+	ammo -= 1
+	shots.append({"x": o.x, "y": o.y, "vx": d.x * SHOT_V, "vy": d.y * SHOT_V, "dmg": dmg, "dry": false, "t": 0.0, "mul": _mul()})
+	# PLACEHOLDER sound: there is no gunshot in the packs yet (the stab, pitched up)
+	arena.sfx("thrust", 0.75, {"st": 5.0})
+	arena.pfx.hit(o.x, o.y, int(signf(d.x)) if d.x != 0.0 else 1, 0.8)
+	return true
 
 func _step_shots(dt: float) -> void:
 	for s in shots:
@@ -178,6 +178,7 @@ func _land_shot(s: Dictionary, m) -> void:
 	arena.sfx("hit1", 0.4 if s["dry"] else 0.6)
 	if not s["dry"]:
 		arena.ult_gain(2.0)
+		add_marks(m, 1)
 		var b = _bomb_on(m)
 		if b != null:
 			_explode(b, BOMB_HEAD, true)
@@ -196,6 +197,7 @@ func can_throw() -> bool:
 func throw_bomb(o: Vector2, d: int, tx := NAN) -> void:
 	if bombs <= 0: return
 	bombs -= 1
+	bomb_t = 0.0                # the refill clock starts over from the last throw
 	var v := 0.5
 	if not is_nan(tx) and (tx - o.x) * d > 0.0: v = clampf(absf(tx - o.x) / 290.0, 0.3, 1.1)
 	bomb_fx.append({"x": o.x, "y": o.y, "vx": d * v, "vy": -0.3, "m": null, "ox": 0.0, "oy": 0.0, "on_floor": false, "t": 0.0, "fuse": FUSE, "done": false})
@@ -253,6 +255,7 @@ func _explode(b: Dictionary, k: float, head: bool) -> void:
 		if ec.distance_to(c) < R + 30.0:
 			var dd := signf(e.position.x - c.x) if e.position.x != c.x else 1.0
 			e.hit(BOMB_DMG * k, dd * 9.0, _mul())
+			if not in_chain: add_marks(e, 1)
 	arena.hit_by = ""
 	booms.append({"x": c.x, "y": c.y, "t": 0.0, "life": 420.0, "big": k > 1.0})
 	arena.sfx("heavy", 1.0)
@@ -391,7 +394,10 @@ func _step_chain(dt: float) -> void:
 		var last := chain.is_empty()
 		var st := minf(12.0, chain_n * 0.6)               # each pop a little higher
 		if it["kind"] == "bomb":
-			if not it["b"]["done"]: _explode(it["b"], 1.6, false)
+			if not it["b"]["done"]:
+				in_chain = true
+				_explode(it["b"], 1.6, false)
+				in_chain = false
 		else:
 			var e = it["m"]
 			if e != null and is_instance_valid(e) and e.alive():

@@ -34,7 +34,8 @@ const QTE_STAY := ["kenin"]
 
 const COMMON := {
 	"charge": [-1, [110, 1000000000]], "acharge": [-1, [110, 1000000000]], "gcharge": [-1, [1000000000]], "cthrust": [-1, [45, 60, 220, 170]],
-	"kcharge": [-1, [70, 70, 90, 1000000000]], "kfire": [-1, [40, 60, 300, 200]],     # Kenin's detonator (charged attack)
+	"kcharge": [-1, [70, 70, 90, 1000000000]], "kfire": [-1, [40, 60, 300, 200]],
+	"kdry": [-1, [130, 110, 170, 170, 230]],                                         # Kenin: the empty pistol     # Kenin's detonator (charged attack)
 	"airdash": [-1, [40, 55, 60, 60, 60, 90]], "backstep": [-1, [60, 110, 120]], "swap_in": [-1, [55, 55, 55, 55, 60, 70]],
 	"teeter": [28, [150, 140, 150, 190]], "teeterL": [-1, [300, 300, 340, 300]],
 }
@@ -120,7 +121,8 @@ const VIRT := {
 	"lgather": [["kneel", 0], ["kneel", 1]], "heal": [["idle", 0], ["idle", 1]],
 	"teeterL": [["teeter", 0], ["teeter", 1], ["teeter", 2], ["teeter", 1]],
 	"kcharge": [["detonate", 3], ["detonate", 4], ["detonate", 5], ["detonate", 6]],  # box out, set down, grips the plunger
-	"kfire": [["detonate", 6], ["detonate", 7], ["detonate", 8], ["detonate", 8]],    # slams it: chain_detonate on frame 2
+	"kfire": [["detonate", 6], ["detonate", 7], ["detonate", 8], ["detonate", 8]],
+	"kdry": [["attack1", 2], ["teeter", 0], ["teeter", 1], ["teeter", 2], ["teeter", 1]],  # click — huh? — flustered    # slams it: chain_detonate on frame 2
 }
 
 ## attack hit data (relative to the feet, facing right; before character scale)

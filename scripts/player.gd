@@ -336,10 +336,12 @@ func kenin_shoot() -> void:
 			var aim: Vector2 = (tg.position + Vector2(0, -55.0) - mz).normalized()
 			var ang := clampf(atan2(aim.y, absf(aim.x)), -0.3, 0.3)
 			d = Vector2(dir * cos(ang), sin(ang))
-	var was_dry: bool = arena.kenin.dry()
-	arena.kenin.fire(mz, d, ka["dmg"])
+	if not arena.kenin.fire(mz, d, ka["dmg"]):
+		# empty: no shot; on the ground he stops and looks at the pistol
+		if on: set_anim("kdry")
+		return
 	add_ghost(120.0, -dir * 10.0 * S)
-	if not was_dry:
+	if true:
 		if ka.get("heavy", false):
 			slide = -dir * 0.32 if on else slide          # the heavy shot's kick: a small skid back
 			arena.shake(4, -dir)
@@ -666,6 +668,8 @@ func step(dt: float) -> void:
 	elif a == "hurt" or a == "death" or a == "tag_out":
 		vx = 0.0
 	elif a == "tag_in" or a == "swap_in":
+		vx = 0.0
+	elif a == "kdry":
 		vx = 0.0
 	elif a == "kfire":
 		vx = 0.0
@@ -1324,7 +1328,7 @@ func advance(dt: float, move: int) -> void:
 				else:
 					anim = "jump"
 					f = 4
-			elif n in ["stop", "hurt", "attack1", "attack2", "attack3", "attack_high", "parry", "cthrust", "lfinisher", "heal", "kfire"]:
+			elif n in ["stop", "hurt", "attack1", "attack2", "attack3", "attack_high", "parry", "cthrust", "lfinisher", "heal", "kfire", "kdry"]:
 				set_anim("kneel" if keys["down"] else "idle")
 				if n.begins_with("attack"): combo_win = 0.0
 			elif n == "kneel_attack":

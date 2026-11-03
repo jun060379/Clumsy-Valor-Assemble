@@ -75,10 +75,14 @@ func _initialize() -> void:
 	ok(K.ammo == 0 and K.dry(), "the cylinder runs dry")
 	await until(func(): return K.shots.is_empty(), 3000.0)
 	var hp1: float = g.hp
-	K.fire(P.position + Vector2(40, -48), Vector2(1, 0), 1.0)
-	await until(func(): return K.shots.is_empty(), 3000.0)
-	ok(g.hp < hp1 and hp1 - g.hp < (hp0 - hp1) / 4.0, "a dry shot is weak (%.1f)" % (hp1 - g.hp))
-	ok(await until(func(): return K.ammo == K.AMMO, 6000.0), "an empty pistol reloads out front")
+	ok(not K.fire(P.position + Vector2(40, -48), Vector2(1, 0), 1.0) and K.shots.is_empty(), "empty: nothing comes out")
+	ok(K.marked_count() >= 1, "landed bullets leave stamps (%d)" % K.marked_count())
+	P.set_anim("attack1", 2)
+	ok(await until(func(): return P.anim == "kdry", 1500.0), "an empty attack: he looks at the pistol")
+	ok(await until(func(): return P.anim == "idle", 2000.0), "and gets over it")
+	K.reload_t = K.RELOAD_FIELD - 300.0
+	ok(await until(func(): return K.ammo == K.AMMO, 3000.0), "an empty pistol reloads out front")
+	K.marks.clear()
 
 	print("sticky bombs")
 	var b0: int = K.bombs
@@ -88,6 +92,8 @@ func _initialize() -> void:
 	var hp2: float = g.hp
 	ok(await until(func(): return K.live_bombs() == 0, 6000.0), "the fuse runs out")
 	ok(g.hp < hp2 - 2.0, "the blast hurts (%.1f)" % (hp2 - g.hp))
+	ok(K.marked_count() == 1, "and stamps the foe (%d)" % K.marked_count())
+	K.marks.clear()
 	K.throw_bomb(Vector2(g.position.x - 120.0, g.position.y - 88.0), 1)
 	await until(func(): return K._bomb_on(g) != null, 2000.0)
 	K.ammo = K.AMMO
@@ -124,6 +130,7 @@ func _initialize() -> void:
 	ok(P.who == "estelle", "no swap: Estelle stays in control")
 	ok(P.swap_cd == 0.0, "her swap cooldown is reset")
 	ok(K.assists.size() == 1, "he appears at the foe's side")
+	K.marks.clear()
 	var hp3: float = g.hp
 	ok(await until(func(): return K.assists.is_empty(), 3000.0), "and is gone")
 	ok(g.hp < hp3 and K.marked_count() == K.MARK_QTE, "the headshot lands and stamps (%.1f, %d)" % [hp3 - g.hp, K.marked_count()])
@@ -174,7 +181,7 @@ func _initialize() -> void:
 	P.swap_cd = 0.0
 	P.swap(false, "estelle")
 	await until(func(): return P.who == "estelle")
-	ok(await until(func(): return K.ammo == K.AMMO, 4000.0), "back in the party he rearms fast")
+	ok(await until(func(): return K.ammo == K.AMMO, 8000.0), "back in the party he rearms faster")
 
 	print("DONE: %d failed" % fails)
 	quit(1 if fails > 0 else 0)
