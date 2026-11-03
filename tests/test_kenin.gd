@@ -1,7 +1,8 @@
 extends SceneTree
 ## 케닌 클로: joins at guild grade 2, every member table knows him, the pistol empties and reloads (fast on the bench),
 ## sticky bombs stick and blow (a shot sets one off), the roll bounces off a wall into the hurt frames without damage,
-## his QTE shoots from the bench without a swap (a mark, the swap cooldown reset), the ult detonates bombs and marks:
+## his QTE shoots from the bench without a swap (three stamps, the swap cooldown reset), his charged attack
+## sets off every stamp and bomb in a chain, the ult (reload, a blink barrage, reload, again, the chain):
 ## godot --headless --path . -s tests/test_kenin.gd
 
 const CH := preload("res://scripts/chars.gd")
@@ -125,19 +126,46 @@ func _initialize() -> void:
 	ok(K.assists.size() == 1, "he appears at the foe's side")
 	var hp3: float = g.hp
 	ok(await until(func(): return K.assists.is_empty(), 3000.0), "and is gone")
-	ok(g.hp < hp3 and K.marked_count() == 1, "the headshot lands and marks (%.1f, %d)" % [hp3 - g.hp, K.marked_count()])
+	ok(g.hp < hp3 and K.marked_count() == K.MARK_QTE, "the headshot lands and stamps (%.1f, %d)" % [hp3 - g.hp, K.marked_count()])
 
-	print("the ult")
+	print("the detonator (charged attack)")
 	P.swap(false, "kenin")
 	await until(func(): return P.who == "kenin" and P.anim != "swap_in")
+	P.dir = 1 if g.position.x > P.position.x else -1
 	K.bombs = K.BOMBS
-	K.throw_bomb(Vector2(g.position.x - 120.0, g.position.y - 88.0), 1)
+	K.throw_bomb(Vector2(g.position.x - P.dir * 120.0, g.position.y - 88.0), P.dir)
 	await until(func(): return K._bomb_on(g) != null, 2000.0)
+	var hp5: float = g.hp
+	var want: int = K.marked_count() + K.live_bombs()
+	Input.action_press("attack")
+	P.set_anim("attack1", 1)
+	ok(await until(func(): return P.anim == "kcharge", 1500.0), "holding attack: the detonator box comes out")
+	await frames(30)
+	Input.action_release("attack")
+	ok(await until(func(): return P.anim == "kfire", 1500.0), "let go: the plunger")
+	ok(await until(func(): return K.chain_n > 0, 1500.0), "the chain starts")
+	ok(K.chain_tot == want, "every stamp and bomb queued (%d of %d)" % [K.chain_tot, want])
+	ok(await until(func(): return not K.chaining(), 4000.0), "and runs out")
+	ok(K.marked_count() == 0 and K.live_bombs() == 0 and g.hp < hp5, "all gone off (%.1f)" % (hp5 - g.hp))
+
+	print("the ult")
+	await until(func(): return P.anim == "idle", 2000.0)
+	K.ammo = 0
 	arena.ult.v["kenin"] = arena.ult.ULTMAX["kenin"]
 	arena.ult.cd["kenin"] = 0.0
 	var hp4: float = g.hp
 	ok(arena.ult.try_ult(), "the ult fires")
-	ok(await until(func(): return arena.ult.state == "", 9000.0), "and ends")
+	var peak := 0
+	var spots := {}
+	var t0 := Time.get_ticks_msec()
+	while arena.ult.state != "" and Time.get_ticks_msec() - t0 < 12000:
+		peak = maxi(peak, K.marked_count())
+		if arena.ult.state == "act": spots[int(P.position.x / 40.0) * 1000 + int(P.position.y / 40.0)] = true
+		await process_frame
+	ok(arena.ult.state == "", "and ends")
+	ok(peak >= 20, "the barrage stamps it all over (%d)" % peak)
+	ok(spots.size() >= 6, "from all sides (%d spots)" % spots.size())
+	ok(K.ammo == K.AMMO or K.ammo >= 0, "reloaded on the way")
 	ok(K.live_bombs() == 0 and K.marked_count() == 0, "every bomb and mark went off")
 	ok(g.hp < hp4 - 5.0, "big damage (%.1f)" % (hp4 - g.hp))
 

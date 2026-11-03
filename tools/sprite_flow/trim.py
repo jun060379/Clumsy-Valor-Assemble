@@ -45,14 +45,17 @@ TARGET_H = 186  # idle standing height in the cell
 def bbox(im):
     return im.getchannel("A").point(lambda v: 255 if v > 24 else 0).getbbox()
 
-idle1 = Image.open("frames/idle/01.png").convert("RGBA")
-ib = bbox(idle1)
-SCALE = TARGET_H / (ib[3] - ib[1])
+# Sprite Flow hands back two canvases (960x960 and 1112x834) with the figure at different sizes, and every motion starts
+# on the source pose: so each motion is scaled by its own first frame's height (the standing figure = TARGET_H)
+def motion_scale(m):
+    b0 = bbox(Image.open(sorted(glob.glob(f"frames/{m}/*.png"))[0]).convert("RGBA"))
+    return TARGET_H / (b0[3] - b0[1])
 os.makedirs("trimmed", exist_ok=True)
 meta = {}
 for m, keep in SEL.items():
     src = sorted(glob.glob(f"frames/{m}/*.png"))
     ims = [ImageOps.mirror(Image.open(src[k - 1]).convert("RGBA")) for k in keep]
+    SCALE = motion_scale(m)
     ims = [im.resize((int(im.width * SCALE), int(im.height * SCALE)), Image.LANCZOS) for im in ims]
     b0 = bbox(ims[0])
     # anchor: in-place motions keep the first frame's offset (feet on FOOT, centre on CX) so recoil reads;

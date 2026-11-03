@@ -1116,7 +1116,7 @@ func _slam(g: CanvasItem, e: Dictionary) -> bool:
 # ---------- CHARGE: motes streak in to the hilt, a glint grows, a burst at full charge ----------
 func _charge(g: CanvasItem, e: Dictionary) -> bool:
 	var P = arena.player
-	var live: bool = P.anim in ["charge", "acharge", "lgather", "gcharge"]
+	var live: bool = P.anim in ["charge", "acharge", "lgather", "gcharge", "kcharge"]
 	if not live and not e.has("endT"): e["endT"] = e["t"]
 	if e.has("endT") and e["t"] - e["endT"] > 160.0: return false
 	var C: Array = e["C"]

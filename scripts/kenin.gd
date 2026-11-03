@@ -1,6 +1,6 @@
 extends RefCounted
 ## 케닌 클로 (도적 · 원거리 · 트릭스터): the pistol, the sticky bombs, the QTE covering shot and the chain detonation.
-## Lives on the arena as `arena.kenin`; player.gd calls fire / throw / assist, ult.gd calls detonate_all.
+## Lives on the arena as `arena.kenin`; player.gd calls fire / throw / assist, the detonator (charged attack) and ult.gd call chain_detonate.
 ## The loop the owner set (2026-11-03): from the bench his QTE shoots a foe's head without swapping (a mark, the swap
 ## cooldown reset); out front he empties the cylinder and the bombs at high power, then he is weak until he reloads —
 ## and he reloads fast only off the field, so he goes back into the party to rearm.
@@ -9,7 +9,9 @@ extends RefCounted
 ##   bombs  BOMBS charges; one back every BOMB_BENCH ms on the bench, BOMB_FIELD ms out front. A thrown bomb sticks to
 ##          the first foe it touches (or rests on the floor) and blows after FUSE ms; a bullet hitting a foe that wears
 ##          one sets it off at once ×BOMB_HEAD.
-##   marks  the QTE headshot leaves a mark on the foe (stacks); the ult detonates every mark and every bomb.
+##   marks  stamps on a foe's body (several at once: the QTE headshot MARK_QTE, the heavy shots MARK_HEAVY, every ult shot
+##          one; at most MARK_MAX a foe). His charged attack (the detonator, chain_detonate) sets off every stamp and
+##          every bomb one after another, nearest first, faster and faster — 파바바방 — and the ult ends on the same chain.
 ## Every number here is a PLACEHOLDER until the owner tunes it.
 
 const CH := preload("res://scripts/chars.gd")
@@ -27,7 +29,13 @@ const BOMB_DMG := 3.0
 const BOMB_R := 120.0
 const BOMB_HEAD := 1.5
 const HEAD_DMG := 4.0
-const MARK_DMG := 2.5
+const MARK_DMG := 1.6           # one stamp popping
+const MARK_QTE := 3
+const MARK_HEAVY := 1
+const MARK_MAX := 8
+const CHAIN_GAP0 := 110.0       # the chain: the first gap, then each gap ×CHAIN_ACC down to CHAIN_GAP_MIN
+const CHAIN_ACC := 0.86
+const CHAIN_GAP_MIN := 38.0
 const SHOT_V := 2.4             # px / ms
 const SHOT_LIFE := 520.0
 ## the QTE assist: the headshot row's frame times (chars.gd A_KENIN "headshot"); the pistol fires on frame 5
@@ -41,7 +49,11 @@ var bomb_t := 0.0
 var shots: Array = []           # {x, y, vx, vy, dmg, dry, t, tr}
 var bomb_fx: Array = []         # {x, y, vx, vy, m (stuck foe or null), ox, oy, on_floor, t, fuse}
 var booms: Array = []           # {x, y, t, life, big}
-var marks := {}                 # instance id -> {m, n}
+var marks := {}                 # instance id -> {m, pts: [{ox, oy, t}]} (stamp offsets from the foe's feet, age)
+var chain: Array = []           # the detonation queue: {at, kind: "mark" / "bomb", m, ox, oy, b, i}
+var chain_t := 0.0
+var chain_n := 0                # pops so far in this chain
+var chain_tot := 0              # how many the chain holds
 var assists: Array = []         # {x, y, dir, tg, t, fired}
 
 
@@ -58,6 +70,7 @@ func reset() -> void:
 	booms.clear()
 	marks.clear()
 	assists.clear()
+	chain.clear()
 
 func _P():
 	return arena.player
@@ -112,6 +125,9 @@ func step(dt: float) -> void:
 	for k in marks.keys():
 		var e = marks[k]["m"]
 		if e == null or not is_instance_valid(e) or not e.alive(): marks.erase(k)
+		else:
+			for q in marks[k]["pts"]: q["t"] += dt
+	_step_chain(dt)
 
 
 # ---------- the pistol ----------
@@ -136,6 +152,7 @@ func _step_shots(dt: float) -> void:
 		var x0: float = s["x"]
 		s["x"] += s["vx"] * dt
 		s["y"] += s["vy"] * dt
+		if s.get("fake", false): continue          # the ult's tracers: the damage was dealt when it fired
 		# swept along this frame's path: a fast ball must not skip through a thin goblin
 		var lo := minf(x0, s["x"]) - 22.0
 		var hi := maxf(x0, s["x"]) + 22.0
@@ -298,9 +315,7 @@ func _headshot(a: Dictionary) -> void:
 	arena.hit_by = "kenin"
 	tg.hit(HEAD_DMG, a["dir"] * 6.0, _mul())
 	arena.hit_by = ""
-	var id: int = tg.get_instance_id()
-	if marks.has(id): marks[id]["n"] += 1
-	else: marks[id] = {"m": tg, "n": 1}
+	add_marks(tg, MARK_QTE)
 	arena.spark_ring(hp, 10)
 	arena.sfx("heavy", 0.9)
 	arena.hitstop = maxf(arena.hitstop, 70.0)
@@ -311,31 +326,130 @@ func _headshot(a: Dictionary) -> void:
 	if b != null: _explode(b, BOMB_HEAD, true)
 
 
-# ---------- the ult: 연쇄 기폭 ----------
-## every bomb and every mark goes off; returns how many went
-func detonate_all() -> int:
-	var n := 0
-	for b in bomb_fx.duplicate():
-		if not b["done"]:
-			_explode(b, 1.6, false)
-			n += 1
-	arena.hit_by = "kenin"
-	for k in marks.keys():
-		var e = marks[k]["m"]
-		if e != null and is_instance_valid(e) and e.alive():
-			var st: int = marks[k]["n"]
-			e.hit(MARK_DMG * st, 0.0, _mul())
-			booms.append({"x": e.position.x, "y": e.position.y - 70.0, "t": 0.0, "life": 420.0, "big": st > 1})
-			arena.spark_ring(Vector2(e.position.x, e.position.y - 70.0), 10)
-			n += st
-	arena.hit_by = ""
-	marks.clear()
-	return n
+# ---------- marks and the chain detonation ----------
+## n stamps on a foe's body, each one stamped in with its own pop (the pitch climbs with how many it wears)
+func add_marks(m, n: int, cap := MARK_MAX) -> void:
+	if m == null or not is_instance_valid(m) or not m.alive(): return
+	var id: int = m.get_instance_id()
+	if not marks.has(id): marks[id] = {"m": m, "pts": []}
+	var pts: Array = marks[id]["pts"]
+	var fly: bool = m.get("M") != null and m.M.has("fly")
+	for i in n:
+		if pts.size() >= cap: break
+		var k := pts.size()
+		# spread over the body: alternate sides, climbing
+		var ox := (-1.0 if k % 2 == 0 else 1.0) * (6.0 + randf() * 12.0)
+		var oy := -(20.0 + fmod(k * 23.0 + randf() * 14.0, 70.0)) if not fly else -(randf() * 30.0)
+		pts.append({"ox": ox, "oy": oy, "t": -i * 45.0})        # stamped one after another, 45 ms apart
+		arena.sfx("ui_ok", 0.45, {"st": minf(14.0, 2.0 * k), "delay_ms": i * 45.0})
 
 func marked_count() -> int:
 	var n := 0
-	for k in marks: n += int(marks[k]["n"])
+	for k in marks: n += (marks[k]["pts"] as Array).size()
 	return n
+
+## the detonator: every stamp and every bomb into the queue, nearest to `o` first, the gaps shrinking; returns how many
+func chain_detonate(o: Vector2) -> int:
+	var items: Array = []
+	for k in marks:
+		var e = marks[k]["m"]
+		if e == null or not is_instance_valid(e) or not e.alive(): continue
+		for q in marks[k]["pts"]:
+			items.append({"kind": "mark", "m": e, "ox": q["ox"], "oy": q["oy"], "d": Vector2(e.position.x + q["ox"], e.position.y + q["oy"]).distance_to(o)})
+	for b in bomb_fx:
+		if not b["done"]:
+			items.append({"kind": "bomb", "b": b, "d": Vector2(b["x"], b["y"]).distance_to(o)})
+	marks.clear()
+	items.sort_custom(func(x, y): return x["d"] < y["d"])
+	var at := 60.0
+	var gap := CHAIN_GAP0
+	for i in items.size():
+		items[i]["at"] = at
+		items[i]["i"] = i
+		at += gap
+		gap = maxf(CHAIN_GAP_MIN, gap * CHAIN_ACC)
+	chain = items
+	chain_t = 0.0
+	chain_n = 0
+	chain_tot = items.size()
+	return items.size()
+
+func chaining() -> bool:
+	return not chain.is_empty()
+
+func _step_chain(dt: float) -> void:
+	if chain.is_empty(): return
+	chain_t += dt
+	while not chain.is_empty() and chain[0]["at"] <= chain_t:
+		var it: Dictionary = chain.pop_front()
+		chain_n += 1
+		var last := chain.is_empty()
+		var st := minf(12.0, chain_n * 0.6)               # each pop a little higher
+		if it["kind"] == "bomb":
+			if not it["b"]["done"]: _explode(it["b"], 1.6, false)
+		else:
+			var e = it["m"]
+			if e != null and is_instance_valid(e) and e.alive():
+				var c := Vector2(e.position.x + it["ox"], e.position.y + it["oy"])
+				arena.hit_by = "kenin"
+				e.hit(MARK_DMG, 0.0, _mul())
+				arena.hit_by = ""
+				booms.append({"x": c.x, "y": c.y, "t": 0.0, "life": 300.0, "big": false, "r": 46.0})
+				arena.spark(c, 6)
+				arena.pfx.hit(c.x, c.y, 1 if it["i"] % 2 == 0 else -1, 0.9)
+				arena.sfx("hit2" if it["i"] % 2 == 0 else "hit1", 0.7, {"st": st})
+				arena.sfx("slam", 0.25, {"st": st})
+				arena.hitstop = maxf(arena.hitstop, 28.0)          # 스톱 모션: every pop holds the world a beat
+				arena.shake(2.0 + minf(6.0, chain_n * 0.4), 1 if it["i"] % 2 == 0 else -1)
+		if last:
+			_chain_finale(it)
+
+## the chain's last pop: a big one, the count, the screen kicks
+func _chain_finale(it: Dictionary) -> void:
+	var c: Vector2
+	if it["kind"] == "bomb": c = Vector2(it["b"]["x"], it["b"]["y"])
+	else:
+		var e = it["m"]
+		c = Vector2(e.position.x + it["ox"], e.position.y + it["oy"]) if e != null and is_instance_valid(e) else _P().position
+	booms.append({"x": c.x, "y": c.y, "t": 0.0, "life": 520.0, "big": true, "r": BOMB_R * 1.25})
+	arena.sfx("heavy", 1.0)
+	arena.sfx("slam", 0.9)
+	arena.hitstop = maxf(arena.hitstop, 90.0)
+	arena.flash = maxf(arena.flash, 0.3)
+	arena.shake(10.0 + minf(8.0, chain_tot * 0.5), 1)
+	arena.post_wave(c, 1.4, 600.0, 0.35)
+	arena.post_ca(0.02)
+	arena.spark_ring(c, 16)
+	if chain_tot >= 2: arena.big_word("연쇄 ×%d" % chain_tot, Color("#e8ffb0"), 900.0, Vector2.ZERO, c + Vector2(0, -90.0))
+
+## ult.gd: a shot that always lands (a tracer toward `at`, the damage dealt by ult.gd), each one a stamp on the foe
+func ult_shot(o: Vector2, at: Vector2, m) -> void:
+	var v := (at - o).normalized() * SHOT_V * 1.6
+	var life := clampf(o.distance_to(at) / (SHOT_V * 1.6), 20.0, 200.0)
+	shots.append({"x": o.x, "y": o.y, "vx": v.x, "vy": v.y, "dmg": 0.0, "dry": false, "t": SHOT_LIFE - life, "mul": _mul(), "fake": true})
+	arena.sfx("thrust", 0.85, {"st": 5.0 + randf() * 2.0})
+	arena.pfx.hit(at.x, at.y, 1 if v.x >= 0.0 else -1, 0.9)
+	arena.spark(o, 3)
+	if m != null and is_instance_valid(m) and m.alive():
+		add_marks(m, 1, 40)
+
+## the detonator with nothing to set off: the box itself kicks (a small blast in front of him)
+func dud_blast(c: Vector2) -> void:
+	arena.hit_by = "kenin"
+	for e in arena.foes():
+		if Vector2(e.position.x, e.position.y - 50.0).distance_to(c) < 90.0:
+			e.hit(BOMB_DMG * 0.6, signf(e.position.x - c.x) * 6.0, _mul())
+	arena.hit_by = ""
+	booms.append({"x": c.x, "y": c.y, "t": 0.0, "life": 320.0, "big": false, "r": 70.0})
+	arena.sfx("slam", 0.6)
+	arena.shake(4.0, 1)
+	arena.spark_ring(c, 8)
+
+## ult.gd: a bomb slapped straight onto the foe
+func ult_bomb(m) -> void:
+	if m == null or not is_instance_valid(m) or not m.alive(): return
+	bomb_fx.append({"x": m.position.x, "y": m.position.y - 50.0, "vx": 0.0, "vy": 0.0, "m": m, "ox": randf_range(-14.0, 14.0), "oy": randf_range(-80.0, -30.0), "on_floor": false, "t": 0.0, "fuse": 99999.0, "done": false})
+	arena.sfx("ui_move", 0.6, {"st": -7.0})
 
 func live_bombs() -> int:
 	return bomb_fx.filter(func(b): return not b["done"]).size()
@@ -346,6 +460,7 @@ const OLV := Color("#9cc14a")
 const OLV_L := Color("#e2f5b8")
 const BRASS := Color("#f1c35a")
 const SOOT := Color("#26231f")
+const MARK_COL := [Color("#9cc14a"), Color("#c9d64a"), Color("#f1c35a"), Color("#f0963a"), Color("#ff5a3a")]
 
 func draw(g: CanvasItem) -> void:
 	var t := float(Time.get_ticks_msec())
@@ -366,22 +481,28 @@ func draw(g: CanvasItem) -> void:
 		p.rect(-1, -5, 2, 1, Color("#6b6156"))
 		var blink: bool = b["fuse"] < 900.0 and int(b["fuse"] / 90.0) % 2 == 0 or b["fuse"] >= 900.0 and int(b["fuse"] / 220.0) % 2 == 0
 		p.px(1, -6, Color("#ff5a3a") if blink else Color("#ffd08a"))
+	# stamps: each pops in big (stamped), settles, then throbs — faster the more the foe wears; colour climbs with the count
 	for k in marks:
 		var e = marks[k]["m"]
 		if e == null or not is_instance_valid(e) or not e.alive(): continue
-		var p := PFX.PX.new(g, e.position.x, e.position.y - 128.0)
-		var r := 4.0 + (1.0 if int(t / 260.0) % 2 == 0 else 0.0)
-		p.circle(0, 0, r, OLV)
-		p.line(-r - 2, 0, -r + 1, 0, OLV_L)
-		p.line(r - 1, 0, r + 2, 0, OLV_L)
-		p.line(0, -r - 2, 0, -r + 1, OLV_L)
-		p.line(0, r - 1, 0, r + 2, OLV_L)
-		if marks[k]["n"] > 1:
-			for i in mini(5, marks[k]["n"]):
-				p.px(-4 + i * 2, r + 4, BRASS)
+		var pts: Array = marks[k]["pts"]
+		var cc: Color = MARK_COL[mini(MARK_COL.size() - 1, pts.size() - 1)]
+		var beat := maxf(110.0, 330.0 - pts.size() * 30.0)
+		for q in pts:
+			if q["t"] < 0.0: continue
+			var pop := 1.0 + maxf(0.0, 1.0 - q["t"] / 120.0) * 0.9
+			var on_beat := int((t + q["ox"] * 13.0) / beat) % 2 == 0
+			var r := (2.0 + (0.6 if on_beat else 0.0)) * pop
+			var p := PFX.PX.new(g, e.position.x + q["ox"], e.position.y + q["oy"])
+			p.circle(0, 0, r, cc)
+			p.line(-r - 2, 0, -r + 1, 0, OLV_L)
+			p.line(r - 1, 0, r + 2, 0, OLV_L)
+			p.line(0, -r - 2, 0, -r + 1, OLV_L)
+			p.line(0, r - 1, 0, r + 2, OLV_L)
+			if q["t"] < 60.0: p.disc(0, 0, r * 0.6, Color.WHITE)
 	for bo in booms:
 		var kk: float = bo["t"] / bo["life"]
-		var rad: float = (BOMB_R * (1.15 if bo["big"] else 1.0)) / PFX.S
+		var rad: float = float(bo.get("r", BOMB_R * (1.15 if bo["big"] else 1.0))) / PFX.S
 		var p := PFX.PX.new(g, bo["x"], bo["y"])
 		var f := PFX.fr(bo["t"])
 		if f < 2: p.disc(0, 0, rad * 0.45, Color("#fff4cf"))

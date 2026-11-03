@@ -90,7 +90,7 @@ func _initialize() -> void:
 	await frames(6)
 	await press("swap")
 	await frames(40)
-	print("SCENE ult")
+	print("SCENE detonator")
 	P.swap_cd = 0.0
 	await press("swap")
 	await frames(40)
@@ -99,9 +99,15 @@ func _initialize() -> void:
 	await frames(26)
 	await press("guard")
 	await frames(20)
+	arena.kenin.add_marks(g1, 4)
+	arena.kenin.add_marks(g2, 3)
+	await frames(20)
+	await press("attack", 30)            # held: the box comes out; let go: the plunger, the chain
+	await frames(70)
+	print("SCENE ult")
 	arena.ult.v["kenin"] = arena.ult.ULTMAX["kenin"]
 	arena.ult.cd["kenin"] = 0.0
 	await press("ult", 3)
-	await frames(150)
+	await frames(260)
 	print("SCENE done")
 	quit()

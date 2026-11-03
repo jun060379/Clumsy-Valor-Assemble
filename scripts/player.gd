@@ -667,7 +667,15 @@ func step(dt: float) -> void:
 		vx = 0.0
 	elif a == "tag_in" or a == "swap_in":
 		vx = 0.0
-	elif a in ["charge", "acharge", "lgather", "gcharge"]:
+	elif a == "kfire":
+		vx = 0.0
+		if f >= 2 and not fx_done:
+			fx_done = true
+			var n: int = arena.kenin.chain_detonate(position + Vector2(dir * 30.0 * CSCALE, -40.0 * CSCALE))
+			arena.sfx("slam", 0.8)
+			arena.shake(5.0, dir)
+			if n == 0: arena.kenin.dud_blast(position + Vector2(dir * 60.0 * CSCALE, -30.0 * CSCALE))
+	elif a in ["charge", "acharge", "lgather", "gcharge", "kcharge"]:
 		if move != 0 and a != "lgather": dir = move
 		vx = 0.0
 		charge_t += dt
@@ -687,6 +695,9 @@ func step(dt: float) -> void:
 				arena.sfx("ui_ok", 0.5)
 			elif a == "acharge":
 				rift_strike(r)
+			elif a == "kcharge":
+				set_anim("kfire")
+				arena.sfx("ui_ok", 0.6, {"st": -3.0})
 			else:
 				set_anim("cthrust")
 				arena.sfx("thrust")
@@ -1313,7 +1324,7 @@ func advance(dt: float, move: int) -> void:
 				else:
 					anim = "jump"
 					f = 4
-			elif n in ["stop", "hurt", "attack1", "attack2", "attack3", "attack_high", "parry", "cthrust", "lfinisher", "heal"]:
+			elif n in ["stop", "hurt", "attack1", "attack2", "attack3", "attack_high", "parry", "cthrust", "lfinisher", "heal", "kfire"]:
 				set_anim("kneel" if keys["down"] else "idle")
 				if n.begins_with("attack"): combo_win = 0.0
 			elif n == "kneel_attack":
@@ -1366,6 +1377,11 @@ func advance(dt: float, move: int) -> void:
 				f = 3
 			else:
 				f = 0
+			break
+		if anim == "attack1" and f == 2 and keys["attack"] and on and who == "kenin":
+			set_anim("kcharge", 0)
+			charge_t = 110.0
+			cfull = false
 			break
 		if anim == "attack1" and f == 2 and keys["attack"] and on and who != "kenin":
 			set_anim({"estelle": "charge", "aida": "acharge", "luce": "lgather"}[who], 1)

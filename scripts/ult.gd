@@ -315,35 +315,157 @@ func _step_aida(_dt: float, P, S: float) -> void:
 			arena.impact("ult", P.position + Vector2(P.dir * 120.0, -60.0), P.dir)   # 타격감
 		if u > 1250.0: end()
 
-## 케닌 「연쇄 기폭」: the pistol goes in the belt, the detonator box comes out of the backpack, a grin, the plunger slams
-## down: every sticky bomb and every QTE mark goes off (kenin.gd detonate_all), and a blast around the box itself
+## 케닌 「연쇄 기폭」: one foe. A snap reload, then he blinks around it — ground, air, low, overhead, the far side — two
+## shots from every spot (each one a stamp, kenin.gd ult_shot) and bombs slapped onto it; reload again, the same round
+## faster; then he lands behind it, sets the box down, grins, and slams the plunger: every stamp and bomb goes off in a
+## chain (kenin.gd chain_detonate). Every blink holds the world a beat (스톱 모션) and leaves an afterimage.
+## spot: [dx, dy (above the foe's feet; 0 = on the floor), faces (+1 = toward the foe), anim, frames, muzzle, bomb]
+const K_SPOTS := [
+	[-150.0, 0.0, "attack1", [1, 2, 3, 4], "flat", false],
+	[130.0, 170.0, "air_combo", [1, 2, 4, 5], "flat", true],
+	[-190.0, 0.0, "kneel_attack", [2, 3, 4, 5], "kneel", false],
+	[-30.0, 290.0, "dive", [0, 1, 1, 2], "down", true],
+	[155.0, 0.0, "attack2", [1, 2, 3, 4], "flat", false],
+	[-120.0, 210.0, "air_combo", [4, 5, 7, 8], "flat", true],
+]
+const K_RELOAD := 300.0
+const K_BLINK := [240.0, 165.0]          # a blink's length, round 1 / round 2
+
+func _k_round_t(r: int) -> float:
+	return K_RELOAD + (K_BLINK[0] * K_SPOTS.size() + K_RELOAD) * r
+
+func _k_target():
+	var K = arena.kenin
+	var tg = sh.get("tg")
+	if tg != null and is_instance_valid(tg) and tg.alive(): return tg
+	# it fell: the next foe near the spot, or keep shooting the spot
+	var best = null
+	var bd := 500.0
+	for e in _foes():
+		var d: float = absf(e.position.x - sh["tx"])
+		if d < bd:
+			bd = d
+			best = e
+	sh["tg"] = best
+	return best
+
+func _k_reload(P, S: float, n: int) -> void:
+	var K = arena.kenin
+	K.ammo = K.AMMO
+	K.bombs = K.BOMBS
+	K.reload_t = 0.0
+	pose("bomb", 1)
+	arena.big_word("재장전!" if n == 0 else "재장전!!", Color("#e8ffb0"), 520.0, Vector2.ZERO, P.position + Vector2(0, -170.0 * S))
+	arena.sfx("ui_ok", 0.9, {"st": 3.0 + n * 3.0})
+	arena.sfx("ui_move", 0.7, {"st": -2.0, "delay_ms": 90.0})
+	arena.flash = maxf(arena.flash, 0.12)
+	arena.hitstop = maxf(arena.hitstop, 70.0)
+
 func _step_kenin(_dt: float, P, S: float) -> void:
-	var D: int = P.dir
-	if t < 700.0:
-		pose("detonate", mini(4, int(t / 140.0)))
-	elif t < 1000.0:
-		pose("detonate", 5 if t < 850.0 else 6)
-		if once("grip"): arena.sfx("ui_ok", 0.6)
+	var K = arena.kenin
+	if once("init"):
+		var tg0 = null
+		var bd := 640.0
+		for e in _foes():
+			var d: float = absf(e.position.x - P.position.x)
+			if d < bd and absf(e.position.y - P.position.y) < 260.0:
+				bd = d
+				tg0 = e
+		var tx: float = tg0.position.x if tg0 != null else P.position.x + P.dir * 200.0
+		sh = {"tg": tg0, "tx": tx, "ty": tg0.position.y if tg0 != null else P.position.y, "side": -1.0 if tx >= P.position.x else 1.0, "chain_end": -1.0}
+		_k_reload(P, S, 0)
+	var tg = _k_target()
+	if tg != null:
+		sh["tx"] = tg.position.x
+		sh["ty"] = tg.position.y
+	var tx: float = sh["tx"]
+	var ty: float = sh["ty"]
+	var aim := Vector2(tx, (_ey(tg) if tg != null else ty - 55.0))
+	P.cam_focus = {"x": tx, "t": 300.0}
+	var n_spots := K_SPOTS.size()
+	var r1 := _k_round_t(1)
+	var t_end_rounds := r1 + K_BLINK[1] * n_spots
+	if t < K_RELOAD:
+		pose("bomb", 1 if t < 150.0 else 2)
+		return
+	if t < t_end_rounds:
+		var rnd := 0 if t < r1 - K_RELOAD else (1 if t >= r1 else -1)
+		if rnd == -1:
+			if once("reload2"): _k_reload(P, S, 1)
+			pose("bomb", 1 if t < r1 - K_RELOAD * 0.5 else 2)
+			return
+		var t0: float = K_RELOAD if rnd == 0 else r1
+		var bl: float = K_BLINK[rnd]
+		var i := mini(n_spots - 1, int((t - t0) / bl))
+		var u: float = t - t0 - i * bl
+		var sp: Array = K_SPOTS[i]
+		var side: float = sh["side"] * (1.0 if rnd == 0 else -1.0)       # round 2 comes from the mirrored spots
+		var px: float = clampf(tx + sp[0] * side * S / 0.88, 40.0, arena.world_w - 40.0)
+		var fl: float = K._floor(px)
+		var py: float = fl if sp[1] == 0.0 else minf(fl, ty) - sp[1] * S / 0.88
+		var key := "b%d_%d" % [rnd, i]
+		if once(key):
+			P.add_ghost(220.0)                                    # the afterimage where he was
+			P.position = Vector2(px, py)
+			P.dir = 1 if tx >= px else -1
+			arena.spark_ring(Vector2(px, py - 50.0 * S), 8)
+			arena.sfx("swing", 0.7, {"st": 6.0 + i})
+			arena.hitstop = maxf(arena.hitstop, 45.0 if rnd == 0 else 30.0)   # 스톱 모션: every blink lands on a held frame
+		P.position = Vector2(px, py)
+		P.vy = 0.0
+		var frs: Array = sp[3]
+		pose(sp[2], frs[mini(frs.size() - 1, int(u / (bl / frs.size())))])
+		var D: int = P.dir
+		var mz: Vector2
+		match sp[4]:
+			"down": mz = P.position + Vector2(D * 4.0, -6.0) * S
+			"kneel": mz = P.position + Vector2(D * 36.0, -24.0) * S
+			_: mz = P.position + Vector2(D * 34.0, -44.0) * S
+		for k in 2:
+			if u >= bl * (0.28 + 0.3 * k) and once(key + "s%d" % k):
+				var hp := aim + Vector2(randf_range(-10.0, 10.0), randf_range(-16.0, 16.0))
+				K.ult_shot(mz, hp, tg)
+				if tg != null: hit(tg, 0.4)
+				K.ammo = maxi(0, K.ammo - 1)
+				arena.shake(2.0, D)
+		if sp[5] and u >= bl * 0.8 and once(key + "b"):
+			K.ult_bomb(tg)
+			K.bombs = maxi(0, K.bombs - 1)
+		return
+	# the finale: behind the foe, the box, a grin, the plunger
+	var tf := t - t_end_rounds
+	if once("behind"):
+		P.add_ghost(260.0)
+		var away: float = sh["side"]                              # he started on this side of it: lands on the other
+		var bx := clampf(tx - away * 95.0 * S / 0.88, 40.0, arena.world_w - 40.0)
+		P.position = Vector2(bx, K._floor(bx))
+		P.vy = 0.0
+		P.dir = 1 if tx >= bx else -1
+		arena.spark_ring(P.position + Vector2(0, -50.0 * S), 10)
+		arena.sfx("swing", 0.8, {"st": 2.0})
+		arena.hitstop = maxf(arena.hitstop, 60.0)
+	P.vy = 0.0
+	if tf < 360.0:
+		pose("detonate", 4 if tf < 120.0 else (5 if tf < 240.0 else 6))
+	elif tf < 600.0:
+		pose("detonate", 6)                                       # the grin, held
+		if once("grip"):
+			arena.sfx("ui_ok", 0.7, {"st": -5.0})
+			arena.flash = maxf(arena.flash, 0.1)
 	else:
-		pose("detonate", 7 if t < 1120.0 else 8)
-		if once("boom"):
-			var n: int = arena.kenin.detonate_all()
-			var bx: float = P.position.x + D * 40.0 * S
-			var by: float = P.position.y - 30.0 * S
-			fx.append({"k": "burst", "x": bx, "y": by, "r": 150.0, "t": 0.0, "life": 520.0})
-			for e in _foes():
-				if absf(e.position.x - bx) < 230.0 and absf(e.position.y - P.position.y) < 160.0: hit(e, 1.5)
-			arena.text(P.position + Vector2(0, -190.0 * S), "연쇄 기폭 ×%d" % n if n > 0 else "기폭!", Color("#e8ffb0"))
+		pose("detonate", 7 if tf < 700.0 else 8)
+		if once("slam"):
+			var n: int = K.chain_detonate(P.position + Vector2(P.dir * 30.0 * S, -30.0 * S))
+			if n == 0: K.dud_blast(P.position + Vector2(P.dir * 60.0 * S, -30.0 * S))
 			arena.sfx("ult", 1.0)              # the impact
 			arena.sfx("slam", 1.0)
-			arena.sfx("heavy", 0.9)
-			arena.post_wave(Vector2(bx, by), 1.6, 700.0, 0.5)
-			arena.post_ca(0.025)
-			arena.flash = 0.45
-			arena.shake(14.0 + minf(10.0, n * 1.5), D)
+			arena.flash = 0.35
+			arena.shake(9.0, P.dir)
 			arena.hitstop = 110.0
-			arena.impact("ult", Vector2(bx, by), D)   # 타격감
-		if t >= 1650.0: end()
+			arena.post_ca(0.02)
+			arena.impact("ult", P.position + Vector2(P.dir * 30.0 * S, -30.0 * S), P.dir)   # 타격감
+		if not K.chaining() and sh["chain_end"] < 0.0: sh["chain_end"] = t
+		if (sh["chain_end"] >= 0.0 and t - sh["chain_end"] > 450.0) or tf > 6000.0: end()
 
 func _step_luce(dt: float, P, S: float) -> void:
 	var D: int = P.dir
