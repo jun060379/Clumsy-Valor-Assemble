@@ -852,15 +852,22 @@ const SNAP_MAX := 0.09
 const SNAP := {"hit1": true, "hit2": true, "hit3": true, "heavy": true, "thrust": true, "parry": true, "ult": true}
 const JITTER := {"hit1": 0.5, "hit2": 0.5, "hit3": 0.5, "heavy": 0.5, "thrust": 0.5, "hurt": 0.5}
 const FILES := {"thrust": "stab", "dash": "dodge", "ui_move": "menu_move", "ui_ok": "menu_ok", "ui_back": "menu_back"}
+## round robin: a base with n variants plays <base>_<k>, never the same k twice in a row (sfx_file)
+const VARIANTS := {"hit1": 4, "hit2": 4, "hit3": 4, "heavy": 4, "stab": 3, "parry": 2, "hurt": 3, "swing": 3, "step": 6}
+## a hit within REPEAT_MS of the last one plays lighter (the fast combo stays light, the finisher lands)
+var repeat_ms := 300.0          # tests set 0
+const REPEAT_K := 0.7
+var vari_last := {}
+var hit_last_ms := -99999.0
 const UI_CLICKS := ["ui1", "ui2", "ui3"]
-const LEVEL := {"hit1": 0.85, "hit2": 0.9, "hit3": 0.75, "heavy": 1.0, "parry": 1.25, "stab": 0.9, "hurt": 0.8, "dodge": 0.55, "ult": 1.0, "ui1": 0.8, "ui2": 0.5, "ui3": 0.55,
+const LEVEL := {"hit1": 0.9, "hit2": 0.9, "hit3": 0.9, "heavy": 1.0, "parry": 1.1, "stab": 0.9, "hurt": 0.9, "dodge": 0.6, "ult": 1.0, "swing": 0.45, "step": 0.5, "ui1": 0.8, "ui2": 0.5, "ui3": 0.55,
 	"pick_coin": 0.53, "pick_stone": 0.68, "pick_rune": 0.53,
 	"menu_move": 0.48, "menu_ok": 0.48, "menu_back": 0.54,
 	"jingle_lv": 0.93, "jingle_rank": 1.12, "jingle_quest": 1.17, "jingle_death": 0.86, "jingle_book": 0.80,
 	"impact_boss_in": 1.48, "impact_boss_down": 1.62,
 	"jump": 0.34, "djump": 0.50, "land": 0.38, "ult_sub": 0.63}
 const DUCK := {"heavy": [4.0, 120.0], "parry": [4.0, 120.0], "ult": [6.0, 250.0]}
-const LAYERS := {"ult": [["ult_sub", 0.9]]}      # name -> [[file, vol]…] played with it, at the same moment
+const LAYERS := {}      # name -> [[file, vol]…] played with it, at the same moment (none now: the recordings stand alone)
 ## the pickup words (arena.text → the GET notice) and their sounds; 룬 and 장비 share pick_rune
 const PICKUPS := {"실링": "pick_coin", "기억석": "pick_stone", "룬 · ": "pick_rune", "장비": "pick_rune"}
 const PICK_VOL := 0.55
@@ -876,7 +883,13 @@ func sfx(n: String, vol := 1.0, opts := {}) -> void:
 	var jit: float = float(opts.get("jitter", JITTER.get(n, 0.0)))
 	if jit > 0.0: st_ += randf_range(-jit, jit)
 	var raw := n == "boom" or n == "witch_end"     # the slow-down's own cues play dry (boom / witchEnd: __raw)
-	var p := {"t": float(opts.get("delay_ms", 0.0)), "file": file, "vol": vol * float(LEVEL.get(file, 1.0)), "pitch": pow(2.0, st_ / 12.0), "raw": raw, "n": n}
+	var base := String(FILES.get(n, n))
+	var lv: float = float(LEVEL.get(file, LEVEL.get(base, 1.0)))
+	if VARIANTS.has(base) and base in ["hit1", "hit2", "hit3", "heavy", "stab"]:
+		var now := Time.get_ticks_msec()
+		if repeat_ms > 0.0 and now - hit_last_ms < repeat_ms: lv *= REPEAT_K
+		hit_last_ms = now
+	var p := {"t": float(opts.get("delay_ms", 0.0)), "file": file, "vol": vol * lv, "pitch": pow(2.0, st_ / 12.0), "raw": raw, "n": n}
 	if bool(opts.get("snap", SNAP.get(n, false))):
 		var d: float = snap_delay()
 		if d > 0.0: p["t"] += d * 1000.0
@@ -900,7 +913,14 @@ func sfx_file(n: String) -> String:
 	if n == "ready":
 		ui_click = (ui_click + 1) % UI_CLICKS.size()
 		return UI_CLICKS[ui_click]
-	return FILES.get(n, n)
+	var base := String(FILES.get(n, n))
+	if VARIANTS.has(base):
+		var cnt: int = VARIANTS[base]
+		var k := randi() % cnt
+		if cnt > 1 and k == int(vari_last.get(base, -1)): k = (k + 1) % cnt
+		vari_last[base] = k
+		return "%s_%d" % [base, k + 1]
+	return base
 
 ## the file's stream: assets/sfx/<file>.ogg first (the pack's processed sounds), else <file>.wav; cached by file
 func sfx_stream(file: String) -> AudioStream:

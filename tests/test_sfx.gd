@@ -27,10 +27,12 @@ func run(s: float) -> void:
 		await process_frame
 
 ## the pool player that last started: the one with this stream
+## the player sounding `file`; a base with variants (hit1 → hit1_1..4) matches any of them
 func player_of(file: String) -> AudioStreamPlayer:
-	var st = arena.sfx_cache.get(file)
 	for ap in arena.sfx_pool:
-		if ap.stream == st and ap.playing: return ap
+		if ap.playing and ap.stream != null:
+			var f: String = ap.stream.resource_path.get_file().get_basename()
+			if f == file or (arena.VARIANTS.has(file) and f.begins_with(file + "_")): return ap
 	return null
 
 func stop_all() -> void:
@@ -42,31 +44,45 @@ func _initialize() -> void:
 	root.add_child(arena)
 	await process_frame
 	await process_frame
+	arena.repeat_ms = 0.0          # the fast-repeat lightening is checked on its own below
 	var P = arena.player
 	var B = arena.bgm
 
 	print("-- the files")
-	for f in ["hit1", "hit2", "hit3", "heavy", "stab", "parry", "hurt", "dodge", "ult", "ui1", "ui2", "ui3", "hit", "swing", "guard", "slam", "step", "skid", "dive", "dig", "break", "boom", "witch_end", "flare", "alert", "alert_q"]:
+	for f in ["ui1", "ui2", "ui3", "hit", "guard", "slam", "skid", "dive", "dig", "break", "boom", "witch_end", "flare", "alert", "alert_q"]:
 		var st = arena.sfx_stream(f)
 		check(st is AudioStreamWAV, "assets/sfx/%s.wav loads" % f)
+	for base in arena.VARIANTS:
+		for k in int(arena.VARIANTS[base]):
+			check(arena.sfx_stream("%s_%d" % [base, k + 1]) is AudioStreamOggVorbis, "assets/sfx/%s_%d.ogg loads" % [base, k + 1])
+	for f in ["dodge", "ult", "jump", "land"]:
+		check(arena.sfx_stream(f) is AudioStreamOggVorbis, "assets/sfx/%s.ogg loads" % f)
 	for f in ["thrust", "dash", "ready"]:
 		check(not ResourceLoader.exists("res://assets/sfx/%s.wav" % f), "the old %s.wav is gone" % f)
-	check(arena.sfx_file("thrust") == "stab" and arena.sfx_file("dash") == "dodge" and arena.sfx_file("hit") == "hit" and arena.sfx_file("heavy") == "heavy", "logical → file: thrust = stab, dash = dodge, hit / heavy themselves")
+	check(arena.sfx_file("thrust").begins_with("stab_") and arena.sfx_file("dash") == "dodge" and arena.sfx_file("hit") == "hit" and arena.sfx_file("heavy").begins_with("heavy_"), "logical → file: thrust = stab_k, dash = dodge, hit itself, heavy = heavy_k")
+	var seen := {}
+	var prev := ""
+	for i in 40:
+		var f: String = arena.sfx_file("hit1")
+		seen[f] = true
+		check(f != prev, "round robin never repeats a variant back to back (%s)" % f) if f == prev else null
+		prev = f
+	check(seen.size() == 4, "hit1 cycles its four variants (%d seen)" % seen.size())
 	# the pack: processed OGGs, loaded before any .wav of the same name
-	const PACK := ["pick_coin", "pick_stone", "pick_rune", "menu_move", "menu_ok", "menu_back", "jingle_lv", "jingle_rank", "jingle_quest", "jingle_death", "jingle_book", "impact_boss_in", "impact_boss_down", "jump", "djump", "land", "ult_sub"]
+	const PACK := ["pick_coin", "pick_stone", "pick_rune", "menu_move", "menu_ok", "menu_back", "jingle_lv", "jingle_rank", "jingle_quest", "jingle_death", "jingle_book", "impact_boss_in", "impact_boss_down", "jump", "djump", "land"]
 	for f in PACK:
 		var st2 = arena.sfx_stream(f)
 		check(st2 is AudioStreamOggVorbis and not st2.loop, "assets/sfx/%s.ogg loads (a one-shot ogg)" % f)
 		check(not ResourceLoader.exists("res://assets/sfx/%s.wav" % f), "no %s.wav beside it" % f)
 		check(arena.LEVEL.has(f) and arena.LEVEL[f] > 0.0, "LEVEL has %s (%.2f)" % [f, float(arena.LEVEL.get(f, 0.0))])
 	check(arena.sfx_path("jump").ends_with("jump.ogg") and not ResourceLoader.exists("res://assets/sfx/jump.wav"), "a name with only .ogg (jump) resolves to the ogg")
-	check(arena.sfx_path("hit1").ends_with("hit1.wav") and not ResourceLoader.exists("res://assets/sfx/hit1.ogg"), "a name with only .wav (hit1) resolves to the wav")
+	check(arena.sfx_path("guard").ends_with("guard.wav") and not ResourceLoader.exists("res://assets/sfx/guard.ogg"), "a name with only .wav (guard) resolves to the wav")
 	check(arena.sfx_path("no_such_sound") == "" and arena.sfx_stream("no_such_sound") == null, "a missing name: no path, a null stream")
 	for f in ["jump", "djump", "land"]:
 		check(arena.sfx_stream(f) is AudioStreamOggVorbis and arena.sfx_stream(f).get_length() > 0.1, "%s.ogg: %.2f s" % [f, arena.sfx_stream(f).get_length()])
 	check(arena.sfx_file("ui_move") == "menu_move" and arena.sfx_file("ui_ok") == "menu_ok" and arena.sfx_file("ui_back") == "menu_back", "ui_move / ui_ok / ui_back → menu_move / menu_ok / menu_back")
 	check(arena.PICKUPS["실링"] == "pick_coin" and arena.PICKUPS["기억석"] == "pick_stone" and arena.PICKUPS["룬 · "] == "pick_rune" and arena.PICKUPS["장비"] == "pick_rune", "pickup words → pick_coin / pick_stone / pick_rune (룬 and 장비 share)")
-	check(arena.LAYERS["ult"] == [["ult_sub", 0.9]], "the ult layers ult_sub at 0.9")
+	check(arena.LAYERS.is_empty(), "no layers: the recordings stand alone")
 	var seq := []
 	for i in 9: seq.append(arena.sfx_file("ready"))
 	var norep := true
@@ -90,7 +106,7 @@ func _initialize() -> void:
 	arena.sfx("hit1", 1.0, {"jitter": 0.0})
 	var ap = player_of("hit1")
 	check(ap != null and arena.sfx_due.is_empty(), "sfx('hit1') plays at once in town")
-	check(near(ap.volume_db, linear_to_db(0.85) - 4.0, 0.01) and ap.pitch_scale == 1.0 and ap.bus == &"Slow", "hit1 at its level (0.85, -4 dB), pitch 1, through the Slow bus")
+	check(near(ap.volume_db, linear_to_db(0.9) - 4.0, 0.01) and ap.pitch_scale == 1.0 and ap.bus == &"Slow", "hit1 at its level (0.9, -4 dB), pitch 1, through the Slow bus")
 	stop_all()
 	arena.sfx("swing")
 	arena.sfx("guard", 0.9)
@@ -108,7 +124,7 @@ func _initialize() -> void:
 	check(near(player_of("hit1").pitch_scale, 0.5, 0.001), "st -12 → 0.5")
 	stop_all()
 	arena.sfx("parry", 1.0, {"st": 7.0})
-	check(near(player_of("parry").pitch_scale, pow(2.0, 7.0 / 12.0), 0.001) and near(player_of("parry").volume_db, linear_to_db(1.25) - 4.0, 0.01), "parry +7 st → 1.498 (a fifth), at its 1.25 level")
+	check(near(player_of("parry").pitch_scale, pow(2.0, 7.0 / 12.0), 0.001) and near(player_of("parry").volume_db, linear_to_db(1.1) - 4.0, 0.01), "parry +7 st → 1.498 (a fifth), at its 1.1 level")
 	stop_all()
 	var pitches := {}
 	for i in 12:
@@ -129,13 +145,9 @@ func _initialize() -> void:
 	check(player_of("boom").pitch_scale == 1.0 and player_of("boom").bus == &"SFX", "the raw cues (boom) stay dry and at 1×, straight on the SFX bus")
 	arena.witch = 0.0
 	stop_all()
-	# the ult's sub layer: both files at once, the layer at 0.9 of the call's volume times its own level
+	# the ult: one file, no layer
 	arena.sfx("ult", 1.0)
-	check(player_of("ult") != null and player_of("ult_sub") != null and arena.sfx_due.is_empty(), "sfx('ult') in town: ult and ult_sub play together")
-	check(near(player_of("ult_sub").volume_db, linear_to_db(0.9 * 0.63) - 4.0, 0.01) and player_of("ult_sub").pitch_scale == 1.0, "ult_sub at 0.9 × its level (0.63)")
-	stop_all()
-	arena.sfx("ult", 0.5)
-	check(near(player_of("ult_sub").volume_db, linear_to_db(0.5 * 0.9 * 0.63) - 4.0, 0.01), "…times the caller's volume")
+	check(player_of("ult") != null and arena.sfx_due.is_empty() and arena.sfx_pool.filter(func(a): return a.playing).size() == 1, "sfx('ult') in town: the one file plays at once")
 	stop_all()
 	# the pickups: by the notice's word, with jitter, never snapped
 	for w in [["실링 +3", "pick_coin"], ["기억석 +1", "pick_stone"], ["룬 · 불씨", "pick_rune"], ["장비 · 낡은 검", "pick_rune"]]:
@@ -250,19 +262,22 @@ func _initialize() -> void:
 	# the ult's impact: snapped, the deep duck
 	C.set_time(line - 0.03)
 	arena.sfx("ult", 1.0)
-	check(player_of("ult") == null and arena.sfx_due.size() == 2 and near(arena.sfx_due[0]["t"], 30.0, 1.0), "the ult impact snaps too (with its ult_sub layer: 2 due)")
+	check(player_of("ult") == null and arena.sfx_due.size() == 1 and near(arena.sfx_due[0]["t"], 30.0, 1.0), "the ult impact snaps too (1 due)")
 	arena.sfx_step(40.0)
 	check(player_of("ult") != null and B.duck_db == 6.0 and near(B.duck_t, 0.25, 0.001) and near(player_of("ult").volume_db, -4.0, 0.01), "…and ducks the music 6 dB for 250 ms when it sounds, at full level")
 	stop_all()
 	B.duck_t = 0.0
 	B.duck_db = 0.0
 	B.duck_v = 0.0
-	# the ult's sub layer is held with it
-	C.set_time(line - 0.03)
-	arena.sfx("ult", 1.0)
-	check(player_of("ult") == null and player_of("ult_sub") == null and arena.sfx_due.size() == 2 and near(arena.sfx_due[0]["t"], arena.sfx_due[1]["t"]), "ult + ult_sub: both held for the same 16th")
-	arena.sfx_step(40.0)
-	check(player_of("ult") != null and player_of("ult_sub") != null and arena.sfx_due.is_empty(), "…and sound together")
+	# a fast repeat plays lighter (REPEAT_K) when repeat_ms is on
+	arena.repeat_ms = 300.0
+	arena.hit_last_ms = -99999.0
+	arena.sfx("hit1", 1.0, {"jitter": 0.0, "snap": false})
+	var first_db: float = player_of("hit1").volume_db
+	stop_all()
+	arena.sfx("hit2", 1.0, {"jitter": 0.0, "snap": false})
+	check(near(player_of("hit2").volume_db, first_db + linear_to_db(arena.REPEAT_K), 0.05), "a hit within 300 ms of the last: 0.7× (the fast combo stays light)")
+	arena.repeat_ms = 0.0
 	stop_all()
 	B.duck_t = 0.0
 	B.duck_db = 0.0
