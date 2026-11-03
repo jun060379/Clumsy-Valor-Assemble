@@ -60,7 +60,19 @@ const RS_RATE := [0, 100, 90, 75, 60, 45, 30, 20]
 const FZG := ["common", "uncommon", "rare", "elite", "epic"]
 const FZRATE := {"uncommon": 90, "rare": 70, "elite": 50, "epic": 40, "legend": 10}
 const FUSE_COST := 15
-const DROP_GEAR := {"weapon": {"전사": ["기사단 롱소드", "브로드소드", "방패병의 한손검"], "워락": ["그을린 삽", "계약의 낫", "흑요석 삽"], "사제": ["순례자의 묵주", "은 성표", "축복받은 홀"], "도적": ["부싯돌 권총", "놋쇠 단발총", "쥐굴 수제 권총"]},    # 도적: PLACEHOLDER names
+## class weapons by gear level (owner 2026-11-04: a class's own weapon line, not a member's signature): five tiers each,
+## Lv 1 / 5 / 9 / 14 / 18 (the dungeons hand out Lv 1–20). Names are PLACEHOLDERs; icons in item_icons.gd.
+const WEAPONS := {
+	"전사": [[1, "훈련용 목검"], [5, "철 롱소드"], [9, "강철 브로드소드"], [14, "바스타드 소드"], [18, "성기사의 장검"]],
+	"도적": [[1, "녹슨 단검"], [5, "쿠크리"], [9, "스틸레토"], [14, "독날 단검"], [18, "그림자 송곳니"]],
+	"마법사": [[1, "견습생의 지팡이"], [5, "수정 지팡이"], [9, "룬 지팡이"], [14, "대마법사의 지팡이"], [18, "별빛 지팡이"]],
+	"사제": [[1, "순례자의 곤봉"], [5, "철 메이스"], [9, "성휘 메이스"], [14, "축복받은 홀"], [18, "광휘의 홀"]],
+	"워락": [[1, "찢어진 계약서"], [5, "가죽 마도서"], [9, "사슬 묶인 마도서"], [14, "응시하는 마도서"], [18, "심연의 계약서"]],
+	"정령술사": [[1, "조약돌 부적"], [5, "유리 정령구"], [9, "원소 수정구"], [14, "사원소 오브"], [18, "정령왕의 핵"]],
+	"드루이드": [[1, "잔가지 지팡이"], [5, "참나무 지팡이"], [9, "뿔 장식 지팡이"], [14, "고목의 지팡이"], [18, "세계수 가지"]],
+	"바드": [[1, "나무 피리"], [5, "나무 류트"], [9, "만돌린"], [14, "황금 리라"], [18, "천상의 하프"]],
+}
+const DROP_GEAR := {
 	"head": ["케틀햇", "가죽 두건", "사제 베일"], "body": ["사슬 갑옷", "가죽 조끼", "수도복"], "shoe": ["판금 각반", "사냥꾼 장화", "헝겊 신"], "acc": ["구리 반지", "유리 펜던트", "낡은 브로치", "은 귀걸이"]}
 ## gear v3 numbers
 const GMUL := {"common": 1.0, "uncommon": 1.15, "rare": 1.3, "elite": 1.45, "epic": 1.65, "legend": 1.9, "unique": 2.1}
@@ -163,15 +175,15 @@ static func _default_gear() -> Dictionary:
 		if wt != "": d["wt"] = wt
 		return d
 	return {
-		"estelle": {"weapon": I.call("낡은 롱소드", "rare", 7, "", ["crit", 3], "firmstep", 1101), "head": I.call("찌그러진 케틀햇", "uncommon", 3, "중갑", null, "stone", 1102),
+		"estelle": {"weapon": I.call("철 롱소드", "rare", 7, "", ["crit", 3], "firmstep", 1101), "head": I.call("찌그러진 케틀햇", "uncommon", 3, "중갑", null, "stone", 1102),
 			"body": I.call("흰 튜닉과 흉갑", "rare", 5, "중갑", null, "", 1103), "shoe": I.call("판금 각반", "common", 2, "중갑", null, "", 1104),
 			"acc1": I.call("십자가 목걸이", "elite", 4, "", ["hp", 6], "firstaid", 1105), "acc2": I.call("검은 리본", "uncommon", 1, "", ["ult", 5], "", 1106), "acc3": null},
-		"aida": {"weapon": I.call("손때 묻은 삽", "elite", 6, "", ["atk", 3], "fang", 2101), "head": null, "body": I.call("묘지기 앞치마 원피스", "uncommon", 3, "천옷", null, "", 2103),
+		"aida": {"weapon": I.call("가죽 마도서", "elite", 6, "", ["atk", 3], "fang", 2101), "head": null, "body": I.call("묘지기 앞치마 원피스", "uncommon", 3, "천옷", null, "", 2103),
 			"shoe": I.call("흙 묻은 장화", "rare", 4, "경갑", ["ms", 3], "breeze", 2104), "acc1": I.call("보라 꽃 머리핀", "rare", 3, "", ["crit", 2], "", 2105), "acc2": null, "acc3": null},
-		"luce": {"weapon": I.call("수습 사제의 묵주", "rare", 5, "", ["heal", 5], "lamp", 3101), "head": null, "body": I.call("수습 사제 로브", "rare", 4, "천옷", null, "prayer", 3103),
+		"luce": {"weapon": I.call("철 메이스", "rare", 5, "", ["heal", 5], "lamp", 3101), "head": null, "body": I.call("수습 사제 로브", "rare", 4, "천옷", null, "prayer", 3103),
 			"shoe": I.call("헝겊 신", "common", 1, "천옷", null, "", 3104), "acc1": I.call("성표 귀걸이", "uncommon", 2, "", ["ult", 5], "", 3105), "acc2": null, "acc3": null},
 		# PLACEHOLDER: Kenin's starting gear (names / grades invented, wait for the user's own)
-		"kenin": {"weapon": I.call("부싯돌 권총", "rare", 5, "", ["crit", 3], "", 4101), "head": I.call("놋쇠 고글", "uncommon", 2, "천옷", null, "", 4102),
+		"kenin": {"weapon": I.call("쿠크리", "rare", 5, "", ["crit", 3], "", 4101), "head": I.call("놋쇠 고글", "uncommon", 2, "천옷", null, "", 4102),
 			"body": I.call("올리브색 여행 로브", "rare", 4, "천옷", null, "", 4103), "shoe": null, "acc1": I.call("두루마리 배낭", "uncommon", 2, "", ["ult", 5], "", 4105), "acc2": null, "acc3": null},
 	}
 
@@ -495,6 +507,15 @@ func gear_lv() -> int:
 	return DUN["glv"][0] + rng.randi() % (DUN["glv"][1] - DUN["glv"][0] + 1)
 
 ## a new drop: base roll plus one sub stat (weapons/armour only sometimes)
+## the class's weapon for gear level lv (now and then one tier under: an old piece turning up)
+func weapon_name(cl: String, lv: int) -> String:
+	var L: Array = WEAPONS.get(cl, WEAPONS["전사"])
+	var ti := 0
+	for i in L.size():
+		if lv >= int(L[i][0]): ti = i
+	if ti > 0 and rand() < 0.2: ti -= 1
+	return String(L[ti][1])
+
 func make_gear(g: String) -> Dictionary:
 	var slot: String = pick(["weapon", "head", "body", "shoe", "acc"])
 	var gm: float = GMUL.get(g, 1.0)
@@ -505,7 +526,7 @@ func make_gear(g: String) -> Dictionary:
 	var it: Dictionary
 	if slot == "weapon":
 		var cl: String = pick(CLS.values())
-		it = {"slot": slot, "cls": cl, "n": pick(DROP_GEAR["weapon"][cl]), "g": g, "lv": ilv, "sub": (sub.call(pick(["heal", "ult", "crit"]) if cl == "사제" else pick(["crit", "ult"]))) if rand() < 0.6 else null}
+		it = {"slot": slot, "cls": cl, "n": weapon_name(cl, ilv), "g": g, "lv": ilv, "sub": (sub.call(pick(["heal", "ult", "crit"]) if cl == "사제" else pick(["crit", "ult"]))) if rand() < 0.6 else null}
 	elif slot == "acc":
 		it = {"slot": slot, "n": pick(DROP_GEAR["acc"]), "g": g, "lv": ilv, "sub": sub.call(pick(["hp", "crit", "ms", "ult", "atk"]))}
 	else:
