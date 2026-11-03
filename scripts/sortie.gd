@@ -168,7 +168,7 @@ func post_player(dt: float) -> void:
 			din["t"] = 0.0
 			P.set_anim("stop")
 			P.vx = 0.0
-			arena.sfx("skid", 0.7)
+			pass
 			arena.dust(P.position + Vector2(-din["dir"] * 10.0, 0), din["dir"], true)
 			deploy_cut()
 		return

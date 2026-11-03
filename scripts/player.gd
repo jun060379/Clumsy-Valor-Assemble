@@ -819,7 +819,7 @@ func step(dt: float) -> void:
 		elif a == "guard" and on and want("jump"):
 			take("jump")
 			set_anim("backstep")
-			arena.sfx("skid")
+			pass                    # (no slide sound: it read wrong on these motions)
 			arena.dust(position + Vector2(dir * 14.0 * CSCALE, 0), dir, false)
 	elif a == "kneel":
 		vx = 0.0
@@ -910,7 +910,7 @@ func locomotion(dt: float, move: int, a: String) -> void:
 			vx = dir * RUN * sk[mini(f, 3)]
 			if move == 0:
 				set_anim("stop")
-				arena.sfx("skid")
+				pass                    # (no slide sound: it read wrong on these motions)
 			elif move == -dir:
 				dir = move
 				vx = 0.0
@@ -919,7 +919,7 @@ func locomotion(dt: float, move: int, a: String) -> void:
 			vx = dir * RUN
 			if move == 0:
 				set_anim("stop")
-				arena.sfx("skid")
+				pass                    # (no slide sound: it read wrong on these motions)
 				arena.dust(position + Vector2(-dir * 10.0 * CSCALE, 0), dir, false)
 			elif move != dir:
 				set_anim("turn")
