@@ -2,13 +2,13 @@
 
 importer="wav"
 type="AudioStreamWAV"
-uid="uid://b3pr87b5cvynf"
-path="res://.godot/imported/thrust.wav-4b589192d1ada446fe2a6fd22c09e467.sample"
+uid="uid://bdv51sj8471a2"
+path="res://.godot/imported/hit3.wav-50d1b36a96d5f6a8e7f4f14c0e968d00.sample"
 
 [deps]
 
-source_file="res://assets/sfx/thrust.wav"
-dest_files=["res://.godot/imported/thrust.wav-4b589192d1ada446fe2a6fd22c09e467.sample"]
+source_file="res://assets/sfx/hit3.wav"
+dest_files=["res://.godot/imported/hit3.wav-50d1b36a96d5f6a8e7f4f14c0e968d00.sample"]
 
 [params]
 

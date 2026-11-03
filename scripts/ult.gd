@@ -7,7 +7,8 @@ extends Node2D
 ##   아이다 「땅 밑의 문」: sigils sprayed out engrave runes on and around foes; rifts open one after another, she bursts
 ##        out of each faster and faster; every rune on a foe detonates
 ##   루체 「루체 펀치」: a star blooms over her raised hand, she grabs it and punches it forward as a beam
-## Ult damage is x2.5 across the board.
+## Ult damage is x2.5 across the board. The cut-in opens on parry + slam; each move's impact (the oath, the runes'
+## detonation, the punch) plays ult.wav on the music's grid and ducks the track (arena.sfx "ult").
 
 const CH := preload("res://scripts/chars.gd")
 const ULTMAX := {"estelle": 390.0, "aida": 300.0, "luce": 240.0}
@@ -213,6 +214,7 @@ func step(dt: float) -> void:
 			fx.append({"k": "rose", "t": 0.0, "life": 99999.0, "end": -1.0, "n": 30})
 			for e in _foes():
 				if absf(e.position.x - P.position.x) < 260.0 and absf(e.position.y - P.position.y) < 160.0: hit(e, 2.0)
+			arena.sfx("ult", 1.0)              # the impact (snapped to the grid, the music ducks 6 dB)
 			arena.sfx("parry", 1.0)
 			arena.flash = 0.3
 			arena.shake(6, P.dir)
@@ -271,7 +273,7 @@ func _step_aida(_dt: float, P, S: float) -> void:
 				hit(e, 1.0)
 				if j < 4: arena.hitstop = 30.0
 				arena.shake(4.0 + j * 0.4, d)
-				arena.sfx("hit", 0.8)
+				arena.sfx("hit%d" % (j % 3 + 1), 0.8)       # the rifts' hits climb F / A / C as they come faster
 		var c: Dictionary = sh["cur"]
 		P.position = Vector2(c["x"], c["y"])
 		P.vy = 0.0
@@ -301,6 +303,7 @@ func _step_aida(_dt: float, P, S: float) -> void:
 				fx.append({"k": "burst", "x": bx, "y": by, "r": 130.0 if live else 60.0, "t": 0.0, "life": 520.0})
 				if live: arena.post_wave(Vector2(bx, e.position.y - 50.0), 1.0, 560.0, 0.2)
 				if live: hit(e, 2.0)
+			arena.sfx("ult", 1.0)              # the impact
 			arena.sfx("slam", 1.0)
 			arena.sfx("break", 0.8)
 			arena.shake(15, P.dir)
@@ -361,6 +364,7 @@ func _step_luce(dt: float, P, S: float) -> void:
 				if (e.position.x - P.position.x) * D > -30.0 and absf(ey - fy0) < 170.0: hit(e, 4.0)
 			for i in 14:
 				fx.append({"k": "twinkle", "x": fx0 + D * randf() * 500.0, "y": fy0 + (randf() - 0.5) * 120.0, "vy": -0.02 - randf() * 0.05, "t": 0.0, "life": 500.0 + randf() * 500.0})
+			arena.sfx("ult", 1.0)              # the impact
 			arena.sfx("slam", 1.0)
 			arena.sfx("break", 0.8)
 			arena.sfx("heavy", 0.8)

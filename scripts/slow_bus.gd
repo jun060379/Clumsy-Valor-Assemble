@@ -5,7 +5,9 @@ extends Node
 ## starts plays at 0.62× (lower and slower, as createBufferSource / the -700 ¢ oscillators do); then it all recovers.
 ## The ramps are the prototype's setTargetAtTime time constants (on .06 / .08 / .1 s, off .18 / .2 / .25 s).
 ## Players join the bus by themselves when they enter the tree (node_added); one that must stay dry (the "boom" of
-## the slow-down and the witch-end chirp, which the prototype plays raw) sets its bus back to Master.
+## the slow-down and the witch-end chirp, which the prototype plays raw) sets its bus back to Master. A player with
+## the `own_pitch` meta (arena.gd's sfx pool: the combo's semitones, the jitter) sets its own pitch and applies the
+## 0.62× itself.
 
 const BUS := &"Slow"
 const CUT_ON := 520.0

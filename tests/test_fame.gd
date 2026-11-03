@@ -117,7 +117,7 @@ func _initialize() -> void:
 	F.poll(true)
 	check(F.base.has("r2a") and F.f_state(FD.fq("r2a")) == "run", "rank 2 requests open with their bases")
 	# ---- 모험 일지 ----
-	check(F.t_can(FD.FCH[0]["t"][1], 0) and not F.t_can(FD.FCH[0]["t"][0], 0), "chapter 1: 첫 보고 claimable, 첫 출격 not yet")
+	check(F.t_can(FD.FCH[0]["t"][1], 0) and F.t_can(FD.FCH[0]["t"][0], 0), "chapter 1: 첫 보고 claimable, and 첫 출격 (the level-up check went down into the cave above)")
 	var xc: int = F.aexp + F.FD.a_need(F.alv) * 0
 	var lc: int = F.alv
 	F.t_claim("c1b")

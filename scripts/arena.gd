@@ -138,6 +138,7 @@ func _ready() -> void:
 	flash_mat.shader = sh
 	for i in 8:
 		var ap := AudioStreamPlayer.new()
+		ap.set_meta("own_pitch", true)        # sfx() sets the pitch (the combo's semitones, witch time); slow_bus.gd leaves it
 		add_child(ap)
 		sfx_pool.append(ap)
 	# spawnDummy: two on platforms, two on the ground, then a row of six that never break (damage testing)
@@ -658,6 +659,7 @@ func fit_view() -> void:
 	r.content_scale_size = Vector2i(view_w(win), int(H))
 
 func _process(delta: float) -> void:
+	sfx_step(minf(delta * 1000.0, 100.0))    # the snapped sounds land on their 16th whatever holds the world
 	# qWatch: long frames lower the render quality (menus and the title don't count)
 	cfg.qwatch(minf(delta * 1000.0, 50.0), ui_root == null or ui_root.holds() or DisplayServer.get_name() == "headless")
 	if pryw_t0 >= 0.0:
@@ -772,23 +774,98 @@ func _process(delta: float) -> void:
 
 
 # ---------- effects ----------
-func sfx(n: String, vol := 1.0) -> void:
-	if not sfx_cache.has(n):
-		sfx_cache[n] = load("res://assets/sfx/%s.wav" % n) if ResourceLoader.exists("res://assets/sfx/%s.wav" % n) else null
-	var st: AudioStream = sfx_cache[n]
-	if st == null:
-		return
+## sfx(name, vol, opts): a sound effect by its logical name, through the 8-player pool. The sounds are instruments on
+## the music: in the dungeon the hits snap to the track's 16th-note grid (bgm.grid(), beat.gd) and the combo rises in
+## pitch — hit1 / hit2 / hit3 are F / A / C (player.gd picks them by the combo's hit), so fighting plays a rhythm over
+## the track. opts:
+##   snap (bool)     — play on the next 16th when it is within SNAP_MAX s, else now (never later than that: the input
+##                     must feel instant); a no-op in town / training / under the title. Default on for the hits,
+##                     heavy, thrust (the stab), parry and the ult's impact (SNAP), not for hurt / dodge / step / UI.
+##   st (float)      — semitones: pitch_scale = 2^(st/12) (a perfect parry's parry is +7)
+##   jitter (float)  — ± semitones at random, so repeats don't machine-gun (JITTER: 0.5 on the hits, heavy, stab, hurt)
+##   delay_ms        — a plain delay before the play
+## Witch time keeps its 0.62× rule on top of the pitch (the slow-down's own cues, boom / witch_end, play dry and raw).
+## Logical names → files (FILES): "thrust" is stab.wav, "dash" is dodge.wav, "ready" (the UI click) cycles ui1 / ui2 /
+## ui3 (never the same twice in a row); "hit" alone is still the old hit.wav (the smith's hammer, the boss chest, the
+## clear screen, the UI). Luce's bolts, the thrown shield and the ult's rift hits take the pitched hits too.
+## LEVEL trims the files' own loudness so the hits sit ~3 dB under heavy and parry and the ult is loudest.
+## heavy, parry and the ult also duck the music (DUCK: dB, ms) while a dungeon track plays.
+const SNAP_MAX := 0.09
+const SNAP := {"hit1": true, "hit2": true, "hit3": true, "heavy": true, "thrust": true, "parry": true, "ult": true}
+const JITTER := {"hit1": 0.5, "hit2": 0.5, "hit3": 0.5, "heavy": 0.5, "thrust": 0.5, "hurt": 0.5}
+const FILES := {"thrust": "stab", "dash": "dodge"}
+const UI_CLICKS := ["ui1", "ui2", "ui3"]
+const LEVEL := {"hit1": 0.85, "hit2": 0.9, "hit3": 0.75, "heavy": 1.0, "parry": 1.25, "stab": 0.9, "hurt": 0.8, "dodge": 0.55, "ult": 1.0, "ui1": 0.8, "ui2": 0.5, "ui3": 0.55}
+const DUCK := {"heavy": [4.0, 120.0], "parry": [4.0, 120.0], "ult": [6.0, 250.0]}
+var ui_click := -1                 # the last UI click played (UI_CLICKS index)
+var sfx_due: Array = []            # scheduled plays: {t (ms left), file, vol, pitch, raw}
+
+func sfx(n: String, vol := 1.0, opts := {}) -> void:
+	var file := sfx_file(n)
+	var st := sfx_stream(file)
+	if st == null: return
+	var st_: float = float(opts.get("st", 0.0))
+	var jit: float = float(opts.get("jitter", JITTER.get(n, 0.0)))
+	if jit > 0.0: st_ += randf_range(-jit, jit)
+	var raw := n == "boom" or n == "witch_end"     # the slow-down's own cues play dry (boom / witchEnd: __raw)
+	var p := {"t": float(opts.get("delay_ms", 0.0)), "file": file, "vol": vol * float(LEVEL.get(file, 1.0)), "pitch": pow(2.0, st_ / 12.0), "raw": raw, "n": n}
+	if bool(opts.get("snap", SNAP.get(n, false))):
+		var d: float = snap_delay()
+		if d > 0.0: p["t"] += d * 1000.0
+	if p["t"] > 0.0:
+		sfx_due.append(p)
+	else:
+		_sfx_play(p)
+
+## the logical name's file: thrust → stab, dash → dodge, ready → the next UI click
+func sfx_file(n: String) -> String:
+	if n == "ready":
+		ui_click = (ui_click + 1) % UI_CLICKS.size()
+		return UI_CLICKS[ui_click]
+	return FILES.get(n, n)
+
+func sfx_stream(file: String) -> AudioStream:
+	if not sfx_cache.has(file):
+		sfx_cache[file] = load("res://assets/sfx/%s.wav" % file) if ResourceLoader.exists("res://assets/sfx/%s.wav" % file) else null
+	return sfx_cache[file]
+
+## seconds to hold a snapped sound for: the time to the next 16th of the dungeon grid when that is within SNAP_MAX,
+## else 0 (play now); 0 without a live dungeon track (town, training, the title)
+func snap_delay() -> float:
+	if bgm == null: return 0.0
+	var d: float = bgm.next_sixteenth()
+	return d if d > 0.0 and d <= SNAP_MAX else 0.0
+
+## the pitch a sound starts at now: its own semitones, and witch time's 0.62× on top (not for the raw cues)
+func sfx_pitch(pitch: float, raw: bool) -> float:
+	return pitch * (0.62 if witch > 0.0 and not raw else 1.0)
+
+func _sfx_play(p: Dictionary) -> void:
+	var st := sfx_stream(p["file"])
+	if st == null: return
 	var best = sfx_pool[0]
 	for ap in sfx_pool:
 		if not ap.playing:
 			best = ap
 			break
 	best.stream = st
-	best.volume_db = linear_to_db(maxf(0.01, vol)) - 4.0
-	var raw := n == "boom" or n == "witch_end"     # the slow-down's own cues play dry (boom / witchEnd: __raw)
-	best.bus = &"Master" if raw else SLOWBUS.BUS
-	best.pitch_scale = 0.62 if witch > 0.0 and not raw else 1.0
+	best.volume_db = linear_to_db(maxf(0.01, p["vol"])) - 4.0
+	best.bus = &"Master" if p["raw"] else SLOWBUS.BUS
+	best.pitch_scale = sfx_pitch(p["pitch"], p["raw"])
 	best.play()
+	if DUCK.has(p["n"]) and bgm != null and bgm.grid() != null:
+		var dk: Array = DUCK[p["n"]]
+		bgm.duck(dk[0], dk[1])
+
+## the scheduled sounds (every frame, before anything holds the world: a snapped hit lands during a hitstop too)
+func sfx_step(dt: float) -> void:
+	if sfx_due.is_empty(): return
+	var left: Array = []
+	for p in sfx_due:
+		p["t"] -= dt
+		if p["t"] <= 0.0: _sfx_play(p)
+		else: left.append(p)
+	sfx_due = left
 
 ## text(): floating text, 600 ms. Numbers pop as tilted condensed italics (H2.txt), words sit on a small black tag.
 ## Pickup words (실링 / 기억석 / 룬 · / 장비) go to the notice feed with a GET tag instead of floating over the world.
@@ -955,9 +1032,11 @@ func perfect_dodge() -> void:
 	sfx("boom", 0.9)
 	sfx("dash", 0.6)
 
-func parry_fx(P, _m) -> void:
+## the parry's sound rings a fifth up (+7 st) when it caught a glinting blow — the perfect parry (perfect_parry follows)
+func parry_fx(P, m) -> void:
 	var d: int = P.dir
-	sfx("parry", 1.0)
+	var perfect: bool = m != null and m.get("flared") == true
+	sfx("parry", 1.0, {"st": 7.0 if perfect else 0.0})
 	hitstop = 95.0
 	flash = 0.45
 	shake(12, d)
@@ -1057,9 +1136,10 @@ func charge_fx(_p: Vector2, _t: float, _col := Color.WHITE) -> void:
 
 
 # ---------- Luce's light ----------
-## a light bolt: rises up-and-back, holds a beat, then shoots and homes in on the target
-func bolt(o: Vector2, tg, sz: float, hold: float, d: int) -> void:
-	var b := {"by": player.who, "k": "bolt", "x": o.x, "y": o.y, "vx": d * 0.001, "vy": 0.0, "tg": tg, "sz": sz, "hold": hold, "hits": [], "home": 0.011, "dmg": 1.0, "mul": player.atk_mul(), "d": d, "t": 0.0, "life": 1100.0 + hold, "tr": [], "hold0": hold, "trT": 0.0}
+## a light bolt: rises up-and-back, holds a beat, then shoots and homes in on the target; `snd` is the hit it lands
+## with (the combo's hit1 / hit2 / hit3, from player.gd hit_sound)
+func bolt(o: Vector2, tg, sz: float, hold: float, d: int, snd := "hit1") -> void:
+	var b := {"by": player.who, "k": "bolt", "x": o.x, "y": o.y, "vx": d * 0.001, "vy": 0.0, "tg": tg, "sz": sz, "hold": hold, "hits": [], "home": 0.011, "dmg": 1.0, "mul": player.atk_mul(), "d": d, "t": 0.0, "life": 1100.0 + hold, "tr": [], "hold0": hold, "trT": 0.0, "snd": snd}
 	if tg == null:
 		b["home"] = 0.0
 	luce_fx.append(b)
@@ -1124,7 +1204,7 @@ func step_luce(dt: float) -> void:
 					f["hits"].append(m)
 					m.hit(f["dmg"], signf(f["vx"]) * 4.0, f["mul"])
 					spark(Vector2(f["x"], f["y"]), 8)
-					sfx("hit", 0.6)
+					sfx(f.get("snd", "hit1"), 0.6)
 					f["t"] = f["life"] + 1.0
 					break
 			if f["y"] > ground_y + 10.0 or f["x"] < -60.0 or f["x"] > world_w + 60.0:
