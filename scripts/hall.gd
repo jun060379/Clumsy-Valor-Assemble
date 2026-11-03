@@ -463,6 +463,9 @@ func step(dt: float) -> void:
 				best = dx
 		if near_door == null:
 			near_door = E.door_near(P)
+		elif near_door["act"] == "counter" and not E.at_desk():
+			near_door = near_door.duplicate()
+			near_door["k"] = "쪽지"      # the touch button reads her note rather than 대화
 	_fx(dt)
 	queue_redraw()
 	glow.queue_redraw()
@@ -681,7 +684,7 @@ func try_interact() -> bool:
 			arena.fade_then(func(): arena.go_hall(to[0], Vector2(to[1], to[2]), 1))
 		"counter":
 			if E.at_desk(): E.talk()
-			else: arena.text(P.position + Vector2(0, -170), "에일린 — " + E.desk_away(), Color("#bfeee6"))
+			else: E.desk_note()       # her note on the counter: the desk works without her
 		"eilin":
 			E.talk()
 		"locked":
@@ -737,6 +740,8 @@ func _draw() -> void:
 		for i in mini(3, ro.size()):
 			var dt: Texture2D = SK.tex(ro[i], "doll")
 			if dt != null: draw_texture_rect(dt, Rect2(roundf(1920.0 + i * 18.0), roundf(G - HH("counter") + 4.0 - dt.get_height() * 2.0), dt.get_width() * 2.0, dt.get_height() * 2.0), false)
+		var nr = note_rect()
+		if nr != null: _note(nr)
 	hfill(self, "top", 0.0, G, W, 30.0, 0.0, G)
 	for p in F["props"]:
 		if String(p[4]).contains("r"): _prop(self, p)
@@ -753,6 +758,21 @@ func _draw() -> void:
 			var a: float = (k2 / 0.15 if k2 < 0.15 else 1.0 - (k2 - 0.15) / 0.85) * 0.35
 			draw_rect(Rect2(roundf((f["x"] - s / 2.0) / 2.0) * 2.0, roundf((f["y"] - s / 2.0) / 2.0) * 2.0, s, s), Color(0.84, 0.8, 0.75, a))
 	_life_draw()
+
+## Eilin's folded note on the counter top (eilin.gd desk_note): its rect on this floor while she is away from the desk,
+## else null. It lies to the right of her place, on the counter's top rim, 9 x 6 art px on the hall's 2 px grid.
+func note_rect() -> Variant:
+	if fl != 0 or arena.eil.at_desk(): return null
+	return Rect2(2068.0, G - HH("counter") + 16.0 - 12.0, 18.0, 12.0)
+
+## placeholder note sprite: two colours, the paper and its fold line (which also edges it off the wood)
+func _note(r: Rect2) -> void:
+	var paper := Color("#efe4c6")
+	var fold := Color("#b4a079")
+	draw_rect(r, paper)
+	draw_rect(Rect2(r.position.x, r.position.y + 6.0, r.size.x, 2.0), fold)                   # the crease
+	draw_rect(Rect2(r.end.x - 2.0, r.position.y + 2.0, 2.0, r.size.y - 2.0), fold)             # the right edge
+	draw_rect(Rect2(r.position.x + 2.0, r.end.y - 2.0, r.size.x - 2.0, 2.0), fold)             # the bottom edge
 
 ## hallLifeDraw: the dropped bread, moths, attic dust, cobwebs and the mouse
 func _life_draw() -> void:

@@ -66,7 +66,9 @@ func notice(s: String, tag := "", col := Color.WHITE, big := false, life := 2600
 
 func _feed_hidden() -> bool:
 	if arena == null: return true
-	if arena.dlg != null and arena.dlg.active: return true
+	# a talk box covers it, except the counter's note menu (eilin.gd desk_note): the note's line is what the feed is showing
+	var E = arena.get("eil")
+	if arena.dlg != null and arena.dlg.active and (E == null or arena.dlg.who != E.NOTE_WHO): return true
 	if arena.ui_root != null and (arena.ui_root.title.active or arena.ui_root.menu.is_open()): return true
 	return false
 

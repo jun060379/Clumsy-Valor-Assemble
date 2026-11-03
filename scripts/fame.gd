@@ -589,9 +589,11 @@ func open_book(book: String, tab := "") -> void:
 	if M == null: return
 	if M.has_method("open_book"): M.open_book(book, tab)
 
-## eilWork: the desk menu
-func eil_work(lead: Array = []) -> void:
-	arena.eil.talk_t = 999999.0
+## eilWork: the desk menu. away: she is not at the counter (eilin.gd desk_note) — the same menu, only without her:
+## no portrait or greeting, the counter's own tag over where she is, and the entries that need her in person (the
+## "talk" icon, a chat with her) left out
+func eil_work(lead: Array = [], away := false) -> void:
+	if not away: arena.eil.talk_t = 999999.0
 	var rd := ready_n()
 	var lt := f_letter()
 	var C := [
@@ -605,9 +607,16 @@ func eil_work(lead: Array = []) -> void:
 		["그만 가볼게요", func():
 			_eil_bye()
 			arena.eil.greet_cd = 6000.0]]
+	if away:
+		arena.dlg.ask(arena.eil.NOTE_WHO, null, "접수대", "에일린 부재중", [arena.eil.desk_away()], C.filter(func(c): return not eil_only(c)))     # placeholder line (user to rewrite): the tags
+		return
 	var hi: Array = arena.eil.EIL_WORK_HI
 	var L: Array = lead if lead.size() else [("아, 마침 잘 오셨어요! 길드 관리국에서 서신이 와 있어요." if lt else ("의뢰를 끝내고 오셨네요! 확인해 드릴까요?" if rd else hi[randi() % hi.size()]))]
 	_say("eilin", L, C)
+
+## a desk entry that is hers in person (a chat with her: the "talk" icon), which her note cannot stand in for
+static func eil_only(c: Array) -> bool:
+	return c.size() > 2 and String(c[2]) == "talk"
 
 ## fameLetter: Eilin opens the bureau's letter; the trial goes up on the board
 func letter() -> void:

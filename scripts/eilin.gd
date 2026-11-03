@@ -2,10 +2,12 @@ extends Node
 const PIXP := preload("res://scripts/player.gd")
 ## Eilin, the receptionist: a person who lives in the world, not a counter fixture.
 ## She walks between maps on a chain of portals (town <-> hall 1F <-> 2F <-> 3F <-> her room); her place comes from the hour,
-## and she keeps walking at real speed even when you are on another map. Ported from hall.js (EIL / EN / eilPlan / eRoute / ewp /
-## eportal / eilWorld / hEilUpd / eDraw / hEilSay / eilTalk).
+## and she keeps walking at real speed even when you are on another map. She strolls as a rule and breaks into her trot
+## when a leg is long or she is late (RUN_FAR / LATE_MIN). While she is away from the counter her note sits on it and the
+## desk works without her (desk_note). Ported from hall.js (EIL / EN / eilPlan / eRoute / ewp / eportal / eilWorld /
+## hEilUpd / eDraw / hEilSay / eilTalk).
 ##   07:30 leaves her room · 08-12 counter · 12-13 lunch at the dining table · 13-18 counter · 18-20:30 town (by the lamp) ·
-##   20:30-22:30 living room · 22:30 home · 23-07:30 asleep.
+##   20:30-22:30 living room · 22:30 home · 23-07:30 asleep (SCHED).
 
 const HD := preload("res://scripts/hall_data.gd")
 const EILM := {"idleA": [4, 154, 320], "idleB": [4, 152, 320], "idleC": [4, 154, 320], "greet": [4, 158, 320], "talk": [4, 156, 320], "stamp": [5, 160, 320],
@@ -18,12 +20,24 @@ const EILS := 0.79            # sized by body bulk (head and shoulders close to 
 const EILS_SIDE := 0.79
 const EILSC := {"sit": 1.22, "eat": 1.22}   # seated sheets were drawn smaller: bring the head back to the standing size
 const EILX := 2006.0
-const EIL_SPD := 0.075
-## her gait: walkL (tools/make_eilin_walk.py) is a calm stroll, 14 frames x 65 ms = one two-step cycle per 0.91 s, which
+const EIL_SPD := 0.075        # her stroll, world px per ms
+## her gaits. walkL (tools/make_eilin_walk.py) is a calm stroll, 14 frames x 65 ms = one two-step cycle per 0.91 s, which
 ## carries her 68.5 px (her planted foot keeps still on the floor at EIL_SPD). WALK_IN: the frame she steps off on (the
-## passing pose, legs together: closest to standing, so no start / stop sheet is needed).
+## passing pose, legs together: closest to standing, so no start / stop sheet is needed). "run" is the hurried trot of old
+## (8 frames x 85 ms) with its own start / stop / turn sheets; she falls into it when a leg is long (RUN_FAR) or she is
+## late for the next stint (LATE_MIN), and otherwise strolls. The trot of old moved at EIL_SPD as well (the stroll's frame
+## time was later fitted to that figure), so there is no faster speed in the history to take over: 1.9x the stroll.
 const WALK := "walkL"
 const WALK_IN := 3
+const RUN := "run"
+const EIL_RUN_SPD := EIL_SPD * 1.9
+const RUN_FAR := 520.0        # a leg (the walk points left on this map) with more than this to go is run
+const LATE_MIN := 20.0        # late: the clock is past the stint's start by more than this many in-game minutes
+                              # (20 real seconds: the clock runs one in-game hour per real minute)
+const GAIT_HOLD := 600.0      # ms between gait changes on the way (no flicker); a new leg picks its gait freely
+## her day as stints: [from (h), spot]; each runs to the next one, the last wraps past midnight (lunch_cut: the table
+## stint is spent at the counter instead)
+const SCHED := [[7.5, "counter"], [12.0, "table"], [13.0, "counter"], [18.0, "town"], [20.5, "living"], [22.5, "room"]]
 const EMAPS := ["town", "h0", "h1", "h2", "room"]
 const HDOOR := 3024.0         # town: the hall's front door (town.gd HDOOR) on the terrace
 const TTOP := 235.0
@@ -32,6 +46,10 @@ const ESPOT := {"room": {"map": "room", "x": 818.0}, "counter": {"map": "h0", "x
 	"town": {"map": "town", "x": 1640.0, "face": -1, "loop": "idleS"}, "living": {"map": "h0", "x": 626.0, "face": -1, "sink": 14.0, "loop": "sit"}}
 const EIL_WORK_HI := ["어서 오세요. 길드 본관 접수처예요.", "오늘은 어떤 용건이세요?", "영웅이 돌아오실 때까지, 길드 관리를 소홀히 할 수는 없어요."]
 const EIL_OFF := [["아, 안녕하세요. 저녁 바람이 좋네요.", "…접수는 내일 아침 여덟 시부터예요. 오늘은 저도 쉬는 시간이라서요."], ["이 시간엔 책 읽는 게 제일 좋아요.", "길드장님이 계실 땐, 다 같이 여기서 떠들곤 했는데."], ["어머, 아직 안 주무셨어요?", "저도 이것만 읽고 들어가려고요."]]
+## her note on the counter while she is away (desk_note): what the feed shows, and the talk box's speaker key for the
+## desk without her (fame_fx keeps the feed up under that one, so the note's line stays readable over the menu)
+const NOTE_LINE := "에일린의 쪽지: 자리를 비웠어요. 업무는 평소처럼 봐 주세요."     # placeholder line (user to rewrite)
+const NOTE_WHO := "desk"
 const POR := preload("res://assets/eilin/por.png")
 
 var arena
@@ -52,6 +70,7 @@ var was_w := false
 var face0 := 1
 var turn_from := 1
 var idle_v := ""
+var was_run := false          # the gait her walk animation is on (upd)
 # where she is (EN)
 var map := "h2"
 var x := 818.0
@@ -60,6 +79,9 @@ var spot := "room"
 var path: Array = []
 var wait := 0.0
 var face := 1
+var gait := "walk"            # "walk" (the stroll) or "run" (the trot) while she is on her way
+var gait_t := GAIT_HOLD       # ms since the gait last changed
+var leg_new := true           # the next step is the first of a leg: its gait is picked afresh
 var talk_t := 0.0
 var hide := false
 var lunch_cut := false
@@ -97,14 +119,56 @@ func sheet(k: String) -> Dictionary:
 func hour() -> float:
 	return fposmod(arena.tod_h, 24.0)
 
-func plan() -> String:
+## the stint the hour falls in: [spot, the hour it began (negative before midnight's wrap)]
+func stint() -> Array:
 	var h := hour()
-	if h < 7.5 or h >= 23.0: return "room"
-	if h >= 12.0 and h < 13.0: return "counter" if lunch_cut else "table"
-	if h >= 7.5 and h < 18.0: return "counter"
-	if h >= 18.0 and h < 20.5: return "town"
-	if h >= 20.5 and h < 22.5: return "living"
-	return "room"
+	var cur: Array = SCHED[SCHED.size() - 1]
+	var st: float = cur[0] - 24.0
+	for s in SCHED:
+		if h >= s[0]:
+			cur = s
+			st = s[0]
+	var sp: String = cur[1]
+	if sp == "table" and lunch_cut: sp = "counter"
+	return [sp, st]
+
+func plan() -> String:
+	return stint()[0]
+
+## late for the stint: its start is more than LATE_MIN in-game minutes behind the clock
+func late() -> bool:
+	return (hour() - float(stint()[1])) * 60.0 > LATE_MIN
+
+## how far the current leg (the walk points left on this map) still runs
+func leg_left() -> float:
+	var d := 0.0
+	var p := Vector2(x, y)
+	for s in path:
+		if s["t"] != "walk": break
+		var q := Vector2(s["x"], s["y"])
+		d += absf(q.x - p.x) if map == "town" else p.distance_to(q)      # the street's height is not hers to track
+		p = q
+	return d
+
+## the run condition: far to go on this leg, or late
+func hurry() -> bool:
+	return not path.is_empty() and (leg_left() > RUN_FAR or late())
+
+func spd() -> float:
+	return EIL_RUN_SPD if gait == RUN else EIL_SPD
+
+func set_gait(g: String) -> void:
+	if g == gait: return
+	gait = g
+	gait_t = 0.0
+
+## the gait for this step: a new leg takes the one its length and the hour call for; on the way it changes only once
+## the run condition has flipped and GAIT_HOLD has passed since the last change (no flicker)
+func _gait_step() -> void:
+	var run := hurry()
+	if leg_new or (run != (gait == RUN) and gait_t >= GAIT_HOLD):
+		set_gait(RUN if run else "walk")
+	leg_new = false
 
 ## where each portal sits on each side: [map i <-> i+1] -> [point on map i, point on map i+1]
 func portal(i: int) -> Array:
@@ -188,11 +252,13 @@ func world(dt: float) -> void:
 	var h := hour()
 	if h < 12.0 or h >= 13.0: lunch_cut = false
 	if talk_t > 0.0 and not talking(): talk_t = 0.0
+	gait_t += dt
 	var want := plan()
 	if want != spot and path.is_empty() and talk_t <= 0.0:
 		var off := spot == "counter" and want in ["town", "living", "room"] and here()
 		path = route(want)
 		spot = "walking"
+		leg_new = true
 		if off:
 			play("stretch", "one")
 			wait = EILM["stretch"][0] * EILSPD["stretch"] + 500.0
@@ -211,6 +277,7 @@ func world(dt: float) -> void:
 		y = s["y"]
 		wait = s["wait"]
 		hide = true
+		leg_new = true
 		path.pop_front()
 		if here() and arena.level.kind == "hall": arena.sfx("ready", 0.12)     # hDoorBump: only indoors
 		return
@@ -220,7 +287,8 @@ func world(dt: float) -> void:
 		var T: Dictionary = ESPOT.get(spot, {})
 		if T.has("face"): face = T["face"]
 		return
-	var st := EIL_SPD * dt
+	_gait_step()
+	var st := spd() * dt
 	var sx: float = s["x"]
 	var sy: float = s["y"]
 	if map == "town":    # the street's height is looked up when she is drawn
@@ -256,6 +324,10 @@ func snap() -> void:
 	x = T0["x"]
 	y = G
 	spot = s0
+	gait = "walk"
+	gait_t = GAIT_HOLD
+	leg_new = true
+	was_run = false
 	if T0.has("face"): face = T0["face"]
 	play(T0.get("loop", "idleA"))
 	mode = "loop"
@@ -274,7 +346,7 @@ func upd(dt: float) -> void:
 	var desk := at_desk()
 	var P = arena.player
 	var nr := here() and absf(P.position.x - x) < 230.0
-	var walk := walking() and wait <= 0.0
+	var walk := walking() and wait <= 0.0 and not leg_new      # a leg's gait is picked on its first step (world)
 	greet_cd -= dt
 	if say_t > 0.0: say_t -= dt
 	t += dt
@@ -292,20 +364,43 @@ func upd(dt: float) -> void:
 		if hold < need: return
 		mode = "loop"
 		a = ""
-	# into / out of the walk: the stroll steps off from its passing pose and turns on the spot (the start / stop / turn
-	# sheets are the hurried trot's, "run": a lunge into a run reads wrong before a calm walk)
+	# into / out of the walk, and between the gaits. The stroll steps off from its passing pose and turns on the spot;
+	# the trot ("run") keeps the start / stop / turn sheets, which were made for it: a lunge off the mark, a skid to a
+	# stand, a wheel round (a lunge into a run reads wrong before a calm walk). A stroller who breaks into the trot
+	# lunges through "start"; a runner easing off drops straight into the stroll's passing pose (she slows, she
+	# doesn't halt, so no skid).
+	var run := walk and gait == RUN
 	if walk != was_w:
 		was_w = walk
 		face0 = face
+		var r0 := was_run
+		was_run = run
 		if walk:
+			if run:
+				play("start", "one")
+				return
 			play(WALK)
 			mode = "loop"
 			f = WALK_IN
+		elif r0 and spot != "counter":
+			play("stop", "one")
+			return
+	elif walk and run != was_run:
+		was_run = run
+		if run:
+			play("start", "one")
+			return
+		play(WALK)
+		mode = "loop"
+		f = WALK_IN
 	if walk and face != face0:
 		turn_from = face0
 		face0 = face
+		if run:
+			play("turn", "one")
+			return
 	var loop: String
-	if walk: loop = WALK
+	if walk: loop = RUN if run else WALK
 	elif desk: loop = "talk" if tk else (idle_v if idle_v != "" else "idleA")
 	else:
 		var T: Dictionary = ESPOT.get(spot, {})
@@ -435,7 +530,7 @@ func talk() -> void:
 		var L: Array = EIL_OFF[randi() % EIL_OFF.size()]
 		arena.dlg.ask("eilin", POR, "에일린", "길드 접수원", L, [["좋은 저녁 보내요", func(): talk_t = 0.0, "leave"]])
 
-## the counter when she is not behind it
+## the counter when she is not behind it: where she is
 func desk_away() -> String:
 	match spot:
 		"table": return "점심 식사 중이에요. 식당 쪽에 계세요."
@@ -443,6 +538,17 @@ func desk_away() -> String:
 		"living": return "퇴근하셨어요. 리빙 룸에 계신 것 같아요."
 		"room": return "주무시는 시간이에요."
 	return "자리를 비웠어요."
+
+## her folded note on the counter while she is away (hall.gd draws it; the counter's key reads it). The feed shows what
+## it says (NOTE_LINE), then the desk menu she would open opens all the same, only without her: no greeting or
+## portrait, and nothing that needs her in person (fame.gd eil_work away)
+func desk_note() -> void:
+	var F = arena.fame
+	if F == null:
+		arena.text(arena.player.position + Vector2(0, -170), "에일린 — " + desk_away(), Color("#bfeee6"))
+		return
+	F.notice(NOTE_LINE, "접수대", Color("#bfeee6"), false, 4200.0)
+	F.eil_work([], true)
 
 ## hEilUpd's rank check: at the desk she stamps and congratulates when the guild goes up a rank
 func on_rank_up() -> void:

@@ -99,6 +99,7 @@ func draw_back(ci: CanvasItem, vs: Vector2) -> void:
 	var ga := clampf(open_t / 200.0, 0.0, 1.0)
 	ci.draw_polygon(PackedVector2Array([Vector2(0, vs.y * 0.45), Vector2(vs.x, vs.y * 0.45), vs, Vector2(0, vs.y)]),
 		PackedColorArray([Color(0, 0, 0, 0), Color(0, 0, 0, 0), Color(0, 0, 0, 0.55 * ga), Color(0, 0, 0, 0.55 * ga)]))
+	if por == null: return        # the shards frame the speaker's art; a speaker without one (the counter's note) gets none
 	var cr := Rect2(-0.04 * vs.x, vs.y * 0.02, vs.x * 0.4, vs.y * 1.04)      # left -4%, bottom -6%, 40% x 104%
 	var shards := [[Rect2(cr.position.x, cr.position.y + cr.size.y * 0.08, cr.size.x * 0.96, cr.size.y * 0.92), dc(), 0.0,
 		[[8, 18], [40, 2], [52, 14], [88, 6], [76, 34], [100, 52], [80, 66], [92, 100], [0, 100], [4, 60], [0, 40]]],
