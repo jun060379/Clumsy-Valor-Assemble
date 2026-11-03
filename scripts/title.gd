@@ -56,6 +56,7 @@ var beat := BEAT.new()           # the music clock
 var mt := 0.0                    # beat.music_t, cached each frame (s)
 var sec := "A"                   # the section mt is in
 var gate := false                # the quiet gate before the first tap (the web: audio needs the gesture)
+var fs_want := false             # the gate was tapped: ask for fullscreen on the tap's release (web)
 var skip := false                # a tap during the intro: its moves settle at once (until the next lap)
 var menu_in := false             # the menu rows have entered (they never leave, laps included)
 var slam_lap := -1               # the lap the logo's slam was played on
@@ -257,6 +258,10 @@ func _input(ev: InputEvent) -> void:
 	var tap := Vector2.INF
 	if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 		tap = ev.position
+	if fs_want and ((ev is InputEventMouseButton and not ev.pressed) or (ev is InputEventScreenTouch and not ev.pressed)):
+		fs_want = false
+		if DisplayServer.window_get_mode() != DisplayServer.WINDOW_MODE_FULLSCREEN:
+			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	var key := -1
 	if ev is InputEventKey and ev.pressed and not ev.echo:
 		key = ev.physical_keycode if ev.physical_keycode != 0 else ev.keycode
@@ -269,10 +274,12 @@ func _input(ev: InputEvent) -> void:
 	if outro >= 0.0:
 		return
 	if gate:
-		# the gate's tap is the browser gesture that allows both audio and fullscreen: ask for the whole screen here
-		# (a later toggle is in the HUD / 설정); phones that refuse (iOS Safari) just stay as they are
-		if OS.has_feature("web") and DisplayServer.window_get_mode() != DisplayServer.WINDOW_MODE_FULLSCREEN:
-			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+		# the gate's tap is the browser gesture that allows both audio and fullscreen. The audio can start on the press;
+		# the fullscreen request has to wait for the RELEASE (a touch grants the browser's activation on touchend, not on
+		# touchstart — the HUD's 전체화면 button works the same way). Phones that refuse (iOS Safari) just stay as they are.
+		fs_want = OS.has_feature("web") and tap != Vector2.INF and DisplayServer.window_get_mode() != DisplayServer.WINDOW_MODE_FULLSCREEN
+		if OS.has_feature("web") and key >= 0 and DisplayServer.window_get_mode() != DisplayServer.WINDOW_MODE_FULLSCREEN:
+			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)     # a key press carries the activation itself
 		go_live()                # the gate's tap: the track and the timeline start
 		return
 	if not intro_done:
