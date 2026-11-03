@@ -81,6 +81,7 @@ var solids: Array = []        # raised rock {x,w,top}
 var ceil_y := -1.0e9
 var level = null              # the dungeon, the town or the hall (level.kind); null = training ground
 var tod_h := 18.5             # one clock for the whole world (town, hall, Eilin's day)
+var day_n := 1                # the in-game day: +1 each time that clock passes midnight (saved; the save headers show it)
 var tod_auto := true
 var weather := "clear"         # "clear" / "rain" / "snow" (town sky, rain and snow; F10 cycles it)
 var eil                       # Eilin lives across maps
@@ -287,7 +288,7 @@ func _ready() -> void:
 	cfg.apply_audio()                     # the saved 전체 음량 · 배경음 · 효과음 · 보이스 onto their buses (after bgm made its bus)
 	save = SAVE.new(self)
 	if get_tree().get_script() != null:
-		save.path = "user://save_test.json"     # test runs never touch the real save
+		save.path = "user://save_test.json"     # test runs never touch the real saves (the slots follow: save_test_1.json …)
 	call_deferred("_start_world")
 	if DEV.on:                            # the build stamp: debug builds only (dev.gd)
 		var stamp := Label.new()
@@ -307,7 +308,6 @@ func _ready() -> void:
 func enter_title_mode() -> void:
 	if title_mode or player == null: return
 	title_mode = true
-	title_park = player.position
 	title_back = {}
 	var lk := level_kind()
 	if lk != "town":
@@ -316,6 +316,7 @@ func enter_title_mode() -> void:
 		elif train != null: title_back = {"kind": "training"}
 		else: title_back = {"kind": "town", "at": player.position, "dir": int(player.dir)}
 		go_town(Vector2(380.0, ground_y), 1)          # (its autosave is a no-op under the title)
+	title_park = player.position
 	player.position.x = -9999.0
 	player.visible = false
 	var F = FOLK.of(self)
@@ -324,7 +325,8 @@ func enter_title_mode() -> void:
 	cam_override = null
 
 ## the hand-off into the game: the player is back where she stood (in the scene the save woke in, when the title had
-## switched to the town for its backdrop and `restore` asks for it), her party is hers again, the camera is hers
+## switched to the town for its backdrop and `restore` asks for it — title.gd passes false and loads the file the
+## player picked instead, load_file), her party is hers again, the camera is hers
 func leave_title_mode(restore := true) -> void:
 	if not title_mode: return
 	title_mode = false
@@ -348,7 +350,7 @@ func leave_title_mode(restore := true) -> void:
 ## the world under the title: the clock, Eilin's day, the town's life (not the player), the title's camera
 func _title_step(dt: float) -> void:
 	if tod_auto and not dlg.active:
-		tod_h = fposmod(tod_h + dt / 1000.0 / 60.0, 24.0)
+		_clock_on(dt)
 	eil.world(dt)
 	var lk := level_kind()
 	if lk == "hall" or lk == "town": eil.upd(dt)
@@ -360,7 +362,14 @@ func _title_step(dt: float) -> void:
 		cam.offset = Vector2.ZERO
 	shadow_node.queue_redraw()
 
-## load silently (the title has no 이어하기): the saved scene, or the village street
+## the world clock runs on (one in-game hour per real minute); passing midnight starts the next day
+func _clock_on(dt: float) -> void:
+	var h := tod_h + dt / 1000.0 / 60.0
+	if h >= 24.0: day_n += 1
+	tod_h = fposmod(h, 24.0)
+
+## the world wakes from the autosave (silently, under the title: the title shows the town whatever scene it is, and
+## 시작 / 불러오기 then load the file picked — load_file), or on the village street
 var world_started := false
 func _start_world() -> void:
 	_start_world2()
@@ -369,17 +378,29 @@ func _start_world() -> void:
 func _start_world2() -> void:
 	var d = save.read() if get_tree().get_script() == null else null
 	if d != null:
-		var s: Array = save.apply(d)
-		match s[0]:
-			"hall":
-				go_hall(clampi(s[3], 0, 3), s[1], s[2])
-				return
-			"training":
-				go_training()
-				return
-		go_town(s[1], s[2])
+		save.loaded_from = save.path
+		_go_saved(save.apply(d))
 		return
 	go_town(Vector2(380.0, ground_y), 1)
+
+## a save file into the world: everything restored, then its scene (the hand-off from the title: 시작 continuing the
+## autosave or the newest slot, 불러오기 any of them). false when there is no save in that file
+func load_file(p: String) -> bool:
+	var d = save.read(p)
+	if d == null: return false
+	save.loaded_from = p
+	_go_saved(save.apply(d))
+	return true
+
+func _go_saved(s: Array) -> void:
+	match s[0]:
+		"hall": go_hall(clampi(s[3], 0, 3), s[1], s[2])
+		"training": go_training()
+		_: go_town(s[1], s[2])
+
+## the hub's 저장 can write a slot here: the town, the hall, the training ground (not in a dungeon)
+func can_save_here() -> bool:
+	return level_kind() != "dungeon"
 
 func save_now() -> void:
 	if save != null: save.save()
@@ -770,7 +791,7 @@ func _process(delta: float) -> void:
 			sfx("witch_end", 0.8)
 	var wk := 0.22 if witch > 0.0 else 1.0   # the world slows; Estelle does not
 	if tod_auto and not dlg.active:
-		tod_h = fposmod(tod_h + dt / 1000.0 / 60.0, 24.0)      # one in-game hour per real minute
+		_clock_on(dt)      # one in-game hour per real minute
 	if dlg.active:
 		# a talk box holds the world still; she keeps talking (her loop runs)
 		dlg.step(dt)

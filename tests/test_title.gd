@@ -5,7 +5,8 @@ extends SceneTree
 ## the hand-off; the stride-matched title gait; the follow camera (the subject's choice, the preference, no repeat,
 ## the idle return, the pan's speed cap); the new intro's times; the slabs' press / release logic; the 시작 card with
 ## and without a save; the 450 ms feedback before the outro; the keyboard path; a bare title with no arena running
-## the whole 165 s timeline headless without errors.
+## the whole 165 s timeline headless without errors. 시작 continues the autosave (no card) or, with no save at all, asks
+## with the new-story card; 불러오기's slot card lists 자동 저장 + 슬롯 1·2·3 and passes over the empty ones.
 
 var fails := 0
 
@@ -100,8 +101,15 @@ func _initialize() -> void:
 	# ---- the stride-matched gait ----
 	var ge: Array = folk.title_gait("estelle")
 	var ga: Array = folk.title_gait("aida")
-	check(near(folk.natural_speed("estelle"), 0.067) and near(ge[0], 0.067) and near(ge[1], 1.0), "에스텔's 초심 walk: 0.067 px/ms at its native cadence, the feet planted (%s)" % [ge])
-	check(near(ga[0], 0.09, 0.001) and near(ga[1], 0.643, 0.01), "아이다's run-row walk slowed to 0.09 px/ms, its frames slowed the same (%s)" % [ga])
+	var gl: Array = folk.title_gait("luce")
+	check(near(folk.natural_speed("estelle"), 0.058, 0.001) and near(ge[0], 0.058, 0.001) and near(ge[1], 1.0), "에스텔's 초심 walk: 0.058 px/ms at its native cadence, the feet planted (%s)" % [ge])
+	check(near(ga[0], 0.09, 0.001) and near(ga[1], 0.62, 0.01), "아이다's run-row walk slowed to 0.09 px/ms, its frames slowed the same (%s)" % [ga])
+	check(near(gl[1], folk.TITLE_PACE, 0.001) and near(gl[0] / gl[1], 0.20, 0.001), "루체's: the frames at TITLE_PACE, the ground speed in the same ratio (%s)" % [gl])
+	for c in ["estelle", "aida", "luce"]:
+		var g: Array = folk.title_gait(c)
+		check(near(g[0] / g[1], folk.natural_speed(c), 0.0001), "%s: ground speed / frame rate = the sheet's stride speed (no sliding feet)" % c)
+	var E0 = arena.eil
+	check(not E0.hurry() and near(E0.spd(), E0.EIL_SPD * 0.7, 0.0001), "Eilin under the title: never the trot, her walkL stroll at 0.7 with its frames at 0.7")
 	var ne = folk.npc("estelle")
 	ne["r"] = "top"
 	ne["x"] = 3000.0
@@ -114,9 +122,14 @@ func _initialize() -> void:
 	var x0: float = ne["x"]
 	var f0: int = ne["f"]
 	for i in 10: folk._upd(ne, 16.0)
-	check(near(ne["x"] - x0, 0.067 * 160.0, 0.5) and ne["anim"] == "walk" and ne["dir"] == 1, "under the title she walks at the art's pace, never runs (%.1f px in 160 ms, %s)" % [ne["x"] - x0, ne["anim"]])
-	for i in 70: folk._upd(ne, 16.0)
-	check(ne["f"] != f0 or true, "the walk's frames advance")
+	check(near(ne["x"] - x0, 0.058 * 160.0, 0.5) and ne["anim"] == "walk" and ne["dir"] == 1, "under the title she walks at the art's pace, never runs (%.1f px in 160 ms, %s)" % [ne["x"] - x0, ne["anim"]])
+	var flips := 0
+	var d0: int = ne["dir"]
+	for i in 70:
+		folk._upd(ne, 16.0)
+		if ne["dir"] != d0: flips += 1
+		d0 = ne["dir"]
+	check(ne["f"] != f0 and flips == 0, "the walk's frames advance (frame %d), no flips on a straight way" % ne["f"])
 	# ---- the camera: home, the pull-in, the follow ----
 	T.beat.hold = true
 	var home: Vector2 = T._home()
@@ -207,10 +220,52 @@ func _initialize() -> void:
 	var held: Vector2 = T.cam_pos
 	for i in 35: tick(T, 100.0)
 	check((T.cam_pos - T.hold_at).length() < 6.0 and (T.cam_pos - held).length() < 120.0, "the camera glides to a stop near where she stopped (%.0f px on)" % (T.cam_pos - held).length())
-	for i in 120: tick(T, 100.0)
-	check(T.cam_phase == "home", "nobody walked for 12 s: back toward the hall (%s)" % T.cam_phase)
-	for i in 300: tick(T, 50.0)
-	check((T.cam_pos - home).length() < 3.0, "home again (%s)" % [T.cam_pos])
+	var guard := 0
+	while T.cam_phase != "home" and guard < 200:
+		tick(T, 100.0)
+		guard += 1
+	check(T.cam_phase == "home" and T.idle_t >= 12000.0 and T.ret_dur >= 3000.0, "nobody walked for 12 s: the drift back to the hall (%.0f ms for %.0f px)" % [T.ret_dur, (T.cam_pos - home).length()])
+	var far: float = (T.ret_from - home).length()
+	check(near(T.ret_dur, maxf(3000.0, 1.5 * far / 140.0 * 1000.0), 1.0), "the drift: 3 s, or as long as 140 px/s needs")
+	var vret := 0.0
+	var steps := 0
+	while T.ret_dur > 0.0 and steps < 2000:
+		var b0: Vector2 = T.cam_pos
+		tick(T, 50.0)
+		vret = maxf(vret, (T.cam_pos - b0).length() / 0.05)
+		steps += 1
+	check((T.cam_pos - home).length() < 1.0 and vret <= 141.0, "home again (%.0f px off), the drift never past 140 px/s (%.0f)" % [(T.cam_pos - home).length(), vret])
+	# a short drift: 3 s exactly
+	T.cam_pos = home + Vector2(150.0, 0.0)
+	T.cam_phase = "hold"
+	T.hold_t = 0.0
+	T.idle_t = 13000.0
+	tick(T, 16.0)
+	check(near(T.ret_dur, 3000.0) and T.cam_phase == "home", "150 px from the hall: the drift takes 3 s (%.0f)" % T.ret_dur)
+	var st2 := 0
+	while T.ret_dur > 0.0 and st2 < 1000:
+		tick(T, 50.0)
+		st2 += 1
+	check(st2 >= 59 and st2 <= 61, "… and it does (%d × 50 ms)" % st2)
+	# ---- the intro on the beat ----
+	T.beat.hold = true
+	check(near(T.T_MENU[0], 1.065, 0.01) and near(T.T_MENU[1], 1.2276, 0.01) and near(T.T_MENU[2], 1.39, 0.01) and near(T.T_MENU[3], 1.553, 0.01), "the slabs land on 1.07 / 1.23 / 1.39 / 1.55")
+	var lap0: int = T.beat.lap
+	T.skip = false
+	T.beat.lap = 0
+	at(T, T.T_MENU[2] - 0.05)
+	var u_before: float = T.mu(T.T_MENU[2] - T.SLAB_IN, T.SLAB_IN, "bk")
+	at(T, T.T_MENU[2])
+	var u_on: float = T.mu(T.T_MENU[2] - T.SLAB_IN, T.SLAB_IN, "bk")
+	check(not near(u_before, 1.0, 0.005) and near(u_on, 1.0, 0.001), "the third slab is still moving 50 ms before its 16th and lands on it (%.2f → %.2f)" % [u_before, u_on])
+	at(T, T.T_CURSOR)
+	check(near(T.mu(T.T_CURSOR - T.CUR_IN, T.CUR_IN, "bk"), 1.0, 0.001), "the brush lands on 1.72")
+	T.beat.lap = lap0
+	# the logo never collides with the menu at 900×500 and 1000×460 (nor 1087×500)
+	for sz in [Vector2(900, 500), Vector2(1000, 460), Vector2(1087, 500)]:
+		var lr: Rect2 = T._logo_rect(sz)
+		var s0r: Rect2 = T.slab_rect(sz, 0)
+		check(lr.end.y < s0r.position.y - 2.0 and lr.size.x <= 0.36 * sz.x + 0.5, "%dx%d: the logo (bottom %.0f) clears the first slab (top %.0f)" % [sz.x, sz.y, lr.end.y, s0r.position.y])
 	# ---- the slabs: press / release ----
 	T.beat.hold = false
 	at(T, 30.0)
@@ -218,9 +273,10 @@ func _initialize() -> void:
 	T.outro = -1.0
 	T.commit_k = -1
 	T.confirm = false
-	T.has_save = true
 	T.menu_in = true
 	T.intro_done = true
+	T.refresh_saves()
+	check(T.has_save and T.auto_file == arena.save.path, "the autosave is there: 시작 will continue it, 불러오기 is live")
 	for i in 3: await process_frame        # a draw: the slab rects
 	check(T.item_rects.size() == T.items.size() and T.item_rects[0].size.x > 0.0, "the slabs' rects are laid out (%d)" % T.item_rects.size())
 	var r0: Rect2 = T.item_rects[0]
@@ -231,38 +287,98 @@ func _initialize() -> void:
 	mouse(T, outside, false)
 	check(not T.confirm and T.commit_k < 0 and T.outro < 0.0, "a stray tap after the intro does nothing")
 	mouse(T, r1.get_center(), true)
-	check(T.press_k == 1 and T.sel == 1, "a press on 불러오기: the squash, the selection follows")
+	check(T.press_k == 1 and T.sel == 1 and T._slab_scale(1) <= 1.0, "a press on 불러오기: the squash, the selection follows")
 	mouse(T, outside, false)
-	check(T.press_k < 0 and T.commit_k < 0 and T.outro < 0.0, "released outside it: nothing")
+	check(T.press_k < 0 and T.commit_k < 0 and not T.confirm and T.outro < 0.0, "released outside it: nothing")
+	mouse(T, r0.get_center(), true)
+	mouse(T, r1.get_center(), false)
+	check(T.commit_k < 0 and not T.confirm, "pressed on 시작, released on 불러오기: nothing")
+	# the intro: a tap only finishes it
+	T.intro_done = false
+	T.menu_in = false
+	T.skip = false
 	mouse(T, r0.get_center(), true)
 	mouse(T, r0.get_center(), false)
-	check(T.confirm and T.confirm_kind == "wipe" and T.commit_k < 0, "시작 over a save: the card asks before the save goes, nothing starts")
-	key(T, KEY_ESCAPE)
-	check(not T.confirm, "Esc closes the card")
-	T.has_save = false
+	check(T.intro_done and T.skip and T.commit_k < 0 and not T.confirm, "during the intro a tap on a slab only finishes the intro")
+	# 시작 with the autosave: the feedback, then straight in (no card)
 	mouse(T, r0.get_center(), true)
 	mouse(T, r0.get_center(), false)
-	check(T.confirm and T.confirm_kind == "fresh" and T.confirm_sel == 0, "시작 with no save: the 새로운 이야기 card")
+	check(T.commit_k == 0 and not T.confirm and T.load_file == arena.save.path and T.outro < 0.0, "시작 over the autosave: no card, the feedback runs, the autosave to load")
+	T.commit_k = -1
+	T.load_file = ""
+	# 불러오기: the slot card — 자동 저장 + 슬롯 1·2·3, the empty ones greyed and passed over
+	var slot2: String = arena.save.slot_path(2)
+	check(slot2 == "user://save_test_2.json", "slot 2's file is save_test_2.json in a test run (%s)" % slot2)
+	for k in range(1, 4): DirAccess.remove_absolute(arena.save.slot_path(k))
+	arena.save.save(slot2)
+	mouse(T, r1.get_center(), true)
+	mouse(T, r1.get_center(), false)
+	check(T.confirm and T.confirm_kind == "load" and T.rows.size() == 4 and T.commit_k < 0, "불러오기: the slot card with four rows, nothing loads yet")
+	check(T.rows[0]["on"] and not T.rows[1]["on"] and T.rows[2]["on"] and not T.rows[3]["on"], "자동 저장 and 슬롯 2 can be picked, the empty 1 and 3 not")
+	check(T.rows[0]["h"]["place"] == "본관 2층" and T.rows[2]["h"]["party"] == ["에스텔", "아이다"], "the rows carry the headers (%s / %s)" % [T.rows[0]["h"]["place"], T.rows[2]["h"]["party"]])
+	check(T.confirm_sel == 0, "the first filled row picked")
+	key(T, KEY_DOWN)
+	check(T.confirm_sel == 2, "↓ passes over the empty 슬롯 1 (%d)" % T.confirm_sel)
+	key(T, KEY_DOWN)
+	check(T.confirm_sel == 0, "↓ passes over the empty 슬롯 3 and wraps (%d)" % T.confirm_sel)
+	for i in 3: await process_frame        # a draw: the rows' rects
+	check(T.confirm_rects.size() == 4 and T.close_rects.size() == 1, "the rows and 닫기 laid out")
+	mouse(T, T.confirm_rects[1].get_center(), true)
+	mouse(T, T.confirm_rects[1].get_center(), false)
+	check(T.confirm and T.commit_k < 0, "a tap on the empty 슬롯 1 does nothing")
+	mouse(T, T.close_rects[0].get_center(), true)
+	mouse(T, T.close_rects[0].get_center(), false)
+	check(not T.confirm, "닫기 closes the card")
+	mouse(T, r1.get_center(), true)
+	mouse(T, r1.get_center(), false)
+	for i in 3: await process_frame
+	mouse(T, T.confirm_rects[2].get_center(), true)
+	mouse(T, outside, false)
+	check(T.confirm and T.commit_k < 0, "pressed on 슬롯 2, released off it: nothing")
+	mouse(T, T.confirm_rects[2].get_center(), true)
+	mouse(T, T.confirm_rects[2].get_center(), false)
+	check(not T.confirm and T.commit_k == 1 and T.load_file == slot2, "슬롯 2 picked: the card closes, the feedback on 불러오기, slot 2 to load")
+	T.commit_k = -1
+	T.load_file = ""
+	DirAccess.remove_absolute(slot2)
+	# 시작 with no save at all: the 새로운 이야기 card
+	DirAccess.rename_absolute(arena.save.path, arena.save.path + ".bak")
+	T.refresh_saves()
+	check(not T.has_save and T.auto_file == "", "no save anywhere: 불러오기 greyed (NO SAVE)")
+	mouse(T, r1.get_center(), true)
+	mouse(T, r1.get_center(), false)
+	check(not T.confirm and T.commit_k < 0, "불러오기 with nothing to load: nothing opens")
+	mouse(T, r0.get_center(), true)
+	mouse(T, r0.get_center(), false)
+	check(T.confirm and T.confirm_kind == "fresh" and T.confirm_sel == 0 and T.commit_k < 0, "시작 with no save: the 새로운 이야기를 시작합니다 card, 시작 picked")
 	for i in 3: await process_frame        # a draw: the card's buttons
 	check(T.confirm_rects.size() == 2, "the card's two buttons")
 	mouse(T, T.confirm_rects[1].get_center(), true)
 	mouse(T, T.confirm_rects[1].get_center(), false)
 	check(not T.confirm and T.commit_k < 0, "취소: the card closes, nothing starts")
-	T.has_save = true
+	T.sel = 0
+	key(T, KEY_ENTER)
+	check(T.confirm and T.confirm_kind == "fresh", "Enter on 시작: the same card")
+	key(T, KEY_ENTER)
+	check(not T.confirm and T.commit_k == 0 and T.load_file == "", "Enter on 시작 in it: the feedback, a new game to start")
+	T.commit_k = -1
+	DirAccess.rename_absolute(arena.save.path + ".bak", arena.save.path)
+	T.refresh_saves()
+	# the pick's feedback: the slab slams, a burst, the others drop out 60 ms apart, the outro 450 ms on
 	T.beat.hold = true
-	# 불러오기: the press feedback, then the outro 450 ms on
+	T.sel = 0
+	key(T, KEY_ENTER)
+	check(T.commit_k == 0 and T.outro < 0.0 and T.release_k == 0, "Enter on 시작 (autosave): the feedback, the same squash and spring as a tap's")
+	check(T._slab_drop(1) == 0.0 and T._slab_drop(3) == 0.0, "the others have not dropped yet")
+	T.clock += 100.0
+	check(T._slab_scale(0) < 1.0 and T._slab_drop(1) > 0.0 and T._slab_drop(2) == 0.0 and T._slab_drop(0) == 0.0, "100 ms: the picked slab in its slam, the first other dropping, the next not yet")
+	T.clock += 60.0
+	check(T._slab_drop(2) > 0.0 and T._slab_drop(3) == 0.0, "160 ms: the second other dropping, 60 ms after the first")
+	T.clock += 300.0
+	check(T._slab_drop(3) > 0.0, "the last other dropping")
 	mouse(T, r1.get_center(), true)
 	mouse(T, r1.get_center(), false)
-	check(T.commit_k == 1 and T.outro < 0.0, "불러오기 picked: the feedback runs, the outro waits")
-	check(T._slab_drop(0) == 0.0 and T._slab_drop(3) == 0.0, "the others have not dropped yet")
-	T.clock += 100.0
-	check(T._slab_scale(1) < 1.0 and T._slab_drop(0) > 0.0 and T._slab_drop(3) == 0.0 and T._slab_drop(1) == 0.0, "100 ms: the picked slab is in its slam, the first other slab drops, the last not yet, the picked one stays")
-	T.clock += 400.0
-	check(T._slab_drop(3) > 0.0, "500 ms: the last other slab is dropping")
-	mouse(T, r0.get_center(), true)
-	mouse(T, r0.get_center(), false)
-	check(T.commit_k == 1 and not T.confirm, "input is ignored while the feedback runs")
-	check(T.outro < 0.0, "the outro has not begun before _process runs it")
+	check(T.commit_k == 0 and not T.confirm, "input is ignored while the feedback runs")
 	T.commit_t = T.clock - 460.0
 	T._process(0.016)
 	check(T.outro >= 0.0 and T.burst_t >= 0.0, "450 ms after the pick: the outro (and the burst) begin")
@@ -270,37 +386,28 @@ func _initialize() -> void:
 	T.commit_k = -1
 	T.burst_t = -1.0
 	T.handed = false
-	# the keyboard path: Enter on 시작 opens the card, Enter on 시작 in the card commits (fresh over a save)
-	T.sel = 0
-	key(T, KEY_ENTER)
-	check(T.confirm and T.confirm_kind == "wipe" and T.confirm_sel == 1, "Enter on 시작: the card, 돌아가기 picked by default")
-	key(T, KEY_LEFT)
-	check(T.confirm_sel == 0, "←: 새로 시작")
-	key(T, KEY_ENTER)
-	check(not T.confirm and T.commit_k == 0 and T.fresh, "Enter: the feedback on 시작, the save marked to go")
-	T.commit_k = -1
-	T.fresh = false
-	# ---- the hand-off: the hero back, her party hers, the hall restored, the town's music ----
+	# ---- the hand-off: the autosave (made in the hall) loads — the hall back, the hero back, her party hers ----
 	for i in 20:
 		B._process(0.05)
 		await process_frame
 	check(B.tgain >= 1.0, "under the title: the title track at full")
 	T.beat.hold = false
+	T.load_file = arena.save.path
 	T._go()
 	for i in 3: await process_frame
 	check(not T.active and not arena.title_mode, "the hand-off: the title off")
-	check(arena.level_kind() == "hall" and arena.level.fl == 1 and P.visible, "불러오기 restored the hall, floor 1 (%s)" % arena.level_kind())
+	check(arena.level_kind() == "hall" and arena.level.fl == 1 and P.visible and (P.position - hall_at).length() < 2.0, "시작 restored the hall, floor 1, where she stood (%s)" % arena.level_kind())
 	check(arena.title_back.is_empty() and arena.cam_override == null and not folk.title_mode and folk.folk() == ["luce"], "the camera and the townsfolk are the game's again, the party hers (%s)" % [folk.folk()])
-	check(P.party == ["estelle", "aida"] and P.who == "estelle", "the party kept (%s)" % [P.party])
+	check(P.party == ["estelle", "aida"] and P.who == "estelle" and arena.save.loaded_from == arena.save.path, "the party kept (%s)" % [P.party])
 	for i in 6:
 		B._process(0.05)
 		await process_frame
 	check(B.wanted() and not B.wanted_title() and B.ap.playing and B.tgain < 1.0, "the town starts while the title fades (tgain %.2f)" % B.tgain)
-	# 시작 over a save (fresh): the hall is not restored (the scene reloads into a new game)
+	# the title again over the hall: the town, the hall remembered; leaving without a restore keeps the town
 	arena.enter_title_mode()
 	check(arena.title_mode and arena.level_kind() == "town" and arena.title_back.get("kind", "") == "hall", "the title again: the town, the hall remembered")
 	arena.leave_title_mode(false)
-	check(not arena.title_mode and arena.level_kind() == "town" and arena.title_back.is_empty(), "leaving without the restore (시작 over a save): the town stays, the hall forgotten")
+	check(not arena.title_mode and arena.level_kind() == "town" and arena.title_back.is_empty(), "leaving without the restore: the town stays, the hall forgotten")
 	DirAccess.remove_absolute(arena.save.path)
 	# ---- a title with no arena and no audio runs the whole timeline ----
 	var bare = load("res://scripts/title.gd").new()

@@ -13,7 +13,7 @@ func _initialize() -> void:
 		await process_frame
 		n += 1
 	print("page ", U.menu.page, " sweep ", U.sweep.active, " holds ", U.holds())
-	U.menu.enter(6)          # 조작 안내
+	U.menu.enter(U.menu.hub_index("help"))          # 조작 안내
 	n = 0
 	while (U.sweep.active or n < 2) and n < 2000:
 		await process_frame

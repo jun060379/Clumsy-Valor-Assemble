@@ -23,11 +23,13 @@ the first tap: the gate.
 
 ## The town under the title (arena.title_mode)
 
-The world starts under the title as it always did (the saved scene, or the village street). While the title is up
+The world wakes from the autosave under the title as it always did (or on the village street). While the title is up
 (`arena.enter_title_mode`, left again on the hand-off): **the title always shows the town** — a save that woke in the
 hall or on the training ground switches to the town for the backdrop (nothing is saved on the way: `_autosave` is a
-no-op under the title) and the scene is remembered (`title_back`) and restored on 불러오기's hand-off (`leave_title_mode`
-→ `go_hall` / `go_training`); 시작 over a save skips the restore, the scene reloads into a new game anyway.
+no-op under the title; the scene is noted in `title_back`). On the hand-off the title leaves title mode without that
+restore and loads the file the player picked (`ui_root.start_game(c, file)` → `arena.load_file`): the save comes back
+whole — its scene (the hall, its floor, the spot she stood on; the training ground), party, clock, day — whichever of
+the autosave or the three slots it is. A new game (no save anywhere) starts on the town as it stands.
 The arena keeps stepping the world's clock (`tod_h`), Eilin's day, and the town's life (weather, lamps and lit windows
 by the real hour, the horse, the cat, the townsfolk) — but not the player: her node is hidden and parked off-world, the
 HUD and touch controls are off. **Every recruited member — the hero too — lives in town as a townsperson** for the
@@ -37,13 +39,18 @@ front and the bench / street / lamp spots (`TITLE_FAV`); their word chats and so
 and Eilin's town. Input goes to the menu only.
 
 **The walkers' footing** (`townsfolk.gd` STRIDE / `title_gait`): the walk art decides the ground speed, not the other
-way round. Each sheet's natural speed is the planted foot's backward travel per frame at the entry's native timing,
-measured on the sheets: 초심's 10-frame walk (row 36) carries 70 px a 1050 ms cycle — 0.067 px/ms, a short calm stride;
-the original art's "walk" is its run row played slow (에스텔 row 2: 0.195, 아이다 row 1: 0.14, 루체 row 1: 0.13 px/ms at
-145 ms a frame). Under the title a walker moves at that natural speed scaled by k = clamp(0.09 / natural, 0.62, 1.0)
-with the frame time scaled by the same k, so the feet plant: 에스텔 strolls at her art's own 67 px/s and cadence,
-아이다 and 루체 at 90 px/s with their run-row frames slowed to match. (In play the street pace WALKSP still applies.)
-Eilin keeps eilin.gd's 0.7 stroll, whose frame time is scaled the same way. A walker flips only when its way turns.
+way round. Each walker plays its own walk sheet (에스텔 초심's walk, 아이다 / 루체 their "walk", Eilin walkL), and each
+sheet's natural speed is the planted sole's travel along the feet line (cell rows 334–340) per frame while it is down,
+× 0.5 × the member's draw scale, at the entry's native frame time — measured on the sheets: 초심's 10-frame walk
+(row 36) moves its sole ~9 cell px a 105 ms frame = **0.058 px/ms** (61 px a 1050 ms cycle), a short calm stride; the
+original art's "walk" is its run row played slow, with two flight frames in eight: 에스텔 row 2 ≈ 0.19, **아이다 row 1
+≈ 0.145** (~33 cell px a frame), **루체 row 1 ≈ 0.20** (~49) px/ms at 145 / 140 ms a frame. (The old figures — 0.067,
+0.14, 0.13 — were off; 루체's by half, so she skated.) Under the title a walker moves at k × natural with its frames
+played at k × their native rate, k = clamp(0.09 / natural, TITLE_PACE 0.62, 1.0): speed ÷ rate is always the sheet's
+own stride speed, so the soles stay planted — 에스텔 strolls at her art's own 58 px/s and cadence, 아이다 at 90 px/s and
+루체 at 124 px/s with their frames at 0.62. Eilin plays walkL at 0.7 of EIL_SPD (52 px/s) with its frames at 0.7, and
+under the title never breaks into her trot (`hurry()` is false). A walker flips only when its way turns (no idle
+about-face on arrival under the title). In play the street pace WALKSP still applies.
 
 **Passing greetings** (`townsfolk._greets`): two walkers within 60 px on the same route, neither busy, their pair
 rested 20 s — both stop 1.2 s, face each other and show an emote ("…", "♪", "!"); Eilin on her way through town too.
@@ -60,9 +67,23 @@ rested 20 s — both stop 1.2 s, face each other and show an emote ("…", "♪"
   so the pan runs at their pace without lag) and holds them at **0.42 W walking right / 0.58 W walking left**, their
   feet at 0.82 H (`_cam_y`: the terrace at home's height, the street and the lower plaza lower). When they stop the
   camera glides to a halt just ahead (`hold_at`) and holds 4–8 s, then picks the next one; with nobody walking for
-  12 s it drifts back home. Every move is an eased pan at **≤ 140 px/s** (`CAM_MAX`), clamped to the town's bounds as
+  12 s it drifts back home over 3 s (a timed smoothstep, `RET_MS`; when home is further than 3 s allows at 140 px/s
+  — the smoothstep's peak is 1.5× its mean — the drift takes 1.5·d / 140 s instead). Every move is an eased pan at **≤ 140 px/s** (`CAM_MAX`), clamped to the town's bounds as
   the normal camera is. Never a cut.
 - **The wedge** stays only for the music's loop wrap (no framing change on it).
+
+## Saves (save_game.gd)
+
+The autosave `user://save.json` (every scene change, every 30 s, when the app is hidden) and three manual slots
+`user://save_1.json` … `save_3.json` share one format; `save(p)` / `read(p)` take the file, `header(p)` reads a file's
+summary (place, day, time, adventurer level, party, timestamp) without touching the world, `newest()` the most recent
+file. The snapshot carries `where` (the place where it was really made: a cave save still loads at the sortie wagon,
+but its header says 동굴 · the room) and `day` (`arena.day_n`, +1 each time the world clock passes midnight).
+**In game, the hub's 저장** (menu.gd, between 적 도감 and 설정) opens the same card over the hub: 슬롯 1·2·3 with their
+headers; an empty slot is written at once, a filled one asks "슬롯 N에 덮어쓸까요?" (덮어쓰기 / 취소, 취소 picked);
+writing plays `ui_ok`, closes the card and shows "슬롯 N에 저장했어요" (placeholder line). Allowed in the town, the hall and
+the training ground; in a dungeon the entry is greyed, its info line and a tap say "던전에서는 저장할 수 없어요"
+(placeholder). Test runs use `save_test.json` and `save_test_N.json`.
 
 ## Composition (fractions of the viewport)
 
@@ -97,10 +118,11 @@ that tap asks the browser for fullscreen). On the desktop the title goes live at
    2° over-rotated and settling in 150 ms (the clumsy touch), a burst popping behind them (0.3 → 1.5 of the logo's
    width over 400 ms, fading), the slam jolt (±3 px, 160 ms), the `slam` sfx, a white slash across the screen.
 3. **1.07 / 1.23 / 1.39 / 1.55** — four consecutive 16ths (T0 + 3 beats + k·0.1625): **the four slabs slam in** from
-   the left (−0.3 W, `bk` 200 ms, rotating in from −6°), a `ui_move` click and a tiny ink splat at each landing; the
-   second slab overshoots 0.01 W on the next 16th and settles (the tag that takes two stamps).
-4. **1.72** — **the brush cursor slaps onto 시작** (1.3× → 1, `bk` 220 ms, `ui_ok`). The picked slab is a plain ink
-   slab until the brush arrives.
+   the left (−0.3 W, `bk` over the 140 ms before, rotating in from −6°) and land exactly on their 16th, a `ui_move`
+   click and a tiny ink splat at each landing; the second slab overshoots 0.01 W over the next 16th and settles (the
+   tag that takes two stamps).
+4. **1.72** — **the brush cursor slaps onto 시작** (1.3× → 1, `bk` over the 120 ms before, landing on 1.72 with
+   `ui_ok`). The picked slab is a plain ink slab until the brush arrives.
 5. **2.11** — the motto fades in. **2.76** — the flower pops (`bk`). **3.23** — the pull-in has settled.
    `intro_done` at 3.1: a tap anywhere before it settles everything at once (the sounds not played); past it, taps
    are the menu's. Nothing else waits.
@@ -113,23 +135,31 @@ that tap asks the browser for fullscreen). On the desktop the title goes live at
   pull-in replays; the logo and the menu stay (the menu never re-enters). No gate on the loop. A tap's skip is cleared
   at the wrap so the pull-in runs.
 
-## Input, the card, the pick (wall clock)
+## Input, the cards, the pick (wall clock)
 
 - **A tap counts on the release inside the same slab it was pressed on.** A press on a slab squashes it and moves the
-  selection to it; a release elsewhere cancels; taps outside the slabs do nothing (once the intro is in). The pad / the
-  keyboard: ↑↓ move the selection (`ui_move`), Enter / A pick (the same squash-and-spring), Esc / B close the card.
-- **시작 never enters straight away**: it opens a card beside the menu — with no save "새로운 이야기를 시작합니다"
-  (시작 / 취소, 시작 picked), over a save "저장된 진행이 있어요. / 지우고 처음부터 시작할까요?" (새로 시작 / 돌아가기,
-  돌아가기 picked). Its buttons count on the release inside them too. **불러오기** goes straight to the pick's feedback
-  (nothing to lose); **설정** opens the settings page; **끝내기** quits.
+  selection to it; a release elsewhere cancels; taps outside the slabs do nothing (once the intro is in — during it a
+  tap only finishes it). The pad / the keyboard: ↑↓ move the selection (`ui_move`), Enter / A pick (the same
+  squash-and-spring), Esc / B close a card.
+- **시작 = continue.** With the autosave it goes straight to the pick's feedback and loads it on the hand-off (no card);
+  without one but with a slot it continues the newest slot (`save_game.newest`); with no save at all it opens a card
+  beside the menu: "새로운 이야기를 시작합니다" (시작 / 취소, 시작 picked) — 시작 there starts a new game. Nothing ever
+  warns about a save being wiped any more (a new game is only offered when there is none).
+- **불러오기** opens the slot card (`slot_card.gd`, shared with the hub's 저장): 자동 저장 and 슬롯 1·2·3, each row the
+  file's header — the place (마을 / 본관 N층 / 훈련장 / 동굴 · the room), the in-game day and time ("3일째 17:30"), the
+  adventurer level (LV), the party's names and the real timestamp; an empty row is greyed "비어 있음" and passed over
+  (↑↓ skip it, a tap on it does nothing); 닫기 / Esc close it. A row counts on the release inside it; picking one
+  closes the card and runs the pick's feedback on 불러오기, then that file is loaded. With nothing to load the slab sits
+  at 45 % with NO SAVE and a tap gives the soft "step". **설정** opens the settings page; **끝내기** quits.
 - **The pick's feedback** (`_commit`, 450 ms before the outro): the chosen slab slams (0.9 → 1.07 → 1 over 300 ms), a
   burst pops on it, `ui_ok` plays, the other slabs drop out of frame downwards 60 ms apart (from 70 ms, `in`, 300 ms);
-  input is ignored meanwhile. The card's 시작 / 새로 시작 use the same feedback.
+  input is ignored meanwhile. The keyboard / pad get the same squash-and-spring and feedback.
 - **The outro** (`_begin`, from 450 ms): the burst (`burst.png`) pops from the logo's centre, 0.2× → 2.4× over 350 ms
   (`out`), spinning −20°, fading from 60 %; the logo and its blob leave left (`in`, 280 ms), the picked slab drops,
   the gradient fades; **150–650** the pink field grows over the screen from the right (bez(.6,0,.9,.4)); **650** the
-  menu sweep carries the pink on into the town; `_go` stops the music clock, leaves title mode (the hero back where she
-  stood, in the scene the save woke in, her party hers, the camera snapped to her) and bgm.gd cross-fades title → town.
+  menu sweep carries the pink on into the town; `_go` stops the music clock, leaves title mode (the hero's townsfolk entry hands her back to her node, her party
+  hers), loads the file picked (`ui_root.start_game(c, file)` → `arena.load_file`: its scene, where she stood, the camera
+  snapped to her) or starts the new game, and bgm.gd cross-fades title → town.
 - The settings page over the title keeps the town living and the title track playing.
 
 Everything is draw calls and a few springs per frame (parallax, the cursor, the camera's damp): no per-pixel work, no

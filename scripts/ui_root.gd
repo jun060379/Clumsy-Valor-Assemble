@@ -56,8 +56,11 @@ func _ready() -> void:
 func holds() -> bool:
 	return title.active or menu.is_open() or sweep.active
 
-func start_game(c: String) -> void:
+## into the game: `file` is the save to load (the title's 시작 continuing, 불러오기's pick — arena.load_file restores it
+## and goes to its scene, `c` is then its leader); "" starts on the world as it stands (a new game when nothing was loaded)
+func start_game(c: String, file := "") -> void:
 	var P = arena.player
+	if file != "" and arena.load_file(file): c = P.who
 	# go(): a fresh game starts with the chosen one alone (PARTY=[]); a saved party takes her in front if she is not along
 	if arena.save == null or not arena.save.loaded: P.party = []
 	if not P.party.has(c):

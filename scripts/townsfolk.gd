@@ -54,11 +54,13 @@ var title_mode := false       # the title is up: everyone is out in town, emotes
 const TITLE_PACE := 0.62      # the title's walkers: the slowest the walk art is played at (its fraction of the native frame time)
 const TITLE_SPEED := 0.09     # … aiming at this ground speed (world px/ms); a sheet whose natural pace is slower keeps its own
 ## the walk art's natural ground speed (world px/ms at the entry's native frame times): the speed at which the planted
-## foot keeps still on the ground, measured on the sheets (the planted foot's backward travel per frame × 0.5 × the
-## member's draw scale / the frame time). Keyed by member, then by the walk entry's sheet row, since a costume may bring
-## its own walk: 초심's 10-frame walk (row 36) is a short calm stride — 70 px a 1050 ms cycle — while the original art's
-## "walk" is its run row played slow (rows 2 / 1), a long stride. Walking faster than this slides the soles.
-const STRIDE := {"estelle": {36: 0.067, 2: 0.195}, "aida": {1: 0.14}, "luce": {1: 0.13}}
+## foot keeps still on the ground, measured on the sheets — the sole's travel along the feet line (cell rows 334–340)
+## between frames while it is down, × 0.5 × the member's draw scale / the frame time. Keyed by member, then by the walk
+## entry's sheet row, since a costume may bring its own walk: 초심's 10-frame walk (row 36) is a short calm stride,
+## ~9 cell px a frame = 0.058 px/ms (61 world px a 1050 ms cycle); the original art's "walk" is its run row played slow
+## (rows 2 / 1, two flight frames in eight), a long stride: 에스텔 0.19, 아이다 ~33 cell px a frame = 0.145, 루체 ~49 =
+## 0.20 px/ms at 145 / 140 ms a frame. Walking faster than this slides the soles, slower makes them skate backwards.
+const STRIDE := {"estelle": {36: 0.058, 2: 0.19}, "aida": {1: 0.145}, "luce": {1: 0.20}}
 const STRIDE_DEFAULT := 0.14
 var greet_cd := {}            # "a|b" -> ms until that pair may greet again
 var greets := 0               # greetings so far (tests)
@@ -400,7 +402,7 @@ func _upd(n: Dictionary, dt: float) -> void:
 				if n["path"].is_empty():
 					n["mode"] = "idle"
 					n["wait"] = 2000.0 + randf() * 5000.0
-					if randf() < 0.4: n["dir"] = -n["dir"]
+					if randf() < 0.4 and not title_mode: n["dir"] = -n["dir"]     # (the title: no idle about-face — a flip only when the way turns)
 					var o = n["seek"]
 					if o != null:
 						n["seek"] = null

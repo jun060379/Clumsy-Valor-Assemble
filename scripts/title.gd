@@ -13,8 +13,10 @@ extends Control
 ## Over it: a soft ink gradient down the left, the brush logo on its blob, the motto, the flower and the menu — four
 ## ink slabs on a pink rail, the picked one pink on the brush stroke. The intro lands on the track's first hits: the
 ## logo on 0.42, the slabs on four consecutive 16ths from 1.07, the cursor on 1.72, the motto and the flower after.
-## A slab counts on the release inside it; 시작 asks first (a card); the pick slams, the others drop, then the outro:
-## the burst from the logo, the pink field grows over the screen and the sweep carries it into the game.
+## A slab counts on the release inside it. 시작 continues (the autosave, else the newest slot; with no save at all a card
+## asks to start a new story); 불러오기 opens the slot card (자동 저장 + 슬롯 1·2·3, slot_card.gd) and loads the pick.
+## The pick slams, the others drop, then the outro: the burst from the logo, the pink field grows over the screen and
+## the sweep carries it into the game, where the file picked is loaded (ui_root.start_game → arena.load_file).
 ##
 ## Layers: this Control draws the gradient (and the gate, and the outro's pink field); `fg` draws the logo, the
 ## menu, the card, the bursts and the loop's wedge with linear filtering.
@@ -23,6 +25,7 @@ const UI := preload("res://scripts/ui_kit.gd")
 const DEV := preload("res://scripts/dev.gd")
 const UIA := preload("res://scripts/ui_anim.gd")
 const BEAT := preload("res://scripts/beat.gd")
+const CARD := preload("res://scripts/slot_card.gd")
 const PINK := Color("#ff3d7f")
 const INK := Color("#0d0b10")
 const CREAM := Color("#f3e9d2")
@@ -51,6 +54,7 @@ const SUBJ_PATH := 280.0
 const HOLD_MIN := 4000.0
 const HOLD_MAX := 8000.0
 const IDLE_HOME := 12000.0
+const RET_MS := 3000.0               # the drift back to the hall takes 3 s (smoothstep), or as long as CAM_MAX needs
 ## the menu column: slabs 0.30 W × 0.072 H leaning −8°, from (0.06 W, 0.56 H), 0.088 H apart
 const MENU_X := 0.06
 const MENU_Y := 0.56
@@ -61,8 +65,9 @@ const SLAB_LEAN := 8.0               # degrees
 const SLAB_SHIFT := 0.014            # the picked slab slides right this much (W)
 const CAPTION := {"start": "START", "load": "LOAD", "opts": "CONFIG", "quit": "QUIT"}
 const COMMIT_MS := 450.0             # the pick's feedback runs this long before the outro
-const CARD_LINES := {"fresh": ["새로운 이야기를 시작합니다"], "wipe": ["저장된 진행이 있어요.", "지우고 처음부터 시작할까요?"]}
-const CARD_BTNS := {"fresh": ["시작", "취소"], "wipe": ["새로 시작", "돌아가기"]}
+const DROP_GAP := 60.0               # ms between the other slabs dropping out
+const FRESH_LINE := "새로운 이야기를 시작합니다"
+const FRESH_BTNS := ["시작", "취소"]
 
 ## ---- the timeline (music seconds; beat.gd has the grid) ----
 const T_FIELD := 0.09                # the gradient fades in (by 0.42); the camera's pull-in starts
@@ -73,6 +78,8 @@ const T_MOTTO := 2.11
 const T_EMBLEM := 2.76
 const T_CAM := 3.23                  # the camera has settled onto the hall's front
 const T_INTRO_END := 3.1             # a tap before this settles the intro at once; past it, taps are the menu's
+const SLAB_IN := 0.14                # s a slab's slam takes: it lands exactly on its 16th
+const CUR_IN := 0.12                 # s the brush's slap takes: it lands on 1.72
 const WEDGE := 0.26                  # s for the loop's wedge to uncover the screen after the wrap
 const LOOP_WEDGE := 1.34             # s before the wrap the loop's wedge starts from the right
 
@@ -110,6 +117,9 @@ var hold_t := 0.0                # ms left of the hold after a subject stopped
 var hold_at := Vector2.ZERO      # where the camera glides to a stop for the hold
 var idle_t := 0.0                # ms nobody has walked
 var cam_lap := -1                # the lap the camera's pull-in was placed for
+var ret_from := Vector2.ZERO     # the drift back to the hall: from here …
+var ret_t := 0.0                 # … ms into it …
+var ret_dur := 0.0               # … over this long (0 = not drifting): RET_MS, longer when the way is too far for CAM_MAX
 ## the menu: 시작 · 불러오기 · 설정 · 끝내기 (no 끝내기 on the web, where a tab cannot close itself)
 var items: Array = []            # [key, label]
 var sel := 0
@@ -121,16 +131,19 @@ var release_t := -1e9            # clock of its release (the spring back)
 var release_k := -1
 var commit_k := -1               # the slab that was picked: it slams, the others drop, then the outro
 var commit_t := -1e9
-var has_save := false
-var confirm := false             # the 시작 card: "새로운 이야기" (no save) or "지우고 처음부터?" (over a save)
-var confirm_kind := "fresh"      # "fresh" / "wipe"
-var confirm_sel := 0
-var confirm_rects: Array = []
+var has_save := false            # some file holds a save (불러오기 is live)
+var auto_file := ""              # the file 시작 continues: the autosave, else the newest slot ("" = a new story)
+var saves_at := -1e9             # clock when the files were last looked at
+var load_file := ""              # the file the hand-off loads ("" = a new game on the world as it stands)
+var confirm := false             # a card is open: the new-story card (시작 with no save) or 불러오기's slot card
+var confirm_kind := "fresh"      # "fresh" (새로운 이야기를 시작합니다 · 시작 / 취소) / "load" (the slot card)
+var confirm_sel := 0             # the card's picked button (fresh) / row (load)
+var confirm_rects: Array = []    # its button rects (fresh) / row rects (load), as last drawn
+var close_rects: Array = []      # the slot card's 닫기
 var confirm_t := 0.0              # clock when the card opened
-var press_c := -1                # the card button a press went down on
-var fresh := false               # 시작 chosen over a save: the save goes and the scene reloads into a new game
+var press_c := -1                # the card button / row a press went down on (100 + i: the slot card's 닫기)
+var rows: Array = []             # the slot card's rows (slot_card.gd rows_of)
 var in_opts := false             # the settings page is open over the title
-static var pending_fresh := false   # set across the reload: the new game starts without the title
 
 ## the title's clock is running (bgm.gd starts the track with it)
 var live: bool:
@@ -167,13 +180,6 @@ func go_live() -> void:
 	if arena != null and arena.bgm != null: arena.bgm.poke()
 
 func _process(delta: float) -> void:
-	if pending_fresh and arena != null and arena.world_started:
-		# the reload after 시작: straight into the new game, no title
-		pending_fresh = false
-		active = false
-		visible = false
-		ui_root.start_game("estelle")
-		return
 	if in_opts:
 		# the settings page over the title: the title waits (input off) until it closes
 		if not ui_root.menu.is_open() and not ui_root.sweep.active:
@@ -183,8 +189,7 @@ func _process(delta: float) -> void:
 		return
 	if not active:
 		return
-	if not has_save and arena != null and arena.save != null and FileAccess.file_exists(arena.save.path):
-		has_save = true
+	if saves_at < -1e8: refresh_saves()        # once as the title comes up (nothing saves under it); the picks look again
 	# the town under the title: once the world is up, it lives on as the backdrop
 	if arena != null and arena.world_started and not arena.title_mode and outro < 0.0:
 		arena.enter_title_mode()
@@ -242,8 +247,8 @@ func _cues() -> void:
 	if not beat.live or beat.lap >= 1 or skip or arena == null: return
 	var cues: Array = [["slam", T_LOGO, "slam", 0.5]]
 	for k in items.size():
-		cues.append(["slab%d" % k, T_MENU[k] + 0.16, "ui_move", 0.5])
-	cues.append(["cursor", T_CURSOR + 0.1, "ui_ok", 0.45])
+		cues.append(["slab%d" % k, T_MENU[k], "ui_move", 0.5])
+	cues.append(["cursor", T_CURSOR, "ui_ok", 0.45])
 	for c in cues:
 		if fired.has(c[0]) or mt < c[1]: continue
 		fired[c[0]] = true
@@ -286,6 +291,7 @@ func _camera_reset() -> void:
 	subject = ""
 	cam_phase = "home"
 	cam_v = Vector2.ZERO
+	ret_dur = 0.0
 	hold_t = 0.0
 	idle_t = 0.0
 	pick_t = _rand(PICK_MIN, PICK_MAX)
@@ -378,8 +384,13 @@ func _camera(dt: float) -> void:
 					var s := pick_subject()
 					if s != "": subject = s
 					elif idle_t >= IDLE_HOME:
+						# nobody walking for 12 s: drift back to the hall over 3 s (a smoothstep, whose peak speed is
+						# 1.5× its mean — a longer way takes longer so the pan stays under CAM_MAX)
 						cam_phase = "home"
 						pick_t = _rand(PICK_MIN, PICK_MAX)
+						ret_from = cam_pos
+						ret_t = 0.0
+						ret_dur = maxf(RET_MS, 1.5 * (cam_home - cam_pos).length() / CAM_MAX * 1000.0)
 					else: hold_t = 1000.0
 			_:
 				cam_phase = "home"
@@ -388,7 +399,9 @@ func _camera(dt: float) -> void:
 					pick_t -= dt
 					if pick_t <= 0.0:
 						var s := pick_subject()
-						if s != "": subject = s
+						if s != "":
+							subject = s
+							ret_dur = 0.0
 						else: pick_t = 1500.0
 	# the town's bounds, as the normal camera
 	target.x = clampf(target.x + ff.x, vs.x / 2.0, maxf(vs.x / 2.0, arena.world_w - vs.x / 2.0))
@@ -396,6 +409,16 @@ func _camera(dt: float) -> void:
 		# the intro: an exact pull-in onto the hall's front, settled by T_CAM
 		cam_pos = cam_home - Vector2(PULL_IN * (1.0 - _pull()), 0.0)
 		cam_v = Vector2.ZERO
+	elif ret_dur > 0.0 and subject == "":
+		# the drift home: a timed smoothstep from where the camera was
+		ret_t += dt
+		var u := clampf(ret_t / ret_dur, 0.0, 1.0)
+		var prev := cam_pos
+		cam_pos = ret_from.lerp(cam_home, u * u * (3.0 - 2.0 * u))
+		cam_v = (cam_pos - prev) / maxf(0.001, dt / 1000.0)
+		if u >= 1.0:
+			ret_dur = 0.0
+			cam_v = Vector2.ZERO
 	else:
 		var out := _damp(cam_pos, target, cam_v, CAM_TAU, CAM_MAX, dt / 1000.0)
 		cam_pos = out[0]
@@ -469,12 +492,14 @@ func _input(ev: InputEvent) -> void:
 		if up_at != Vector2.INF: return
 		_finish_intro()
 		return             # the first press only settles the intro
-	# a release: it counts on the slab (or card button) the press went down on, and only there
+	# a release: it counts on the slab (or card button / row) the press went down on, and only there
 	if up_at != Vector2.INF:
 		if press_c >= 0:
 			var c := press_c
 			press_c = -1
-			if c < confirm_rects.size() and confirm_rects[c].has_point(up_at): _confirm_pick(c)
+			if c >= 100:
+				if c - 100 < close_rects.size() and close_rects[c - 100].has_point(up_at): _close_card()
+			elif c < confirm_rects.size() and confirm_rects[c].has_point(up_at): _confirm_pick(c)
 		elif press_k >= 0:
 			var k := press_k
 			press_k = -1
@@ -489,9 +514,28 @@ func _input(ev: InputEvent) -> void:
 	var ok := key in [KEY_ENTER, KEY_SPACE] or padb == JOY_BUTTON_A
 	var back := key == KEY_ESCAPE or padb == JOY_BUTTON_B
 	if confirm:
+		if confirm_kind == "load":
+			if up or dn:
+				var j := CARD.step(rows, confirm_sel, 1 if dn else -1)
+				if j != confirm_sel:
+					confirm_sel = j
+					_sfx("ui_move", 0.5)
+			elif ok: _confirm_pick(confirm_sel)
+			elif back: _close_card()
+			elif down != Vector2.INF:
+				press_c = -1
+				for k in confirm_rects.size():
+					if confirm_rects[k].has_point(down) and rows[k]["on"]:
+						press_c = k
+						if confirm_sel != k:
+							confirm_sel = k
+							_sfx("ui_move", 0.4)
+				for k in close_rects.size():
+					if close_rects[k].has_point(down): press_c = 100 + k
+			return
 		if left or right or up or dn:
 			confirm_sel = 1 - confirm_sel
-			arena.sfx("ui_move", 0.5)
+			_sfx("ui_move", 0.5)
 		elif ok: _confirm_pick(confirm_sel)
 		elif back: _confirm_pick(1)
 		elif down != Vector2.INF:
@@ -522,20 +566,50 @@ func _input(ev: InputEvent) -> void:
 					sel_t = clock
 					arena.sfx("ui_move", 0.4)
 
+func _sfx(n: String, v: float) -> void:
+	if arena != null: arena.sfx(n, v)
+
+## which files hold a save: 불러오기 is live when any does; 시작 continues the autosave, else the newest slot
+func refresh_saves() -> void:
+	saves_at = clock
+	if arena == null or arena.save == null:
+		has_save = false
+		auto_file = ""
+		return
+	var S = arena.save
+	auto_file = S.path if not S.header(S.path).is_empty() else S.newest()
+	has_save = auto_file != ""
+
 ## a slab picked (a release inside it, Enter, the pad's A)
 func _activate(k: int) -> void:
 	match String(items[k][0]):
 		"start":
-			# never straight in: the card asks (a fresh story, or the save going)
+			# 시작 = continue: straight into the autosave (the newest slot without one) after the pick's feedback; with no
+			# save at all a card says a new story begins
+			refresh_saves()
+			if auto_file != "":
+				load_file = auto_file
+				_commit(k)
+				return
 			confirm = true
-			confirm_kind = "wipe" if has_save else "fresh"
-			confirm_sel = 1 if has_save else 0
+			confirm_kind = "fresh"
+			confirm_sel = 0
 			confirm_t = clock
 			press_c = -1
-			arena.sfx("ui_ok", 0.5)
+			_sfx("ui_ok", 0.5)
 		"load":
-			if has_save: _commit(k)
-			else: arena.sfx("step", 0.2)
+			# the slot card: 자동 저장 + 슬롯 1·2·3, the empty ones greyed and passed over
+			refresh_saves()
+			if not has_save:
+				_sfx("step", 0.2)
+				return
+			rows = CARD.rows_of(arena.save, true, false)
+			confirm = true
+			confirm_kind = "load"
+			confirm_sel = CARD.step(rows, -1, 1)
+			confirm_t = clock
+			press_c = -1
+			_sfx("ui_ok", 0.5)
 		"opts":
 			in_opts = true
 			active = false
@@ -544,14 +618,25 @@ func _activate(k: int) -> void:
 		"quit":
 			get_tree().quit()
 
-## the card's answer: 0 = go (시작 / 새로 시작), 1 = back
+## the card's answer — the new-story card: 0 = 시작 (a new game), 1 = 취소; the slot card: row k's file is loaded
 func _confirm_pick(k: int) -> void:
+	press_c = -1
+	if confirm_kind == "load":
+		if k < 0 or k >= rows.size() or not rows[k]["on"]: return
+		confirm = false
+		load_file = String(rows[k]["file"])
+		_commit(1)
+		return
+	confirm = false
+	if k == 0:
+		load_file = ""
+		_commit(0)
+	else: _sfx("ui_back", 0.5)
+
+func _close_card() -> void:
 	confirm = false
 	press_c = -1
-	if k == 0:
-		fresh = has_save and confirm_kind == "wipe"
-		_commit(0)
-	else: arena.sfx("ui_back", 0.5)
+	_sfx("ui_back", 0.5)
 
 ## the pick's feedback before the outro: the chosen slab slams, a burst pops on it, the others drop out of frame
 ## 60 ms apart; the outro begins COMMIT_MS later (_process)
@@ -559,7 +644,7 @@ func _commit(k: int) -> void:
 	commit_k = k
 	commit_t = clock
 	press_k = -1
-	if arena != null: arena.sfx("ui_ok", 0.6)
+	_sfx("ui_ok", 0.6)
 
 ## the outro: the burst, the logo leaves, the pink field grows, the sweep carries on into the game
 func _begin() -> void:
@@ -577,21 +662,16 @@ func _finish_intro() -> void:
 	fired["slam"] = true
 	_tick()
 
+## the hand-off: the title steps aside, the town is the game's again, the file picked is loaded (its scene — the hall,
+## the training ground — comes back with it) or a new game starts on the town as it stands
 func _go() -> void:
 	active = false
 	visible = false
 	beat.stop()                  # bgm.gd cross-fades to the town from here
-	if arena != null: arena.leave_title_mode(not fresh)
-	if fresh:
-		# 시작 over a saved game: the save goes, the scene reloads and starts the new game under the sweep
-		if arena.save != null and FileAccess.file_exists(arena.save.path):
-			DirAccess.remove_absolute(arena.save.path)
-		if get_tree().current_scene != null:
-			pending_fresh = true
-			get_tree().reload_current_scene()
-			return
+	if arena == null: return
+	arena.leave_title_mode(false)
 	var c: String = arena.player.who if arena.save != null and arena.save.loaded else "estelle"
-	ui_root.start_game(c)
+	ui_root.start_game(c, load_file)
 
 
 # ---------- layout ----------
@@ -847,8 +927,8 @@ func _menu(ci: CanvasItem, vs: Vector2) -> void:
 		ci.draw_set_transform(Vector2.ZERO)
 	# the brush stroke behind the picked slab, sliding between rows on its spring; it slaps onto 시작 from 1.3× and
 	# pulses on the pulse
-	var ucur := 1.0 if menu_in else mu(T_CURSOR, 0.22, "bk")
-	var on_k := sel if not confirm else -1
+	var ucur := 1.0 if menu_in else mu(T_CURSOR - CUR_IN, CUR_IN, "bk")
+	var on_k := sel                       # (a card open over the menu keeps its slab picked)
 	if commit_k >= 0: on_k = commit_k
 	if ucur > 0.0 and o < 1.0 and on_k >= 0:
 		var rs := slab_rect(vs, int(round(sp_cur.x)) if commit_k < 0 else commit_k)
@@ -862,7 +942,7 @@ func _menu(ci: CanvasItem, vs: Vector2) -> void:
 		ci.draw_set_transform(Vector2.ZERO)
 	# the slabs
 	for k in items.size():
-		var u := 1.0 if menu_in else mu(T_MENU[k], 0.2, "bk")
+		var u := 1.0 if menu_in else mu(T_MENU[k] - SLAB_IN, SLAB_IN, "bk")
 		if u <= 0.0 or o >= 1.0:
 			item_rects.append(Rect2())
 			continue
@@ -874,7 +954,7 @@ func _menu(ci: CanvasItem, vs: Vector2) -> void:
 		var shift := SLAB_SHIFT * W * (1.0 if on else 0.0)
 		# the second slab takes two stamps: a 0.01 W overshoot on the 16th after it lands, settling back
 		var push := 0.0
-		if k == 1 and not menu_in: push = 0.01 * W * sin(PI * mu(T_MENU[1] + 0.1, 0.22, "linear"))
+		if k == 1 and not menu_in: push = 0.01 * W * sin(PI * mu(T_MENU[1], BEAT.PULSE / 4.0, "linear"))
 		var sc := _slab_scale(k)
 		var drop := _slab_drop(k)
 		var alpha := (1.0 if on else 0.8) * (1.0 - o)
@@ -910,7 +990,7 @@ func _menu(ci: CanvasItem, vs: Vector2) -> void:
 		item_rects.append(Rect2(x - 6.0, y - 4.0, w + lean + 12.0, h + 12.0))
 		# the tiny ink splat as the slab lands (the first lap)
 		if not menu_in and beat.lap == 0 and not skip:
-			var us2 := mu(T_MENU[k] + 0.12, 0.22, "out")
+			var us2 := mu(T_MENU[k], 0.22, "out")
 			if us2 > 0.0 and us2 < 1.0:
 				var sz := w * 0.22 * (0.4 + 0.6 * us2)
 				var at := Vector2(x + lean * 0.5 + 0.01 * W, y + h * 0.5)
@@ -930,36 +1010,42 @@ func _menu(ci: CanvasItem, vs: Vector2) -> void:
 			ci.draw_texture_rect(BURST, Rect2(c - Vector2(sz, sz) / 2.0, Vector2(sz, sz)), false, Color(1, 1, 1, al))
 			ci.draw_set_transform(Vector2.ZERO)
 
-## the 시작 card beside the menu: a fresh story ("새로운 이야기를 시작합니다" · 시작 / 취소), or over a save the warning
-## ("저장된 진행이 있어요 / 지우고 처음부터?" · 새로 시작 / 돌아가기); a button counts on the release inside it
+## the cards beside the menu. 시작 with no save at all: "새로운 이야기를 시작합니다" (시작 / 취소, 시작 picked). 불러오기:
+## the slot card (slot_card.gd) — 자동 저장 and 슬롯 1·2·3 with their headers, the empty ones greyed, 닫기 under them.
+## A button / row counts on the release inside it
 func _card(ci: CanvasItem, vs: Vector2) -> void:
 	confirm_rects.clear()
+	close_rects.clear()
 	if not confirm: return
 	var W := vs.x
 	var H := vs.y
+	var cu := UIA.p(clock - confirm_t, 0.0, 260.0, "bk")
+	if confirm_kind == "load":
+		var cr := CARD.rect(vs, rows.size())
+		var out: Dictionary = CARD.draw(ci, vs, cr, "불러오기", "LOAD", rows, confirm_sel, press_c, ["닫기"], -1, press_c - 100, cu)
+		confirm_rects = out["rows"]
+		close_rects = out["btns"]
+		return
 	var fb := UI.bhs()
 	var fs2 := int(0.03 * H)
-	var lines: Array = CARD_LINES[confirm_kind]
-	var labs: Array = CARD_BTNS[confirm_kind]
 	var cw := 0.36 * W
-	var chh := (0.2 if lines.size() > 1 else 0.17) * H
+	var chh := 0.17 * H
 	var cr := Rect2(MENU_X * W + SLAB_W * W + 0.06 * W, 0.96 * H - chh, cw, chh)
-	var cu := UIA.p(clock - confirm_t, 0.0, 260.0, "bk")
-	ci.draw_set_transform_matrix(UIA.xf(cr.get_center(), Vector2(0, 0.08 * H * (1.0 - cu)), deg_to_rad(-2.0), Vector2(cu, cu)))
+	var m := UIA.xf(cr.get_center(), Vector2(0, 0.08 * H * (1.0 - cu)), deg_to_rad(-2.0), Vector2(cu, cu))
+	ci.draw_set_transform_matrix(m)
 	ci.draw_colored_polygon(UI.clip(cr.grow(3.0), [[0, 4], [100, 0], [99, 100], [1, 96]]), Color(PINK, 0.9))
 	ci.draw_colored_polygon(UI.clip(cr, [[0, 4], [100, 0], [99, 100], [1, 96]]), INK)
 	ci.draw_colored_polygon(UI.clip(Rect2(cr.position.x, cr.position.y, 0.006 * W, chh), [[0, 0], [100, 0], [100, 100], [0, 100]]), PINK)
 	var fn2 := UI.noto()
 	var fsq := int(0.03 * H)
-	for i in lines.size():
-		ci.draw_string(fn2, Vector2(cr.position.x + 0.03 * W, cr.position.y + (0.06 + 0.04 * i) * H), lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, fsq, Color.WHITE if i == 0 else Color(0.8, 0.8, 0.85))
+	ci.draw_string(fn2, Vector2(cr.position.x + 0.03 * W, cr.position.y + 0.06 * H), FRESH_LINE, HORIZONTAL_ALIGNMENT_LEFT, -1, fsq, Color.WHITE)
 	for k in 2:
 		var bw := 0.13 * W
 		var br := Rect2(cr.position.x + 0.03 * W + k * (bw + 0.02 * W), cr.end.y - 0.07 * H, bw, 0.05 * H)
 		var bon := k == confirm_sel
 		var sc := 0.96 if press_c == k else 1.0
-		ci.draw_set_transform_matrix(UIA.xf(cr.get_center(), Vector2(0, 0.08 * H * (1.0 - cu)), deg_to_rad(-2.0), Vector2(cu, cu)) * UIA.xf(br.get_center(), Vector2.ZERO, 0.0, Vector2(sc, sc)))
+		ci.draw_set_transform_matrix(m * UIA.xf(br.get_center(), Vector2.ZERO, 0.0, Vector2(sc, sc)))
 		UI.para(ci, br.position.x, br.position.y, bw, br.size.y, -br.size.y * 0.3, PINK if bon else Color.WHITE)
-		ci.draw_string(fb, Vector2(br.position.x + 0.02 * W, br.position.y + br.size.y * 0.5 + fs2 * 0.36), labs[k], HORIZONTAL_ALIGNMENT_LEFT, -1, fs2, Color.WHITE if bon else INK)
+		ci.draw_string(fb, Vector2(br.position.x + 0.02 * W, br.position.y + br.size.y * 0.5 + fs2 * 0.36), FRESH_BTNS[k], HORIZONTAL_ALIGNMENT_LEFT, -1, fs2, Color.WHITE if bon else INK)
 		confirm_rects.append(br.grow(6.0))
 	ci.draw_set_transform(Vector2.ZERO)

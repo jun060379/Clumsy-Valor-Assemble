@@ -152,6 +152,7 @@ func leg_left() -> float:
 
 ## the run condition: far to go on this leg, or late
 func hurry() -> bool:
+	if arena != null and arena.get("title_mode") == true: return false     # the title: she strolls (walkL), never trots
 	return not path.is_empty() and (leg_left() > RUN_FAR or late())
 
 func spd() -> float:
