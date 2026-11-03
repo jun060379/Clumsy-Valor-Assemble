@@ -1377,6 +1377,15 @@ func take_hit(m, raw: float) -> String:
 		set_anim("hurt")
 	return "hit"
 
+## every joined member at 0 HP (not the one on the field) comes back at full HP; returns who did
+func revive_fallen() -> Array:
+	var up: Array = []
+	for c in roster():
+		if c != who and hpm.has(c) and hpm[c] <= 0.0:
+			hpm[c] = _mhp(c)
+			up.append(c)
+	return up
+
 func die() -> void:
 	hp = 0.0
 	set_anim("death")
@@ -1405,6 +1414,9 @@ func party_step(dt: float) -> void:
 		for c in party:
 			if c != who and hpm[c] > 0.0:
 				hpm[c] = minf(_mhp(c), hpm[c] + dt * 0.002 * _lvm("luce"))
+	# back in town or the guild hall: members who fell in the cave stand up again, fully healed
+	if arena.level_kind() in ["town", "hall"]:
+		revive_fallen()
 	if anim == "death":
 		dead_t += dt
 		if dead_t > 650.0 and not party_down:
