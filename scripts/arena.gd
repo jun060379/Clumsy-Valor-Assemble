@@ -46,6 +46,9 @@ var platforms: Array = []
 var player
 var dummies: Array = []
 var cam: Camera2D
+var cam_override = null       # Vector2: the title drives the camera (title.gd's framings); null = the player's camera
+var title_mode := false       # the title is up over the live town: the town's life runs, the player stands aside (as a townsperson)
+var title_park := Vector2.ZERO   # where the player stood before the title parked her off-world
 var hitstop := 0.0
 var flash := 0.0
 var shake_amt := 0.0
@@ -292,6 +295,48 @@ func _ready() -> void:
 		ui.add_child(stamp)
 
 
+# ---------- the title over the live town ----------
+## the title is up: the player is parked off-world and hidden (the townsfolk draw her as one of them), every recruited
+## member lives in town, the title's camera takes over
+func enter_title_mode() -> void:
+	if title_mode or player == null: return
+	title_mode = true
+	title_park = player.position
+	player.position.x = -9999.0
+	player.visible = false
+	var F = FOLK.of(self)
+	F.title_mode = true
+	F.title_place()
+	cam_override = null
+
+## the hand-off into the game: the player is back where she stood, her party is hers again, the camera is hers
+func leave_title_mode() -> void:
+	if not title_mode: return
+	title_mode = false
+	var F = FOLK.of(self)
+	F.title_mode = false
+	for c in player.roster():
+		if c == player.who or player.party.has(c): F.join_party(c)
+	player.position = title_park
+	player.visible = true
+	cam_override = null
+	snap_camera()
+
+## the world under the title: the clock, Eilin's day, the town's life (not the player), the title's camera
+func _title_step(dt: float) -> void:
+	if tod_auto and not dlg.active:
+		tod_h = fposmod(tod_h + dt / 1000.0 / 60.0, 24.0)
+	eil.world(dt)
+	var lk := level_kind()
+	if lk == "hall" or lk == "town": eil.upd(dt)
+	if level != null: level.step(dt)
+	elif train != null: train.step(dt)
+	if cam_override is Vector2:
+		var vw := get_viewport_rect().size.x
+		cam.position = Vector2(clampf(cam_override.x, vw / 2.0, maxf(vw / 2.0, world_w - vw / 2.0)), cam_override.y)
+		cam.offset = Vector2.ZERO
+	shadow_node.queue_redraw()
+
 ## load silently (the title has no 이어하기): the saved scene, or the village street
 var world_started := false
 func _start_world() -> void:
@@ -317,6 +362,7 @@ func save_now() -> void:
 	if save != null: save.save()
 
 func _autosave() -> void:
+	if title_mode: return                     # under the title nothing has changed (and the hero is parked off-world)
 	if save != null and player != null: save.save()
 
 ## the prototype wrote localStorage on every change; here: every 30 s of play, and whenever the page is hidden,
@@ -664,7 +710,10 @@ func _process(delta: float) -> void:
 		pryw_node.queue_redraw()          # on its own real-time clock, even while the world holds
 		if Time.get_ticks_msec() - pryw_t0 > 700.0: pryw_t0 = -1.0
 	if ui_root != null and ui_root.holds():
-		return            # the world holds still under the title, a menu page or a transition
+		# the world holds still under the title, a menu page or a transition — except that the title shows the town
+		# living: its day, Eilin, the townsfolk, the weather, and the title's camera
+		if title_mode: _title_step(minf(delta * 1000.0, 50.0))
+		return
 	if fame != null and fame.holds():
 		return            # …and under the rank cut and the guild's title cards
 	var dt := minf(delta * 1000.0, 50.0)

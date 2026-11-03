@@ -3,6 +3,9 @@ extends RefCounted
 ## places they like, idle, say a line now and then, and walk up to each other for a short chat. Ported from the
 ## prototype's NPCS / POI / FAV / SOLO / CHAT / npcGo / pickPOI / npcUpdate / startChat / leaveParty.
 ## One instance lives on the arena (meta "folk"), so where they are survives leaving and re-entering town.
+## Under the title (title_mode, arena.gd) every recruited member but the hero lives here — the party too — leaning
+## toward the hall's front and the bench and street spots (a first run is Eilin's town alone); their word chats rest and instead whoever passes within
+## reach of someone (a member, or Eilin on her way) stops for a moment, turns, and the two trade a small emote.
 
 const CH := preload("res://scripts/chars.gd")
 const SK := preload("res://scripts/skins.gd")
@@ -35,10 +38,20 @@ const CHAT := {
 		[[0, "잉, 아이다씨가 만든 건 이상한 느낌 나요."], [1, "흑주술 조금 섞었어요."], [0, "주여, 이 바보 같은 이를 용서하소서~"]],
 		[[1, "루체님, 머리에 잎 붙었어요."], [0, "어? 어디어디?"], [1, "…거기 말고요."]]]}
 const WALKSP := {"estelle": 0.2, "aida": 0.18, "luce": 0.18}
+## the title: the spots everyone leans toward (in place of their own favourites), the emotes, the passing distance,
+## the pair cooldown
+const TITLE_FAV := {"hall": 4.0, "bench": 3.0, "fountain": 2.0, "lamp": 2.0, "board": 1.5, "store": 1.0, "yard": 1.0}
+const EMOTES := ["…", "♪", "!"]
+const GREET_D := 60.0
+const GREET_MS := 1200.0
+const GREET_CD := 20000.0
 
 var arena
 var town                      # the town while you are in it (null elsewhere)
 var npcs := {}
+var title_mode := false       # the title is up: everyone is out in town, emotes instead of chats
+var greet_cd := {}            # "a|b" -> ms until that pair may greet again
+var greets := 0               # greetings so far (tests)
 
 
 static func of(a) -> RefCounted:
@@ -56,6 +69,7 @@ func npc(c: String) -> Dictionary:
 
 func folk() -> Array:
 	var P = arena.player
+	if title_mode: return P.roster().filter(func(c): return c != P.who)             # the title: everyone who has joined but the hero
 	return P.roster().filter(func(c): return not P.party.has(c) and c != P.who)     # ROSTER: only who has joined
 
 func route_y(r: String, x: float) -> float:
@@ -101,13 +115,13 @@ func go(n: Dictionary, x: float, r: String, run = null) -> void:
 	n["mode"] = "move"
 
 func pick_poi(c: String) -> Array:
-	var f: Dictionary = FAV[c]
+	var f: Dictionary = TITLE_FAV if title_mode else FAV[c]
 	var n: Dictionary = npc(c)
 	var tot := 0.0
 	var w := []
 	for p in POI:
 		var d: float = absf(p[0] - n["x"]) + (1500.0 if p[1] != n["r"] else 0.0) if n["placed"] else 0.0
-		var v: float = f.get(p[2], 0.3) * exp(-d / 2200.0)
+		var v: float = f.get(p[2], 0.3 if not title_mode else 0.1) * exp(-d / 2200.0)
 		tot += v
 		w.append(v)
 	var u := randf() * tot
@@ -129,6 +143,21 @@ func place() -> void:
 		if n["mode"] == "chat" or n["mode"] == "wait":
 			n["mode"] = "idle"
 			n["chat"] = null
+
+## the title goes up: the party steps out into town too, each to one of their (title-leaning) places; whoever already
+## lived in town stays where they were
+func title_place() -> void:
+	for c in folk():
+		var n := npc(c)
+		if n["placed"]: continue
+		var p := pick_poi(c)
+		n["x"] = p[0] + (randf() - 0.5) * 80.0
+		n["r"] = p[1]
+		n["placed"] = true
+		n["dir"] = 1 if randf() < 0.5 else -1
+		n["mode"] = "idle"
+		n["wait"] = 600.0 + randf() * 2000.0
+		if town != null: n["y"] = route_y(n["r"], n["x"])
 
 ## a member leaves the party: they wait by the fountain in the lower plaza
 func leave_party(c: String) -> void:
@@ -186,6 +215,53 @@ func step(dt: float) -> void:
 		var n := npc(c)
 		if not n["placed"]: place()
 		_upd(n, dt)
+	if title_mode: _greets(dt)
+
+## the title's passing greetings: two walkers within GREET_D of each other (a member and a member, or a member and
+## Eilin walking through town), neither busy, their pair rested for GREET_CD — both stop for GREET_MS, face each
+## other and show an emote
+func _greets(dt: float) -> void:
+	for k in greet_cd.keys():
+		greet_cd[k] -= dt
+		if greet_cd[k] <= 0.0: greet_cd.erase(k)
+	var F := folk()
+	for i in F.size():
+		var a := npc(F[i])
+		if not _can_greet(a): continue
+		for j in range(i + 1, F.size()):
+			var b := npc(F[j])
+			if not _can_greet(b) or a["r"] != b["r"]: continue
+			if absf(a["x"] - b["x"]) > GREET_D or absf(a["y"] - b["y"]) > 30.0: continue
+			var key: String = F[i] + "|" + F[j]
+			if greet_cd.has(key): continue
+			greet_cd[key] = GREET_CD
+			_greet(a, 1 if b["x"] > a["x"] else -1, 0)
+			_greet(b, -1 if b["x"] > a["x"] else 1, 1)
+			greets += 1
+		# Eilin on her way through town
+		var E = arena.eil
+		if E != null and E.map == "town" and E.walking() and E.wait <= 0.0 and E.talk_t <= 0.0 and a["r"] == "top":
+			if absf(E.x - a["x"]) <= GREET_D and absf(E.y - a["y"]) <= 40.0:
+				var key2: String = "eilin|" + F[i]
+				if not greet_cd.has(key2):
+					greet_cd[key2] = GREET_CD
+					var d := 1 if E.x > a["x"] else -1
+					_greet(a, d, 0)
+					E.wait = GREET_MS
+					E.face = -d
+					E.say(EMOTES[2], GREET_MS + 100.0)
+					greets += 1
+
+## someone who may stop for a greeting: walking (or standing free), not chatting, waiting or seeking anyone
+func _can_greet(n: Dictionary) -> bool:
+	return n["placed"] and n["mode"] in ["move", "idle"] and n["chat"] == null and n["partner"] == null and n["seek"] == null and n["talk_t"] <= 0.0
+
+func _greet(n: Dictionary, dir: int, k: int) -> void:
+	n["mode"] = "greet"
+	n["greet_t"] = GREET_MS
+	n["dir"] = dir
+	anim(n, "idle")
+	say(n, EMOTES[(k * 2 + int(absf(n["x"]))) % 3], GREET_MS + 100.0)
 
 func _upd(n: Dictionary, dt: float) -> void:
 	var P = arena.player
@@ -198,6 +274,13 @@ func _upd(n: Dictionary, dt: float) -> void:
 		return
 	if n["chat_cd"] > 0.0: n["chat_cd"] -= dt
 	match n["mode"]:
+		"greet":
+			anim(n, "idle")
+			anim_step(n, dt)
+			n["greet_t"] = n.get("greet_t", 0.0) - dt
+			if n["greet_t"] <= 0.0:
+				n["mode"] = "move" if not n["path"].is_empty() else "idle"
+				if n["mode"] == "idle": n["wait"] = 800.0 + randf() * 1500.0
 		"chat":
 			var ch: Dictionary = n["chat"]
 			anim(n, "idle")
@@ -235,7 +318,7 @@ func _upd(n: Dictionary, dt: float) -> void:
 				if c == n["c"]: continue
 				var o: Dictionary = npc(c)
 				if o["placed"] and (o["mode"] == "idle" or o["mode"] == "move") and o["chat_cd"] <= 0.0: others.append(o)
-			if n["chat_cd"] <= 0.0 and others.size() > 0 and randf() < 0.45:
+			if not title_mode and n["chat_cd"] <= 0.0 and others.size() > 0 and randf() < 0.45:
 				var o: Dictionary = others[randi() % others.size()]
 				o["mode"] = "wait"
 				o["wait_t"] = 14000.0
@@ -246,7 +329,7 @@ func _upd(n: Dictionary, dt: float) -> void:
 				var side := -1.0 if n["x"] < o["x"] else 1.0
 				go(n, o["x"] + side * 62.0, o["r"], absf(o["x"] - n["x"]) > 500.0)
 				return
-			if randf() < 0.25 and n["say_t"] <= 0.0:
+			if not title_mode and randf() < 0.25 and n["say_t"] <= 0.0:
 				var L: Array = SOLO[n["c"]]
 				say(n, L[randi() % L.size()])
 			var p: Array

@@ -1,8 +1,9 @@
 extends SceneTree
-## The music-driven title: godot --headless --path . -s tests/test_title.gd
-## beat.gd's grid and sections, the clock's fallbacks and the loop wrap, what the scene shows at a music time for an
-## empty / three-member / rank-7 save (the light ladder, the framings, the cut-in slots, the crowd), the empty-state
-## cut-in, and a bare title with no fame and no audio running the whole 165 s timeline headless without errors.
+## The music-driven title over the live town: godot --headless --path . -s tests/test_title.gd
+## beat.gd's grid and sections, the clock's fallbacks and the loop wrap; the title's hold on the town (title_mode puts
+## the party out in town and the hero aside, restored on the hand-off), the camera override and its framings by
+## section, the passing greetings (once per pair per cooldown), the bgm hand-off, and a bare title with no arena and
+## no audio running the whole 165 s timeline headless without errors.
 
 var fails := 0
 
@@ -17,6 +18,7 @@ func near(a: float, b: float, eps := 0.01) -> bool:
 func at(T, t: float) -> void:
 	T.beat.set_time(t)
 	T._tick()
+	T._camera()
 
 func _initialize() -> void:
 	var BEAT = load("res://scripts/beat.gd")
@@ -58,7 +60,7 @@ func _initialize() -> void:
 	b.stop()
 	check(not b.live, "stop")
 
-	# ---- the title on an arena ----
+	# ---- the title on an arena: the town lives under it ----
 	var arena = load("res://scenes/main.tscn").instantiate()
 	root.add_child(arena)
 	await process_frame
@@ -66,133 +68,134 @@ func _initialize() -> void:
 	var T = arena.ui_root.title
 	var F = arena.fame
 	var B = arena.bgm
-	check(not T.gate and not T.live, "a test run: no gate (not the web), not live until the title is used")
+	var P = arena.player
+	var folk = arena.FOLK.of(arena)
+	check(not T.gate and not T.live and not arena.title_mode, "a test run: no gate (not the web), not live, the town not held for the title")
+	check(arena.level_kind() == "town", "the world started in town")
+	F.rec = ["estelle", "aida", "luce"]
+	F.fac = {"fire": 1, "chand": 1}
+	F.r = 3
+	P.who = "estelle"
+	P.party = ["estelle", "aida"]
+	var home: Vector2 = P.position
 	T.active = true
 	T.visible = true
-	T.go_live()
-	check(T.live and T.beat.music_t == 0.0, "go_live: the clock starts at 0")
-	check(B.wanted_title() and B.tap.playing and B.tap.stream.loop, "bgm: the title track is wanted and playing, looping")
-	check(not B.wanted(), "bgm: the town is not wanted under the title")
+	await process_frame
+	await process_frame
+	check(T.live and arena.title_mode, "the title up: live, the town in title mode")
+	check(not P.visible and P.position.x < -5000.0 and arena.title_park == home, "the hero hidden and parked off-world (parked at %s)" % [arena.title_park])
+	check(folk.title_mode and folk.folk() == ["aida", "luce"], "title mode: the party and the rest out in town, the hero not (%s)" % [folk.folk()])
+	check(folk.npc("aida")["placed"] and folk.npc("luce")["placed"], "everyone placed")
+	check(B.wanted_title() and B.tap.playing and not B.wanted(), "bgm: the title track plays, the town is not wanted")
+	check(arena.cam_override is Vector2 and T.framing == "F1", "the title drives the camera: F1 (%s)" % T.framing)
 	T.beat.hold = true
-	# ---- an empty save ----
-	F.rec = ["estelle"]
-	F.fac = {}
-	F.r = 1
-	T.crowd_seed.clear()
-	check(T.people() == ["estelle"] and T.lit_windows() == 1 and T.crowd_n() == 0 and T.open_spots(), "empty: 에스텔 alone, one light, no crowd, open spots")
-	at(T, 5.0)
-	check(T.sec == "A" and T.lights_on == 0 and not T.intro_done and not T.menu_in, "5 s: section A, no lights yet, the intro running")
-	at(T, 9.5)
-	check(T.lights_on == 1 and T.intro_done, "9.5 s: the first light (Eilin's window), the menu usable")
+	var L = arena.level
 	at(T, 30.0)
-	check(T.lights_on == 1 and T.fB == 0.0 and T.fC == 0.0 and T.menu_in, "30 s: the A framing, the menu in")
-	at(T, 56.5)
-	check(T.sec == "B" and near(T.fB, 1.0) and T.slot() == 1 and T.slot_who(1) == "", "56.5 s, empty save: the cut-in's second slot is the empty chair")
-	check(T.slot_who(0) == "estelle" and T.slot_who(2) == "estelle" and T.slot_who(3) == "", "empty save slots: 에스텔, chair, 에스텔, chair")
-	at(T, 80.0)
-	check(T.slot() == 3 and T.slot_who(3) == "", "80 s, empty save: the empty chair")
-	# ---- three members, four facilities, rank 3 ----
-	F.rec = ["estelle", "aida", "luce"]
-	F.fac = {"fire": 1, "chand": 1, "forge": 1, "hearth": 1}
-	F.r = 3
-	T.crowd_seed.clear()
-	check(T.people().size() == 3 and T.lit_windows() == 5 and T.crowd_n() == 6, "three: 3 people, 5 lights, a crowd of 6")
-	at(T, 9.5)
-	check(T.lights_on == 1, "9.5 s: one light")
-	at(T, 9.22 + 1.3005 * 2.5)
-	check(T.lights_on == 3, "two and a half bars after the slap: three lights (%d)" % T.lights_on)
-	at(T, 30.0)
-	check(T.lights_on == 5, "30 s: all five (%d)" % T.lights_on)
-	T._sync_crowd()
-	check(T.crowd_seed.size() == 6, "the crowd's seeds follow the rank (%d)" % T.crowd_seed.size())
-	check(T.slot_who(0) == "estelle" and T.slot_who(1) == "aida" and T.slot_who(2) == "luce" and T.slot_who(3) == "", "three slots: 에스텔, 아이다, 루체, then the empty chair")
-	at(T, 50.0)
-	check(T.sec == "B" and near(T.fB, 1.0) and T.fC == 0.0 and T.slot() == 0, "50 s: the cut-in (에스텔)")
-	at(T, 60.0)
-	check(T.slot() == 1 and T._panel_figure(root.get_visible_rect().size)[0] == "aida", "60 s: 아이다's cut-in")
-	at(T, 90.0)
-	check(T.sec == "C" and near(T.fC, 1.0) and T.fB == 0.0 and near(T.kF, 0.55) and near(T.gy, 0.80), "90 s: the village wide — the hall at .55, the ground at .80 H")
-	at(T, 130.0)
-	check(T.sec == "D" and T.fB == 0.0 and T.fC == 0.0 and T.lights_on == 5, "130 s: ASSEMBLE in the A framing, all lights")
-	at(T, 155.0)
-	check(T.sec == "out" and T.wedge.is_empty(), "155 s: the outro, no wedge yet")
-	# ---- the wedges ----
+	var f1: Vector2 = T._framing("F1")
+	check(near(f1.x, L.HXB + 330.0) and near(f1.y, L.TTOP - 160.0), "F1 본관 정면: HXB + 330, the terrace at ~.82 H (%s)" % [f1])
+	check(T.sec == "A" and T.framing == "F1" and near(T.cam_pos.x, f1.x + 40.0 * sin(PI * (30.0 - 0.09) / 45.52), 2.0), "30 s: F1 with its drift (%s)" % [T.cam_pos])
+	await process_frame
+	check(near(arena.cam.position.x, T.cam_pos.x, 1.0) and near(arena.cam.position.y, T.cam_pos.y, 1.0), "the arena's camera follows the title's (%s)" % [arena.cam.position])
+	var drift := func(t: float) -> float: return 40.0 * sin(PI * (t - 0.09) / (BEAT.bar_t(35) - 0.09))
+	at(T, 2.5)
+	check(near(T.cam_pos.x, f1.x - 60.0 + drift.call(2.5), 1.0), "2.5 s: the intro's pull-in starts 60 px left of F1 (%s)" % [T.cam_pos])
+	at(T, 3.3)
+	check(near(T.cam_pos.x, f1.x + drift.call(3.3), 1.0), "3.3 s: settled into F1")
+	for p in [[45.7, "F1"], [46.0, "F2"], [50.0, "F2"], [84.7, "F2"], [90.0, "F3"], [118.5, "F3"], [130.0, "F2"], [150.0, "F1"], [155.0, "F1"]]:
+		at(T, p[0])
+		check(T.framing == p[1], "%.1f s: framing %s (%s)" % [p[0], p[1], T.framing])
 	at(T, 45.7)
-	check(not T.wedge.is_empty() and T.wedge[1] == 1 and T.wedge[2] < 1.0, "45.7 s: section B's wedge mid-sweep, left → right")
+	check(not T.wedge.is_empty() and T.wedge[1] == 1, "45.7 s: section B's wedge mid-sweep")
 	at(T, 118.5)
 	check(not T.wedge.is_empty() and T.wedge[3] == true, "118.5 s: section D's wedge carries the biggest burst")
+	at(T, 149.8)
+	check(not T.wedge.is_empty(), "149.8 s: the outro's wedge (back to F1)")
 	at(T, 164.3)
 	check(not T.wedge.is_empty() and T.wedge[1] == -1, "164.3 s: the loop's wedge from the right")
-	# ---- the loop wrap ----
+	# the loop wrap
 	T.beat.hold = false
 	T.beat.set_time(164.4)
 	T.beat.step(0.1, -1.0)
 	T._tick()
-	check(T.beat.lap == 1 and near(T.mt, 0.06) and T.sec == "A", "the wrap: lap 1, 0.06 s, section A")
-	check(not T.wedge.is_empty() and T.wedge[1] == -1, "just after the wrap: the wedge uncovers the intro")
-	check(T.menu_in and T.intro_done and T.lights_on == 5, "after the wrap: the menu stays, the lights stay")
-	var m: Array = T._hall_motion(root.get_visible_rect().size, 1.0)
-	check(m[3] == 1.0, "after the wrap: the hall is already there")
+	check(T.beat.lap == 1 and near(T.mt, 0.06) and T.sec == "A" and T.framing == "F1", "the wrap: lap 1, section A, F1")
+	check(not T.wedge.is_empty() and T.wedge[1] == -1 and T.menu_in and T.intro_done, "just after the wrap: the wedge uncovers the intro, the menu stays")
 	T.beat.hold = true
-	# ---- rank 7 ----
-	F.r = 7
-	F.fac = {"a": 1, "b": 1, "c": 1, "d": 1, "e": 1, "f": 1, "g": 1}
-	T.crowd_seed.clear()
-	check(T.crowd_n() == 18 and T.lit_windows() == 7, "rank 7: a crowd of 18, the whole ladder")
-	T.beat.lap = 0
-	at(T, 17.5)
-	var st: Array = T._crowd_start(0)
-	check(near(st[0], 17.09) and not st[1], "17.5 s: the crowd sprints in from 17.09, one per beat")
-	at(T, 90.0)
-	st = T._crowd_start(2)
-	check(near(st[0], 84.6225 + 0.26 + 2.0 * 1.3005) and not st[1], "section C: the third figure sprints in two bars after the switch")
-	at(T, 130.0)
-	check(T._crowd_start(17)[1], "section D: the crowd is present")
-	# ---- hand-off: the clock stops, the town takes over from 0 ----
+	# ---- the passing greetings ----
+	var a = folk.npc("aida")
+	var c = folk.npc("luce")
+	for n in [a, c]:
+		n["r"] = "top"
+		n["mode"] = "move"
+		n["path"] = [{"x": 1000.0, "r": "top"}]
+		n["chat"] = null
+		n["partner"] = null
+		n["seek"] = null
+		n["talk_t"] = 0.0
+	a["x"] = 3000.0
+	c["x"] = 3040.0
+	folk.greet_cd.clear()
+	var g0: int = folk.greets
+	folk.step(16.0)
+	check(folk.greets == g0 + 1 and a["mode"] == "greet" and c["mode"] == "greet", "two walkers within 60 px: both stop to greet")
+	check(a["dir"] == 1 and c["dir"] == -1 and a["say"] != "" and c["say"] != "" and a["say"] in folk.EMOTES and c["say"] in folk.EMOTES, "they face each other and show emotes (%s %s)" % [a["say"], c["say"]])
+	for i in 80: folk.step(16.0)
+	check(a["mode"] == "move" and c["mode"] == "move", "1.2 s on: both walk again")
+	a["x"] = 3000.0
+	c["x"] = 3040.0
+	folk.step(16.0)
+	check(folk.greets == g0 + 1, "the pair's cooldown: no second greeting yet")
+	folk.greet_cd["aida|luce"] = 1.0
+	folk.step(16.0)
+	folk.step(16.0)
+	check(folk.greets == g0 + 2, "the cooldown over: they greet again")
+	check(not folk.greet_cd.is_empty() and folk.greet_cd["aida|luce"] > 19000.0, "a 20 s cooldown per pair")
+	# ---- the hand-off: the hero back, her party hers, the camera hers, the town's music ----
 	for i in 20:
 		B._process(0.05)
 		await process_frame
-	check(B.tgain >= 1.0 and B.tap.playing and not B.ap.playing, "under the title: the title track at full, the town silent")
+	check(B.tgain >= 1.0, "under the title: the title track at full")
 	T.beat.hold = false
-	T.active = false
-	T.visible = false
-	T.beat.stop()
-	arena.go_town(Vector2(900.0, arena.ground_y), 1)
+	arena.leave_title_mode()
+	check(not arena.title_mode and P.visible and P.position == home, "leaving title mode: the hero back where she stood, visible")
+	check(arena.cam_override == null and not folk.title_mode and folk.folk() == ["luce"], "the camera and the townsfolk are the game's again, the party hers (%s)" % [folk.folk()])
+	T._go()
+	check(not T.active and not arena.title_mode, "the hand-off: the title off")
 	for i in 6:
 		B._process(0.05)
 		await process_frame
-	check(B.wanted() and not B.wanted_title() and B.ap.playing and B.tgain < 1.0 and B.tgain > 0.0, "after the hand-off: the town starts while the title fades (tgain %.2f)" % B.tgain)
+	check(B.wanted() and not B.wanted_title() and B.ap.playing and B.tgain < 1.0 and B.tgain > 0.0, "the town starts while the title fades (tgain %.2f)" % B.tgain)
 	check(B.ap.get_playback_position() < 0.5, "the town starts from 0 (%.2f)" % B.ap.get_playback_position())
 	for i in 30:
 		B._process(0.05)
 		await process_frame
 	check(B.tgain == 0.0 and not B.tap.playing and B.gain >= 1.0, "1.5 s on: the title track is off, the town at full")
-	# ---- a title with no fame and no audio runs the whole timeline ----
+	# ---- a title with no arena and no audio runs the whole timeline ----
 	var bare = load("res://scripts/title.gd").new()
 	bare.arena = null
 	bare.ui_root = null
 	root.add_child(bare)
 	bare.go_live()
-	check(bare.live and bare.people() == ["estelle"] and bare.lit_windows() == 1 and bare.crowd_n() == 0, "no fame: 에스텔, one light, no crowd")
+	check(bare.live and bare.framing == "F1", "no arena: live, F1")
 	var tt := 0.0
 	var seen := {}
 	while tt < 165.0:
 		bare.beat.set_time(tt)
 		bare._tick()
+		bare._camera()
 		seen[bare.sec] = true
 		await process_frame
 		tt += 0.25
-	check(seen.size() == 5, "no fame, no audio: every section drew (%s)" % [seen.keys()])
+	check(seen.size() == 5, "no arena, no audio: every section drew (%s)" % [seen.keys()])
 	bare.beat.hold = false
 	bare.beat.set_time(164.4)
 	bare.beat.step(0.1)
 	bare._tick()
 	await process_frame
-	check(bare.beat.lap == 1 and bare.menu_in, "no fame: the loop wrapped")
+	check(bare.beat.lap == 1 and bare.menu_in, "no arena: the loop wrapped")
 	bare.burst_t = bare.clock
 	bare.outro = 0.0
 	for i in 3: await process_frame
-	check(bare.outro > 0.0, "no fame: the burst and the outro draw")
+	check(bare.outro > 0.0, "no arena: the burst and the outro draw")
 	bare.queue_free()
 	print("FAILS: %d" % fails)
 	quit()
