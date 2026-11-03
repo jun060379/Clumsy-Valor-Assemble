@@ -11,9 +11,9 @@ const SK := preload("res://scripts/skins.gd")       # every member picture comes
 const WEAR := preload("res://scripts/ui_char_wear.gd")
 const TABS := [["attr", "상세", "STATUS"], ["gear", "장비", "GEAR"], ["skill", "스킬", "SKILL"], ["match", "기억", "MEMORY"], ["rec", "기록", "RECORD"], ["wear", "의상", "COSTUME"]]
 const GSL := [["weapon", "WEAPON"], ["head", "HEAD"], ["body", "BODY"], ["shoe", "SHOES"], ["acc1", "ACC 1"], ["acc2", "ACC 2"], ["acc3", "ACC 3"]]
-const SHEET := {"estelle": ["에스텔 벨라시타", "자칭 성기사 · 탱커", ["수호자", "받는 피해 25% 감소."]],
-	"aida": ["스나가와 아이다", "삽 · 기습형", ["그림자 걸음", "적의 등 뒤에서 때리면 피해 2배 (뒷치기)."]],
-	"luce": ["루체 루멘", "빛 · 원거리 지원", ["축복", "루체가 파티에 있으면 대기 중인 동료가 초당 체력 2씩 회복한다."]]}
+const SHEET := {"estelle": ["에스텔 벨라시타", "자칭 성기사 · 전사", ["수호자", "받는 피해 25% 감소."]],
+	"aida": ["스나가와 아이다", "삽 · 워락", ["그림자 걸음", "적의 등 뒤에서 때리면 피해 2배 (뒷치기)."]],
+	"luce": ["루체 루멘", "빛 · 사제", ["축복", "루체가 파티에 있으면 대기 중인 동료가 초당 체력 2씩 회복한다."]]}
 
 var c := "estelle"
 var tab := "attr"
