@@ -618,7 +618,8 @@ func _gear_card(vs: Vector2, col: Color) -> void:
 		var cp := Vector2(w - cs * 0.55, -cs * 0.95)
 		var sw := sin(t / 900.0) * 0.06
 		draw_set_transform_matrix(_card_xf * Transform2D(sw, cp + Vector2(cs, cs) / 2.0) * Transform2D(0.0, -Vector2(cs, cs) / 2.0))
-		draw_circle(Vector2(cs, cs) / 2.0, cs * 0.46, Color(g2, 0.25))
+		var pul := 0.75 + 0.25 * sin(t / 600.0)
+		for gk in 2: draw_texture_rect(UI.glow(), Rect2(Vector2(cs, cs) / 2.0 - Vector2(cs, cs) * 0.8, Vector2(cs, cs) * 1.6), false, Color(g2.lightened(0.4), 0.9 * pul))
 		draw_texture_rect(cic, Rect2(Vector2(3, 4), Vector2(cs, cs)), false, Color(0, 0, 0, 0.35))
 		draw_texture_rect(cic, Rect2(Vector2.ZERO, Vector2(cs, cs)), false)
 		var gl := fmod(t / 2600.0, 1.0)

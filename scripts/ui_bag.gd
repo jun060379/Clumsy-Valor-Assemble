@@ -264,14 +264,17 @@ func _spot(vs: Vector2, o: Dictionary, col: Color) -> void:
 	var bm := Transform2D(PI / 4.0, Vector2(bsc, bsc), 0.0, bc)
 	var sq := func(r: float, sh := Vector2.ZERO) -> PackedVector2Array:
 		return PackedVector2Array([bm * (Vector2(-r, -r) + sh), bm * (Vector2(r, -r) + sh), bm * (Vector2(r, r) + sh), bm * (Vector2(-r, r) + sh)])
-	draw_colored_polygon(sq.call(B / 2.0, Vector2(10, 10)), Color(0, 0, 0, ba))
-	draw_colored_polygon(sq.call(B / 2.0), Color(1, 1, 1, ba))
-	draw_colored_polygon(sq.call(B / 2.0 - 6.0), Color(g, ba))
-	if o["kind"] == "gear":
-		var ip := ICON.file_of(o["v"], String(o.get("s", "")))
-		if ip != "" and ResourceLoader.exists(ip):
-			# the piece itself on the gem, a size bigger, popping in with it and bobbing with it (a glint now and then)
-			var isz := B * 1.7
+	var ip := ICON.file_of(o["v"], String(o.get("s", ""))) if o["kind"] == "gear" else ""
+	var has_ic := ip != "" and ResourceLoader.exists(ip)
+	if not has_ic:
+		draw_colored_polygon(sq.call(B / 2.0, Vector2(10, 10)), Color(0, 0, 0, ba))
+		draw_colored_polygon(sq.call(B / 2.0), Color(1, 1, 1, ba))
+		draw_colored_polygon(sq.call(B / 2.0 - 6.0), Color(g, ba))
+	if has_ic:
+		if true:
+			# the piece itself on the disc (no gem under it): a grade glow, popping in and bobbing, a glint now and then
+			var isz := B * 2.3
+			draw_texture_rect(UI.glow(), Rect2(bc - Vector2(isz, isz) * 0.75, Vector2(isz, isz) * 1.5), false, Color(g.lightened(0.35), 0.9 * ba))
 			draw_set_transform(bc, sin(t / 1100.0) * 0.05, Vector2(bsc, bsc))
 			draw_texture_rect(tx(ip), Rect2(Vector2(-isz / 2.0, -isz / 2.0) + Vector2(5, 7), Vector2(isz, isz)), false, Color(0, 0, 0, 0.4 * ba))
 			draw_texture_rect(tx(ip), Rect2(Vector2(-isz / 2.0, -isz / 2.0), Vector2(isz, isz)), false, Color(1, 1, 1, ba))
@@ -620,7 +623,7 @@ func _draw_rows() -> void:
 				# the piece's own icon in place of the grade gem: a grade glow behind, a bob when picked
 				var bob := sin(t / 380.0) * 1.5 if on else 0.0
 				ci.draw_set_transform_matrix(m * Transform2D(0.0, Vector2(21, h / 2.0 + bob)))
-				ci.draw_circle(Vector2.ZERO, 15.0, Color(gc, 0.28 * e["a"]))
+				ci.draw_texture_rect(UI.glow(), Rect2(-24, -24, 48, 48), false, Color(gc.lightened(0.3), 0.7 * e["a"]))
 				ci.draw_texture_rect(gic, Rect2(-17, -17, 34, 34), false, Color(1, 1, 1, e["a"]))
 				ci.draw_set_transform(Vector2.ZERO)
 			for gl2 in ([] if gic != null else [[11.0, 0.12], [9.0, 0.22]]):
