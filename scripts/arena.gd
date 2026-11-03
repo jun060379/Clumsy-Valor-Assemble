@@ -50,6 +50,7 @@ var cam: Camera2D
 var cam_override = null       # Vector2: the title drives the camera (title.gd's framings); null = the player's camera
 var title_mode := false       # the title is up over the live town: the town's life runs, the player stands aside (as a townsperson)
 var title_park := Vector2.ZERO   # where the player stood before the title parked her off-world
+var title_back := {}          # the scene the title switched away from for its town backdrop (restored on the hand-off)
 var hitstop := 0.0
 var flash := 0.0
 var shake_amt := 0.0
@@ -299,12 +300,22 @@ func _ready() -> void:
 
 
 # ---------- the title over the live town ----------
-## the title is up: the player is parked off-world and hidden (the townsfolk draw her as one of them), every recruited
-## member lives in town, the title's camera takes over
+## the title is up: the town is the backdrop whatever scene the save woke in (the hall or the training ground give way
+## to the town — nothing is saved on the way, and the scene comes back on the hand-off), the player is parked off-world
+## and hidden (the townsfolk draw her as one of them, out for a walk), every recruited member lives in town, the
+## title's camera takes over
 func enter_title_mode() -> void:
 	if title_mode or player == null: return
 	title_mode = true
 	title_park = player.position
+	title_back = {}
+	var lk := level_kind()
+	if lk != "town":
+		# the scene to come back to on the hand-off (what the save woke in), then the town
+		if lk == "hall": title_back = {"kind": "hall", "fl": int(level.fl), "at": player.position, "dir": int(player.dir)}
+		elif train != null: title_back = {"kind": "training"}
+		else: title_back = {"kind": "town", "at": player.position, "dir": int(player.dir)}
+		go_town(Vector2(380.0, ground_y), 1)          # (its autosave is a no-op under the title)
 	player.position.x = -9999.0
 	player.visible = false
 	var F = FOLK.of(self)
@@ -312,8 +323,9 @@ func enter_title_mode() -> void:
 	F.title_place()
 	cam_override = null
 
-## the hand-off into the game: the player is back where she stood, her party is hers again, the camera is hers
-func leave_title_mode() -> void:
+## the hand-off into the game: the player is back where she stood (in the scene the save woke in, when the title had
+## switched to the town for its backdrop and `restore` asks for it), her party is hers again, the camera is hers
+func leave_title_mode(restore := true) -> void:
 	if not title_mode: return
 	title_mode = false
 	var F = FOLK.of(self)
@@ -323,6 +335,14 @@ func leave_title_mode() -> void:
 	player.position = title_park
 	player.visible = true
 	cam_override = null
+	if restore and not title_back.is_empty():
+		match String(title_back["kind"]):
+			"hall": go_hall(int(title_back["fl"]), title_back["at"], int(title_back["dir"]))
+			"training": go_training()
+			_: go_town(title_back["at"], int(title_back["dir"]))
+		title_back = {}
+		return
+	title_back = {}
 	snap_camera()
 
 ## the world under the title: the clock, Eilin's day, the town's life (not the player), the title's camera
