@@ -42,7 +42,7 @@ func _initialize() -> void:
 	ok(B.tap.stream == tt and B.tap.bus == &"BGM" and not B.tap.playing, "the title player holds it on the BGM bus, silent in a test run (the title is off)")
 	ok(B.ap.bus == &"BGM", "player on the BGM bus (not the slow bus)")
 	# the dungeon tracks: their files, lengths and loop points (the streams and the .import files)
-	for tr in [["battle", 105.79, 4.99, B.bp], ["boss", 174.68, 13.49, B.bsp], ["lowhp", 60.24, 20.18, B.lp]]:
+	for tr in [["battle", 105.79, 4.99, B.bp], ["boss", 174.35, 13.49, B.bsp], ["lowhp", 60.24, 20.18, B.lp]]:
 		var s2 = load("res://assets/bgm/%s.ogg" % tr[0])
 		ok(s2 is AudioStreamOggVorbis and absf(s2.get_length() - tr[1]) < 0.2, "%s.ogg: an ogg of %.2f s (%.2f)" % [tr[0], tr[1], s2.get_length()])
 		ok(s2.loop and near(s2.loop_offset, tr[2], 0.001), "%s.ogg loops back to %.2f (%.2f)" % [tr[0], tr[2], s2.loop_offset])

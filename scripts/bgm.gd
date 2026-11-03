@@ -11,7 +11,7 @@ extends Node
 ##   · battle.ogg (105.79 s, loops back to 4.99) starts from 0 on entering the dungeon and plays through every room;
 ##     room-to-room moves never restart it, leaving to town stops it (the town resumes where it paused), and the next
 ##     sortie starts it from 0 again.
-##   · boss.ogg (174.68 s, a 13.5 s fade-in intro, loops back to 13.49) starts from 0 when the boss room is entered
+##   · boss.ogg (174.35 s, a 13.5 s fade-in intro, loops back to 13.49) starts from 0 when the boss room is entered
 ##     while the battle track fades out over one bar (BAR_OUT); when the boss is down it fades out over BOSS_OUT.
 ##   · lowhp.ogg (60.24 s, loops back to 20.18) is an overlay on a third player: under 30 % HP in the dungeon it fades
 ##     in over LOW_IN s, started on the next bar line of the battle / boss clock so it lands on the grid (from 0 the
@@ -51,7 +51,7 @@ const GRID := {
 	"title": {"bpm": 184.57, "t0": 0.09, "half_time": true, "len": 164.44, "loop": 0.0},
 	"town": {"bpm": 96.0, "t0": 0.65, "half_time": false, "len": 75.0, "loop": 0.0},
 	"battle": {"bpm": 95.7, "t0": 0.12, "half_time": false, "len": 105.79, "loop": 4.99},
-	"boss": {"bpm": 95.7, "t0": 0.70, "half_time": false, "len": 174.68, "loop": 13.49},
+	"boss": {"bpm": 95.7, "t0": 0.70, "half_time": false, "len": 174.35, "loop": 13.49},
 	"lowhp": {"bpm": 95.7, "t0": 0.12, "half_time": false, "len": 60.24, "loop": 20.18},
 }
 
