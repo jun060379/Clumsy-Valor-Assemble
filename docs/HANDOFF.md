@@ -166,7 +166,11 @@ main에 푸시하면 GitHub Actions가 웹·윈도우로 빌드해서 GitHub Pag
 - 원화 → 실제 도트 크기: `tools/pixel/pixelize.py` (축소·Lab k-means 16~24색·잡티·1px 머리털 제거·외곽선). 얼굴은 자동으로 약해져서 몇 칸 손봐야 함.
 - 생성 서비스: **PixelLab** 시험 완료(정지 이미지·동작 둘 다 "나쁘지 않음"; 업로드 최대 256, 뼈대 애니메이션 캔버스 최대 128, 남쪽 정면 필수). **Sprite Flow**가 다음 시험 대상(옆모습 지원, 최대 512, Godot 내보내기, API/MCP — 상업 라이선스 확인 필요).
 - PixelLab 결과 정리 규칙(오너 지시): 반투명 테두리 정리·외곽선·잡티 OK, **얼굴 도트는 크게 바꾸지 말 것(눈은 손대지 않음)**, 비슷한 색만 1~2색으로 합치기, 끊어진 머리카락은 잇기. 예시 스크립트 `tools/pixel/cleanup_pixellab.py`(좌표가 그 한 장 전용).
-- 다음: 같은 에스텔 원화로 PixelLab과 Sprite Flow에서 옆모습 걷기 → 정리 자동 적용 → 마을 배경에서 지금 에스텔과 나란히 영상 비교 → 오너가 결정. 이후 "스프라이트 작업대"(폰에서 시트/영상 올리면 자르기·정렬·정리·미리보기·확정) 제작 제안이 걸려 있음.
+- **결정 (2026-11-03)**: 기존 캐릭터(에스텔·아이다·루체·브랜·에일린)의 시트는 지금 것 그대로 쓴다. **앞으로 만드는 새 캐릭터는 Sprite Flow로 뽑는다.** 에스텔 원화로 PixelLab과 나란히 비교하는 계획은 취소.
+- Sprite Flow 연결 방법: 오너가 claude.ai 커스텀 커넥터로 `https://spriteflow.io/api/mcp`를 붙였다(인증 "로그인 없음" + Request header `Authorization: Bearer <키>`). 도구: get_credit_balance, search_assets, create_upload_url / confirm_upload, estimate_cost, generate_character, generate_sprite_motion(Classic 8장 / Pro 32장), generate_direction_sprites / _animation, get_task, get_download_url 등. 생성 전에는 항상 estimate_cost. 시작 시 잔액 595크레딧.
+  - 파일 업로드·다운로드는 Cloudflare R2(`93f3340089e53560d7fc247d7a422b68.r2.cloudflarestorage.com`) 서명 URL(5분 만료)로 오간다. 오너가 claude.ai 설정의 네트워크 접근을 켜서 이 세션에서 받기가 됐다. `spriteflow.io` 자체는 셸에서 여전히 막힘(문서는 오너가 캡처로 보여 줘야 함). 새 세션에서 막히면 같은 설정을 확인해 달라고 할 것.
+  - 계정에 이미 있는 것: 에스텔(초심 옷) Pro 모드 `run-sprint-cycle` 32장, `attack-slash-combo` 32장, 1024×1024 RGBA. 기존 캐릭터는 안 바꾸기로 했으니 참고용.
+- 다음: 새 캐릭터가 정해지면 원화(NAI V4.5 정면) → Sprite Flow 업로드 → 옆모습·동작 생성 → 받아서 `tools/pixel/` 정리 → 게임에 넣고 영상 확인. "스프라이트 작업대"(폰에서 시트/영상 올리면 자르기·정렬·정리·미리보기·확정) 제작 제안은 아직 걸려 있음.
 
 작업 공간이 사라지면서 없어지는 것:
 - 오너가 첨부한 원본 사운드(Cymatics zip, 効果音ラボ, ElevenLabs mp3), 원본 걷기 시트, 로고 원본, scratchpad의 캡처·디버그 스크립트. 저장소에는 가공본만 있다
