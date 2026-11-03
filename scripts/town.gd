@@ -726,12 +726,12 @@ func try_interact() -> bool:
 	var d = near_door
 	var to: String = d.get("to", "")
 	if to == "arena":
-		arena.sfx("ready", 0.6)
+		arena.sfx("ui_ok", 0.6)
 		arena.fade_then(func(): arena.go_training())
 	elif to == "dungeon":
 		arena.sortie.open_dsel(0)          # 출격 마차: the dungeon select
 	elif to == "hall":
-		arena.sfx("ready", 0.6)
+		arena.sfx("ui_ok", 0.6)
 		var s0: Array = arena.HALL.HD.SPAWN[0]
 		arena.fade_then(func(): arena.go_hall(0, Vector2(s0[0], s0[1]), s0[2]))
 	elif d.get("act", "") == "eilin":

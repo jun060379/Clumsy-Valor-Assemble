@@ -162,7 +162,8 @@ func hit(dmg: float, kb: float, mul := 1.0) -> void:
 		arena.sfx("break", 0.8)
 		arena.spark(position + Vector2(0, -40), 16)
 		if M.has("boss"):
-			# mobDie: the boss goes down hard
+			# mobDie: the boss goes down hard — impact_boss_down lands 120 ms after the break
+			arena.sfx("impact_boss_down", 1.0, {"delay_ms": 120.0})
 			arena.shake(14, 1)
 			arena.flash = 0.5
 			arena.hitstop = 160.0

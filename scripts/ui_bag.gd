@@ -125,7 +125,7 @@ func _cat(k: String) -> void:
 	cat_t = 0.0
 	sel = 0
 	scroll = 0.0
-	sfx("ready", 0.2)
+	sfx("ui_move", 0.5)
 	bg_rows()
 
 func _sub(k: String) -> void:
@@ -133,7 +133,7 @@ func _sub(k: String) -> void:
 	else: rsub = k
 	sel = 0
 	scroll = 0.0
-	sfx("ready", 0.2)
+	sfx("ui_move", 0.5)
 	bg_rows()
 
 func worn() -> Array:
@@ -420,7 +420,7 @@ func _nm(vs: Vector2, sp: Rect2, o: Dictionary, g: Color) -> void:
 			h_back.append([poly(Rect2(0, by, pw, y - by), SQ, pm), func():
 				rvm[bx["ctx"]] = "r" if _face(bx) == "g" else "g"
 				flip_t = 0.0
-				sfx("ready", 0.15), "flip"])
+				sfx("ui_ok", 0.5), "flip"])
 	if not sl.is_empty():
 		draw_flow(self, sl, 10, y, 18.0, a)
 	draw_set_transform(Vector2.ZERO)
@@ -497,7 +497,7 @@ func _bwho(m: Transform2D, y0: float, nw: float, o: Dictionary, W: Array, bw2: A
 		h_back.append([pts, func():
 			if R().gear_on(w3, sl, R().gearbag.find(it)):
 				arena.text(arena.player.position + Vector2(0, -170), RN.pname(w3) + " · " + it["n"] + " 장착", Color("#ffe9a8"))
-				sfx("ready", 0.5)
+				sfx("ui_ok", 0.5)
 				bg_rows(), "eq"])
 		x += b["w"] + 5.0
 		rowh = maxf(rowh, b["h"])

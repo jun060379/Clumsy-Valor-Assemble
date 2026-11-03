@@ -33,6 +33,8 @@ var f := 0
 var ft := 0.0
 var t := 0.0
 var air := 0
+var air_top := 0.0            # the highest point of the current flight (y, smaller = higher): a landing from LAND_MIN px down rings land.ogg
+const LAND_MIN := 48.0        # px of drop before touchdown gets its land sound (a kerb or a stair step stays quiet)
 var coyote := 0.0
 var combo_win := 0.0
 var slide := 0.0
@@ -610,7 +612,7 @@ func step(dt: float) -> void:
 		arena.charge_fx(position + Vector2(-dir * 2.0, -64.0 * CSCALE), charge_t, CH.COLOR[who])
 		if charge_t >= 650.0 and not cfull:
 			cfull = true
-			arena.sfx("ready")
+			arena.sfx("ui_ok")
 			arena.flash = 0.08
 		if not keys["attack"]:
 			var r := minf(1.0, (charge_t - 200.0) / 450.0)
@@ -620,7 +622,7 @@ func step(dt: float) -> void:
 			elif a == "lgather":
 				set_anim("lfinisher")
 				cw_r = r
-				arena.sfx("ready", 0.5)
+				arena.sfx("ui_ok", 0.5)
 			elif a == "acharge":
 				rift_strike(r)
 			else:
@@ -697,7 +699,7 @@ func step(dt: float) -> void:
 			heal_cd = 9000.0 * _cdk()
 			_rev("skill")
 			_rev("heal")
-			arena.sfx("ready", 0.9)
+			arena.sfx("ui_ok", 0.9)
 		if heal_t >= 700.0 and not fx_done:
 			fx_done = true
 			_rev("skill")
@@ -710,7 +712,7 @@ func step(dt: float) -> void:
 					hpm[c] = minf(_mhp(c), hpm[c] + hv)
 					al += 1
 			heal_cd = 9000.0 * _cdk()
-			arena.sfx("ready", 0.9)
+			arena.sfx("ui_ok", 0.9)
 			arena.flash = 0.1
 			arena.pfx.heal_burst(position.x, position.y, CSCALE)
 			arena.text(position + Vector2(0, -130.0 * CSCALE), "+%d" % int(hv), Color("#ffe9a8"))
@@ -1016,6 +1018,7 @@ func edge_hold(x0: float) -> void:
 		arena.dust(position, 0, false)
 
 func physics(dt: float, a: String) -> void:
+	air_top = position.y if on else minf(air_top, position.y)
 	if not on and not air_tag:
 		var g := GRAV
 		if a == "dive" or ((a in ["tp_in", "dig_out", "mark", "amark", "dig_in"]) and dig_air): g = 0.0
@@ -1086,7 +1089,7 @@ func physics(dt: float, a: String) -> void:
 			air = 0
 			if a in ["jump", "runjump", "double_jump"]:
 				land_anim()
-				arena.sfx("step")
+				land_sfx()
 				arena.dust(position, 0, false)
 		elif landed:
 			vy = 0.0
@@ -1118,7 +1121,7 @@ func physics(dt: float, a: String) -> void:
 		air = 0
 		if a in ["jump", "runjump", "double_jump"]:
 			land_anim()
-			arena.sfx("step")
+			land_sfx()
 			arena.dust(position, 0, false)
 	elif landed:
 		on = true
@@ -1131,6 +1134,10 @@ func physics(dt: float, a: String) -> void:
 			if not attacking() and a != "kneel" and not busy_rift():
 				set_anim("jump", 4)
 
+
+## touchdown after a jump or a fall of LAND_MIN px or more: land.ogg (never for a small step down)
+func land_sfx() -> void:
+	if position.y - air_top >= LAND_MIN: arena.sfx("land", 0.45)
 
 ## a jump touching down: still running (a direction held, moving that way) lands straight into the run on a contact
 ## frame; the standing landing → idle → start → run stopped her and set off again after every run jump
@@ -1321,6 +1328,8 @@ func die() -> void:
 	hp = 0.0
 	set_anim("death")
 	dead_t = 0.0
+	arena.sfx("jingle_death", 1.0)
+	if arena.bgm != null and arena.bgm.grid() != null: arena.bgm.duck(6.0, 600.0)
 
 
 # ---------- party: switching, QTE tag-in, counter swap ----------
@@ -1602,7 +1611,7 @@ func qte_offer(reason: String, data = null) -> void:
 	if reason == "low": qte["low"] = true
 	qte["t"] = QTE_T * _mk("qteT")
 	qte["cd"] = 3500.0
-	arena.sfx("ready", 0.5)
+	arena.sfx("ui_ok", 0.5)
 
 func qte_end() -> void:
 	qte["t"] = 0.0

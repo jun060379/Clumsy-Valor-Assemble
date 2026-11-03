@@ -261,7 +261,7 @@ func grant(id: String, how := "", quiet := false) -> bool:
 	if not quiet and not (arena != null and arena.get("world_started") == false):
 		var nm := "의상 · %s 「%s」" % [CH.NAME[s["c"]], s["n"]] + ("" if is_ready(id) else " · 그림 준비 중")
 		_notice(nm, TAG.get(how, "의상"), Color("#ff6fae"))
-		if arena != null and arena.has_method("sfx"): arena.sfx("ready", 0.6)
+		if arena != null and arena.has_method("sfx"): arena.sfx("ui_ok", 0.6)
 	return true
 
 ## the story system's hook: every skin whose unlock is story `key`

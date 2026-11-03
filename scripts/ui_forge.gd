@@ -282,7 +282,7 @@ func go_station(np: String) -> void:
 	mark("slab")
 	mark("wipe")
 	clk["wipe_to"] = _ai(np)
-	sfx("ready", 0.25)
+	sfx("ui_move", 0.5)
 	var op := p
 	after(500.0, func():
 		p = np
@@ -526,7 +526,7 @@ func picking_open() -> void:
 	picking = true
 	pick_closing = false
 	mark("pick")
-	sfx("ready", 0.3)
+	sfx("ui_ok", 0.5)
 
 func gear_close(then: Callable) -> void:
 	if pick_closing: return
@@ -1074,7 +1074,7 @@ func _card(vs: Vector2, col: Color, d: Dictionary, idx: int) -> void:
 					hb.append([poly(Rect2(16, 30, cw, op[1] - 30), SQ, m), func():
 						rvm[bx["ctx"]] = "r" if _face(bx) == "g" else "g"
 						mark("flip")
-						sfx("ready", 0.15)])
+						sfx("ui_ok", 0.5)])
 			"btn":
 				var bf := UI.bhs()
 				var bw := tw(bf, d["btn"], 22) + 44.0
@@ -1184,7 +1184,7 @@ func _rlist(vs: Vector2, col: Color, rows: Array, sel: int) -> void:
 		hb.append([pts, func():
 			if busy > 0: return
 			_row_pick(i2)
-			sfx("ready", 0.15)])
+			sfx("ui_move", 0.5)])
 		y += h + 6.0
 
 func _rc_gem(vs: Vector2, i: int) -> Vector2:
@@ -1458,7 +1458,7 @@ func _dis(vs: Vector2, col: Color) -> void:
 		hb.append([pts, func():
 			if ds == key or busy > 0: return
 			ds = key
-			sfx("ready", 0.2)])
+			sfx("ui_move", 0.5)])
 		x += w + 6.0
 	var V := _dis_list()
 	if V.is_empty():
@@ -1625,7 +1625,7 @@ func _pick(vs: Vector2, col: Color) -> void:
 			if gs == key: return
 			gs = key
 			mark("pickrows")
-			sfx("ready", 0.2)])
+			sfx("ui_move", 0.5)])
 		x += w + 6.0
 	var V := L.filter(func(q): return (gs == "rune") == R().has_rune_item(q[2]))
 	var y := 109.0

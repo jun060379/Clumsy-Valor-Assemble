@@ -218,6 +218,7 @@ func _open_fx() -> void:
 	hero_dock = ""
 	trn.clear()
 	S.play(self, S.noise_wav(0.16), 0.26)
+	arena.sfx("jingle_book", 0.4)
 
 ## fmClose: the sheet drops, the band leaves, the header lifts away; the page goes after 440 ms
 func close_fx() -> void:
@@ -1216,6 +1217,7 @@ func _row(r: Rect2, o: Dictionary) -> void:
 				if claims.size() > 0: return
 				# the claim applies when the first chip lands (or 260 ms after the stamp if nothing flies)
 				var n := _claim_fx(rr, rw, stp, rx)
+				if stp == "완료": arena.sfx("jingle_quest", 0.7)      # the 완료 stamp: the quest jingle
 				claims.append([cb, 160.0 + (120.0 + 520.0 if n > 0 else 260.0)]))
 		ry = brr.end.y + 14.0
 	var r1: String = o.get("r1", "")

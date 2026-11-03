@@ -121,7 +121,7 @@ func _wheel(d: int, _p: Vector2) -> void:
 	if j != sel: _pick(j)
 
 func back() -> void:
-	arena.sfx("ready", 0.25)
+	arena.sfx("ui_back", 0.5)
 	menu.ui_root.sweep.run(func(): menu.close_page(), UI.col(c))
 
 func _pick(j: int) -> void:
@@ -131,21 +131,21 @@ func _pick(j: int) -> void:
 	arm_t = 1e9
 	mv_t = 0.0
 	if S() != null: S().seen(cur_id())
-	sfx("ready", 0.18)
+	sfx("ui_move", 0.5)
 
 func _member(cc: String) -> void:
 	if cc == c or wipe_t >= 0.0: return
 	pend_c = cc
 	wipe_t = 0.0
 	wipe_kind = "member"
-	sfx("ready", 0.3)
+	sfx("ui_move", 0.5)
 
 func _move(d: int) -> void:
 	var n: int = MOVES[c].size()
 	mv = (mv + d + n) % n
 	mv_t = 0.0
 	mv_chg = 0.0
-	sfx("ready", 0.12)
+	sfx("ui_move", 0.5)
 
 ## Enter / the main button: 입기, or 구매 (armed on the first press, bought on the second)
 func _act() -> void:
@@ -155,13 +155,13 @@ func _act() -> void:
 	if st == "owned":
 		if S().equip(id):
 			_stamp("CHANGE!")
-			sfx("ready", 0.6)
+			sfx("ui_ok", 0.5)
 			sfx("heavy", 0.35)
 		return
 	if st == "locked" and SD.kind(id) == "shop":
 		if arm_t > 2600.0:
 			arm_t = 0.0
-			sfx("ready", 0.3)
+			sfx("ui_ok", 0.5)
 			return
 		var r: String = S().buy(id)
 		arm_t = 1e9

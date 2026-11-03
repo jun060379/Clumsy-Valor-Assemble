@@ -77,7 +77,7 @@ func _process(delta: float) -> void:
 func pick(c: String) -> void:
 	if c == sel: return
 	sel = c
-	sfx("ready", 0.2)
+	sfx("ui_move", 0.5)
 
 ## the bar's state for the picked member: [[act, label, enabled]...]
 func bar() -> Array:
@@ -95,7 +95,7 @@ func press(a: String) -> void:
 		"in":
 			arena.toggle_member(c)          # PARTY ± c; leaveParty / the townsfolk let go of a member who joins
 			arena.save_now()
-			sfx("ready", 0.4)
+			sfx("ui_ok", 0.5)
 		"lead":
 			# not along: join (a full party drops its last member, PARTY.pop(), after the hand-over), then take control
 			if not P.party.has(c):
@@ -106,7 +106,7 @@ func press(a: String) -> void:
 			else:
 				_swap(c)
 			arena.save_now()
-			sfx("ready", 0.5)
+			sfx("ui_ok", 0.5)
 		"info":
 			# txSweep(() => { PTE.hidden = true; cxOpen(c) })
 			menu.ui_root.sweep.run(func():
@@ -132,7 +132,7 @@ func _key(k: int) -> void:
 		elif k in [KEY_RIGHT, KEY_D]: pick(R2[mini(R2.size() - 1, i + 1)])
 		elif k in [KEY_DOWN, KEY_S, KEY_ENTER, KEY_KP_ENTER, KEY_SPACE]:
 			focus = 0
-			sfx("ready", 0.15)
+			sfx("ui_move", 0.5)
 	else:
 		if k in [KEY_LEFT, KEY_A]: focus = maxi(0, focus - 1)
 		elif k in [KEY_RIGHT, KEY_D]: focus = mini(2, focus + 1)

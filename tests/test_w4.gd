@@ -157,7 +157,8 @@ func _initialize() -> void:
 	check(hit_ap.size() > 0 and absf(hit_ap[0].pitch_scale - 0.62) < 0.001 and hit_ap[0].bus == &"Slow", "witch: a new sfx plays at 0.62×")
 	arena.sfx("boom", 0.5)
 	var boom_ap = arena.sfx_pool.filter(func(a): return a.stream != null and a.stream.resource_path.ends_with("boom.wav"))
-	check(boom_ap.is_empty() or (boom_ap[0].bus == &"Master" and boom_ap[0].pitch_scale == 1.0), "the boom itself plays dry")
+	check(boom_ap.is_empty() or (boom_ap[0].bus == &"SFX" and boom_ap[0].pitch_scale == 1.0), "the boom itself plays dry (straight on the SFX bus)")
+	check(AudioServer.get_bus_send(bi) == &"SFX" and AudioServer.get_bus_index(&"SFX") < bi, "the Slow bus sends into SFX (the 효과음 slider)")
 	arena.witch = 0.0
 	for i in 150: S._process(1.0 / 60.0)
 	check(S.cut > 19000.0 and not AudioServer.is_bus_effect_enabled(bi, S.fx), "after: the low-pass opens again")

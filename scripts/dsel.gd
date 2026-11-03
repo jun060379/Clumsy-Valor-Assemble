@@ -57,14 +57,14 @@ func show_it() -> void:
 	launch = -1.0
 	launched = false
 	wipe_t = -1.0
-	arena.sfx("ready", 0.4)
+	arena.sfx("ui_ok", 0.5)
 
 func close() -> void:
 	if launch >= 0.0: return
 	open = false
 	visible = false
 	sortie.dsel_cd = 1500.0
-	arena.sfx("ready", 0.25)
+	arena.sfx("ui_back", 0.5)
 
 func _ok() -> bool:
 	return DUN[sel]["ok"]
@@ -75,7 +75,7 @@ func go_tab(i: int) -> void:
 	wipe_to = i
 	wipe_col = DUN[i]["col"]
 	wipe_t = 0.0
-	arena.sfx("ready", 0.25)
+	arena.sfx("ui_move", 0.5)
 
 ## sxLaunch
 func do_launch() -> void:
@@ -86,7 +86,7 @@ func do_launch() -> void:
 		return
 	launch = 0.0
 	press_go = 220.0
-	arena.sfx("ready", 0.8)
+	arena.sfx("ui_ok", 0.8)
 
 
 func _input(ev: InputEvent) -> void:

@@ -2,8 +2,17 @@ extends RefCounted
 ## Player settings (prototype 설정 panel + sortie.js key rebinding), saved to user://settings.cfg.
 ## Control device (auto / kbm / pad / touch) with the prototype's TOUCHUI rule: once a keyboard or mouse has been
 ## used, the touch UI stays hidden until a real touch.
+## Volumes ("audio" section: master / bgm / sfx / voice, 0..1): applied as bus volumes (apply_audio) — Master is bus 0,
+## "BGM" gets bgm.gd's BUS_DB trim plus the slider, "SFX" (everything that is not music: the Slow bus sends into it)
+## and "Voice" (no users yet) their sliders; 0 mutes the bus. The 배경음 on / off toggle (arena.music) is separate.
 
 const PATH := "user://settings.cfg"
+const BGM := preload("res://scripts/bgm.gd")      # its BUS_DB: the track trim the 배경음 slider multiplies on top of
+const SFX_BUS := &"SFX"
+const VOICE_BUS := &"Voice"
+const AUDIO_KEYS := ["master", "bgm", "sfx", "voice"]
+const AUDIO_DEF := {"master": 1.0, "bgm": 0.8, "sfx": 1.0, "voice": 1.0}
+const AUDIO_BUS := {"master": &"Master", "bgm": &"BGM", "sfx": &"SFX", "voice": &"Voice"}
 ## KB_ACT
 const ACTS := [["left", "왼쪽"], ["right", "오른쪽"], ["up", "위 · 계단 · 문"], ["down", "아래"], ["jump", "점프"], ["attack", "공격 · 상호작용"], ["guard", "스킬"], ["dash", "대시"], ["ult", "궁극기"], ["swap", "동료 교대"]]
 ## a binding is a keycode, plus the side for a modifier (e.code ShiftLeft / ControlRight…): code | side << SIDE_SH
@@ -32,6 +41,7 @@ var _touch_auto = null
 var qk := 1.0              # QK: render quality (1 → .8 → .6), lowered by qWatch when frames run long; saved
 var qw := {"n": 0, "s": 0.0, "cool": 0.0}
 var sides := true          # the platform tells left from right modifiers (false once one arrives without a side)
+var vol := AUDIO_DEF.duplicate()      # master / bgm / sfx / voice, 0..1 (the 전체 음량 · 배경음 · 효과음 · 보이스 sliders)
 
 
 func _init(a) -> void:
@@ -41,6 +51,8 @@ func _init(a) -> void:
 	var cf := ConfigFile.new()
 	if cf.load(PATH) != OK:
 		return
+	for k in AUDIO_KEYS:
+		vol[k] = clampf(float(cf.get_value("audio", k, AUDIO_DEF[k])), 0.0, 1.0)
 	dev = String(cf.get_value("ui", "dev", dev))
 	stick = String(cf.get_value("ui", "stick", stick))
 	arena.screen_fx = bool(cf.get_value("ui", "pfx", true))
@@ -68,10 +80,46 @@ func save() -> void:
 	cf.set_value("ui", "ambient", arena.ambient)
 	cf.set_value("ui", "bgm", arena.music)
 	cf.set_value("ui", "qk", qk)
+	for k in AUDIO_KEYS:
+		cf.set_value("audio", k, vol[k])
 	cf.set_value("keys", "rmb", rmb)
 	for a in ACTS:
 		cf.set_value("keys", a[0], kb[a[0]])
 	cf.save(PATH)
+
+
+# ---------- volumes ----------
+## the "SFX" and "Voice" buses (default_bus_layout.tres; made here if the layout is missing): SFX right after Master so
+## the Slow bus can send into it (a bus only sends to one before it), Voice after that
+static func ensure_buses() -> void:
+	for b in [SFX_BUS, VOICE_BUS]:
+		if AudioServer.get_bus_index(b) >= 0: continue
+		var at := 1 if b == SFX_BUS else mini(AudioServer.bus_count, AudioServer.get_bus_index(SFX_BUS) + 1)
+		AudioServer.add_bus(at)
+		AudioServer.set_bus_name(at, b)
+		AudioServer.set_bus_send(at, &"Master")
+
+## the slider value as a bus volume: linear_to_db(v), and 0 mutes the bus outright. "bgm" rides bgm.gd's BUS_DB trim.
+static func bus_db(k: String, v: float) -> float:
+	var trim: float = BGM.BUS_DB if k == "bgm" else 0.0
+	return trim + linear_to_db(maxf(0.0001, v))
+
+func set_vol(k: String, v: float) -> void:
+	vol[k] = clampf(v, 0.0, 1.0)
+	apply_audio()
+
+func get_vol(k: String) -> float:
+	return float(vol.get(k, 1.0))
+
+## every slider onto its bus (at startup from the saved values, and whenever a slider moves)
+func apply_audio() -> void:
+	ensure_buses()
+	for k in AUDIO_KEYS:
+		var i := AudioServer.get_bus_index(AUDIO_BUS[k])
+		if i < 0: continue
+		var v := float(vol[k])
+		AudioServer.set_bus_mute(i, v <= 0.0)
+		AudioServer.set_bus_volume_db(i, bus_db(k, v))
 
 
 static func preset(k: String) -> Dictionary:

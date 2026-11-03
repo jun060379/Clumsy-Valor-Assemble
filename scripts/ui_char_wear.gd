@@ -69,7 +69,7 @@ func _pick(j: int) -> void:
 	p.slam_t = 0.0                    # the art slams in again (cx_slam), as on a member change
 	p.name_t = 0.0
 	if S() != null: S().seen(shown)
-	p.sfx("ready", 0.15)
+	p.sfx("ui_move", 0.5)
 
 func wear() -> void:
 	var id := cur_id()
@@ -81,7 +81,7 @@ func wear() -> void:
 		p.sfx("guard", 0.35)
 		return
 	wore_t = 0.0
-	p.sfx("ready", 0.6)
+	p.sfx("ui_ok", 0.5)
 	p.sfx("heavy", 0.35)
 
 

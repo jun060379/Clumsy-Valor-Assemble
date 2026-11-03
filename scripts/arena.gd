@@ -18,6 +18,7 @@ const WEATHERS := ["clear", "rain", "snow"]
 const SETTINGS := preload("res://scripts/settings.gd")
 const AMBIENCE := preload("res://scripts/ambience.gd")
 const SLOWBUS := preload("res://scripts/slow_bus.gd")
+const SFX_BUS := SETTINGS.SFX_BUS                 # "SFX": every sound that is not music (the Slow bus sends into it)
 const BGM := preload("res://scripts/bgm.gd")
 const DEV := preload("res://scripts/dev.gd")
 const UI_KIT := preload("res://scripts/ui_kit.gd")
@@ -282,6 +283,7 @@ func _ready() -> void:
 	bgm.set_script(BGM)
 	bgm.arena = self
 	add_child(bgm)
+	cfg.apply_audio()                     # the saved 전체 음량 · 배경음 · 효과음 · 보이스 onto their buses (after bgm made its bus)
 	save = SAVE.new(self)
 	if get_tree().get_script() != null:
 		save.path = "user://save_test.json"     # test runs never touch the real save
@@ -834,18 +836,35 @@ func _process(delta: float) -> void:
 ##   jitter (float)  — ± semitones at random, so repeats don't machine-gun (JITTER: 0.5 on the hits, heavy, stab, hurt)
 ##   delay_ms        — a plain delay before the play
 ## Witch time keeps its 0.62× rule on top of the pitch (the slow-down's own cues, boom / witch_end, play dry and raw).
-## Logical names → files (FILES): "thrust" is stab.wav, "dash" is dodge.wav, "ready" (the UI click) cycles ui1 / ui2 /
-## ui3 (never the same twice in a row); "hit" alone is still the old hit.wav (the smith's hammer, the boss chest, the
-## clear screen, the UI). Luce's bolts, the thrown shield and the ult's rift hits take the pitched hits too.
-## LEVEL trims the files' own loudness so the hits sit ~3 dB under heavy and parry and the ult is loudest.
+## Logical names → files (FILES): "thrust" is stab.wav, "dash" is dodge.wav; "hit" alone is still the old hit.wav (the
+## smith's hammer, the boss chest, the clear screen). Luce's bolts, the thrown shield and the ult's rift hits take the
+## pitched hits too. The UI has four names: "ui_move" (a cursor, a row, a tab: menu_move), "ui_ok" (a tap on an item,
+## a confirm: menu_ok), "ui_back" (a close, a cancel: menu_back) for the menu screens, and "ready" — the old rubber
+## stamps ui1 / ui2 / ui3 (never the same twice in a row) — kept for the paper screens only (the 수첩 books, the
+## 접수대 desk menu, a dialog's choice stamps). Pickups (실링 / 기억석 / 룬 · 장비, PICKUPS) ring pick_coin / pick_stone /
+## pick_rune; the jingles, the boss impacts, jump / djump / land and ult_sub are the pack's processed OGGs (sfx_stream
+## loads <file>.ogg first, then <file>.wav).
+## LEVEL trims the files' own loudness so the hits sit ~3 dB under heavy and parry and the ult is loudest; the pack
+## files are trimmed to their max-100 ms RMS targets (pickups / UI / jump ≈ -18 dBFS, jingles -14, boss -10, ult_sub -12).
+## LAYERS stacks a second file under a name at the same moment (ult: the ult_sub low-passed sub layer at 0.9).
 ## heavy, parry and the ult also duck the music (DUCK: dB, ms) while a dungeon track plays.
 const SNAP_MAX := 0.09
 const SNAP := {"hit1": true, "hit2": true, "hit3": true, "heavy": true, "thrust": true, "parry": true, "ult": true}
 const JITTER := {"hit1": 0.5, "hit2": 0.5, "hit3": 0.5, "heavy": 0.5, "thrust": 0.5, "hurt": 0.5}
-const FILES := {"thrust": "stab", "dash": "dodge"}
+const FILES := {"thrust": "stab", "dash": "dodge", "ui_move": "menu_move", "ui_ok": "menu_ok", "ui_back": "menu_back"}
 const UI_CLICKS := ["ui1", "ui2", "ui3"]
-const LEVEL := {"hit1": 0.85, "hit2": 0.9, "hit3": 0.75, "heavy": 1.0, "parry": 1.25, "stab": 0.9, "hurt": 0.8, "dodge": 0.55, "ult": 1.0, "ui1": 0.8, "ui2": 0.5, "ui3": 0.55}
+const LEVEL := {"hit1": 0.85, "hit2": 0.9, "hit3": 0.75, "heavy": 1.0, "parry": 1.25, "stab": 0.9, "hurt": 0.8, "dodge": 0.55, "ult": 1.0, "ui1": 0.8, "ui2": 0.5, "ui3": 0.55,
+	"pick_coin": 0.53, "pick_stone": 0.68, "pick_rune": 0.53,
+	"menu_move": 0.48, "menu_ok": 0.48, "menu_back": 0.54,
+	"jingle_lv": 0.93, "jingle_rank": 1.12, "jingle_quest": 1.17, "jingle_death": 0.86, "jingle_book": 0.80,
+	"impact_boss_in": 1.48, "impact_boss_down": 1.62,
+	"jump": 0.34, "djump": 0.50, "land": 0.38, "ult_sub": 0.63}
 const DUCK := {"heavy": [4.0, 120.0], "parry": [4.0, 120.0], "ult": [6.0, 250.0]}
+const LAYERS := {"ult": [["ult_sub", 0.9]]}      # name -> [[file, vol]…] played with it, at the same moment
+## the pickup words (arena.text → the GET notice) and their sounds; 룬 and 장비 share pick_rune
+const PICKUPS := {"실링": "pick_coin", "기억석": "pick_stone", "룬 · ": "pick_rune", "장비": "pick_rune"}
+const PICK_VOL := 0.55
+const PICK_JITTER := 0.7
 var ui_click := -1                 # the last UI click played (UI_CLICKS index)
 var sfx_due: Array = []            # scheduled plays: {t (ms left), file, vol, pitch, raw}
 
@@ -861,22 +880,47 @@ func sfx(n: String, vol := 1.0, opts := {}) -> void:
 	if bool(opts.get("snap", SNAP.get(n, false))):
 		var d: float = snap_delay()
 		if d > 0.0: p["t"] += d * 1000.0
+	_sfx_queue(p)
+	for L in LAYERS.get(n, []):
+		if sfx_stream(L[0]) == null: continue
+		var q := p.duplicate()
+		q["file"] = L[0]
+		q["vol"] = vol * float(L[1]) * float(LEVEL.get(L[0], 1.0))
+		q["n"] = L[0]
+		_sfx_queue(q)
+
+func _sfx_queue(p: Dictionary) -> void:
 	if p["t"] > 0.0:
 		sfx_due.append(p)
 	else:
 		_sfx_play(p)
 
-## the logical name's file: thrust → stab, dash → dodge, ready → the next UI click
+## the logical name's file: thrust → stab, dash → dodge, ui_move / ui_ok / ui_back → menu_*, ready → the next stamp
 func sfx_file(n: String) -> String:
 	if n == "ready":
 		ui_click = (ui_click + 1) % UI_CLICKS.size()
 		return UI_CLICKS[ui_click]
 	return FILES.get(n, n)
 
+## the file's stream: assets/sfx/<file>.ogg first (the pack's processed sounds), else <file>.wav; cached by file
 func sfx_stream(file: String) -> AudioStream:
 	if not sfx_cache.has(file):
-		sfx_cache[file] = load("res://assets/sfx/%s.wav" % file) if ResourceLoader.exists("res://assets/sfx/%s.wav" % file) else null
+		var p := sfx_path(file)
+		sfx_cache[file] = load(p) if p != "" else null
 	return sfx_cache[file]
+
+static func sfx_path(file: String) -> String:
+	for ext in ["ogg", "wav"]:
+		var p := "res://assets/sfx/%s.%s" % [file, ext]
+		if ResourceLoader.exists(p): return p
+	return ""
+
+## a pickup's sound by its notice text (실링 / 기억석 / 룬 · / 장비): a little jitter, never snapped
+func pick_sfx(s: String) -> void:
+	for k in PICKUPS:
+		if s.begins_with(k):
+			sfx(PICKUPS[k], PICK_VOL, {"jitter": PICK_JITTER, "snap": false})
+			return
 
 ## seconds to hold a snapped sound for: the time to the next 16th of the dungeon grid when that is within SNAP_MAX,
 ## else 0 (play now); 0 without a live dungeon track (town, training, the title)
@@ -899,7 +943,7 @@ func _sfx_play(p: Dictionary) -> void:
 			break
 	best.stream = st
 	best.volume_db = linear_to_db(maxf(0.01, p["vol"])) - 4.0
-	best.bus = &"Master" if p["raw"] else SLOWBUS.BUS
+	best.bus = SFX_BUS if p["raw"] else SLOWBUS.BUS      # dry cues skip the Slow bus but still ride the 효과음 slider
 	best.pitch_scale = sfx_pitch(p["pitch"], p["raw"])
 	best.play()
 	if DUCK.has(p["n"]) and bgm != null and bgm.grid() != null:
@@ -917,13 +961,15 @@ func sfx_step(dt: float) -> void:
 	sfx_due = left
 
 ## text(): floating text, 600 ms. Numbers pop as tilted condensed italics (H2.txt), words sit on a small black tag.
-## Pickup words (실링 / 기억석 / 룬 · / 장비) go to the notice feed with a GET tag instead of floating over the world.
+## Pickup words (실링 / 기억석 / 룬 · / 장비) go to the notice feed with a GET tag instead of floating over the world,
+## with their pickup sound (pick_sfx: pick_coin / pick_stone / pick_rune).
 const PICKUP_RE := "^(실링|기억석|룬 · |장비)"
 static var _pick_re: RegEx
 func text(p: Vector2, s: String, col: Color, ic := "") -> void:
 	if _pick_re == null: _pick_re = RegEx.create_from_string(PICKUP_RE)
 	if _pick_re.search(s) != null and fame != null:
 		fame.notice(s, "GET", col)
+		pick_sfx(s)
 		return
 	fx.append({"k": "txt", "x": p.x, "y": p.y, "s": s, "col": col, "ic": ic, "t": 0.0, "life": 600.0})
 
@@ -979,37 +1025,10 @@ func _draw_pryw() -> void:
 		x += fnt.get_string_size(ch, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + sp
 	pryw_node.draw_set_transform_matrix(Transform2D.IDENTITY)
 
-## lootGet's tink: a triangle at 1.4-1.9 kHz, 5 ms up to 0.06, gone by 120 ms
-static var _tinks: Array = []
-func loot_tink() -> void:
-	if _tinks.is_empty():
-		var rate := 22050
-		for v in 6:
-			var f0 := 1400.0 + v * 100.0
-			var n := int(rate * 0.14)
-			var data := PackedByteArray()
-			data.resize(n * 2)
-			var ph := 0.0
-			for i in n:
-				var tt := float(i) / rate
-				ph += f0 / rate
-				var tri := 4.0 * absf(fmod(ph, 1.0) - 0.5) - 1.0
-				var env := 0.0001 * pow(600.0, tt / 0.005) if tt < 0.005 else (0.06 * pow(0.0001 / 0.06, (tt - 0.005) / 0.115) if tt < 0.12 else 0.0)
-				data.encode_s16(i * 2, int(clampf(tri * env, -1.0, 1.0) * 32767.0))
-			var w := AudioStreamWAV.new()
-			w.format = AudioStreamWAV.FORMAT_16_BITS
-			w.mix_rate = rate
-			w.data = data
-			_tinks.append(w)
-	var best = sfx_pool[0]
-	for ap in sfx_pool:
-		if not ap.playing:
-			best = ap
-			break
-	best.stream = _tinks[randi() % _tinks.size()]
-	best.volume_db = 0.0
-	best.pitch_scale = 1.0
-	best.play()
+## lootGet (the boss chest's loot landing in the purse, loot.gd): the same pickup sounds by the item's kind
+const LOOT_PICK := {"sh": "실링", "mem": "기억석", "rune": "룬 · ", "gear": "장비", "skin": "장비"}
+func loot_pick(kind: String) -> void:
+	pick_sfx(LOOT_PICK.get(kind, "실링"))
 
 
 # ---------- monsters ----------
@@ -1196,7 +1215,7 @@ func bolt(o: Vector2, tg, sz: float, hold: float, d: int, snd := "hit1") -> void
 func pillar(x: float, y: float, dmg: float, d: int) -> void:
 	luce_fx.append({"by": player.who, "k": "pillar", "x": x, "y": y, "dmg": dmg, "d": d, "hits": [], "mul": player.atk_mul(), "t": 0.0, "life": 420.0})
 	pfx.pillar(x, y, player.CSCALE)
-	sfx("ready", 0.4)
+	sfx("ui_ok", 0.4)
 
 func lightning(x: float, y: float, sz: float, dmg: float, d: int) -> void:
 	post_wave(Vector2(x, y - 20.0), 0.5 * sz, 420.0, 0.12 + 0.06 * sz)
@@ -1486,7 +1505,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 		elif ev.keycode == KEY_INSERT and ult != null:
 			ult.v[player.who] = ult.ULTMAX[player.who]     # test: fill the 기력 gauge, clear the cooldown
 			ult.cd[player.who] = 0.0
-			sfx("ready", 0.8)
+			sfx("ui_ok", 0.8)
 		elif ev.keycode == KEY_F4 and ev.shift_pressed and level_kind() == "dungeon":
 			for k in level.rooms:                          # test: straight to the boss room
 				if level.rooms[k]["type"] == "boss":

@@ -1,6 +1,7 @@
 extends Node
 ## 배경음: the tracks on their own bus, "BGM" (default_bus_layout.tres, -1 dB, made here if missing; every file sits at
-## -14 LUFS), out of the witch-time "Slow" bus and under the sound effects.
+## -14 LUFS), out of the witch-time "Slow" bus and under the sound effects. BUS_DB is the track trim; the 배경음 slider
+## (settings.gd apply_audio) sets the bus to BUS_DB + linear_to_db(v) on top of it, and 0 % mutes the bus.
 ##   · title.ogg (164.44 s, loops) plays while the title is up (title.gd's music clock, beat.gd, follows its position);
 ##     on the web it can only start after the first tap or key — the title's gate — and it is (re)started on every
 ##     input event until it is really running, so a first try before the gesture is never the last one.
