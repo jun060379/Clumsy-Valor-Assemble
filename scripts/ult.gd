@@ -427,7 +427,6 @@ func _step_kenin(_dt: float, P, S: float) -> void:
 				K.ult_shot(mz, hp, tg)
 				if tg != null: hit(tg, 0.4)
 				K.ammo = maxi(0, K.ammo - 1)
-				arena.shake(2.0, D)
 		if sp[5] and u >= bl * 0.8 and once(key + "b"):
 			K.ult_bomb(tg)
 			K.bombs = maxi(0, K.bombs - 1)
@@ -460,7 +459,6 @@ func _step_kenin(_dt: float, P, S: float) -> void:
 			arena.sfx("ult", 1.0)              # the impact
 			arena.sfx("slam", 1.0)
 			arena.flash = 0.35
-			arena.shake(9.0, P.dir)
 			arena.hitstop = 110.0
 			arena.post_ca(0.02)
 			arena.impact("ult", P.position + Vector2(P.dir * 30.0 * S, -30.0 * S), P.dir)   # 타격감

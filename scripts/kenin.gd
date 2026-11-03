@@ -72,6 +72,11 @@ func reset() -> void:
 	assists.clear()
 	chain.clear()
 
+## no screen shake while his ult plays (owner 2026-11-04: the ult read better still)
+func _shake(amt: float, d: int) -> void:
+	if arena.ult != null and arena.ult.state == "act" and arena.ult.who == "kenin": return
+	arena.shake(amt, d)
+
 func _P():
 	return arena.player
 
@@ -252,7 +257,7 @@ func _explode(b: Dictionary, k: float, head: bool) -> void:
 	booms.append({"x": c.x, "y": c.y, "t": 0.0, "life": 420.0, "big": k > 1.0})
 	arena.sfx("heavy", 1.0)
 	arena.sfx("slam", 0.5)          # PLACEHOLDER: no explosion in the packs yet
-	arena.shake(7.0 if k > 1.0 else 5.0, 1)
+	_shake(7.0 if k > 1.0 else 5.0, 1)
 	arena.hitstop = maxf(arena.hitstop, 45.0)
 	arena.post_wave(c, 1.0 * k, 520.0, 0.25)
 	arena.dust(Vector2(c.x, _floor(c.x)), 0, true)
@@ -400,7 +405,7 @@ func _step_chain(dt: float) -> void:
 				arena.sfx("hit2" if it["i"] % 2 == 0 else "hit1", 0.7, {"st": st})
 				arena.sfx("slam", 0.25, {"st": st})
 				arena.hitstop = maxf(arena.hitstop, 28.0)          # 스톱 모션: every pop holds the world a beat
-				arena.shake(2.0 + minf(6.0, chain_n * 0.4), 1 if it["i"] % 2 == 0 else -1)
+				_shake(2.0 + minf(6.0, chain_n * 0.4), 1 if it["i"] % 2 == 0 else -1)
 		if last:
 			_chain_finale(it)
 
@@ -416,7 +421,7 @@ func _chain_finale(it: Dictionary) -> void:
 	arena.sfx("slam", 0.9)
 	arena.hitstop = maxf(arena.hitstop, 90.0)
 	arena.flash = maxf(arena.flash, 0.3)
-	arena.shake(10.0 + minf(8.0, chain_tot * 0.5), 1)
+	_shake(10.0 + minf(8.0, chain_tot * 0.5), 1)
 	arena.post_wave(c, 1.4, 600.0, 0.35)
 	arena.post_ca(0.02)
 	arena.spark_ring(c, 16)
@@ -442,7 +447,7 @@ func dud_blast(c: Vector2) -> void:
 	arena.hit_by = ""
 	booms.append({"x": c.x, "y": c.y, "t": 0.0, "life": 320.0, "big": false, "r": 70.0})
 	arena.sfx("slam", 0.6)
-	arena.shake(4.0, 1)
+	_shake(4.0, 1)
 	arena.spark_ring(c, 8)
 
 ## ult.gd: a bomb slapped straight onto the foe
