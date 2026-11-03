@@ -51,6 +51,7 @@ func _initialize() -> void:
 	F.fx.lv = {}
 	arena.enter_dungeon()
 	for i in 30: await process_frame
+	F.poll(true)                     # the scene change is seen by the poll (timer-driven otherwise): 첫 출격 counts here
 	var lvd: int = F.alv
 	F.a_gain(F.FD.a_need(F.alv))
 	F._lv_flush()
