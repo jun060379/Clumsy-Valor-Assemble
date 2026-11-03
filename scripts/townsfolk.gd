@@ -66,7 +66,7 @@ const TITLE_SPEED := 0.09     # … aiming at this ground speed (world px/ms); a
 ## played slow (rows 2 / 1, two flight frames in eight), a long stride: 에스텔 0.19, 아이다 ~33 cell px a frame = 0.145,
 ## 루체 ~49 = 0.20 px/ms at 145 / 140 ms a frame (the sole's travel along the feet line between frames while it is down
 ## × 0.5 × the draw scale / the frame time). Walking faster than this slides the soles, slower makes them skate backwards.
-const STRIDE := {"estelle": {2: 0.19}, "aida": {1: 0.145}, "luce": {1: 0.20}, "kenin": {1: 0.16}}
+const STRIDE := {"estelle": {2: 0.19}, "aida": {1: 0.145}, "luce": {1: 0.20}, "kenin": {1: 0.13}}
 const STRIDE_DEFAULT := 0.14
 var greet_cd := {}            # "a|b" -> ms until that pair may greet again
 var greets := 0               # greetings so far (tests)

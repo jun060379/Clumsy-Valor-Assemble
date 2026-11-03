@@ -1817,7 +1817,7 @@ func _draw() -> void:
 		for a in arena.kenin.assists:
 			var at: float = a["t"]
 			var al := minf(1.0, minf(at / 70.0, (tot - at) / 120.0))
-			draw_frame("kenin", "headshot", arena.kenin._as_frame(at), Vector2(a["x"], a["y"]) - position, a["dir"], Color(1, 1, 1, al))
+			draw_frame("kenin", "headshot", arena.kenin._as_frame(at), Vector2(a["x"], a["y"]) - position, a["dir"], Color(1, 1, 1, al), "", null, NAN, 0, "assist", -1.0, al >= 1.0)
 	# afterimages (ghostFx): the frame tinted with PAL[CHAR].ghost, smooth (never pixelated), 0.35 at birth
 	var gt: Array = CH.GHOST[who]
 	for g in ghosts:

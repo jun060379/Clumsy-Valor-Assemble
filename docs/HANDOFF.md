@@ -148,6 +148,9 @@ main에 푸시하면 GitHub Actions가 웹·윈도우로 빌드해서 GitHub Pag
   - 시트: `assets/chars/kenin/kenin_0..3.png` (+ 빈 `_4`). 줄 배치는 `chars.gd` A_KENIN. Sprite Flow 결과를 자르고 묶는 도구는 `tools/sprite_flow/` (trim.py → pack_kenin.py; 원본 프레임은 Sprite Flow 계정의 webm에서 받음 — 작업 공간에는 없음)
   - 전투는 `scripts/kenin.gd` 한 곳: 장탄·재장전(필드 빈 총은 RELOAD_FIELD 뒤 재장전, 대기석에선 빠르게 1발씩), 빈 총 약사격(DRY), 점착 폭탄(붙음 → FUSE 뒤 폭발, 붙은 적에 총알 맞으면 즉시 ×BOMB_HEAD), 표식, QTE 원호(`assist`), 궁 `detonate_all`. player.gd: `kenin_shoot`, `bomb` 동작, 구르기(dash 9프레임, f1~6 무적, 벽에 막히면 `roll_bounce` → hurt + 뒤로 밀림, 피해 없음), `bench_assist` / `counter_assist`(QTE_STAY 멤버는 교대 안 함, swap_cd 0). ult.gd `_step_kenin`.
   - 영입: 길드 등급 2 승인 때 합류 (`fame.gd` KENIN_RANK, **임시**)
+  - **테스트 빌드: 모든 동료가 처음부터 영입됨** (`fame.gd` ALL_IN = true, 오너 요청 2026-11-04). 정식 흐름으로 돌릴 땐 false. 테스트·캡처 스크립트(-s)는 원래 흐름
+  - 크기: SCALE 0.88 (머리 크기를 맞춤). 밝기: pack_kenin.py의 tone() — Sprite Flow 프레임이 너무 어두워서 밝기 분위수 곡선으로 보정
+  - QTE 원호는 적의 등 뒤(조작 중인 동료 반대편)에서 나타남 (오너 요청)
   - **임시(PLACEHOLDER)**: kenin.gd의 모든 수치, STATS/ULTMAX, 노드 트리(전부 "(예정)"), 시작 장비 이름, 마을 대사·브랜 대사(「(임시)」 표기), 스킬 탭 설명의 숫자, 서 있는 그림·얼굴·초상·궁 일러(원화 크롭), 스킬 아이콘(선 그림 폭탄), 총소리·폭발음(기존 stab·heavy·slam 재활용)
   - 필요한 에셋(오너에게 요청): 총소리·폭발음·폭탄 붙는 소리(상용 팩), 서 있는 그림 세트(base/cl/smile/sup), 피격 초상, 얼굴, 궁 컷씬 영상, 스킬 아이콘
   - 테스트 `tests/test_kenin.gd`, 녹화 `tools/capture/movie_kenin.gd`

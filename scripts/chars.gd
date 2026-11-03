@@ -10,7 +10,7 @@ const ROWS_PER_SHEET := 7
 const NAME := {"estelle": "에스텔", "aida": "아이다", "luce": "루체", "kenin": "케닌"}
 const LATIN := {"estelle": "ESTELLE", "aida": "AYDA", "luce": "LUCE", "kenin": "KENIN"}
 const COLOR := {"estelle": Color("#ff4d9a"), "aida": Color("#9a5cff"), "luce": Color("#ffc94d"), "kenin": Color("#9cc14a")}
-const SCALE := {"estelle": 1.3, "aida": 1.25, "luce": 1.2, "kenin": 1.1}
+const SCALE := {"estelle": 1.3, "aida": 1.25, "luce": 1.2, "kenin": 0.88}     # kenin: head size matched (his head and body are big in the cell)
 const STATS := {"estelle": {"hp": 70.0, "atk": 1.0, "as": 0.95}, "aida": {"hp": 50.0, "atk": 1.2, "as": 1.1}, "luce": {"hp": 40.0, "atk": 0.9, "as": 1.0}, "kenin": {"hp": 45.0, "atk": 1.0, "as": 1.0}}   # kenin: PLACEHOLDER numbers
 ## Aida's sheet rows were drawn at slightly different sizes: scale each row to match her idle pose
 const ROWFIX_AIDA := {8: 1 / 1.04, 9: 1 / 1.12, 14: 1 / 1.1, 15: 1 / 1.08, 16: 1 / 1.08, 17: 1 / 1.05, 18: 1 / 1.03, 19: 1 / 1.03, 20: 1 / 1.07}
@@ -80,7 +80,7 @@ const A_LUCE := {
 ## Every shot's firing frame is the table's hit frame (KATK); the roll is the dash (9 frames, wall bounce in player.gd).
 const A_KENIN := {
 	"idle": [0, [300, 300, 300, 300, 300, 300, 300, 300]], "run": [1, [55, 55, 55, 55, 55, 55, 55, 55]], "walk": [1, [95, 95, 95, 95, 95, 95, 95, 95]],
-	"start": [2, [45, 55, 55, 55]], "stop": [3, [70, 90, 90, 110, 130]], "turn": [4, [55, 75, 55, 55]],
+	"start": [2, [45, 55, 55, 55]], "stop": [3, [80, 100, 110, 130]], "turn": [4, [55, 75, 55, 55]],
 	"jump": [5, [80, 70, 110, 160, 110, 120, 90, 120]], "runjump": [6, [80, 100, 130, 100, 110, 80, 90, 100]],
 	"attack1": [7, [60, 60, 70, 90, 80, 90]], "attack2": [8, [50, 60, 60, 90, 80, 90]], "attack3": [9, [70, 80, 140, 120, 110, 110, 120]],
 	"kneel": [10, [320, 300, 300, 320]], "kneel_attack": [11, [60, 60, 60, 90, 90, 110, 120]], "attack_high": [12, [60, 60, 70, 100, 90, 100]],

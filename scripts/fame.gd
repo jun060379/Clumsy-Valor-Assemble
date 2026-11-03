@@ -547,6 +547,9 @@ func poll(force := false) -> void:
 				if ch != P.who: P.hpm[ch] = arena.runes.max_hp(ch) if arena.get("runes") != null else P.CH.STATS[ch]["hp"]
 		scene = lk
 	if not rec.has(arena.player.who): rec.append(arena.player.who)
+	if ALL_IN and not _scripted():
+		for ch in FD.ALLC:
+			if not rec.has(ch): rec.append(ch)
 	var tr := f_trial()
 	if not tr.is_empty() and not got.has(tr["id"]) and not let.has(str(r)) and pts >= FD.FRANK[mini(6, r)]["need"]:
 		let[str(r)] = 1
@@ -706,6 +709,13 @@ func settle_rec(party: Array) -> void:
 		for ch in ["aida", "luce"]:
 			if not rec.has(ch): rec.append(ch)
 	if r >= KENIN_RANK and not rec.has("kenin"): rec.append("kenin")
+
+## TEST BUILD (owner, 2026-11-04): every member is in the guild from the start, to try them all out. Turn off for the
+## real game (the story's recruiting takes over). Scripted runs (tests, capture scripts: -s) keep the real flow.
+const ALL_IN := true
+static func _scripted() -> bool:
+	var a := OS.get_cmdline_args()
+	return a.has("-s") or a.has("--script")
 
 ## PLACEHOLDER (until the owner writes his arrival): Kenin joins with the guild's grade 2 approval
 const KENIN_RANK := 2

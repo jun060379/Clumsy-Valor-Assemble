@@ -268,8 +268,10 @@ func assist(tg) -> void:
 	var x: float = P.position.x + P.dir * 160.0
 	var y: float = P.position.y
 	if tg != null:
-		side = -1 if tg.position.x < P.position.x else 1         # from the player's side of it
-		x = tg.position.x - side * 92.0
+		# from behind the foe (the far side from the one in control), facing its back
+		var away := -1 if tg.position.x < P.position.x else 1
+		x = tg.position.x + away * 80.0
+		side = -away
 		var fly: bool = tg.get("M") != null and tg.M.has("fly")
 		y = _floor(x) if fly else tg.position.y
 	assists.append({"x": clampf(x, 30.0, arena.world_w - 30.0), "y": y, "dir": side, "tg": tg, "t": 0.0, "fired": false})
