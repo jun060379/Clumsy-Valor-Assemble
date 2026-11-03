@@ -885,10 +885,14 @@ func _process(delta: float) -> void:
 	var vw := get_viewport_rect().size.x
 	var camf: bool = player.cam_focus["t"] > 0.0
 	var target := Vector2(cam_x_target(), cam_y_target())
+	var klock: bool = ult != null and ult.state == "act" and ult.who == "kenin" and ult.sh.has("cx")
+	if klock:
+		# Kenin's ult: the camera stays put on the foe (he blinks around it; following him made the frame sway)
+		target = Vector2(clampf(ult.sh["cx"], vw / 2.0, maxf(vw / 2.0, world_w - vw / 2.0)), ult.sh["cy"])
 	cam.position.x = clampf(lerpf(cam.position.x, target.x, minf(1.0, (16.0 / 45.0 if camf else 16.0 / 90.0) * (dt / 16.0))), vw / 2.0, maxf(vw / 2.0, world_w - vw / 2.0))
-	cam.position.y = lerpf(cam.position.y, target.y, minf(1.0, dt / 140.0))
+	if not klock: cam.position.y = lerpf(cam.position.y, target.y, minf(1.0, dt / 140.0))
 	cam.offset = Vector2(randf_range(-1, 1) * shake_amt * 0.6 + shake_dir * shake_amt * 0.3, randf_range(-1, 1) * shake_amt * 0.4)
-	if post != null and screen_fx: cam.offset += post.kick_off()      # 타격감: the camera kick, easing back
+	if post != null and screen_fx and not klock: cam.offset += post.kick_off()      # 타격감: the camera kick, easing back
 	queue_redraw()
 	fx_layer.queue_redraw()
 	shadow_node.queue_redraw()
