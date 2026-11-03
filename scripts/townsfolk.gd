@@ -3,8 +3,9 @@ extends RefCounted
 ## places they like, idle, say a line now and then, and walk up to each other for a short chat. Ported from the
 ## prototype's NPCS / POI / FAV / SOLO / CHAT / npcGo / pickPOI / npcUpdate / startChat / leaveParty.
 ## One instance lives on the arena (meta "folk"), so where they are survives leaving and re-entering town.
-## Under the title (title_mode, arena.gd) every recruited member but the hero lives here — the party too — leaning
-## toward the hall's front and the bench and street spots (a first run is Eilin's town alone); their word chats rest and instead whoever passes within
+## Under the title (title_mode, arena.gd) every recruited member lives here — the party and the hero too, her player
+## node parked aside — leaning toward the hall's front and the bench and street spots, strolling at the pace their
+## walk art plants its feet at (STRIDE: a sheet's stride decides the ground speed, not the other way round); their word chats rest and instead whoever passes within
 ## reach of someone (a member, or Eilin on her way) stops for a moment, turns, and the two trade a small emote.
 
 const CH := preload("res://scripts/chars.gd")
@@ -50,7 +51,17 @@ var arena
 var town                      # the town while you are in it (null elsewhere)
 var npcs := {}
 var title_mode := false       # the title is up: everyone is out in town, emotes instead of chats
-const TITLE_PACE := 0.62      # the title's walkers move (and step) at this fraction of the street pace
+const TITLE_PACE := 0.62      # the title's walkers: the slowest the walk art is played at (its fraction of the native frame time)
+const TITLE_SPEED := 0.09     # … aiming at this ground speed (world px/ms); a sheet whose natural pace is slower keeps its own
+## the walk art's natural ground speed (world px/ms at the entry's native frame times): the speed at which the planted
+## foot keeps still on the ground, measured on the sheets — the sole's travel along the feet line (cell rows 334–340)
+## between frames while it is down, × 0.5 × the member's draw scale / the frame time. Keyed by member, then by the walk
+## entry's sheet row, since a costume may bring its own walk: 초심's 10-frame walk (row 36) is a short calm stride,
+## ~9 cell px a frame = 0.058 px/ms (61 world px a 1050 ms cycle); the original art's "walk" is its run row played slow
+## (rows 2 / 1, two flight frames in eight), a long stride: 에스텔 0.19, 아이다 ~33 cell px a frame = 0.145, 루체 ~49 =
+## 0.20 px/ms at 145 / 140 ms a frame. Walking faster than this slides the soles, slower makes them skate backwards.
+const STRIDE := {"estelle": {36: 0.058, 2: 0.19}, "aida": {1: 0.145}, "luce": {1: 0.20}}
+const STRIDE_DEFAULT := 0.14
 var greet_cd := {}            # "a|b" -> ms until that pair may greet again
 var greets := 0               # greetings so far (tests)
 
@@ -70,8 +81,36 @@ func npc(c: String) -> Dictionary:
 
 func folk() -> Array:
 	var P = arena.player
-	if title_mode: return P.roster().filter(func(c): return c != P.who)             # the title: everyone who has joined but the hero
+	if title_mode: return P.roster()                                                 # the title: everyone who has joined, the hero too
 	return P.roster().filter(func(c): return not P.party.has(c) and c != P.who)     # ROSTER: only who has joined
+
+## the walk art's natural ground speed for member c (STRIDE, by the worn costume's walk row)
+func natural_speed(c: String) -> float:
+	var e = SK.entry(c, "walk")
+	var row: int = int(e[0]) if e != null else -1
+	return float(STRIDE.get(c, {}).get(row, STRIDE_DEFAULT))
+
+## the title's stroll for member c: [ground speed (px/ms), the walk's play rate] — the walk art played at a rate that
+## plants the feet at TITLE_SPEED, never slower than TITLE_PACE of its native timing and never faster than native
+func title_gait(c: String) -> Array:
+	var nat := natural_speed(c)
+	var k := clampf(TITLE_SPEED / maxf(0.001, nat), TITLE_PACE, 1.0)
+	return [nat * k, k]
+
+## how far n still has to walk along its path (world px; 0 when it stands)
+func path_left(n: Dictionary) -> float:
+	if n["mode"] != "move" or n["path"].is_empty(): return 0.0
+	var d := 0.0
+	var x: float = n["x"]
+	for wp in n["path"]:
+		if wp.get("flip", false): continue
+		d += absf(float(wp["x"]) - x)
+		x = float(wp["x"])
+	return d
+
+## n is on its way (the mode and a path, not stopped for a word)
+func walking(n: Dictionary) -> bool:
+	return n["placed"] and n["mode"] == "move" and not n["path"].is_empty() and n["talk_t"] <= 0.0
 
 func route_y(r: String, x: float) -> float:
 	return town.floor_at(x) if r == "top" else town.terr_y(x)
@@ -351,14 +390,19 @@ func _upd(n: Dictionary, dt: float) -> void:
 				n["path"].pop_front()
 				return
 			var dx: float = wp["x"] - n["x"]
-			var tk := TITLE_PACE if title_mode else 1.0                  # the title: an unhurried stroll, nobody runs
-			var sp: float = (0.34 if n["run"] and not title_mode else WALKSP.get(n["c"], 0.085)) * tk
+			# the title: an unhurried stroll, nobody runs, and the walk art decides the pace so the feet plant
+			var tk := 1.0
+			var sp: float = 0.34 if n["run"] else WALKSP.get(n["c"], 0.085)
+			if title_mode:
+				var g := title_gait(n["c"])
+				sp = g[0]
+				tk = g[1]
 			if absf(dx) < 3.0:
 				n["path"].pop_front()
 				if n["path"].is_empty():
 					n["mode"] = "idle"
 					n["wait"] = 2000.0 + randf() * 5000.0
-					if randf() < 0.4: n["dir"] = -n["dir"]
+					if randf() < 0.4 and not title_mode: n["dir"] = -n["dir"]     # (the title: no idle about-face — a flip only when the way turns)
 					var o = n["seek"]
 					if o != null:
 						n["seek"] = null
@@ -366,7 +410,7 @@ func _upd(n: Dictionary, dt: float) -> void:
 							_start_chat(n, o)
 				return
 			n["x"] += signf(dx) * minf(absf(dx), sp * dt)
-			n["dir"] = int(signf(dx))
+			if int(signf(dx)) != n["dir"]: n["dir"] = int(signf(dx))     # (a flip only when the way really turns)
 			anim(n, "run" if n["run"] and not title_mode else "walk")
 			anim_step(n, dt * tk)
 	n["y"] = route_y(n["r"], n["x"])

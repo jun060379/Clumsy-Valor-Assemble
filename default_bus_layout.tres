@@ -1,14 +1,13 @@
-[gd_resource type="AudioBusLayout" load_steps=3 format=3]
-
-[sub_resource type="AudioEffectLowPassFilter" id="AudioEffectLowPassFilter_slow"]
-resource_name = "LowPassFilter"
-cutoff_hz = 20000.0
+[gd_resource type="AudioBusLayout" load_steps=3 format=3 uid="uid://bjjf3c8ulje2b"]
 
 [sub_resource type="AudioEffectLimiter" id="AudioEffectLimiter_master"]
 resource_name = "Limiter"
 ceiling_db = -0.5
 threshold_db = -2.0
-soft_clip_db = 2.0
+
+[sub_resource type="AudioEffectLowPassFilter" id="AudioEffectLowPassFilter_slow"]
+resource_name = "LowPassFilter"
+cutoff_hz = 20000.0
 
 [resource]
 bus/0/effect/0/effect = SubResource("AudioEffectLimiter_master")

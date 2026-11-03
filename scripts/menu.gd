@@ -17,6 +17,7 @@ const WARD := preload("res://scripts/ui_wardrobe.gd")
 const CODEX := preload("res://scripts/ui_codex.gd")
 const CHOICE := preload("res://scripts/ui_choice.gd")
 const BOOK := preload("res://scripts/fame_book.gd")
+const CARD := preload("res://scripts/slot_card.gd")   # the 저장 picker: the title's slot card
 const ICON := {
 	"fs": preload("res://assets/ui/icons/tb_fs.svg"), "gbk": preload("res://assets/ui/icons/tb_gbk.svg"), "abk": preload("res://assets/ui/icons/tb_abk.svg"),
 	"pty": preload("res://assets/ui/icons/tb_pty.svg"), "cxb": preload("res://assets/ui/icons/tb_cxb.svg"), "bgb": preload("res://assets/ui/icons/tb_bgb.svg"),
@@ -28,7 +29,7 @@ const TB := [["fs", "전체화면"], ["gbk", "길드 수첩"], ["abk", "모험 �
 ## old rubber-stamp click ("ready" = ui1 / ui2 / ui3); every other screen uses ui_move / ui_ok / ui_back (arena.gd sfx)
 const PAPER := ["gbk", "abk", "bran"]
 ## PHM: key, name, English, line
-const PHM := [["party", "파티", "PARTY", "함께 던전에 나설 동료."], ["char", "캐릭터", "CHARACTER", "능력치 · 장비 · 스킬 · 기억 · 기록."], ["bag", "가방", "INVENTORY", "던전에서 얻은 장비와 룬, 재화."], ["forge", "대장간", "FORGE", "브랜에게 강화 · 각인 · 합성 · 계승을 맡긴다."], ["best", "적 도감", "BESTIARY", "만난 적과 상성을 정리한 기록."], ["opts", "설정", "CONFIG", "소리 · 화면 · 조작 · 테스트."], ["help", "조작 안내", "HOW TO", "터치와 키보드 조작법."]]
+const PHM := [["party", "파티", "PARTY", "함께 던전에 나설 동료."], ["char", "캐릭터", "CHARACTER", "능력치 · 장비 · 스킬 · 기억 · 기록."], ["bag", "가방", "INVENTORY", "던전에서 얻은 장비와 룬, 재화."], ["forge", "대장간", "FORGE", "브랜에게 강화 · 각인 · 합성 · 계승을 맡긴다."], ["best", "적 도감", "BESTIARY", "만난 적과 상성을 정리한 기록."], ["save", "저장", "SAVE", "지금까지의 여정을 슬롯에 남긴다."], ["opts", "설정", "CONFIG", "소리 · 화면 · 조작 · 테스트."], ["help", "조작 안내", "HOW TO", "터치와 키보드 조작법."]]
 ## pages without their system yet: title (English small line, Korean big line) and icon
 const PAGE := {
 	"char": ["CHARACTER", "캐릭터", "res://assets/ui/icons/ui_character.png"],
@@ -75,6 +76,20 @@ var item_rects: Array = []      # hit areas (screen) for menu items
 var party_rects := {}
 var close_rect := Rect2()
 var clock := 0.0
+# the 저장 picker over the hub (slot_card.gd): 슬롯 1·2·3 with their headers; a filled one asks 덮어쓰기? first
+const NO_SAVE_LINE := "던전에서는 저장할 수 없어요"     # PLACEHOLDER: the user's own line to come
+const SAVED_LINE := "슬롯 %d에 저장했어요"              # PLACEHOLDER: the user's own line to come
+var sv_open := false
+var sv_rows: Array = []
+var sv_sel := 0
+var sv_t := 0.0                 # clock when the picker opened
+var sv_press := -1              # the row (0..2) or button (100 + i) a press went down on
+var sv_confirm := false         # 덮어쓰기? on sv_sel
+var sv_csel := 1                # the confirm's picked button: 0 덮어쓰기, 1 취소
+var sv_rects: Array = []
+var sv_btns: Array = []
+var toast := ""                 # a short line over the hub (saved / not here)
+var toast_t := 0.0
 
 
 func _ready() -> void:
@@ -166,6 +181,7 @@ func open_hub() -> void:
 func _show_hub(fresh: bool) -> void:
 	page = "hub"
 	from_hub = false
+	sv_open = false
 	opts.visible = false
 	hub_t = 0.0
 	slam_t = 0.0
@@ -179,7 +195,131 @@ func close_hub() -> void:
 ## phEnter
 func enter(i: int) -> void:
 	var k: String = PHM[i][0]
+	if k == "save":
+		open_save()
+		return
 	ui_root.sweep.run(func(): _open_page(k, true), UI.col(ph_c))
+
+## the hub's index of entry key k
+func hub_index(k: String) -> int:
+	for i in PHM.size():
+		if PHM[i][0] == k: return i
+	return -1
+
+
+# ---------- 저장: the slot picker over the hub ----------
+## 저장 is allowed in town, the hall and the training ground; in a dungeon the entry is greyed and says why
+func open_save() -> void:
+	if not arena.can_save_here():
+		arena.sfx("step", 0.3)
+		_toast(NO_SAVE_LINE)
+		return
+	sv_rows = CARD.rows_of(arena.save, false, true)
+	sv_open = true
+	sv_sel = 0
+	sv_t = clock
+	sv_press = -1
+	sv_confirm = false
+	arena.sfx("ui_ok", 0.5)
+
+func close_save() -> void:
+	sv_open = false
+	sv_confirm = false
+	sv_press = -1
+	arena.sfx("ui_back", 0.5)
+
+## row k picked: an empty slot is written at once, a filled one asks 덮어쓰기? first
+func save_pick(k: int) -> void:
+	sv_sel = k
+	if not sv_rows[k]["h"].is_empty():
+		sv_confirm = true
+		sv_csel = 1
+		arena.sfx("ui_ok", 0.45)
+		return
+	save_write(k)
+
+## write slot row k: ui_ok and the notice, the picker closes
+func save_write(k: int) -> void:
+	var ok: bool = arena.save.save(String(sv_rows[k]["file"]))
+	sv_confirm = false
+	sv_rows = CARD.rows_of(arena.save, false, true)
+	if ok:
+		arena.sfx("ui_ok", 0.6)
+		_toast(SAVED_LINE % (k + 1))
+		sv_open = false
+	else:
+		arena.sfx("step", 0.3)
+
+func _toast(s: String) -> void:
+	toast = s
+	toast_t = 1800.0
+
+func _input_save(ev: InputEvent) -> void:
+	var key := _key(ev)
+	var pad: int = ev.button_index if ev is InputEventJoypadButton and ev.pressed else -1
+	var up := key in [KEY_UP, KEY_W] or pad == JOY_BUTTON_DPAD_UP
+	var dn := key in [KEY_DOWN, KEY_S] or pad == JOY_BUTTON_DPAD_DOWN
+	var lr := key in [KEY_LEFT, KEY_RIGHT, KEY_A, KEY_D] or pad in [JOY_BUTTON_DPAD_LEFT, JOY_BUTTON_DPAD_RIGHT]
+	var ok := key in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE] or pad == JOY_BUTTON_A
+	var back := key == KEY_ESCAPE or pad in [JOY_BUTTON_B, JOY_BUTTON_START]
+	if key >= 0 or pad >= 0 or ev is InputEventMouseButton: get_viewport().set_input_as_handled()
+	if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT:
+		# a tap counts on the release inside the row / button it went down on
+		if ev.pressed:
+			sv_press = -1
+			if not sv_confirm:
+				for i in sv_rects.size():
+					if sv_rects[i].has_point(ev.position):
+						sv_press = i
+						if sv_sel != i:
+							sv_sel = i
+							arena.sfx("ui_move", 0.4)
+			for i in sv_btns.size():
+				if sv_btns[i].has_point(ev.position): sv_press = 100 + i
+		else:
+			var k := sv_press
+			sv_press = -1
+			if k >= 100 and k - 100 < sv_btns.size() and sv_btns[k - 100].has_point(ev.position):
+				if sv_confirm:
+					if k == 100: save_write(sv_sel)
+					else:
+						sv_confirm = false
+						arena.sfx("ui_back", 0.5)
+				else: close_save()
+			elif k >= 0 and k < sv_rects.size() and sv_rects[k].has_point(ev.position):
+				save_pick(k)
+		return
+	if sv_confirm:
+		if lr or up or dn:
+			sv_csel = 1 - sv_csel
+			arena.sfx("ui_move", 0.5)
+		elif ok:
+			if sv_csel == 0: save_write(sv_sel)
+			else:
+				sv_confirm = false
+				arena.sfx("ui_back", 0.5)
+		elif back:
+			sv_confirm = false
+			arena.sfx("ui_back", 0.5)
+		return
+	if up or dn:
+		sv_sel = posmod(sv_sel + (1 if dn else -1), sv_rows.size())
+		arena.sfx("ui_move", 0.5)
+	elif ok: save_pick(sv_sel)
+	elif back: close_save()
+
+func _draw_save(ci: CanvasItem, vs: Vector2) -> void:
+	sv_rects = []
+	sv_btns = []
+	if not sv_open: return
+	ci.draw_rect(Rect2(Vector2.ZERO, vs), Color(0, 0, 0, 0.35))
+	var r := CARD.rect(vs, sv_rows.size(), 0.40, 0.56)
+	var u := UIA.p(clock - sv_t, 0.0, 260.0, "bk")
+	var btns: Array = ["덮어쓰기", "취소"] if sv_confirm else ["닫기"]
+	var note := ("슬롯 %d에 덮어쓸까요?" % (sv_sel + 1)) if sv_confirm else ""
+	var out: Dictionary = CARD.draw(ci, vs, r, "저장", "SAVE", sv_rows, sv_sel, sv_press, btns, sv_csel if sv_confirm else -1, sv_press - 100, u, note)
+	sv_rects = out["rows"]
+	sv_btns = out["btns"]
 
 ## cxOpen(c): the character screen on member c (the hall's library and the members' rooms)
 func open_char(c: String) -> void:
@@ -327,6 +467,9 @@ func _bar_click(id: String) -> void:
 		"bgb": open_page("bag")
 
 func _input_hub(ev: InputEvent, tap: Vector2, key: int) -> void:
+	if sv_open:
+		_input_save(ev)
+		return
 	var handled := tap != Vector2.INF or key >= 0 or ev is InputEventJoypadButton
 	var pad: int = ev.button_index if ev is InputEventJoypadButton and ev.pressed else -1
 	if key in [KEY_DOWN, KEY_S] or pad == JOY_BUTTON_DPAD_DOWN:
@@ -384,6 +527,7 @@ var idle_draw := -1e9
 func _process(delta: float) -> void:
 	var dt := minf(delta * 1000.0, 250.0)   # real time, like the prototype's CSS / rAF clocks
 	clock += dt
+	if toast_t > 0.0: toast_t -= dt
 	hub_t += dt
 	slam_t += dt
 	info_t += dt
@@ -598,6 +742,7 @@ func _draw_fg() -> void:
 		item_rects.append(PackedVector2Array([it * Vector2(-4, 0), it * Vector2(tw + 8, 0), it * Vector2(tw + 8, step), it * Vector2(-4, step)]))
 		ci.draw_set_transform_matrix(it)
 		var a := ia * (1.0 if on else 0.85)
+		if PHM[i][0] == "save" and not arena.can_save_here(): a *= 0.45     # 저장 in a dungeon: greyed
 		ci.draw_string(sf, Vector2(0, 9), PHM[i][2], HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(col, a) if on else Color(0, 0, 0, 0.6 * a))
 		var by := 6.0 + fs * 0.98
 		if on:
@@ -660,9 +805,18 @@ func _draw_fg() -> void:
 		ci.draw_string(bf, Vector2(cx + 10.0 + w0, 6), pair[1], HORIZONTAL_ALIGNMENT_LEFT, -1, 14, col)
 		cx += w0 + w1 + 28.0
 	ci.draw_set_transform(Vector2.ZERO)
+	_draw_save(ci, vs)
+	if toast_t > 0.0:
+		# the notice: a black slab low in the middle, fading out
+		var ta := clampf(toast_t / 300.0, 0.0, 1.0) * clampf((1800.0 - toast_t) / 120.0, 0.0, 1.0)
+		var tw2 := UI.text_w(UI.bhs(), toast, 18) + 40.0
+		UI.para(ci, vs.x * 0.5 - tw2 / 2.0 + 4.0, vs.y * 0.78 + 4.0, tw2, 34, 8.0, Color(col, ta))
+		UI.para(ci, vs.x * 0.5 - tw2 / 2.0, vs.y * 0.78, tw2, 34, 8.0, Color(0, 0, 0, ta))
+		ci.draw_string(UI.bhs(), Vector2(vs.x * 0.5 - tw2 / 2.0 + 24.0, vs.y * 0.78 + 24.0), toast, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(1, 1, 1, ta))
 
 ## phInfo: the extra line under an entry
 func _info(k: String) -> String:
+	if k == "save": return "" if arena.can_save_here() else NO_SAVE_LINE
 	if k == "party": return "%d / 3 편성" % arena.player.party.size()
 	if k == "forge": return "실링 " + BAGP.loc(int(arena.shilling))
 	if arena.get("runes") != null:
