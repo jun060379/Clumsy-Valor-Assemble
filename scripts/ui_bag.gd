@@ -10,6 +10,7 @@ extends "res://scripts/ui_page.gd"
 ## the disc, whose w_spin replaces its centring translate, only drifts from centred to half a disc right-down in 14 s.
 
 const SK := preload("res://scripts/skins.gd")       # member art through the worn costume
+const ICON := preload("res://scripts/item_icons.gd")
 const AE := preload("res://scripts/ui_anim.gd")
 
 var cat := "gear"
@@ -266,6 +267,17 @@ func _spot(vs: Vector2, o: Dictionary, col: Color) -> void:
 	draw_colored_polygon(sq.call(B / 2.0, Vector2(10, 10)), Color(0, 0, 0, ba))
 	draw_colored_polygon(sq.call(B / 2.0), Color(1, 1, 1, ba))
 	draw_colored_polygon(sq.call(B / 2.0 - 6.0), Color(g, ba))
+	if o["kind"] == "gear":
+		var ip := ICON.file_of(o["v"], String(o.get("s", "")))
+		if ip != "" and ResourceLoader.exists(ip):
+			# the piece itself on the gem, a size bigger, popping in with it and bobbing with it (a glint now and then)
+			var isz := B * 1.7
+			draw_set_transform(bc, sin(t / 1100.0) * 0.05, Vector2(bsc, bsc))
+			draw_texture_rect(tx(ip), Rect2(Vector2(-isz / 2.0, -isz / 2.0) + Vector2(5, 7), Vector2(isz, isz)), false, Color(0, 0, 0, 0.4 * ba))
+			draw_texture_rect(tx(ip), Rect2(Vector2(-isz / 2.0, -isz / 2.0), Vector2(isz, isz)), false, Color(1, 1, 1, ba))
+			var gl := fmod(t / 2400.0, 1.0)
+			if gl < 0.18: UI.star4(self, Vector2(isz * (-0.25 + gl * 2.5), -isz * 0.25), 9.0 * sin(gl / 0.18 * PI), Color.WHITE)
+			draw_set_transform(Vector2.ZERO)
 	_nm(vs, sp, o, g)
 
 ## the info p's runs and the who row's needs, per kind
@@ -600,11 +612,23 @@ func _draw_rows() -> void:
 			ci.draw_colored_polygon(pts, Color(1, 1, 1, e["a"]) if white else Color(0.082, 0.082, 0.082, e["a"]))
 			var gc := ocol(o)
 			var gm := m * Transform2D(PI / 4.0, Vector2(21, h / 2.0))
-			for gl2 in [[11.0, 0.12], [9.0, 0.22]]:
+			var gic: Texture2D = null
+			if o["kind"] == "gear":
+				var ip := ICON.file_of(o["v"], String(o.get("s", "")))
+				if ip != "" and ResourceLoader.exists(ip): gic = tx(ip)
+			if gic != null:
+				# the piece's own icon in place of the grade gem: a grade glow behind, a bob when picked
+				var bob := sin(t / 380.0) * 1.5 if on else 0.0
+				ci.draw_set_transform_matrix(m * Transform2D(0.0, Vector2(21, h / 2.0 + bob)))
+				ci.draw_circle(Vector2.ZERO, 15.0, Color(gc, 0.28 * e["a"]))
+				ci.draw_texture_rect(gic, Rect2(-17, -17, 34, 34), false, Color(1, 1, 1, e["a"]))
+				ci.draw_set_transform(Vector2.ZERO)
+			for gl2 in ([] if gic != null else [[11.0, 0.12], [9.0, 0.22]]):
 				ci.draw_colored_polygon(PackedVector2Array([gm * Vector2(-gl2[0], -gl2[0]), gm * Vector2(gl2[0], -gl2[0]), gm * Vector2(gl2[0], gl2[0]), gm * Vector2(-gl2[0], gl2[0])]), Color(gc, gl2[1] * e["a"]))
-			ci.draw_colored_polygon(PackedVector2Array([gm * Vector2(-7, -7), gm * Vector2(7, -7), gm * Vector2(7, 7), gm * Vector2(-7, 7)]), Color(gc, e["a"]))
-			var inr := PackedVector2Array([gm * Vector2(-5, -5), gm * Vector2(5, -5), gm * Vector2(5, 5), gm * Vector2(-5, 5), gm * Vector2(-5, -5)])
-			ci.draw_polyline(inr, Color(1, 1, 1, 0.35 * e["a"]), 2.0)
+			if gic == null:
+				ci.draw_colored_polygon(PackedVector2Array([gm * Vector2(-7, -7), gm * Vector2(7, -7), gm * Vector2(7, 7), gm * Vector2(-7, 7)]), Color(gc, e["a"]))
+				var inr := PackedVector2Array([gm * Vector2(-5, -5), gm * Vector2(5, -5), gm * Vector2(5, 5), gm * Vector2(-5, 5), gm * Vector2(-5, -5)])
+				ci.draw_polyline(inr, Color(1, 1, 1, 0.35 * e["a"]), 2.0)
 			var fc := Color(0, 0, 0, e["a"]) if white else Color(1, 1, 1, e["a"])
 			ci.draw_set_transform_matrix(m)
 			if two:

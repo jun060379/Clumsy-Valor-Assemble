@@ -6,6 +6,7 @@ extends "res://scripts/ui_page.gd"
 ## 의상 is drawn by ui_char_wear.gd (wr): the member's costumes (skins.gd), quick switching. All member art goes through skins.gd.
 
 const MEMUI := preload("res://scripts/ui_char_mem.gd")
+const ICON := preload("res://scripts/item_icons.gd")
 const UIA := preload("res://scripts/ui_anim.gd")
 const SK := preload("res://scripts/skins.gd")       # every member picture comes through the worn costume (skins.gd)
 const WEAR := preload("res://scripts/ui_char_wear.gd")
@@ -486,7 +487,14 @@ func _gear(vs: Vector2, col: Color) -> void:
 		draw_rect(Rect2(x - 2, y, 5, bh - 2), Color(g, e))
 		draw_string(UI.spaced(UI.anton(), 1), Vector2(x + 12, y + 20), GSL[i][1], HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(g.darkened(0.3) if on else g, e))
 		var nm: String = it["n"] if it != null else "— 비어 있음"
-		draw_string(UI.noto_k(), Vector2(x + 72, y + 20), nm, HORIZONTAL_ALIGNMENT_LEFT, bw - 130.0, 13, Color(0, 0, 0, e) if on else Color(1, 1, 1, e))
+		var ic := _icon(it, s)
+		if ic != null:
+			# the item's icon, standing a little proud of the blade; the picked one bobs
+			var isz := bh + 8.0
+			var ip := Vector2(x + 64.0, y - 5.0 + (sin(t / 380.0) * 1.5 if on else 0.0))
+			draw_texture_rect(ic, Rect2(ip + Vector2(2, 2), Vector2(isz, isz)), false, Color(0, 0, 0, 0.35 * e))
+			draw_texture_rect(ic, Rect2(ip, Vector2(isz, isz)), false, Color(1, 1, 1, e))
+		draw_string(UI.noto_k(), Vector2(x + (106.0 if ic != null else 72.0), y + 20), nm, HORIZONTAL_ALIGNMENT_LEFT, bw - (164.0 if ic != null else 130.0), 13, Color(0, 0, 0, e) if on else Color(1, 1, 1, e))
 		if it != null:
 			var lv := "Lv %d" % int(it.get("lv", 0))
 			draw_string(UI.anton(true), Vector2(x + bw - 44, y + 21), lv, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0, 0, 0, e) if on else Color(col, e))
@@ -497,6 +505,14 @@ func _gear(vs: Vector2, col: Color) -> void:
 				sfx("ui_move", 0.5))
 		y += bh + 7.0
 	_gear_card(vs, col)
+
+var _card_xf := Transform2D()
+
+## a gear piece's icon (item_icons.gd), cached; null when it has none
+func _icon(it, slot: String) -> Texture2D:
+	var p := ICON.file_of(it, slot)
+	if p == "" or not ResourceLoader.exists(p): return null
+	return tx(p)
 
 ## the picked piece (gearCard), or the swap list
 func _gear_card(vs: Vector2, col: Color) -> void:
@@ -544,8 +560,13 @@ func _gear_card(vs: Vector2, col: Color) -> void:
 			draw_set_transform_matrix(xf)
 			draw_rect(rr, Color(0.08, 0.08, 0.09))
 			draw_rect(Rect2(rr.position, Vector2(4, 40)), RN.gcol(g["g"]))
-			draw_string(UI.noto_k(), rr.position + Vector2(12, 17), "%s  Lv %d" % [g["n"], int(g.get("lv", 0))], HORIZONTAL_ALIGNMENT_LEFT, w - 40.0, 12, RN.gcol(g["g"]).lightened(0.3))
-			draw_string(UI.noto(), rr.position + Vector2(12, 33), diff if diff != "" else "변화 없음", HORIZONTAL_ALIGNMENT_LEFT, w - 40.0, 10, Color("#9fe3a0") if diff.find("+") >= 0 else Color("#ff9d9d"))
+			var gic := _icon(g, s)
+			var tx0 := 12.0
+			if gic != null:
+				draw_texture_rect(gic, Rect2(rr.position + Vector2(8, 2), Vector2(36, 36)), false)
+				tx0 = 48.0
+			draw_string(UI.noto_k(), rr.position + Vector2(tx0, 17), "%s  Lv %d" % [g["n"], int(g.get("lv", 0))], HORIZONTAL_ALIGNMENT_LEFT, w - 28.0 - tx0, 12, RN.gcol(g["g"]).lightened(0.3))
+			draw_string(UI.noto(), rr.position + Vector2(tx0, 33), diff if diff != "" else "변화 없음", HORIZONTAL_ALIGNMENT_LEFT, w - 28.0 - tx0, 10, Color("#9fe3a0") if diff.find("+") >= 0 else Color("#ff9d9d"))
 			draw_set_transform(Vector2.ZERO)
 			var b2: int = bi
 			hit(_xr(xf, rr), func():
@@ -576,18 +597,34 @@ func _gear_card(vs: Vector2, col: Color) -> void:
 	var gc0 := Vector2(x + w / 2.0, y + 60.0)
 	if gd_t < tab_t:
 		var e := UIA.p(gd_t, 0.0, 420.0, "bk")
-		draw_set_transform_matrix(UIA.xf(gc0, Vector2(-30.0 * (1.0 - e), 0), deg_to_rad(12.0 * (1.0 - e)), Vector2.ONE * lerpf(0.6, 1.0, e)) * Transform2D(deg_to_rad(-3.0), Vector2(x, y)))
+		_card_xf = UIA.xf(gc0, Vector2(-30.0 * (1.0 - e), 0), deg_to_rad(12.0 * (1.0 - e)), Vector2.ONE * lerpf(0.6, 1.0, e)) * Transform2D(deg_to_rad(-3.0), Vector2(x, y))
+		draw_set_transform_matrix(_card_xf)
 	else:
 		# as the pane's eighth .it: from 60 px right, turned 6°, after the seven blades
 		var e2 := UIA.p(tab_t, 7 * 40.0, 500.0, "bk")
 		if tab_t < 7 * 40.0: return
-		draw_set_transform_matrix(UIA.xf(gc0, Vector2(60.0 * (1.0 - e2), 0), deg_to_rad(6.0 * (1.0 - e2))) * Transform2D(deg_to_rad(-3.0), Vector2(x, y)))
+		_card_xf = UIA.xf(gc0, Vector2(60.0 * (1.0 - e2), 0), deg_to_rad(6.0 * (1.0 - e2))) * Transform2D(deg_to_rad(-3.0), Vector2(x, y))
+		draw_set_transform_matrix(_card_xf)
 	draw_rect(Rect2(6, 6, w, h2), Color(0, 0, 0, 0.5))
 	draw_rect(Rect2(0, 0, w, h2), Color.WHITE)
 	var g2: Color = RN.gcol(it["g"]) if it != null else Color(0.5, 0.5, 0.5)
 	UI.para(self, 12, 6, tw(UI.anton(), k, 11) + 18.0, 16, 3.0, g2)
 	draw_string(UI.spaced(UI.anton(), 1), Vector2(20, 19), k, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color.BLACK)
 	draw_string(UI.bhs(), Vector2(12, 48), title, HORIZONTAL_ALIGNMENT_LEFT, w - 90.0, 21, Color.BLACK)
+	var cic := _icon(it, s)
+	if cic != null:
+		# the item itself, big, hanging off the card's top-right corner (a slow sway, a glint now and then)
+		var cs := 76.0
+		var cp := Vector2(w - cs * 0.55, -cs * 0.95)
+		var sw := sin(t / 900.0) * 0.06
+		draw_set_transform_matrix(_card_xf * Transform2D(sw, cp + Vector2(cs, cs) / 2.0) * Transform2D(0.0, -Vector2(cs, cs) / 2.0))
+		draw_circle(Vector2(cs, cs) / 2.0, cs * 0.46, Color(g2, 0.25))
+		draw_texture_rect(cic, Rect2(Vector2(3, 4), Vector2(cs, cs)), false, Color(0, 0, 0, 0.35))
+		draw_texture_rect(cic, Rect2(Vector2.ZERO, Vector2(cs, cs)), false)
+		var gl := fmod(t / 2600.0, 1.0)
+		if gl < 0.2: UI.star4(self, Vector2(cs * (0.3 + gl * 2.0), cs * 0.3), 5.0 * sin(gl / 0.2 * PI), Color.WHITE)
+		draw_set_transform_matrix(_card_xf)
+
 	if it != null:
 		var lv := "Lv %d" % int(it.get("lv", 0))
 		draw_string(UI.anton(true), Vector2(w - tw(UI.anton(true), lv, 30) - 10.0, 46), lv, HORIZONTAL_ALIGNMENT_LEFT, -1, 30, col.darkened(0.1))
