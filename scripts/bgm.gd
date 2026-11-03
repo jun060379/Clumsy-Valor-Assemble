@@ -106,9 +106,13 @@ func _ready() -> void:
 	var tt: AudioStreamOggVorbis = TITLE
 	tt.loop = true
 	tap = _player(tt)
+	for pr in [[ap, "town"], [tap, "title"]]:
+		pr[0].finished.connect(_ended.bind(pr[0], pr[1]))
 	bp = _player(_looped(BATTLE, 4.99))
 	bsp = _player(_looped(BOSS, 13.49))
 	lp = _player(_looped(LOWHP, 20.18))
+	bp.finished.connect(_ended.bind(bp, "battle"))
+	bsp.finished.connect(_ended.bind(bsp, "boss"))
 	for n in ["town", "battle", "boss", "lowhp"]:
 		clocks[n] = BEAT.new(grid_of(n))
 
@@ -297,8 +301,23 @@ func _player_of(n: String) -> AudioStreamPlayer:
 
 ## the town starts: from 0 when it takes over from the title, else where it paused
 func _start() -> void:
-	ap.play(0.0 if tgain > 0.0 else maxf(0.0, paused_at))
-	clocks["town"].start(0.0 if tgain > 0.0 else maxf(0.0, paused_at))
+	var from := 0.0 if tgain > 0.0 else maxf(0.0, paused_at)
+	ap.stream.loop = true                        # belt and braces: the web build must never run off the end
+	ap.play(from)
+	clocks["town"].start(from)
+	paused_at = -1.0                             # resumed: a later (re)start goes to the top, never to a mid-track point
+
+## a player ran off its end (looping failed): back to its loop point, not to wherever it paused
+func _ended(p: AudioStreamPlayer, key: String) -> void:
+	if p == ap and wanted():
+		ap.play(0.0)
+		clocks["town"].start(0.0)
+	elif p == bp and wanted_battle():
+		bp.play(bp.stream.loop_offset)
+	elif p == bsp and wanted_boss():
+		bsp.play(bsp.stream.loop_offset)
+	elif p == tap and wanted_title():
+		tap.play(0.0)
 
 ## a tap / click / key: the browser's audio may only now be allowed to run
 func _input(ev: InputEvent) -> void:

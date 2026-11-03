@@ -385,6 +385,10 @@ func check_hits() -> void:
 		if who == "aida" and _rk(): arena.runes.clone_hits(atk)
 		arena.hitstop = atk.get("stop", 55)
 		arena.shake(atk.get("shake", 4), dir)
+		# 타격감: the weight of the blow (by its sound: hit1 / hit2 light, hit3, heavy) — the hitstop by weight, the
+		# chromatic pulse, the zoom punch and the kick (the punch distortion is the mob's, in mob.hit); 화면 효과 off:
+		# the lines above stand as they are
+		arena.impact(hit_weight(), hp0, dir)
 		var ac: Array = atk.get("arc", [])
 		arena.slash_mark(hp0, (ac[3] + ac[4]) / 2.0 if ac.size() > 4 else 0.0, atk["dmg"])
 		if heavy:
@@ -403,6 +407,13 @@ func hit_sound() -> String:
 		"air_combo": return "hit1" if f < 3 else ("hit2" if f < 6 else "hit3")
 		"cthrust": return "heavy"
 	return "hit1"
+
+## the blow's weight for the screen (arena.impact): hit1 / hit2 are light, hit3 is hit3, the charged thrust heavy
+func hit_weight() -> String:
+	match hit_sound():
+		"hit3": return "hit3"
+		"heavy": return "heavy"
+	return "light"
 
 ## the foe as a vertical segment (ey-eh .. ey) tested against the swing: point-blank always counts,
 ## arcs test sample points against the crescent sector, thrusts use the box
@@ -857,7 +868,7 @@ func use_skill(move: int) -> void:
 		if _shield_throw(): return
 		set_anim("parry")
 		ghit = false
-		arena.sfx("guard")
+		arena.sfx("swing", 0.5)          # the guard comes up: a quick swish, not a block (that sounds on contact)
 		if move != 0: dir = move
 	elif who == "aida":
 		if tp_cd <= 0.0:
@@ -1160,6 +1171,7 @@ func advance(dt: float, move: int) -> void:
 			break
 		ft -= dur()
 		f += 1
+		if on and anim == "run" and f in SK.steps(who, "run"): arena.sfx("foot", 0.6)     # a foot lands: the surface's step
 		if f >= frames():
 			var n := anim
 			if n in ["idle", "run", "kneel"]:
@@ -1313,6 +1325,7 @@ func take_hit(m, raw: float) -> String:
 	arena.sfx("hurt", 0.8)
 	arena.shake(8, -dir)
 	arena.flash = 0.25
+	arena.impact("hurt", position + Vector2(0, -60.0 * CSCALE), -dir)   # 타격감: the red vignette, the kick back
 	vx = 0.0
 	air_tag = false
 	arena.text(position + Vector2(0, -130.0 * CSCALE), "-" + str(roundi(tk2)), Color("#ff9d9d"))
@@ -1329,6 +1342,7 @@ func die() -> void:
 	set_anim("death")
 	dead_t = 0.0
 	arena.sfx("jingle_death", 1.0)
+	arena.sfx("death", 0.9)
 	if arena.bgm != null and arena.bgm.grid() != null: arena.bgm.duck(6.0, 600.0)
 
 

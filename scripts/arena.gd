@@ -435,6 +435,17 @@ func post_wave(p: Vector2, strength := 1.0, life := 520.0, rad := 0.35) -> void:
 func post_ca(v: float) -> void:
 	if post != null: post.aberr(v)
 
+## 타격감 (post_fx.gd impact): the screen answers an impact at a world point by its weight — "light" (combo 1·2),
+## "hit3", "heavy" (charged thrust), "parry", "ult", "hurt" (her own), "boss" (its death). Hitstop by weight, the
+## punch distortion, the chromatic pulse, the zoom punch, the camera kick in direction d. Inert with 화면 효과 off:
+## the callers' own hitstop / shake lines stay as they were.
+func impact(kind: String, p: Vector2, d: int) -> void:
+	if post != null and screen_fx: post.impact(kind, p, d)
+
+## the punch alone (a mob taking the blade: every landing hit, scaled by its damage)
+func punch(p: Vector2, strength: float) -> void:
+	if post != null and screen_fx: post.punch(p, strength)
+
 ## a mob's attack element against the member's own elements (hurtAmt)
 func taken_mul(m) -> float:
 	var el := "phys"
@@ -537,6 +548,7 @@ func snap_camera() -> void:
 	var vw := get_viewport_rect().size.x
 	cam.position = Vector2(clampf(player.position.x, vw / 2.0, maxf(vw / 2.0, world_w - vw / 2.0)), cam_y_target(true))
 	cam.reset_smoothing()
+	if post != null: post.feel_reset()     # 타격감: no punch, zoom, kick or desaturation carries into a new scene
 
 func cam_x_target() -> float:
 	var vw := get_viewport_rect().size.x
@@ -802,6 +814,7 @@ func _process(delta: float) -> void:
 	fade_rect.color.a = fade
 	if ult != null: ult.fx_step(dt)
 	for m in mobs:
+		m.fx_step(dt)         # 타격감: the squash eases back on real time, through a hitstop
 		m.queue_redraw()
 	mobs = mobs.filter(func(m):
 		if m.dead > 2400.0:
@@ -833,6 +846,7 @@ func _process(delta: float) -> void:
 	cam.position.x = clampf(lerpf(cam.position.x, target.x, minf(1.0, (16.0 / 45.0 if camf else 16.0 / 90.0) * (dt / 16.0))), vw / 2.0, maxf(vw / 2.0, world_w - vw / 2.0))
 	cam.position.y = lerpf(cam.position.y, target.y, minf(1.0, dt / 140.0))
 	cam.offset = Vector2(randf_range(-1, 1) * shake_amt * 0.6 + shake_dir * shake_amt * 0.3, randf_range(-1, 1) * shake_amt * 0.4)
+	if post != null and screen_fx: cam.offset += post.kick_off()      # 타격감: the camera kick, easing back
 	queue_redraw()
 	fx_layer.queue_redraw()
 	shadow_node.queue_redraw()
@@ -871,16 +885,27 @@ func _process(delta: float) -> void:
 const SNAP_MAX := 0.09
 const SNAP := {"hit1": true, "hit2": true, "hit3": true, "heavy": true, "thrust": true, "parry": true, "ult": true}
 const JITTER := {"hit1": 0.5, "hit2": 0.5, "hit3": 0.5, "heavy": 0.5, "thrust": 0.5, "hurt": 0.5}
-const FILES := {"thrust": "stab", "dash": "dodge", "ui_move": "menu_move", "ui_ok": "menu_ok", "ui_back": "menu_back"}
+const FILES := {"thrust": "stab", "dash": "dodge", "ui_move": "menu_move", "ui_ok": "menu_ok", "ui_back": "menu_back", "step": "tick"}
+## round robin: a base with n variants plays <base>_<k>, never the same k twice in a row (sfx_file)
+const VARIANTS := {"hit1": 4, "hit2": 4, "hit3": 4, "heavy": 4, "stab": 3, "parry": 2, "guard": 3, "hurt": 4, "swing": 4, "dodge": 4, "skid": 2, "death": 2, "down": 3, "ult": 4, "ult_charge": 3,
+	"step_grass": 8, "step_stone": 8, "step_wood": 8, "step_run": 8}
+## footsteps ("foot"): the surface under the player picks the set — the hall's boards, the cave's stone, grass elsewhere
+const FOOT := {"hall": "step_wood", "dungeon": "step_stone"}
+## a hit within REPEAT_MS of the last one plays lighter (the fast combo stays light, the finisher lands)
+var repeat_ms := 300.0          # tests set 0
+const REPEAT_K := 0.7
+var vari_last := {}
+var hit_last_ms := -99999.0
 const UI_CLICKS := ["ui1", "ui2", "ui3"]
-const LEVEL := {"hit1": 0.85, "hit2": 0.9, "hit3": 0.75, "heavy": 1.0, "parry": 1.25, "stab": 0.9, "hurt": 0.8, "dodge": 0.55, "ult": 1.0, "ui1": 0.8, "ui2": 0.5, "ui3": 0.55,
+const LEVEL := {"hit1": 0.9, "hit2": 0.9, "hit3": 0.9, "heavy": 1.0, "parry": 1.2, "stab": 0.9, "guard": 0.9, "hurt": 0.9, "death": 1.0, "down": 0.9, "dodge": 0.6, "skid": 0.5, "ult": 1.0, "ult_charge": 0.8, "swing": 0.4,
+	"step_grass": 0.45, "step_stone": 0.5, "step_wood": 0.5, "step_run": 0.5, "tick": 0.5, "ui1": 0.8, "ui2": 0.5, "ui3": 0.55,
 	"pick_coin": 0.53, "pick_stone": 0.68, "pick_rune": 0.53,
 	"menu_move": 0.48, "menu_ok": 0.48, "menu_back": 0.54,
 	"jingle_lv": 0.93, "jingle_rank": 1.12, "jingle_quest": 1.17, "jingle_death": 0.86, "jingle_book": 0.80,
 	"impact_boss_in": 1.48, "impact_boss_down": 1.62,
 	"jump": 0.34, "djump": 0.50, "land": 0.38, "ult_sub": 0.63}
 const DUCK := {"heavy": [4.0, 120.0], "parry": [4.0, 120.0], "ult": [6.0, 250.0]}
-const LAYERS := {"ult": [["ult_sub", 0.9]]}      # name -> [[file, vol]…] played with it, at the same moment
+const LAYERS := {}      # name -> [[file, vol]…] played with it, at the same moment (none now: the recordings stand alone)
 ## the pickup words (arena.text → the GET notice) and their sounds; 룬 and 장비 share pick_rune
 const PICKUPS := {"실링": "pick_coin", "기억석": "pick_stone", "룬 · ": "pick_rune", "장비": "pick_rune"}
 const PICK_VOL := 0.55
@@ -896,7 +921,14 @@ func sfx(n: String, vol := 1.0, opts := {}) -> void:
 	var jit: float = float(opts.get("jitter", JITTER.get(n, 0.0)))
 	if jit > 0.0: st_ += randf_range(-jit, jit)
 	var raw := n == "boom" or n == "witch_end"     # the slow-down's own cues play dry (boom / witchEnd: __raw)
-	var p := {"t": float(opts.get("delay_ms", 0.0)), "file": file, "vol": vol * float(LEVEL.get(file, 1.0)), "pitch": pow(2.0, st_ / 12.0), "raw": raw, "n": n}
+	var base := String(FILES.get(n, n))
+	if base == "foot": base = String(FOOT.get(level_kind(), "step_grass"))
+	var lv: float = float(LEVEL.get(file, LEVEL.get(base, 1.0)))
+	if VARIANTS.has(base) and base in ["hit1", "hit2", "hit3", "heavy", "stab"]:
+		var now := Time.get_ticks_msec()
+		if repeat_ms > 0.0 and now - hit_last_ms < repeat_ms: lv *= REPEAT_K
+		hit_last_ms = now
+	var p := {"t": float(opts.get("delay_ms", 0.0)), "file": file, "vol": vol * lv, "pitch": pow(2.0, st_ / 12.0), "raw": raw, "n": n}
 	if bool(opts.get("snap", SNAP.get(n, false))):
 		var d: float = snap_delay()
 		if d > 0.0: p["t"] += d * 1000.0
@@ -920,7 +952,15 @@ func sfx_file(n: String) -> String:
 	if n == "ready":
 		ui_click = (ui_click + 1) % UI_CLICKS.size()
 		return UI_CLICKS[ui_click]
-	return FILES.get(n, n)
+	var base := String(FILES.get(n, n))
+	if base == "foot": base = String(FOOT.get(level_kind(), "step_grass"))
+	if VARIANTS.has(base):
+		var cnt: int = VARIANTS[base]
+		var k := randi() % cnt
+		if cnt > 1 and k == int(vari_last.get(base, -1)): k = (k + 1) % cnt
+		vari_last[base] = k
+		return "%s_%d" % [base, k + 1]
+	return base
 
 ## the file's stream: assets/sfx/<file>.ogg first (the pack's processed sounds), else <file>.wav; cached by file
 func sfx_stream(file: String) -> AudioStream:
@@ -949,9 +989,12 @@ func snap_delay() -> float:
 	var d: float = bgm.next_sixteenth()
 	return d if d > 0.0 and d <= SNAP_MAX else 0.0
 
+## witch time's slow-down pitch (0.62×) only drags the movement sounds; impacts keep their bite so a parry's aftermath
+## does not turn to mud
+const WITCH_SLOW := ["swing", "dodge", "skid", "foot", "jump", "djump", "land", "flare", "dash"]
 ## the pitch a sound starts at now: its own semitones, and witch time's 0.62× on top (not for the raw cues)
-func sfx_pitch(pitch: float, raw: bool) -> float:
-	return pitch * (0.62 if witch > 0.0 and not raw else 1.0)
+func sfx_pitch(pitch: float, raw: bool, n := "") -> float:
+	return pitch * (0.62 if witch > 0.0 and not raw and (n == "" or WITCH_SLOW.has(n)) else 1.0)
 
 func _sfx_play(p: Dictionary) -> void:
 	var st := sfx_stream(p["file"])
@@ -964,7 +1007,7 @@ func _sfx_play(p: Dictionary) -> void:
 	best.stream = st
 	best.volume_db = linear_to_db(maxf(0.01, p["vol"])) - 4.0
 	best.bus = SFX_BUS if p["raw"] else SLOWBUS.BUS      # dry cues skip the Slow bus but still ride the 효과음 slider
-	best.pitch_scale = sfx_pitch(p["pitch"], p["raw"])
+	best.pitch_scale = sfx_pitch(p["pitch"], p["raw"], String(p.get("n", "")))
 	best.play()
 	if DUCK.has(p["n"]) and bgm != null and bgm.grid() != null:
 		var dk: Array = DUCK[p["n"]]
@@ -1135,6 +1178,8 @@ func parry_fx(P, m) -> void:
 	parry_word()                  # runeEv('parry') -> parryWord: every parry
 	post_wave(P.position + Vector2(d * 50.0 * 1.3, -70.0 * 1.3), 1.1, 480.0, 0.22)
 	post_ca(0.012)
+	# 타격감: the "합 승리" — one frame in the negative, the longest freeze, the zoom punch, the biggest punch, 12 sparks
+	impact("parry", P.position + Vector2(d * 50.0 * 1.3, -70.0 * 1.3), d)
 
 func perfect_parry(m) -> void:
 	witch = maxf(witch, 560.0)
@@ -1191,6 +1236,13 @@ func spark(p: Vector2, n: int) -> void:
 		var a := randf() * TAU
 		var s := 0.25 + randf() * 0.4
 		fx.append({"k": "sp", "x": p.x, "y": p.y, "vx": cos(a) * s, "vy": sin(a) * s, "c": player.who, "t": 0.0, "life": 140.0 + randf() * 120.0})
+
+## a radial burst: n sparks evenly around the point, fast (the parry's twelve)
+func spark_ring(p: Vector2, n: int) -> void:
+	for i in n:
+		var a := TAU * i / n + randf() * 0.15
+		var s := 0.55 + randf() * 0.2
+		fx.append({"k": "sp", "x": p.x, "y": p.y, "vx": cos(a) * s, "vy": sin(a) * s, "c": player.who, "t": 0.0, "life": 200.0 + randf() * 80.0})
 
 ## slashMark: the cross-cut and the ring at the point a swing lands
 func slash_mark(p: Vector2, ang: float, big: float) -> void:

@@ -55,6 +55,8 @@ var ft := 0.0
 var cd := 0.0
 var flash := 0.0
 var kx := 0.0
+var sq := 0.0                 # 타격감: squash-and-stretch ms left (x 1.18 / y 0.86 easing back over SQ_MS)
+const SQ_MS := 70.0
 var dead := 0.0
 var hurt_t := 0.0
 var ph := 0.0
@@ -147,19 +149,24 @@ func hit(dmg: float, kb: float, mul := 1.0) -> void:
 	flash = 120.0
 	kx = kb * 0.6
 	var hd := signf(position.x - arena.player.position.x)
+	# 타격감: the sprite squashes, the screen punches at the hit point by the blow's weight (dmg 1 light, 2 hit3, 3+ heavy)
+	var hp_at := position + Vector2(0, -20.0 if M.has("fly") else -62.0 * M["s"] / 3.0)
+	if arena.screen_fx:
+		sq = SQ_MS
+		arena.punch(hp_at, 0.35 if dmg <= 1.0 else (0.6 if dmg < 3.0 else 1.0))
 	arena.damage_text(position + Vector2(0, -95 if not M.has("fly") else -40), roundi(d), dmg > 1.0)
 	arena.spark(position + Vector2(-hd * 10.0, -20.0 if M.has("fly") else -62.0 * M["s"] / 3.0), 14 if dmg > 1.0 else 8)
 	if arena.get("pfx") != null: arena.pfx.hit(position.x - hd * 10.0, position.y - (20.0 if M.has("fly") else 62.0 * M["s"] / 3.0), int(hd) if hd != 0.0 else 1, 1.25 if dmg >= 2.0 else 1.0)
 	if hp <= 0.0:
 		# hitDummy on hp<=0: break, a jolt of shake, sparks and dust ...
-		arena.sfx("break", 1.0)
+		arena.sfx("down", 1.0)                 # a body goes down (the dummies keep their "break")
 		arena.shake_amt = maxf(arena.shake_amt, 8.0)
 		arena.spark(position + Vector2(0, -40), 20)
 		arena.dust(position, 0, true)
 		# ... then mobDie
 		dead = 1.0
 		set_a("die")
-		arena.sfx("break", 0.8)
+		arena.sfx("down", 0.6)
 		arena.spark(position + Vector2(0, -40), 16)
 		if M.has("boss"):
 			# mobDie: the boss goes down hard — impact_boss_down lands 120 ms after the break
@@ -168,7 +175,19 @@ func hit(dmg: float, kb: float, mul := 1.0) -> void:
 			arena.flash = 0.5
 			arena.hitstop = 160.0
 			arena.text(position + Vector2(0, -200), "격파!", Color("#ffd34d"))
+			arena.impact("boss", hp_at, 1)       # 타격감: three punches over half a second, the colour fringes
 		if R != null: R.on_kill(self)
+
+
+## the squash's clock runs on real time (arena steps it through a hitstop too) and its scale about the feet
+func fx_step(dt: float) -> void:
+	if sq > 0.0: sq = maxf(0.0, sq - dt)
+
+func squash() -> Vector2:
+	if sq <= 0.0: return Vector2.ONE
+	var k: float = sq / SQ_MS
+	k = k * k
+	return Vector2(1.0 + 0.18 * k, 1.0 - 0.14 * k)
 
 
 func notice(call: bool) -> void:
@@ -442,7 +461,8 @@ func _draw() -> void:
 	var floor_dy: float = (arena.ground_y - position.y) if M.has("fly") else 0.0
 	draw_set_transform(Vector2(0, floor_dy - 1.0), 0.0, Vector2(1.0, 0.25))
 	draw_circle(Vector2.ZERO, 16.0 * s / 3.0, Color(0, 0, 0, 0.28 * alpha))
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2(dir, 1))
+	var sqs := squash()
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2(dir * sqs.x, sqs.y))
 	var tint: Color = M.get("tint", Color(1.15, 0.8, 1.25) if elite else Color.WHITE)
 	draw_texture_rect_region(tex(A[0]), Rect2(-75.0 * s, -100.0 * s, 150.0 * s, 150.0 * s), Rect2(fr * 150, 0, 150, 150), Color(tint.r, tint.g, tint.b, alpha))
 	draw_set_transform(Vector2.ZERO)
@@ -499,6 +519,7 @@ func _draw_rim() -> void:
 	mat.set_shader_parameter("rcol", rc)
 	var A: Array = M["anims"].get(anim, M["anims"]["idle"])
 	var fr := mini(f, A[1] - 1)
-	rim_n.draw_set_transform(Vector2.ZERO, 0.0, Vector2(dir, 1))
+	var sqs := squash()
+	rim_n.draw_set_transform(Vector2.ZERO, 0.0, Vector2(dir * sqs.x, sqs.y))
 	rim_n.draw_texture_rect_region(tex(A[0]), Rect2(-75.0 * s, -100.0 * s, 150.0 * s, 150.0 * s), Rect2(fr * 150, 0, 150, 150))
 	rim_n.draw_set_transform(Vector2.ZERO)
