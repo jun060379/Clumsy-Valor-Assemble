@@ -50,6 +50,7 @@ var arena
 var town                      # the town while you are in it (null elsewhere)
 var npcs := {}
 var title_mode := false       # the title is up: everyone is out in town, emotes instead of chats
+const TITLE_PACE := 0.62      # the title's walkers move (and step) at this fraction of the street pace
 var greet_cd := {}            # "a|b" -> ms until that pair may greet again
 var greets := 0               # greetings so far (tests)
 
@@ -350,7 +351,8 @@ func _upd(n: Dictionary, dt: float) -> void:
 				n["path"].pop_front()
 				return
 			var dx: float = wp["x"] - n["x"]
-			var sp: float = 0.34 if n["run"] else WALKSP.get(n["c"], 0.085)
+			var tk := TITLE_PACE if title_mode else 1.0                  # the title: an unhurried stroll, nobody runs
+			var sp: float = (0.34 if n["run"] and not title_mode else WALKSP.get(n["c"], 0.085)) * tk
 			if absf(dx) < 3.0:
 				n["path"].pop_front()
 				if n["path"].is_empty():
@@ -365,8 +367,8 @@ func _upd(n: Dictionary, dt: float) -> void:
 				return
 			n["x"] += signf(dx) * minf(absf(dx), sp * dt)
 			n["dir"] = int(signf(dx))
-			anim(n, "run" if n["run"] else "walk")
-			anim_step(n, dt)
+			anim(n, "run" if n["run"] and not title_mode else "walk")
+			anim_step(n, dt * tk)
 	n["y"] = route_y(n["r"], n["x"])
 
 

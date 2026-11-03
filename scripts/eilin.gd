@@ -155,7 +155,8 @@ func hurry() -> bool:
 	return not path.is_empty() and (leg_left() > RUN_FAR or late())
 
 func spd() -> float:
-	return EIL_RUN_SPD if gait == RUN else EIL_SPD
+	var k := 0.7 if arena != null and arena.get("title_mode") == true else 1.0     # the title: she strolls slower too
+	return (EIL_RUN_SPD if gait == RUN else EIL_SPD) * k
 
 func set_gait(g: String) -> void:
 	if g == gait: return
@@ -349,7 +350,7 @@ func upd(dt: float) -> void:
 	var walk := walking() and wait <= 0.0 and not leg_new      # a leg's gait is picked on its first step (world)
 	greet_cd -= dt
 	if say_t > 0.0: say_t -= dt
-	t += dt
+	t += dt * (0.7 if walk and arena.get("title_mode") == true else 1.0)     # the title's slower stroll keeps its footing
 	var tk := talking()
 	# one-shots play through, then fall back to the loop
 	if mode in ["one", "greet", "stamp", "sew"]:
