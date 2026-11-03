@@ -718,7 +718,18 @@ func fit_view() -> void:
 	r.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_KEEP
 	r.content_scale_size = Vector2i(view_w(win), int(H))
 
+## the browser's fullscreen switch resizes the canvas in steps and a size_changed can arrive before the last one: the
+## view is re-fitted whenever the window's shape no longer matches it (polled every frame — one compare), so the
+## picture never stays squashed
+var _fit_win := Vector2i.ZERO
+func _fit_poll() -> void:
+	var r := get_tree().root
+	if r.size != _fit_win:
+		_fit_win = r.size
+		fit_view()
+
 func _process(delta: float) -> void:
+	_fit_poll()
 	sfx_step(minf(delta * 1000.0, 100.0))    # the snapped sounds land on their 16th whatever holds the world
 	# qWatch: long frames lower the render quality (menus and the title don't count)
 	cfg.qwatch(minf(delta * 1000.0, 50.0), ui_root == null or ui_root.holds() or DisplayServer.get_name() == "headless")
