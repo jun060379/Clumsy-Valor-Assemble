@@ -210,7 +210,7 @@ func break_chest() -> void:
 	arena.hitstop = maxf(arena.hitstop, 170.0)
 	arena.shake(18, 1)
 	arena.flash = maxf(arena.flash, 0.55)
-	arena.sfx("break", 1.0)
+	arena.sfx("down", 1.0)
 	arena.sfx("slam", 0.9)
 	arena.post_wave(Vector2(C["x"], C["y"] - 50.0), 1.4, 600.0, 0.3)
 	arena.post_ca(0.02)

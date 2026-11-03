@@ -67,7 +67,7 @@ func hit(dmg: float, kb: float, mul := 1.0) -> void:
 	arena.score += roundi(d / 10.0)
 	if hp <= 0.0:
 		dead = 1.0
-		arena.sfx("break", 1.0)
+		arena.sfx("down", 1.0)
 		arena.shake(8, 1 if kb >= 0.0 else -1)
 		arena.spark(position + Vector2(0, -40), 20)
 		arena.dust(position, 0, true)

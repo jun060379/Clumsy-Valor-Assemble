@@ -306,7 +306,6 @@ func _step_aida(_dt: float, P, S: float) -> void:
 				if live: hit(e, 2.0)
 			arena.sfx("ult", 1.0)              # the impact
 			arena.sfx("slam", 1.0)
-			arena.sfx("break", 0.8)
 			arena.shake(15, P.dir)
 			arena.flash = 0.35
 			arena.hitstop = 100.0
@@ -368,7 +367,6 @@ func _step_luce(dt: float, P, S: float) -> void:
 				fx.append({"k": "twinkle", "x": fx0 + D * randf() * 500.0, "y": fy0 + (randf() - 0.5) * 120.0, "vy": -0.02 - randf() * 0.05, "t": 0.0, "life": 500.0 + randf() * 500.0})
 			arena.sfx("ult", 1.0)              # the impact
 			arena.sfx("slam", 1.0)
-			arena.sfx("break", 0.8)
 			arena.sfx("heavy", 0.8)
 			arena.flash = 0.55
 			arena.shake(18, D)

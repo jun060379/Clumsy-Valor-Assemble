@@ -105,7 +105,7 @@ func hit(dmg: float, _kb: float, mul := 1.0) -> void:
 	if hp <= 0.0:
 		up = false
 		t = 0.0
-		arena.sfx("break", 1.0)
+		arena.sfx("down", 1.0)
 		arena.spark(position + Vector2(0, -30), 24)
 		arena.ring(position + Vector2(0, -30), 10.0)
 		arena.score += 8
