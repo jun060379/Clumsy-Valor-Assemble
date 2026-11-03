@@ -372,7 +372,7 @@ func _step_kenin(_dt: float, P, S: float) -> void:
 				bd = d
 				tg0 = e
 		var tx: float = tg0.position.x if tg0 != null else P.position.x + P.dir * 200.0
-		sh = {"tg": tg0, "tx": tx, "ty": tg0.position.y if tg0 != null else P.position.y, "side": -1.0 if tx >= P.position.x else 1.0, "chain_end": -1.0, "cx": tx, "cy": arena.cam.position.y}
+		sh = {"tg": tg0, "tx": tx, "ty": tg0.position.y if tg0 != null else P.position.y, "side": -1.0 if tx >= P.position.x else 1.0, "chain_end": -1.0}
 		_k_reload(P, S, 0)
 	var tg = _k_target()
 	if tg != null:
@@ -381,6 +381,7 @@ func _step_kenin(_dt: float, P, S: float) -> void:
 	var tx: float = sh["tx"]
 	var ty: float = sh["ty"]
 	var aim := Vector2(tx, (_ey(tg) if tg != null else ty - 55.0))
+	P.cam_focus = {"x": tx, "t": 300.0}
 	var n_spots := K_SPOTS.size()
 	var r1 := _k_round_t(1)
 	var t_end_rounds := r1 + K_BLINK[1] * n_spots
@@ -424,8 +425,7 @@ func _step_kenin(_dt: float, P, S: float) -> void:
 			if u >= bl * (0.28 + 0.3 * k) and once(key + "s%d" % k):
 				var hp := aim + Vector2(randf_range(-10.0, 10.0), randf_range(-16.0, 16.0))
 				K.ult_shot(mz, hp, tg)
-				if tg != null and tg.alive():
-					tg.hit(0.4 * DMG, 0.0, P.atk_mul())        # no knockback: the foe stays the pivot he blinks around
+				if tg != null: hit(tg, 0.4)
 				K.ammo = maxi(0, K.ammo - 1)
 		if sp[5] and u >= bl * 0.8 and once(key + "b"):
 			K.ult_bomb(tg)
