@@ -884,7 +884,9 @@ func _stand(vs: Vector2) -> void:
 	if own_rec != "":
 		r = cutout(own_rec, SK.path(c, "st_full_sil"), box, 2.0 + 8.0 * (1.0 - e), Vector2(18, 10), clampf(e, 0.0, 1.0), xx)
 	else:
-		r = cutout(ST + c + "_old_" + face + ".webp", ST + c + "_old_base_sil.webp", box, 2.0 + 8.0 * (1.0 - e), Vector2(18, 10), clampf(e, 0.0, 1.0), xx)
+		var op: String = ST + c + "_old_" + face + ".webp"
+		if not ResourceLoader.exists(op): op = ST + c + "_old_base.webp"      # a member drawn with one face (케닌) keeps it
+		r = cutout(op, ST + c + "_old_base_sil.webp", box, 2.0 + 8.0 * (1.0 - e), Vector2(18, 10), clampf(e, 0.0, 1.0), xx)
 	p.hit(Rect2(r.position.x + r.size.x * 0.15, r.position.y, r.size.x * 0.7, r.size.y), func(): talk())
 	# cx_emo: a white star with ♪ (or !! after three quick taps) pops off her head (1.2s --bk)
 	if jolt_t < 1200.0:

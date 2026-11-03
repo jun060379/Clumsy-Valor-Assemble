@@ -154,8 +154,9 @@ main에 푸시하면 GitHub Actions가 웹·윈도우로 빌드해서 GitHub Pag
   - **테스트 빌드: 모든 동료가 처음부터 영입됨** (`fame.gd` ALL_IN = true, 오너 요청 2026-11-04). 정식 흐름으로 돌릴 땐 false. 테스트·캡처 스크립트(-s)는 원래 흐름
   - 크기: SCALE 0.88 (머리 크기를 맞춤). Sprite Flow 캔버스가 두 종류(960×960 / 1112×834)라 모션마다 키가 달랐음 → trim.py가 모션별 첫 프레임 키로 맞춤(서 있는 키 186px). 밝기: pack_kenin.py의 tone() — Sprite Flow 프레임이 너무 어두워서 밝기 분위수 곡선으로 보정
   - QTE 원호는 적의 등 뒤(조작 중인 동료 반대편)에서 나타남 (오너 요청)
-  - **임시(PLACEHOLDER)**: kenin.gd의 모든 수치, STATS/ULTMAX, 노드 트리(전부 "(예정)"), 시작 장비 이름, 마을 대사·브랜 대사(「(임시)」 표기), 스킬 탭 설명의 숫자, 서 있는 그림·얼굴·초상·궁 일러(원화 크롭), 스킬 아이콘(선 그림 폭탄), 총소리·폭발음(기존 stab·heavy·slam 재활용)
-  - 필요한 에셋(오너에게 요청): 총소리·폭발음·폭탄 붙는 소리(상용 팩), 서 있는 그림 세트(base/cl/smile/sup), 피격 초상, 얼굴, 궁 컷씬 영상, 스킬 아이콘
+  - **임시(PLACEHOLDER)**: kenin.gd의 모든 수치, STATS/ULTMAX, 노드 트리(전부 "(예정)"), 시작 장비 이름, 마을 대사·브랜 대사(「(임시)」 표기), 스킬 탭 설명의 숫자, 얼굴·초상·궁 일러(원화 크롭), 스킬 아이콘(선 그림 폭탄), 총소리·폭발음(기존 stab·heavy·slam 재활용)
+  - 일러 받음 (2026-11-04): 기본 `kenin_base`, 장비 `kenin_gear`, 스킬 `kenin_skill`, 기억 `kenin_rec`, 메모리얼 전 기록 전체샷 `kenin_old_base` (표정 하나 — 기록 대사 표정은 base로 대체), 실루엣은 tools/memgen/sil.py
+  - 필요한 에셋(오너에게 요청): 총소리·폭발음·폭탄 붙는 소리(상용 팩), 표정 차분(cl/smile/sup), 피격 초상, 얼굴, 궁 컷씬 영상, 스킬 아이콘, 메모리얼 일러(`kenin_mem` + 눈 감은 `_mem_c`)
   - 테스트 `tests/test_kenin.gd`, 녹화 `tools/capture/movie_kenin.gd`
 
 ## 5. 이번 세션에 끝낸 것 (모두 main, 푸시·배포 완료)
