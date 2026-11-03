@@ -851,16 +851,20 @@ func _process(delta: float) -> void:
 const SNAP_MAX := 0.09
 const SNAP := {"hit1": true, "hit2": true, "hit3": true, "heavy": true, "thrust": true, "parry": true, "ult": true}
 const JITTER := {"hit1": 0.5, "hit2": 0.5, "hit3": 0.5, "heavy": 0.5, "thrust": 0.5, "hurt": 0.5}
-const FILES := {"thrust": "stab", "dash": "dodge", "ui_move": "menu_move", "ui_ok": "menu_ok", "ui_back": "menu_back"}
+const FILES := {"thrust": "stab", "dash": "dodge", "ui_move": "menu_move", "ui_ok": "menu_ok", "ui_back": "menu_back", "step": "tick"}
 ## round robin: a base with n variants plays <base>_<k>, never the same k twice in a row (sfx_file)
-const VARIANTS := {"hit1": 4, "hit2": 4, "hit3": 4, "heavy": 4, "stab": 3, "parry": 2, "hurt": 3, "swing": 3, "step": 6}
+const VARIANTS := {"hit1": 4, "hit2": 4, "hit3": 4, "heavy": 4, "stab": 3, "parry": 2, "guard": 3, "hurt": 4, "swing": 4, "dodge": 4, "skid": 2, "death": 2, "ult": 4, "ult_charge": 3,
+	"step_grass": 8, "step_stone": 8, "step_wood": 8, "step_run": 8}
+## footsteps ("foot"): the surface under the player picks the set — the hall's boards, the cave's stone, grass elsewhere
+const FOOT := {"hall": "step_wood", "dungeon": "step_stone"}
 ## a hit within REPEAT_MS of the last one plays lighter (the fast combo stays light, the finisher lands)
 var repeat_ms := 300.0          # tests set 0
 const REPEAT_K := 0.7
 var vari_last := {}
 var hit_last_ms := -99999.0
 const UI_CLICKS := ["ui1", "ui2", "ui3"]
-const LEVEL := {"hit1": 0.9, "hit2": 0.9, "hit3": 0.9, "heavy": 1.0, "parry": 1.1, "stab": 0.9, "hurt": 0.9, "dodge": 0.6, "ult": 1.0, "swing": 0.45, "step": 0.5, "ui1": 0.8, "ui2": 0.5, "ui3": 0.55,
+const LEVEL := {"hit1": 0.9, "hit2": 0.9, "hit3": 0.9, "heavy": 1.0, "parry": 1.1, "stab": 0.9, "guard": 0.9, "hurt": 0.9, "death": 1.0, "dodge": 0.6, "skid": 0.5, "ult": 1.0, "ult_charge": 0.8, "swing": 0.4,
+	"step_grass": 0.45, "step_stone": 0.5, "step_wood": 0.5, "step_run": 0.5, "tick": 0.5, "ui1": 0.8, "ui2": 0.5, "ui3": 0.55,
 	"pick_coin": 0.53, "pick_stone": 0.68, "pick_rune": 0.53,
 	"menu_move": 0.48, "menu_ok": 0.48, "menu_back": 0.54,
 	"jingle_lv": 0.93, "jingle_rank": 1.12, "jingle_quest": 1.17, "jingle_death": 0.86, "jingle_book": 0.80,
@@ -884,6 +888,7 @@ func sfx(n: String, vol := 1.0, opts := {}) -> void:
 	if jit > 0.0: st_ += randf_range(-jit, jit)
 	var raw := n == "boom" or n == "witch_end"     # the slow-down's own cues play dry (boom / witchEnd: __raw)
 	var base := String(FILES.get(n, n))
+	if base == "foot": base = String(FOOT.get(level_kind(), "step_grass"))
 	var lv: float = float(LEVEL.get(file, LEVEL.get(base, 1.0)))
 	if VARIANTS.has(base) and base in ["hit1", "hit2", "hit3", "heavy", "stab"]:
 		var now := Time.get_ticks_msec()
@@ -914,6 +919,7 @@ func sfx_file(n: String) -> String:
 		ui_click = (ui_click + 1) % UI_CLICKS.size()
 		return UI_CLICKS[ui_click]
 	var base := String(FILES.get(n, n))
+	if base == "foot": base = String(FOOT.get(level_kind(), "step_grass"))
 	if VARIANTS.has(base):
 		var cnt: int = VARIANTS[base]
 		var k := randi() % cnt

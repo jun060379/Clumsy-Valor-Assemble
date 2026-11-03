@@ -49,17 +49,18 @@ func _initialize() -> void:
 	var B = arena.bgm
 
 	print("-- the files")
-	for f in ["ui1", "ui2", "ui3", "hit", "guard", "slam", "skid", "dive", "dig", "break", "boom", "witch_end", "flare", "alert", "alert_q"]:
+	for f in ["ui1", "ui2", "ui3", "hit", "slam", "dive", "dig", "break", "boom", "witch_end", "flare", "alert", "alert_q", "tick"]:
 		var st = arena.sfx_stream(f)
 		check(st is AudioStreamWAV, "assets/sfx/%s.wav loads" % f)
 	for base in arena.VARIANTS:
 		for k in int(arena.VARIANTS[base]):
 			check(arena.sfx_stream("%s_%d" % [base, k + 1]) is AudioStreamOggVorbis, "assets/sfx/%s_%d.ogg loads" % [base, k + 1])
-	for f in ["dodge", "ult", "jump", "land"]:
+	for f in ["jump", "djump", "land"]:
 		check(arena.sfx_stream(f) is AudioStreamOggVorbis, "assets/sfx/%s.ogg loads" % f)
 	for f in ["thrust", "dash", "ready"]:
 		check(not ResourceLoader.exists("res://assets/sfx/%s.wav" % f), "the old %s.wav is gone" % f)
-	check(arena.sfx_file("thrust").begins_with("stab_") and arena.sfx_file("dash") == "dodge" and arena.sfx_file("hit") == "hit" and arena.sfx_file("heavy").begins_with("heavy_"), "logical → file: thrust = stab_k, dash = dodge, hit itself, heavy = heavy_k")
+	check(arena.sfx_file("thrust").begins_with("stab_") and arena.sfx_file("dash").begins_with("dodge_") and arena.sfx_file("hit") == "hit" and arena.sfx_file("heavy").begins_with("heavy_") and arena.sfx_file("step") == "tick", "logical → file: thrust = stab_k, dash = dodge_k, hit itself, heavy = heavy_k, step = tick")
+	check(arena.sfx_file("foot").begins_with("step_grass_"), "a footstep in town: the grass set")
 	var seen := {}
 	var prev := ""
 	for i in 40:
@@ -76,7 +77,7 @@ func _initialize() -> void:
 		check(not ResourceLoader.exists("res://assets/sfx/%s.wav" % f), "no %s.wav beside it" % f)
 		check(arena.LEVEL.has(f) and arena.LEVEL[f] > 0.0, "LEVEL has %s (%.2f)" % [f, float(arena.LEVEL.get(f, 0.0))])
 	check(arena.sfx_path("jump").ends_with("jump.ogg") and not ResourceLoader.exists("res://assets/sfx/jump.wav"), "a name with only .ogg (jump) resolves to the ogg")
-	check(arena.sfx_path("guard").ends_with("guard.wav") and not ResourceLoader.exists("res://assets/sfx/guard.ogg"), "a name with only .wav (guard) resolves to the wav")
+	check(arena.sfx_path("slam").ends_with("slam.wav") and not ResourceLoader.exists("res://assets/sfx/slam.ogg"), "a name with only .wav (slam) resolves to the wav")
 	check(arena.sfx_path("no_such_sound") == "" and arena.sfx_stream("no_such_sound") == null, "a missing name: no path, a null stream")
 	for f in ["jump", "djump", "land"]:
 		check(arena.sfx_stream(f) is AudioStreamOggVorbis and arena.sfx_stream(f).get_length() > 0.1, "%s.ogg: %.2f s" % [f, arena.sfx_stream(f).get_length()])
@@ -112,7 +113,7 @@ func _initialize() -> void:
 	arena.sfx("guard", 0.9)
 	arena.sfx("thrust", 0.5)
 	check(player_of("swing") != null and player_of("guard") != null and player_of("stab") != null, "the old one- and two-argument calls still play (thrust came out as stab)")
-	check(near(player_of("guard").volume_db, linear_to_db(0.9) - 4.0, 0.01) and near(player_of("stab").volume_db, linear_to_db(0.5 * 0.9) - 4.0, 0.01), "the caller's volume times the file's level")
+	check(near(player_of("guard").volume_db, linear_to_db(0.9 * 0.9) - 4.0, 0.01) and near(player_of("stab").volume_db, linear_to_db(0.5 * 0.9) - 4.0, 0.01), "the caller's volume times the file's level")
 	stop_all()
 	arena.sfx("heavy", 1.0, {"jitter": 0.0})
 	check(B.duck_t == 0.0 and B.duck_db == 0.0, "heavy in town does not duck the music")
@@ -135,7 +136,7 @@ func _initialize() -> void:
 		stop_all()
 	check(pitches.size() >= 6, "the jitter varies from play to play (%d distinct of 12)" % pitches.size())
 	arena.sfx("step")
-	check(player_of("step").pitch_scale == 1.0, "step: no jitter")
+	check(player_of("tick").pitch_scale == 1.0, "step (the UI tick): no jitter")
 	stop_all()
 	arena.witch = 1000.0
 	arena.sfx("hit1", 1.0, {"st": 12.0, "jitter": 0.0})
@@ -243,13 +244,13 @@ func _initialize() -> void:
 	arena.sfx("dash")
 	arena.sfx("ready", 0.4)
 	arena.sfx("step")
-	check(player_of("hurt") != null and player_of("dodge") != null and player_of("step") != null and arena.sfx_due.is_empty(), "hurt, dodge, the UI click and steps never snap")
+	check(player_of("hurt") != null and player_of("dodge") != null and player_of("tick") != null and arena.sfx_due.is_empty(), "hurt, dodge, the UI click and ticks never snap")
 	stop_all()
 	arena.sfx("hit3", 1.0, {"snap": false, "jitter": 0.0})
 	check(player_of("hit3") != null and arena.sfx_due.is_empty(), "snap: false turns it off for a call")
 	stop_all()
 	arena.sfx("step", 1.0, {"snap": true})
-	check(player_of("step") == null and arena.sfx_due.size() == 1, "snap: true turns it on for a call")
+	check(player_of("tick") == null and arena.sfx_due.size() == 1, "snap: true turns it on for a call")
 	stop_all()
 	# a snapped hit scheduled, then witch time starts before it plays: the pitch is read when it sounds
 	C.set_time(line - 0.05)

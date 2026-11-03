@@ -1160,6 +1160,7 @@ func advance(dt: float, move: int) -> void:
 			break
 		ft -= dur()
 		f += 1
+		if on and anim == "run" and f in SK.steps(who, "run"): arena.sfx("foot", 0.6)     # a foot lands: the surface's step
 		if f >= frames():
 			var n := anim
 			if n in ["idle", "run", "kneel"]:
@@ -1329,6 +1330,7 @@ func die() -> void:
 	set_anim("death")
 	dead_t = 0.0
 	arena.sfx("jingle_death", 1.0)
+	arena.sfx("death", 0.9)
 	if arena.bgm != null and arena.bgm.grid() != null: arena.bgm.duck(6.0, 600.0)
 
 

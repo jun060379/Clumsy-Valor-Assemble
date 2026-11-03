@@ -107,8 +107,8 @@ func try_ult() -> bool:
 	var vr: Rect2 = arena.view_rect()
 	arena.post_wave(Vector2(vr.get_center().x, vr.position.y + 250.0 * vr.size.y / get_viewport_rect().size.y), 1.6, 700.0, 0.7)
 	arena.post_ca(0.02)
-	arena.sfx("parry", 1.0)
-	arena.sfx("slam", 0.7)
+	arena.sfx("ult_charge", 1.0)          # the cut-in: the charge
+	arena.sfx("slam", 0.5)
 	return true
 
 ## the world clock while the cut-in plays (it holds everything else)
