@@ -166,7 +166,7 @@ func _art_xf(vs: Vector2, tex: Texture2D, xk: float) -> Array:
 		skx = lerpf(-3.0, 0.0, (e - 0.75) / 0.25)
 	tx -= 0.7 * xk
 	skx += 8.0 * xk
-	var pos := Vector2(-0.06 * vs.x + tx * w, vs.y * 1.04 - h)
+	var pos := Vector2((0.0 if w > h * 1.2 else -0.06 * vs.x) + tx * w, vs.y * 1.04 - h)    # a wide splash keeps its left edge in
 	var xf := Transform2D(Vector2(1, 0), Vector2(-tan(deg_to_rad(skx)), 1), pos + Vector2(0, h)) * Transform2D(0.0, Vector2(0, -h))
 	return [xf, Vector2(w, h), a]
 

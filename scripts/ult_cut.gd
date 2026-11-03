@@ -198,11 +198,18 @@ func _draw_art() -> void:
 	var tex: Texture2D = SK.tex(who, "ult_art")
 	var ak := _uB((t - PING * 0.6) / 240.0)
 	var h := vs.y * 1.08
-	var w := h * tex.get_width() / tex.get_height()
+	var asp := float(tex.get_width()) / tex.get_height()
+	var w := h * asp
 	var tx := (1.0 - ak) * -60.0 + (t - PING) * 0.012
 	var sc := 1.14 - 0.14 * ak + (t - PING) * 0.00003
 	var pos := Vector2(vs.x * 0.01 + tx, -vs.y * 0.04)
 	var piv := pos + Vector2(w * 0.5, h * 0.8)
+	if asp > 1.2:
+		# a wide splash (케닌): the whole picture, its left edge on the screen's, its foot on the bottom; it grows from that corner
+		w = minf(w, vs.x * 0.74)
+		h = w / asp
+		pos = Vector2(minf(0.0, tx), vs.y - h)
+		piv = pos + Vector2(0.0, h)
 	art_node.draw_set_transform(piv, 0.0, Vector2(sc, sc))
 	art_node.draw_texture_rect(tex, Rect2(pos - piv, Vector2(w, h)), false)
 	art_node.draw_set_transform(Vector2.ZERO)
