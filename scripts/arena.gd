@@ -415,6 +415,17 @@ func post_wave(p: Vector2, strength := 1.0, life := 520.0, rad := 0.35) -> void:
 func post_ca(v: float) -> void:
 	if post != null: post.aberr(v)
 
+## 타격감 (post_fx.gd impact): the screen answers an impact at a world point by its weight — "light" (combo 1·2),
+## "hit3", "heavy" (charged thrust), "parry", "ult", "hurt" (her own), "boss" (its death). Hitstop by weight, the
+## punch distortion, the chromatic pulse, the zoom punch, the camera kick in direction d. Inert with 화면 효과 off:
+## the callers' own hitstop / shake lines stay as they were.
+func impact(kind: String, p: Vector2, d: int) -> void:
+	if post != null and screen_fx: post.impact(kind, p, d)
+
+## the punch alone (a mob taking the blade: every landing hit, scaled by its damage)
+func punch(p: Vector2, strength: float) -> void:
+	if post != null and screen_fx: post.punch(p, strength)
+
 ## a mob's attack element against the member's own elements (hurtAmt)
 func taken_mul(m) -> float:
 	var el := "phys"
@@ -517,6 +528,7 @@ func snap_camera() -> void:
 	var vw := get_viewport_rect().size.x
 	cam.position = Vector2(clampf(player.position.x, vw / 2.0, maxf(vw / 2.0, world_w - vw / 2.0)), cam_y_target(true))
 	cam.reset_smoothing()
+	if post != null: post.feel_reset()     # 타격감: no punch, zoom, kick or desaturation carries into a new scene
 
 func cam_x_target() -> float:
 	var vw := get_viewport_rect().size.x
@@ -782,6 +794,7 @@ func _process(delta: float) -> void:
 	fade_rect.color.a = fade
 	if ult != null: ult.fx_step(dt)
 	for m in mobs:
+		m.fx_step(dt)         # 타격감: the squash eases back on real time, through a hitstop
 		m.queue_redraw()
 	mobs = mobs.filter(func(m):
 		if m.dead > 2400.0:
@@ -813,6 +826,7 @@ func _process(delta: float) -> void:
 	cam.position.x = clampf(lerpf(cam.position.x, target.x, minf(1.0, (16.0 / 45.0 if camf else 16.0 / 90.0) * (dt / 16.0))), vw / 2.0, maxf(vw / 2.0, world_w - vw / 2.0))
 	cam.position.y = lerpf(cam.position.y, target.y, minf(1.0, dt / 140.0))
 	cam.offset = Vector2(randf_range(-1, 1) * shake_amt * 0.6 + shake_dir * shake_amt * 0.3, randf_range(-1, 1) * shake_amt * 0.4)
+	if post != null and screen_fx: cam.offset += post.kick_off()      # 타격감: the camera kick, easing back
 	queue_redraw()
 	fx_layer.queue_redraw()
 	shadow_node.queue_redraw()
@@ -1144,6 +1158,8 @@ func parry_fx(P, m) -> void:
 	parry_word()                  # runeEv('parry') -> parryWord: every parry
 	post_wave(P.position + Vector2(d * 50.0 * 1.3, -70.0 * 1.3), 1.1, 480.0, 0.22)
 	post_ca(0.012)
+	# 타격감: the "합 승리" — one frame in the negative, the longest freeze, the zoom punch, the biggest punch, 12 sparks
+	impact("parry", P.position + Vector2(d * 50.0 * 1.3, -70.0 * 1.3), d)
 
 func perfect_parry(m) -> void:
 	witch = maxf(witch, 560.0)
@@ -1200,6 +1216,13 @@ func spark(p: Vector2, n: int) -> void:
 		var a := randf() * TAU
 		var s := 0.25 + randf() * 0.4
 		fx.append({"k": "sp", "x": p.x, "y": p.y, "vx": cos(a) * s, "vy": sin(a) * s, "c": player.who, "t": 0.0, "life": 140.0 + randf() * 120.0})
+
+## a radial burst: n sparks evenly around the point, fast (the parry's twelve)
+func spark_ring(p: Vector2, n: int) -> void:
+	for i in n:
+		var a := TAU * i / n + randf() * 0.15
+		var s := 0.55 + randf() * 0.2
+		fx.append({"k": "sp", "x": p.x, "y": p.y, "vx": cos(a) * s, "vy": sin(a) * s, "c": player.who, "t": 0.0, "life": 200.0 + randf() * 80.0})
 
 ## slashMark: the cross-cut and the ring at the point a swing lands
 func slash_mark(p: Vector2, ang: float, big: float) -> void:

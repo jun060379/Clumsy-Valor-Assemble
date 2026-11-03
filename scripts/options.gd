@@ -88,7 +88,7 @@ func _rows() -> Array:
 			"set": func(i): C.dev = ["auto", "kbm", "pad", "touch"][i]})
 		R.append({"k": "tog", "lab": "이동 스틱", "o": ["따라오는 스틱", "고정 스틱"], "on": 0 if C.stick == "float" else 1,
 			"set": func(i): C.stick = "float" if i == 0 else "fixed"})
-		R.append({"k": "tog", "lab": "화면 효과 (빛 번짐·충격파)", "o": ["켜기", "끄기"], "on": 0 if arena.screen_fx else 1,
+		R.append({"k": "tog", "lab": "화면 효과 (빛 번짐·충격파·타격감)", "o": ["켜기", "끄기"], "on": 0 if arena.screen_fx else 1,
 			"set": func(i): arena.screen_fx = i == 0})
 		var hh := int(arena.tod_h)
 		var mm := int(roundf((arena.tod_h - hh) * 60.0)) % 60

@@ -218,6 +218,7 @@ func step(dt: float) -> void:
 			arena.sfx("parry", 1.0)
 			arena.flash = 0.3
 			arena.shake(6, P.dir)
+			arena.impact("ult", P.position + Vector2(0, -70.0), P.dir)   # 타격감
 		if t >= 420.0: end()
 	elif who == "aida":
 		_step_aida(dt, P, S)
@@ -309,6 +310,7 @@ func _step_aida(_dt: float, P, S: float) -> void:
 			arena.shake(15, P.dir)
 			arena.flash = 0.35
 			arena.hitstop = 100.0
+			arena.impact("ult", P.position + Vector2(P.dir * 120.0, -60.0), P.dir)   # 타격감
 		if u > 1250.0: end()
 
 func _step_luce(dt: float, P, S: float) -> void:
@@ -371,6 +373,7 @@ func _step_luce(dt: float, P, S: float) -> void:
 			arena.flash = 0.55
 			arena.shake(18, D)
 			arena.hitstop = 120.0
+			arena.impact("ult", Vector2(fx0, fy0), D)   # 타격감
 		if t >= 1750.0:
 			star["life"] = star["t"]
 			end()

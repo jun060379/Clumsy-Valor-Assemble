@@ -7,7 +7,10 @@ extends CanvasLayer
 ## light do), and the blur chain is small SubViewports. Refreshed every frame (no stale halo trailing a running sprite).
 ## The perfect-dodge slow time also draws its overlay here (drawWitchTint: vignette, drifting streaks, the sweeping ring,
 ## the frame) under the pass, and the heroine on top of the grade (drawWitchHero), so she keeps her colours.
-## Off (arena.screen_fx false): nothing is drawn and the dodge falls back to the plain blue tint.
+## 타격감 lives here too (impact / punch / ca_pulse / zoom_punch / kick / invert / hurt, FEEL by weight): the punch
+## distortion at the hit point, the chromatic pulse, the zoom punch and the camera kick, the parry's negative frame,
+## the hurt vignette with its low-HP pulse, the death desaturation — shader uniforms animated on real time.
+## Off (arena.screen_fx false): nothing is drawn, the feel is inert and the dodge falls back to the plain blue tint.
 
 const CH := preload("res://scripts/chars.gd")
 const WAVE_SH := """
@@ -21,9 +24,23 @@ uniform float ca = 0.0;
 uniform float hit = 0.0;
 uniform float wd = 0.0;
 uniform vec4 w[4];
+uniform vec4 pn[4];
+uniform float neg = 0.0;
+uniform float hv = 0.0;
+uniform float ds = 0.0;
 uniform vec2 asp = vec2(1.8, 1.0);
 void fragment() {
 	vec2 u = SCREEN_UV;
+	// 타격감: the punch — a ring of displacement racing out from the hit point (radius 0.12 of the screen height),
+	// the picture shoved outward then let back (pn: xy centre, z phase 0..1, w strength)
+	for (int i = 0; i < 4; i++) {
+		vec4 q = pn[i];
+		if (q.w <= 0.0) continue;
+		vec2 dd = (u - q.xy) * asp;
+		float r = length(dd);
+		float band = exp(-pow((r - 0.12 * q.z) / 0.05, 2.0));
+		u -= normalize(dd + 1e-5) / asp * band * 0.035 * q.w * sin(q.z * 3.14159);
+	}
 	for (int i = 0; i < 4; i++) {
 		vec4 q = w[i];
 		if (q.w <= 0.0) continue;
@@ -43,6 +60,12 @@ void fragment() {
 	col = (col - 0.5) * 1.03 + 0.5;
 	col += vec3(1.0, 0.85, 0.95) * hit * 0.18 * (1.0 - vg0);
 	col *= mix(0.72, 1.0, vg0);
+	// the hurt vignette: red bleeding in from the edges
+	float edge = smoothstep(0.42, 0.98, length(dir * vec2(1.05, 1.2)) * 1.3);
+	col = mix(col, vec3(0.78, 0.04, 0.08), hv * edge);
+	// death: the colour drains; the parry: one frame in the negative
+	col = mix(col, vec3(dot(col, vec3(0.299, 0.587, 0.114))), ds);
+	col = mix(col, vec3(1.0) - col, neg);
 	COLOR = vec4(col, 1.0);
 }
 """
@@ -101,6 +124,39 @@ var ca := 0.0
 var hit := 0.0
 var wd := 0.0
 var waves: Array = []          # {x, y (world), t, life, str, rad}
+# 타격감 (the hit feel): every impact answers on the screen, scaled by its weight; all of it gated by 화면 효과
+const PUNCH_MS := 90.0
+const PUNCH_R := 0.12
+var punches: Array = []        # {x, y (world), t, str}: the ring distortions, at most 4 live, the oldest dropped
+var punch_due: Array = []      # {x, y, str, at}: punches still to fire (the boss's three in sequence)
+var cap := 0.0                 # the chromatic pulse's peak ...
+var cap_t := 0.0               # ... its age (ms) ...
+var cap_ms := 0.0              # ... and its length; cap_now() decays it to 0
+var zoom_peak := 1.0           # the zoom punch: 1 -> peak over ZOOM_IN, back to 1 over ZOOM_OUT
+var zoom_t := -1.0             # ms since it started; -1 = idle
+const ZOOM_IN := 40.0
+const ZOOM_OUT := 180.0
+var kick_v := Vector2.ZERO     # the camera kick: a nudge in the hit direction ...
+var kick_t := -1.0             # ... easing back over KICK_MS
+const KICK_MS := 120.0
+var neg_frames := 0            # frames left in the negative (the parry's one)
+var hv_a := 0.0                # the hurt vignette's flash alpha ...
+var hv_t := 0.0                # ... and its age
+const HV_MS := 220.0
+var pulse_t := 0.0             # the low-HP pulse's own clock when no music clock is live (0.65 s a cycle)
+const PULSE_MS := 650.0
+var ds := 0.0                  # the death desaturation 0..1 (1.2 s up; reset the moment she is not dying)
+const DS_MS := 1200.0
+# the weights: hitstop ms, punch strength, chromatic pulse (peak, ms), zoom peak, camera kick px
+const FEEL := {
+	"light": {"stop": 40.0, "punch": 0.35, "ca": 0.0, "ca_ms": 0.0, "zoom": 1.0, "kick": 4.0},
+	"hit3": {"stop": 90.0, "punch": 0.6, "ca": 0.012, "ca_ms": 60.0, "zoom": 1.0, "kick": 4.0},
+	"heavy": {"stop": 120.0, "punch": 1.0, "ca": 0.03, "ca_ms": 110.0, "zoom": 1.025, "kick": 4.0},
+	"parry": {"stop": 140.0, "punch": 1.0, "ca": 0.03, "ca_ms": 110.0, "zoom": 1.025, "kick": 4.0},
+	"ult": {"stop": 160.0, "punch": 1.0, "ca": 0.05, "ca_ms": 160.0, "zoom": 1.04, "kick": 4.0},
+	"hurt": {"stop": 0.0, "punch": 0.0, "ca": 0.02, "ca_ms": 80.0, "zoom": 1.0, "kick": 4.0},
+	"boss": {"stop": 0.0, "punch": 1.0, "ca": 0.03, "ca_ms": 600.0, "zoom": 1.025, "kick": 0.0},
+}
 var pass_rect: ColorRect
 var vig: ColorRect
 var mat: ShaderMaterial
@@ -224,6 +280,159 @@ func aberr(v: float) -> void:
 func grades() -> bool:
 	return on()
 
+# ---------- 타격감 ----------
+## the punch: a ring distortion at a world point, 90 ms, at most four live (the oldest gives way)
+func punch(p: Vector2, strength := 1.0) -> void:
+	if not on(): return
+	punches.append({"x": p.x, "y": p.y, "t": 0.0, "str": strength})
+	while punches.size() > 4: punches.pop_front()
+
+## punches to come: the boss goes down to three, spread over `span` ms
+func punch_seq(p: Vector2, n: int, span: float, strength := 1.0) -> void:
+	if not on(): return
+	for i in n:
+		var at: float = span * i / maxf(1.0, n - 1)
+		if at <= 0.0: punch(p, strength)
+		else: punch_due.append({"x": p.x, "y": p.y, "str": strength, "at": at})
+
+## the chromatic pulse: `v` at once, decaying to nothing over `ms` (on top of the slow aberr fringes)
+func ca_pulse(v: float, ms: float) -> void:
+	if not on() or v <= 0.0 or ms <= 0.0: return
+	if v >= cap_now():
+		cap = v
+		cap_t = 0.0
+		cap_ms = ms
+
+func cap_now() -> float:
+	if cap_ms <= 0.0 or cap_t >= cap_ms: return 0.0
+	var k: float = 1.0 - cap_t / cap_ms
+	return cap * k * k
+
+## the zoom punch: 1.0 -> peak over 40 ms, back over 180 ms
+func zoom_punch(peak: float) -> void:
+	if not on() or peak <= 1.0: return
+	if zoom_t < 0.0 or peak >= zoom_peak:
+		zoom_peak = peak
+		zoom_t = 0.0
+
+func zoom_now() -> float:
+	if zoom_t < 0.0: return 1.0
+	if zoom_t < ZOOM_IN: return lerpf(1.0, zoom_peak, zoom_t / ZOOM_IN)
+	var k: float = (zoom_t - ZOOM_IN) / ZOOM_OUT
+	if k >= 1.0: return 1.0
+	return lerpf(zoom_peak, 1.0, 1.0 - (1.0 - k) * (1.0 - k))
+
+## the camera kick: a nudge of `px` in direction d, easing back over 120 ms (on top of the shake)
+func kick(d: Vector2, px: float) -> void:
+	if not on() or px <= 0.0 or d == Vector2.ZERO: return
+	kick_v = d.normalized() * px
+	kick_t = 0.0
+
+func kick_off() -> Vector2:
+	if kick_t < 0.0: return Vector2.ZERO
+	var k: float = kick_t / KICK_MS
+	if k >= 1.0: return Vector2.ZERO
+	return kick_v * (1.0 - k) * (1.0 - k)
+
+## one frame in the negative: the parry's "합 승리"
+func invert() -> void:
+	if not on(): return
+	neg_frames = 1
+
+## the hurt vignette: red at the edges at alpha `a`, fading over 220 ms
+func hurt(a := 0.35) -> void:
+	if not on(): return
+	hv_a = maxf(hurt_fade(), a)
+	hv_t = 0.0
+
+func hurt_fade() -> float:
+	if hv_t >= HV_MS: return 0.0
+	return hv_a * (1.0 - hv_t / HV_MS)
+
+## true while the low-HP pulse should breathe: in the dungeon, alive, under 30 %
+func low_hp() -> bool:
+	var P = arena.player
+	if P == null or arena.level_kind() != "dungeon": return false
+	return P.hp > 0.0 and P.hp < P.MAX_HP * 0.3
+
+## 0..1 of the pulse: the music's pulse when a clock is live, else a 0.65 s cycle of its own
+func pulse_phase() -> float:
+	var B = arena.get("bgm")
+	var c = B.clock() if B != null else null
+	if c != null and c.live: return c.pulse_phase()
+	return fposmod(pulse_t / PULSE_MS, 1.0)
+
+## the vignette alpha this frame: the hit's flash, or the soft low-HP pulse, whichever is stronger
+func hurt_a() -> float:
+	if not on(): return 0.0
+	var a := hurt_fade()
+	if low_hp():
+		a = maxf(a, 0.1 + 0.12 * (0.5 - 0.5 * cos(pulse_phase() * TAU)))
+	return a
+
+## the whole impact at a world point: hitstop by weight, the punch, the chromatic pulse, the zoom punch, the kick
+func impact(kind: String, p: Vector2, d: int) -> void:
+	if not on() or not FEEL.has(kind): return
+	var F: Dictionary = FEEL[kind]
+	if F["stop"] > 0.0: arena.hitstop = maxf(arena.hitstop, F["stop"])
+	if kind == "boss":
+		punch_seq(p, 3, 500.0, F["punch"])
+	elif kind != "hurt" and F["punch"] > 0.0:
+		punch(p, F["punch"])
+	ca_pulse(F["ca"], F["ca_ms"])
+	zoom_punch(F["zoom"])
+	if F["kick"] > 0.0: kick(Vector2(d, 0), F["kick"])
+	match kind:
+		"parry":
+			invert()
+			arena.spark_ring(p, 12)
+		"ult":
+			arena.shake(10, d)
+		"hurt":
+			hurt(0.35)
+			arena.shake(3, d)
+
+func feel_reset() -> void:
+	punches.clear()
+	punch_due.clear()
+	cap = 0.0
+	cap_ms = 0.0
+	zoom_t = -1.0
+	zoom_peak = 1.0
+	kick_t = -1.0
+	neg_frames = 0
+	hv_a = 0.0
+	hv_t = HV_MS
+	ds = 0.0
+	if arena.cam != null and arena.cam.zoom != Vector2.ONE: arena.cam.zoom = Vector2.ONE
+
+## the feel's clocks, real time (they run through a hitstop: the freeze is theirs to fill)
+func feel_step(dt: float) -> void:
+	for q in punches: q["t"] += dt
+	punches = punches.filter(func(q): return q["t"] < PUNCH_MS)
+	if not punch_due.is_empty():
+		var fire: Array = []
+		for q in punch_due:
+			q["at"] -= dt
+			if q["at"] <= 0.0: fire.append(q)
+		for q in fire:
+			punch_due.erase(q)
+			punch(Vector2(q["x"], q["y"]), q["str"])
+	cap_t += dt
+	if zoom_t >= 0.0:
+		zoom_t += dt
+		if zoom_t >= ZOOM_IN + ZOOM_OUT: zoom_t = -1.0
+	if kick_t >= 0.0:
+		kick_t += dt
+		if kick_t >= KICK_MS: kick_t = -1.0
+	hv_t += dt
+	pulse_t += dt
+	var P = arena.player
+	var dying: bool = P != null and P.anim == "death" and P.hp <= 0.0
+	ds = minf(1.0, ds + dt / DS_MS) if dying else 0.0
+	var z := zoom_now()
+	if arena.cam != null: arena.cam.zoom = Vector2(z, z)
+
 func _bloom_step(run: bool) -> void:
 	if bsv.is_empty(): return
 	if run and _dev_px() != bpx: _bloom_setup()
@@ -278,10 +487,12 @@ func _process(delta: float) -> void:
 		waves.clear()
 		ca = 0.0
 		hit = 0.0
+		feel_reset()
 		_bloom_step(false)
 		return
 	# the world under the title, a menu or a full-screen page stays plain
 	var cover: bool = arena.ui_root != null and arena.ui_root.holds()
+	feel_step(dt)
 	hit *= pow(0.985, dt)
 	ca *= pow(0.992, dt)
 	wd = 0.0
@@ -310,9 +521,20 @@ func _process(delta: float) -> void:
 		var sp: Vector2 = xf * Vector2(q["x"], q["y"])
 		arr[i] = Vector4(sp.x / vs.x, sp.y / vs.y, q["rad"] * pow(k, 0.6), q["str"] * (1.0 - k) * (1.0 - k))
 	mat.set_shader_parameter("w", arr)
-	mat.set_shader_parameter("ca", minf(0.05, ca))
+	var pa := PackedVector4Array()
+	pa.resize(4)
+	for i in punches.size():
+		var q: Dictionary = punches[i]
+		var sp: Vector2 = xf * Vector2(q["x"], q["y"])
+		pa[i] = Vector4(sp.x / vs.x, sp.y / vs.y, q["t"] / PUNCH_MS, q["str"])
+	mat.set_shader_parameter("pn", pa)
+	mat.set_shader_parameter("ca", minf(0.06, ca + cap_now()))
 	mat.set_shader_parameter("hit", minf(1.0, hit))
 	mat.set_shader_parameter("wd", wd)
+	mat.set_shader_parameter("neg", 1.0 if neg_frames > 0 else 0.0)
+	if neg_frames > 0: neg_frames -= 1
+	mat.set_shader_parameter("hv", hurt_a())
+	mat.set_shader_parameter("ds", ds)
 	mat.set_shader_parameter("asp", Vector2(vs.x / vs.y, 1.0))
 
 func _wk() -> float:
