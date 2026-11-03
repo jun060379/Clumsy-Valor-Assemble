@@ -955,9 +955,12 @@ func snap_delay() -> float:
 	var d: float = bgm.next_sixteenth()
 	return d if d > 0.0 and d <= SNAP_MAX else 0.0
 
+## witch time's slow-down pitch (0.62×) only drags the movement sounds; impacts keep their bite so a parry's aftermath
+## does not turn to mud
+const WITCH_SLOW := ["swing", "dodge", "skid", "foot", "jump", "djump", "land", "flare", "dash"]
 ## the pitch a sound starts at now: its own semitones, and witch time's 0.62× on top (not for the raw cues)
-func sfx_pitch(pitch: float, raw: bool) -> float:
-	return pitch * (0.62 if witch > 0.0 and not raw else 1.0)
+func sfx_pitch(pitch: float, raw: bool, n := "") -> float:
+	return pitch * (0.62 if witch > 0.0 and not raw and (n == "" or WITCH_SLOW.has(n)) else 1.0)
 
 func _sfx_play(p: Dictionary) -> void:
 	var st := sfx_stream(p["file"])
@@ -970,7 +973,7 @@ func _sfx_play(p: Dictionary) -> void:
 	best.stream = st
 	best.volume_db = linear_to_db(maxf(0.01, p["vol"])) - 4.0
 	best.bus = SFX_BUS if p["raw"] else SLOWBUS.BUS      # dry cues skip the Slow bus but still ride the 효과음 slider
-	best.pitch_scale = sfx_pitch(p["pitch"], p["raw"])
+	best.pitch_scale = sfx_pitch(p["pitch"], p["raw"], String(p.get("n", "")))
 	best.play()
 	if DUCK.has(p["n"]) and bgm != null and bgm.grid() != null:
 		var dk: Array = DUCK[p["n"]]

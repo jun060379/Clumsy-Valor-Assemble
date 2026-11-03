@@ -857,7 +857,7 @@ func use_skill(move: int) -> void:
 		if _shield_throw(): return
 		set_anim("parry")
 		ghit = false
-		arena.sfx("guard")
+		arena.sfx("swing", 0.5)          # the guard comes up: a quick swish, not a block (that sounds on contact)
 		if move != 0: dir = move
 	elif who == "aida":
 		if tp_cd <= 0.0:

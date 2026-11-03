@@ -139,8 +139,11 @@ func _initialize() -> void:
 	check(player_of("tick").pitch_scale == 1.0, "step (the UI tick): no jitter")
 	stop_all()
 	arena.witch = 1000.0
+	arena.sfx("swing", 1.0, {"st": 12.0, "jitter": 0.0})
+	check(near(player_of("swing").pitch_scale, 2.0 * 0.62, 0.001), "witch time: 0.62× on top of the semitones for a movement sound (1.24)")
+	stop_all()
 	arena.sfx("hit1", 1.0, {"st": 12.0, "jitter": 0.0})
-	check(near(player_of("hit1").pitch_scale, 2.0 * 0.62, 0.001), "witch time: 0.62× on top of the semitones (1.24)")
+	check(near(player_of("hit1").pitch_scale, 2.0, 0.001), "witch time leaves an impact's pitch alone")
 	stop_all()
 	arena.sfx("boom", 0.9)
 	check(player_of("boom").pitch_scale == 1.0 and player_of("boom").bus == &"SFX", "the raw cues (boom) stay dry and at 1×, straight on the SFX bus")
@@ -254,10 +257,10 @@ func _initialize() -> void:
 	stop_all()
 	# a snapped hit scheduled, then witch time starts before it plays: the pitch is read when it sounds
 	C.set_time(line - 0.05)
-	arena.sfx("hit1", 1.0, {"jitter": 0.0})
+	arena.sfx("swing", 1.0, {"jitter": 0.0, "snap": true})
 	arena.witch = 1000.0
 	arena.sfx_step(60.0)
-	check(player_of("hit1") != null and near(player_of("hit1").pitch_scale, 0.62, 0.001), "witch time that began while a hit waited: it sounds at 0.62×")
+	check(player_of("swing") != null and near(player_of("swing").pitch_scale, 0.62, 0.001), "witch time that began while a snapped swing waited: it sounds at 0.62×")
 	arena.witch = 0.0
 	stop_all()
 	# the ult's impact: snapped, the deep duck
