@@ -124,7 +124,8 @@ var ret_dur := 0.0               # … over this long (0 = not drifting): RET_MS
 var items: Array = []            # [key, label]
 var sel := 0
 var sel_t := -1e9                # clock when the selection last moved (the underline sweep)
-var item_rects: Array = []       # Rect2 per item, as last drawn (taps)
+var item_rects: Array = []       # Rect2 per item, as last drawn (its bounds)
+var item_polys: Array = []       # the item's turned box, as last drawn (taps hit this)
 var press_k := -1                # the slab a press went down on (a tap counts on the release inside it)
 var press_t := -1e9              # clock of that press (the squash)
 var release_t := -1e9            # clock of its release (the spring back)
@@ -505,7 +506,7 @@ func _input(ev: InputEvent) -> void:
 			press_k = -1
 			release_k = k
 			release_t = clock
-			if k < item_rects.size() and item_rects[k].has_point(up_at): _activate(k)
+			if hit_item(k, up_at): _activate(k)
 		return
 	var up := key in [KEY_UP, KEY_W] or padb == JOY_BUTTON_DPAD_UP
 	var dn := key in [KEY_DOWN, KEY_S] or padb == JOY_BUTTON_DPAD_DOWN
@@ -558,7 +559,7 @@ func _input(ev: InputEvent) -> void:
 		# a press on a slab: the squash, and the pick waits for the release inside it; elsewhere nothing
 		press_k = -1
 		for k in item_rects.size():
-			if item_rects[k].has_point(down):
+			if hit_item(k, down):
 				press_k = k
 				press_t = clock
 				if sel != k:
@@ -581,6 +582,11 @@ func refresh_saves() -> void:
 	has_save = auto_file != ""
 
 ## a slab picked (a release inside it, Enter, the pad's A)
+## a tap on item k: inside its turned box (the tilted rows' bounds overlap, the boxes don't)
+func hit_item(k: int, p: Vector2) -> bool:
+	if k < item_polys.size() and item_polys[k].size() > 2: return Geometry2D.is_point_in_polygon(p, item_polys[k])
+	return k < item_rects.size() and item_rects[k].has_point(p)
+
 func _activate(k: int) -> void:
 	match String(items[k][0]):
 		"start":
@@ -885,16 +891,13 @@ func _menu(ci: CanvasItem, vs: Vector2) -> void:
 	var H := vs.y
 	var o := UIA.p(outro, 0.0, 280.0, "in") if outro >= 0.0 else 0.0
 	item_rects.clear()
+	item_polys.clear()
 	if not beat.live:
-		for k in items.size(): item_rects.append(Rect2())
+		for k in items.size():
+			item_rects.append(Rect2())
+			item_polys.append(PackedVector2Array())
 		return
 	var lean := _lean(vs)
-	var fb := UI.bhs()
-	var fi := UI.anton(false, 0)
-	var fcap := UI.anton(false, 2)
-	var fs_lab := int(0.038 * H)
-	var fs_idx := int(0.022 * H)
-	var fs_cap := int(0.018 * H)
 	var pulse := BEAT.bump(beat.pulse_phase(), 0.45) if intro_done else 0.0
 	# the motto, small above the logo
 	var ua := mu(T_MOTTO, 0.5, "ease") * (1.0 - o)
@@ -903,19 +906,7 @@ func _menu(ci: CanvasItem, vs: Vector2) -> void:
 		var motto := "서툴지만, 물러서지 않는다"
 		var fsm := int(0.026 * H)
 		ci.draw_string(fn, Vector2(0.089 * W + 0.02 * W * (1.0 - ua), 0.065 * H), motto, HORIZONTAL_ALIGNMENT_LEFT, -1, fsm, Color(0.86, 0.86, 0.9, ua))
-	# the rail: a thin pink line down the slabs' left edges, from the logo's bottom-left to under the last slab
 	var r0 := slab_rect(vs, 0)
-	var rl := slab_rect(vs, items.size() - 1)
-	var ur := 1.0 if menu_in else mu(T_MENU[0] - 0.1, 0.35, "ease")
-	if ur > 0.0 and o < 1.0:
-		var lr := _logo_rect(vs)
-		var y_top := lr.end.y - 0.02 * H
-		var y_bot := rl.end.y + 0.035 * H
-		var y1 := lerpf(y_top, y_bot, ur)
-		var slope := -tan(deg_to_rad(SLAB_LEAN))        # x per y, leaning like the slabs
-		var xb := r0.position.x + 0.004 * W
-		var x_at := func(y: float) -> float: return xb + (y - r0.end.y) * slope
-		ci.draw_line(Vector2(x_at.call(y_top), y_top + 0.25 * H * o), Vector2(x_at.call(y1), y1 + 0.25 * H * o), Color(PINK, 0.85 * (1.0 - o)), 2.0)
 	# the flower, small to the right of the first slab, popping on its beat
 	var ue := 1.0 if menu_in else mu(T_EMBLEM, 0.3, "bk")
 	if ue > 0.0 and o < 1.0:
@@ -925,75 +916,78 @@ func _menu(ci: CanvasItem, vs: Vector2) -> void:
 		ci.draw_set_transform_matrix(UIA.xf(er.get_center(), Vector2(0, 0.25 * H * o), 0.0, Vector2(ue, ue)))
 		ci.draw_texture_rect(EMBLEM, er, false, Color(1, 1, 1, minf(1.0, ue) * (1.0 - o)))
 		ci.draw_set_transform(Vector2.ZERO)
-	# the brush stroke behind the picked slab, sliding between rows on its spring; it slaps onto 시작 from 1.3× and
-	# pulses on the pulse
+	# the menu in the in-game hub's style (menu.gd _draw_fg): a list tilted −9°, a small English caption over each
+	# Korean label, the picked one blown up black on a white plate over a pink plate that slide between rows
 	var ucur := 1.0 if menu_in else mu(T_CURSOR - CUR_IN, CUR_IN, "bk")
-	var on_k := sel                       # (a card open over the menu keeps its slab picked)
+	var on_k := sel                       # (a card open over the menu keeps its item picked)
 	if commit_k >= 0: on_k = commit_k
+	var fs := int(clampf(0.058 * H, 22.0, 34.0))
+	var step := fs * 1.12 + 7.0
+	var org := Vector2(MENU_X * W, MENU_Y * H - step * 0.35)
+	var xf := Transform2D(deg_to_rad(-9.0), org)
+	var bf := UI.bhs()
+	var sf := UI.anton(false, 2)
+	# the plates (cursor): their row follows the spring sp_cur.x; width eases to the picked label's
 	if ucur > 0.0 and o < 1.0 and on_k >= 0:
-		var rs := slab_rect(vs, int(round(sp_cur.x)) if commit_k < 0 else commit_k)
-		var cy := slab_rect(vs, 0).get_center().y + sp_cur.x * MENU_PITCH * H if commit_k < 0 else rs.get_center().y
-		var bw := rs.size.x * 1.25
-		var bh := rs.size.y * 2.6
-		var cc := Vector2(rs.position.x + SLAB_SHIFT * W + rs.size.x * 0.5 + lean * 0.5, cy)
-		var psc := (1.0 + 0.02 * pulse) * (1.0 + 0.3 * (1.0 - minf(1.0, ucur))) * _slab_scale(on_k)
-		ci.draw_set_transform_matrix(UIA.xf(cc, Vector2(0, 0.25 * H * o + _slab_drop(on_k) * 0.6 * H), 0.0, Vector2(psc, psc)))
-		ci.draw_texture_rect(BRUSH, Rect2(cc - Vector2(bw, bh) / 2.0, Vector2(bw, bh)), false, Color(1, 1, 1, minf(1.0, ucur) * (1.0 - o)))
+		var rowf: float = sp_cur.x if commit_k < 0 else float(commit_k)
+		var lw := UI.text_w(bf, String(items[on_k][1]), fs) * 1.38 + 30.0
+		var cp := Vector2(rowf * 10.0 + 2.0, rowf * step + step - 48.0 * fs / 30.0)
+		var ps := (1.0 + 0.02 * pulse) * (1.0 + 0.3 * (1.0 - minf(1.0, ucur))) * _slab_scale(on_k)
+		var dv := Vector2(0, 0.25 * H * o + _slab_drop(on_k) * 0.6 * H)
+		var pa := minf(1.0, ucur) * (1.0 - o)
+		var ph := 44.0 * fs / 30.0
+		for pl in [[Vector2(-8, 4), deg_to_rad(2.0), lw + 12.0, [[0, 34], [100, 8], [94, 100], [5, 84]], Color(PINK, pa)],
+				[Vector2.ZERO, deg_to_rad(-3.0), lw, [[3, 20], [97, 0], [100, 74], [7, 100]], Color(1, 1, 1, pa)]]:
+			var m: Transform2D = Transform2D(0.0, dv) * xf * Transform2D(pl[1], cp + pl[0]) * Transform2D(0.0, Vector2(ps, ps), 0.0, Vector2.ZERO)
+			ci.draw_set_transform_matrix(m)
+			ci.draw_colored_polygon(UI.clip(Rect2(0, 0, pl[2], ph), pl[3]), pl[4])
 		ci.draw_set_transform(Vector2.ZERO)
-	# the slabs
 	for k in items.size():
 		var u := 1.0 if menu_in else mu(T_MENU[k] - SLAB_IN, SLAB_IN, "bk")
 		if u <= 0.0 or o >= 1.0:
 			item_rects.append(Rect2())
+			item_polys.append(PackedVector2Array())
 			continue
 		var key := String(items[k][0])
 		var on := k == on_k and ucur > 0.0
 		var dim: bool = key == "load" and not has_save
 		var lab: String = items[k][1]
-		var r := slab_rect(vs, k)
-		var shift := SLAB_SHIFT * W * (1.0 if on else 0.0)
-		# the second slab takes two stamps: a 0.01 W overshoot on the 16th after it lands, settling back
-		var push := 0.0
-		if k == 1 and not menu_in: push = 0.01 * W * sin(PI * mu(T_MENU[1], BEAT.PULSE / 4.0, "linear"))
-		var sc := _slab_scale(k)
-		var drop := _slab_drop(k)
-		var alpha := (1.0 if on else 0.8) * (1.0 - o)
-		if dim: alpha = 0.45 * (1.0 - o)
-		var fill := PINK if on else INK
-		var tc := INK if on else CREAM
-		var ic := INK if on else PINK
 		var cap: String = "NO SAVE" if dim else CAPTION[key]
-		var cc := r.get_center() + Vector2(shift + lean * 0.5, 0)
-		ci.draw_set_transform_matrix(UIA.xf(cc, Vector2(-0.3 * W * (1.0 - u) + push, 0.25 * H * o + drop * 0.6 * H), deg_to_rad(-6.0 * (1.0 - u)), Vector2(sc, sc)))
-		var x := r.position.x + shift
-		var y := r.position.y
-		var w := r.size.x
-		var h := r.size.y
-		# the hard pink shadow, the ink body, the rim on the left edge
-		UI.para(ci, x + 4.0, y + 4.0, w, h, lean, Color(PINK if not on else INK, alpha))
-		UI.para(ci, x, y, w, h, lean, Color(fill, alpha))
-		ci.draw_colored_polygon(PackedVector2Array([Vector2(x + lean, y), Vector2(x + lean + 3.0, y), Vector2(x + 3.0, y + h), Vector2(x, y + h)]), Color(INK if on else PINK, alpha))
-		# the index, the label, the caption
-		var base_y := y + h * 0.5
-		ci.draw_string(fi, Vector2(x + lean * 0.6 + 0.014 * W, base_y + fs_idx * 0.36), "%02d" % (k + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, fs_idx, Color(ic, alpha))
-		var lx := x + lean * 0.5 + 0.055 * W
-		ci.draw_string(fb, Vector2(lx, base_y + fs_lab * 0.36), lab, HORIZONTAL_ALIGNMENT_LEFT, -1, fs_lab, Color(tc, alpha))
-		var cw := UI.text_w(fcap, cap, fs_cap)
-		ci.draw_string(fcap, Vector2(x + w + lean * 0.4 - 0.022 * W - cw, base_y + fs_cap * 0.36), cap, HORIZONTAL_ALIGNMENT_LEFT, -1, fs_cap, Color(INK if on else ROSE, alpha * (0.9 if on else 1.0)))
-		# the cream underline sweeping across the label on selection
-		if on and commit_k < 0:
-			var us := UIA.p(clock - sel_t, 0.0, 180.0, "ease-out")
-			if us > 0.0:
-				var lw := UI.text_w(fb, lab, fs_lab)
-				ci.draw_rect(Rect2(lx, base_y + fs_lab * 0.5 + 2.0, lw * us, 2.0), Color(CREAM, alpha))
+		var base := Vector2(k * 10 + (14 if on else 0), k * step)
+		var sc := (1.38 if on else 1.0) * _slab_scale(k)
+		# entrance: each item swings in from the upper left on its 16th (the 2nd overshoots once)
+		var ex := Vector2(-60, -20) * (1.0 - u)
+		if k == 1 and not menu_in: ex.x += 0.01 * W * sin(PI * mu(T_MENU[1], BEAT.PULSE / 4.0, "linear"))
+		var er := deg_to_rad(-30.0) * (1.0 - u)
+		var rr := deg_to_rad(2.0 if k % 2 else -2.0) + er
+		var tw := UI.text_w(bf, lab, fs)
+		var pivot := base + ex + Vector2(0, step * 0.6)
+		var dv := Vector2(0, 0.25 * H * o + _slab_drop(k) * 0.6 * H)
+		var it := Transform2D(0.0, dv) * xf * Transform2D(rr, pivot) * Transform2D(0.0, Vector2(sc, sc), 0.0, Vector2.ZERO) * Transform2D(0.0, Vector2(0, -step * 0.6))
+		ci.draw_set_transform_matrix(it)
+		var a := minf(1.0, u * 2.0) * (1.0 if on else 0.85) * (1.0 - o)
+		if dim: a *= 0.45
+		ci.draw_string(sf, Vector2(0, 9), cap, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(PINK, a) if on else Color(0, 0, 0, 0.6 * a))
+		var by := 6.0 + fs * 0.98
+		if on:
+			ci.draw_string(bf, Vector2(0, by), lab, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0, 0, 0, a))
+		else:
+			ci.draw_string_outline(bf, Vector2(0, by), lab, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 5, Color(0, 0, 0, a))
+			ci.draw_string(bf, Vector2(0, by), lab, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, a))
 		ci.draw_set_transform(Vector2.ZERO)
-		item_rects.append(Rect2(x - 6.0, y - 4.0, w + lean + 12.0, h + 12.0))
-		# the tiny ink splat as the slab lands (the first lap)
+		# the hit area: the item's turned box, as an axis-aligned rect (a little padding for fingers)
+		var pts := [it * Vector2(-4, 0), it * Vector2(tw + 8, 0), it * Vector2(tw + 8, step), it * Vector2(-4, step)]
+		var hr := Rect2(pts[0], Vector2.ZERO)
+		for q in pts: hr = hr.expand(q)
+		item_rects.append(hr.grow(6.0))
+		var hw := maxf(tw + 8.0, 0.2 * W)        # at least a thumb's width
+		item_polys.append(PackedVector2Array([it * Vector2(-10, -2), it * Vector2(hw, -2), it * Vector2(hw, step + 2), it * Vector2(-10, step + 2)]))
+		# the tiny ink splat as the item lands (the first lap)
 		if not menu_in and beat.lap == 0 and not skip:
 			var us2 := mu(T_MENU[k], 0.22, "out")
 			if us2 > 0.0 and us2 < 1.0:
-				var sz := w * 0.22 * (0.4 + 0.6 * us2)
-				var at := Vector2(x + lean * 0.5 + 0.01 * W, y + h * 0.5)
+				var sz := tw * 0.5 * (0.4 + 0.6 * us2)
+				var at := it * Vector2(-6, step * 0.55)
 				ci.draw_set_transform_matrix(UIA.xf(at, Vector2.ZERO, deg_to_rad(40.0 * k + 90.0 * us2)))
 				ci.draw_texture_rect(BURST, Rect2(at - Vector2(sz, sz) / 2.0, Vector2(sz, sz)), false, Color(INK, 0.9 * (1.0 - us2)))
 				ci.draw_set_transform(Vector2.ZERO)
@@ -1002,9 +996,9 @@ func _menu(ci: CanvasItem, vs: Vector2) -> void:
 		var tb := clock - commit_t
 		if tb < 380.0:
 			var ub := UIA.ez("out", tb / 380.0)
-			var rr := slab_rect(vs, commit_k)
-			var c := rr.get_center() + Vector2(SLAB_SHIFT * W + lean * 0.5, 0)
-			var sz := rr.size.x * lerpf(0.25, 1.5, ub)
+			var rr: Rect2 = item_rects[commit_k] if commit_k < item_rects.size() and item_rects[commit_k].size.x > 0.0 else slab_rect(vs, commit_k)
+			var c := rr.get_center()
+			var sz := maxf(rr.size.x, 0.2 * W) * lerpf(0.25, 1.5, ub)
 			var al := 1.0 if tb < 200.0 else 1.0 - (tb - 200.0) / 180.0
 			ci.draw_set_transform_matrix(UIA.xf(c, Vector2.ZERO, deg_to_rad(-25.0 * ub)))
 			ci.draw_texture_rect(BURST, Rect2(c - Vector2(sz, sz) / 2.0, Vector2(sz, sz)), false, Color(1, 1, 1, al))

@@ -281,28 +281,28 @@ func _initialize() -> void:
 	check(T.item_rects.size() == T.items.size() and T.item_rects[0].size.x > 0.0, "the slabs' rects are laid out (%d)" % T.item_rects.size())
 	var r0: Rect2 = T.item_rects[0]
 	var r1: Rect2 = T.item_rects[1]
-	check(near(r0.position.y + 4.0, 0.56 * vs.y, 1.0) and near(r1.position.y - r0.position.y, 0.088 * vs.y, 1.0), "the column from 0.56 H, 0.088 H apart")
+	check(r0.position.y > 0.4 * vs.y and r1.get_center().y > r0.get_center().y and T.hit_item(0, T.item_polys[0][0].lerp(T.item_polys[0][2], 0.5)) and not T.hit_item(1, T.item_polys[0][0].lerp(T.item_polys[0][2], 0.5)), "the hub-style list: rows go down, a tap in a row's turned box hits only that row")
 	var outside := Vector2(vs.x * 0.8, vs.y * 0.2)
 	mouse(T, outside, true)
 	mouse(T, outside, false)
 	check(not T.confirm and T.commit_k < 0 and T.outro < 0.0, "a stray tap after the intro does nothing")
-	mouse(T, r1.get_center(), true)
+	mouse(T, T.item_polys[1][0].lerp(T.item_polys[1][2], 0.5), true)
 	check(T.press_k == 1 and T.sel == 1 and T._slab_scale(1) <= 1.0, "a press on 불러오기: the squash, the selection follows")
 	mouse(T, outside, false)
 	check(T.press_k < 0 and T.commit_k < 0 and not T.confirm and T.outro < 0.0, "released outside it: nothing")
-	mouse(T, r0.get_center(), true)
-	mouse(T, r1.get_center(), false)
+	mouse(T, T.item_polys[0][0].lerp(T.item_polys[0][2], 0.5), true)
+	mouse(T, T.item_polys[1][0].lerp(T.item_polys[1][2], 0.5), false)
 	check(T.commit_k < 0 and not T.confirm, "pressed on 시작, released on 불러오기: nothing")
 	# the intro: a tap only finishes it
 	T.intro_done = false
 	T.menu_in = false
 	T.skip = false
-	mouse(T, r0.get_center(), true)
-	mouse(T, r0.get_center(), false)
+	mouse(T, T.item_polys[0][0].lerp(T.item_polys[0][2], 0.5), true)
+	mouse(T, T.item_polys[0][0].lerp(T.item_polys[0][2], 0.5), false)
 	check(T.intro_done and T.skip and T.commit_k < 0 and not T.confirm, "during the intro a tap on a slab only finishes the intro")
 	# 시작 with the autosave: the feedback, then straight in (no card)
-	mouse(T, r0.get_center(), true)
-	mouse(T, r0.get_center(), false)
+	mouse(T, T.item_polys[0][0].lerp(T.item_polys[0][2], 0.5), true)
+	mouse(T, T.item_polys[0][0].lerp(T.item_polys[0][2], 0.5), false)
 	check(T.commit_k == 0 and not T.confirm and T.load_file == arena.save.path and T.outro < 0.0, "시작 over the autosave: no card, the feedback runs, the autosave to load")
 	T.commit_k = -1
 	T.load_file = ""
@@ -311,8 +311,8 @@ func _initialize() -> void:
 	check(slot2 == "user://save_test_2.json", "slot 2's file is save_test_2.json in a test run (%s)" % slot2)
 	for k in range(1, 4): DirAccess.remove_absolute(arena.save.slot_path(k))
 	arena.save.save(slot2)
-	mouse(T, r1.get_center(), true)
-	mouse(T, r1.get_center(), false)
+	mouse(T, T.item_polys[1][0].lerp(T.item_polys[1][2], 0.5), true)
+	mouse(T, T.item_polys[1][0].lerp(T.item_polys[1][2], 0.5), false)
 	check(T.confirm and T.confirm_kind == "load" and T.rows.size() == 4 and T.commit_k < 0, "불러오기: the slot card with four rows, nothing loads yet")
 	check(T.rows[0]["on"] and not T.rows[1]["on"] and T.rows[2]["on"] and not T.rows[3]["on"], "자동 저장 and 슬롯 2 can be picked, the empty 1 and 3 not")
 	check(T.rows[0]["h"]["place"] == "본관 2층" and T.rows[2]["h"]["party"] == ["에스텔", "아이다"], "the rows carry the headers (%s / %s)" % [T.rows[0]["h"]["place"], T.rows[2]["h"]["party"]])
@@ -329,8 +329,8 @@ func _initialize() -> void:
 	mouse(T, T.close_rects[0].get_center(), true)
 	mouse(T, T.close_rects[0].get_center(), false)
 	check(not T.confirm, "닫기 closes the card")
-	mouse(T, r1.get_center(), true)
-	mouse(T, r1.get_center(), false)
+	mouse(T, T.item_polys[1][0].lerp(T.item_polys[1][2], 0.5), true)
+	mouse(T, T.item_polys[1][0].lerp(T.item_polys[1][2], 0.5), false)
 	for i in 3: await process_frame
 	mouse(T, T.confirm_rects[2].get_center(), true)
 	mouse(T, outside, false)
@@ -345,11 +345,11 @@ func _initialize() -> void:
 	DirAccess.rename_absolute(arena.save.path, arena.save.path + ".bak")
 	T.refresh_saves()
 	check(not T.has_save and T.auto_file == "", "no save anywhere: 불러오기 greyed (NO SAVE)")
-	mouse(T, r1.get_center(), true)
-	mouse(T, r1.get_center(), false)
+	mouse(T, T.item_polys[1][0].lerp(T.item_polys[1][2], 0.5), true)
+	mouse(T, T.item_polys[1][0].lerp(T.item_polys[1][2], 0.5), false)
 	check(not T.confirm and T.commit_k < 0, "불러오기 with nothing to load: nothing opens")
-	mouse(T, r0.get_center(), true)
-	mouse(T, r0.get_center(), false)
+	mouse(T, T.item_polys[0][0].lerp(T.item_polys[0][2], 0.5), true)
+	mouse(T, T.item_polys[0][0].lerp(T.item_polys[0][2], 0.5), false)
 	check(T.confirm and T.confirm_kind == "fresh" and T.confirm_sel == 0 and T.commit_k < 0, "시작 with no save: the 새로운 이야기를 시작합니다 card, 시작 picked")
 	for i in 3: await process_frame        # a draw: the card's buttons
 	check(T.confirm_rects.size() == 2, "the card's two buttons")
@@ -376,8 +376,8 @@ func _initialize() -> void:
 	check(T._slab_drop(2) > 0.0 and T._slab_drop(3) == 0.0, "160 ms: the second other dropping, 60 ms after the first")
 	T.clock += 300.0
 	check(T._slab_drop(3) > 0.0, "the last other dropping")
-	mouse(T, r1.get_center(), true)
-	mouse(T, r1.get_center(), false)
+	mouse(T, T.item_polys[1][0].lerp(T.item_polys[1][2], 0.5), true)
+	mouse(T, T.item_polys[1][0].lerp(T.item_polys[1][2], 0.5), false)
 	check(T.commit_k == 0 and not T.confirm, "input is ignored while the feedback runs")
 	T.commit_t = T.clock - 460.0
 	T._process(0.016)
