@@ -303,7 +303,7 @@ func _initialize() -> void:
 	bm.hp = 1.0
 	bm.hit(1.0, 0.0)
 	var due_down: Array = arena.sfx_due.filter(func(q): return q["file"] == "impact_boss_down")
-	check(bm.is_dead() and player_of("break") != null and due_down.size() == 1 and near(due_down[0]["t"], 120.0, 1.0), "the boss falls: break now, impact_boss_down due in 120 ms (%s)" % str(due_down.size()))
+	check(bm.is_dead() and player_of("down") != null and due_down.size() == 1 and near(due_down[0]["t"], 120.0, 1.0), "the boss falls: the body-down now, impact_boss_down due in 120 ms (%s)" % str(due_down.size()))
 	arena.sfx_step(130.0)
 	check(player_of("impact_boss_down") != null, "…and it sounds")
 	stop_all()

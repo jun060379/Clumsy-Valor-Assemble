@@ -159,14 +159,14 @@ func hit(dmg: float, kb: float, mul := 1.0) -> void:
 	if arena.get("pfx") != null: arena.pfx.hit(position.x - hd * 10.0, position.y - (20.0 if M.has("fly") else 62.0 * M["s"] / 3.0), int(hd) if hd != 0.0 else 1, 1.25 if dmg >= 2.0 else 1.0)
 	if hp <= 0.0:
 		# hitDummy on hp<=0: break, a jolt of shake, sparks and dust ...
-		arena.sfx("break", 1.0)
+		arena.sfx("down", 1.0)                 # a body goes down (the dummies keep their "break")
 		arena.shake_amt = maxf(arena.shake_amt, 8.0)
 		arena.spark(position + Vector2(0, -40), 20)
 		arena.dust(position, 0, true)
 		# ... then mobDie
 		dead = 1.0
 		set_a("die")
-		arena.sfx("break", 0.8)
+		arena.sfx("down", 0.6)
 		arena.spark(position + Vector2(0, -40), 16)
 		if M.has("boss"):
 			# mobDie: the boss goes down hard — impact_boss_down lands 120 ms after the break
