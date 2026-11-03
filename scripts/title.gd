@@ -907,15 +907,7 @@ func _menu(ci: CanvasItem, vs: Vector2) -> void:
 		var fsm := int(0.026 * H)
 		ci.draw_string(fn, Vector2(0.089 * W + 0.02 * W * (1.0 - ua), 0.065 * H), motto, HORIZONTAL_ALIGNMENT_LEFT, -1, fsm, Color(0.86, 0.86, 0.9, ua))
 	var r0 := slab_rect(vs, 0)
-	# the flower, small to the right of the first slab, popping on its beat
-	var ue := 1.0 if menu_in else mu(T_EMBLEM, 0.3, "bk")
-	if ue > 0.0 and o < 1.0:
-		var eh := 0.15 * H
-		var ew := eh * EMBLEM.get_width() / EMBLEM.get_height()
-		var er := Rect2(r0.end.x + lean + 0.055 * W, r0.position.y - eh * 0.3, ew, eh)
-		ci.draw_set_transform_matrix(UIA.xf(er.get_center(), Vector2(0, 0.25 * H * o), 0.0, Vector2(ue, ue)))
-		ci.draw_texture_rect(EMBLEM, er, false, Color(1, 1, 1, minf(1.0, ue) * (1.0 - o)))
-		ci.draw_set_transform(Vector2.ZERO)
+	# (the flower emblem by the menu is gone: the user asked for it off the title)
 	# the menu in the in-game hub's style (menu.gd _draw_fg): a list tilted −9°, a small English caption over each
 	# Korean label, the picked one blown up black on a white plate over a pink plate that slide between rows
 	var ucur := 1.0 if menu_in else mu(T_CURSOR - CUR_IN, CUR_IN, "bk")
