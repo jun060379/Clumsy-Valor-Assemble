@@ -400,6 +400,9 @@ func check_hits() -> void:
 ## the hit's sound: the ground combo's n-th hit plays hit<n> (F / A / C), the air combo cycles 1 / 2 / 3 by its hit,
 ## the kneeling slash and the dive are hit1, the upward slash hit2; the charged thrust lands heavy
 func hit_sound() -> String:
+	if who == "aida":
+		# Aida's otherworld: the dark-energy zing on the light blows, the void boom on the third and the charge
+		return "aida_heavy" if anim in ["attack3", "cthrust"] or (anim == "air_combo" and f >= 6) else "aida_hit"
 	match anim:
 		"attack1", "kneel_attack", "dive": return "hit1"
 		"attack2", "attack_high": return "hit2"
@@ -410,7 +413,10 @@ func hit_sound() -> String:
 
 ## the blow's weight for the screen (arena.impact): hit1 / hit2 are light, hit3 is hit3, the charged thrust heavy
 func hit_weight() -> String:
-	match hit_sound():
+	var hs := hit_sound()
+	if hs == "aida_heavy": return "hit3" if anim != "cthrust" else "heavy"
+	if hs == "aida_hit": return "light"
+	match hs:
 		"hit3": return "hit3"
 		"heavy": return "heavy"
 	return "light"
@@ -453,8 +459,9 @@ func rift_enter(to_x: float, to_y: float, quick: bool, snd := 0.0) -> void:
 	gate_in = position + Vector2(dir * (30.0 if quick else 42.0) * CSCALE, 0)
 	gate_out = Vector2.INF
 	gate_t = 0.0
-	if snd > 0.0: arena.sfx("dig", snd)
-	arena.sfx("rift", 0.9)                 # the portal dash's anime swipe
+	# the rift opens with a snap and she's through with a swish (the old 'dig' rumble is gone)
+	arena.sfx("aida_open", 0.9 if snd <= 0.0 else maxf(0.7, snd))
+	arena.sfx("aida_pass", 0.8, {"delay_ms": 60.0})
 
 func rift_exit() -> void:
 	position.x = dig_to
@@ -485,7 +492,7 @@ func rift_exit() -> void:
 	g_out = arena.pfx.gate(position.x - dir * (30.0 if rift_q else 42.0) * CSCALE, position.y, M["h"] * CSCALE, M["k"], M["w"])
 	gdx = -dir * 125.0 * CSCALE
 	gclip = {"x": g_out["x"], "keep": dir}
-	arena.sfx("dig", 0.5)
+	arena.sfx("aida_close", 0.85)          # the way in shuts: a short crack
 	if r_strike != null:
 		# both gates snap shut: whatever stood on the path she cut through is cut
 		var s = r_strike
@@ -502,7 +509,7 @@ func rift_exit() -> void:
 		if hit:
 			arena.streak_fx(s["x0"], position.x, position.y - 62.0 * CSCALE, dir, Color("#b37bff"))
 			qte_offer("finisher")
-		arena.sfx("heavy", 0.9)
+		arena.sfx("aida_heavy", 1.0)
 		arena.shake(5.0 + s["r"] * 7.0, dir)
 		arena.post_wave(Vector2((s["x0"] + position.x) / 2.0, position.y - 60.0 * CSCALE), 0.8 + s["r"] * 0.6, 520.0, 0.2)
 		arena.hitstop = maxf(arena.hitstop, 80.0 + s["r"] * 60.0 if hit else 30.0)

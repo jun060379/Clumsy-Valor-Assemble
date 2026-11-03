@@ -915,11 +915,11 @@ func _process(delta: float) -> void:
 ## LAYERS stacks a second file under a name at the same moment (ult: the ult_sub low-passed sub layer at 0.9).
 ## heavy, parry and the ult also duck the music (DUCK: dB, ms) while a dungeon track plays.
 const SNAP_MAX := 0.09
-const SNAP := {"hit1": true, "hit2": true, "hit3": true, "heavy": true, "thrust": true, "parry": true, "ult": true}
-const JITTER := {"hit1": 0.5, "hit2": 0.5, "hit3": 0.5, "heavy": 0.5, "thrust": 0.5, "hurt": 0.5}
+const SNAP := {"hit1": true, "hit2": true, "hit3": true, "heavy": true, "thrust": true, "parry": true, "ult": true, "aida_hit": true, "aida_heavy": true}
+const JITTER := {"aida_hit": 0.5, "aida_heavy": 0.4, "hit1": 0.5, "hit2": 0.5, "hit3": 0.5, "heavy": 0.5, "thrust": 0.5, "hurt": 0.5}
 const FILES := {"thrust": "stab", "dash": "dodge", "ui_move": "menu_move", "ui_ok": "menu_ok", "ui_back": "menu_back", "step": "tick"}
 ## round robin: a base with n variants plays <base>_<k>, never the same k twice in a row (sfx_file)
-const VARIANTS := {"hit1": 4, "hit2": 4, "hit3": 4, "heavy": 4, "stab": 3, "parry": 2, "guard": 3, "hurt": 4, "swing": 4, "dodge": 2, "rift": 2, "skid": 2, "death": 2, "down": 3, "ult": 4, "ult_charge": 3,
+const VARIANTS := {"hit1": 4, "hit2": 4, "hit3": 4, "heavy": 4, "stab": 3, "parry": 2, "guard": 3, "hurt": 4, "swing": 4, "dodge": 2, "aida_open": 2, "aida_pass": 2, "aida_close": 2, "aida_hit": 4, "aida_heavy": 3, "skid": 2, "death": 2, "down": 3, "ult": 4, "ult_charge": 3,
 	"step_grass": 8, "step_stone": 8, "step_wood": 8, "step_run": 8}
 ## footsteps ("foot"): the surface under the player picks the set — the hall's boards, the cave's stone, grass elsewhere
 const FOOT := {"hall": "step_wood", "dungeon": "step_stone"}
@@ -929,7 +929,7 @@ const REPEAT_K := 0.7
 var vari_last := {}
 var hit_last_ms := -99999.0
 const UI_CLICKS := ["ui1", "ui2", "ui3"]
-const LEVEL := {"hit1": 0.9, "hit2": 0.9, "hit3": 0.9, "heavy": 1.0, "parry": 1.2, "stab": 0.9, "guard": 0.9, "hurt": 0.9, "death": 1.0, "down": 0.9, "dodge": 0.6, "rift": 0.7, "skid": 0.5, "ult": 1.0, "ult_charge": 0.8, "swing": 0.4,
+const LEVEL := {"hit1": 0.9, "hit2": 0.9, "hit3": 0.9, "heavy": 1.0, "parry": 1.2, "stab": 0.9, "guard": 0.9, "hurt": 0.9, "death": 1.0, "down": 0.9, "dodge": 0.6, "aida_open": 0.8, "aida_pass": 0.6, "aida_close": 0.75, "aida_hit": 0.85, "aida_heavy": 0.95, "skid": 0.5, "ult": 1.0, "ult_charge": 0.8, "swing": 0.4,
 	"step_grass": 0.15, "step_stone": 0.16, "step_wood": 0.16, "step_run": 0.16, "tick": 0.5, "ui1": 0.8, "ui2": 0.5, "ui3": 0.55,
 	"pick_coin": 0.53, "pick_stone": 0.68, "pick_rune": 0.53,
 	"menu_move": 0.48, "menu_ok": 0.48, "menu_back": 0.54,
@@ -956,7 +956,7 @@ func sfx(n: String, vol := 1.0, opts := {}) -> void:
 	var base := String(FILES.get(n, n))
 	if base == "foot": base = String(FOOT.get(level_kind(), "step_grass"))
 	var lv: float = float(LEVEL.get(file, LEVEL.get(base, 1.0)))
-	if VARIANTS.has(base) and base in ["hit1", "hit2", "hit3", "heavy", "stab"]:
+	if VARIANTS.has(base) and base in ["hit1", "hit2", "hit3", "heavy", "stab", "aida_hit", "aida_heavy"]:
 		var now := Time.get_ticks_msec()
 		if repeat_ms > 0.0 and now - hit_last_ms < repeat_ms: lv *= REPEAT_K
 		hit_last_ms = now
