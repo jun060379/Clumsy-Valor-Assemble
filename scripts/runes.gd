@@ -60,7 +60,7 @@ const RS_RATE := [0, 100, 90, 75, 60, 45, 30, 20]
 const FZG := ["common", "uncommon", "rare", "elite", "epic"]
 const FZRATE := {"uncommon": 90, "rare": 70, "elite": 50, "epic": 40, "legend": 10}
 const FUSE_COST := 15
-const DROP_GEAR := {"weapon": {"전사": ["기사단 롱소드", "브로드소드", "방패병의 한손검"], "워락": ["그을린 삽", "계약의 낫", "흑요석 삽"], "사제": ["순례자의 묵주", "은 성표", "축복받은 홀"]},
+const DROP_GEAR := {"weapon": {"전사": ["기사단 롱소드", "브로드소드", "방패병의 한손검"], "워락": ["그을린 삽", "계약의 낫", "흑요석 삽"], "사제": ["순례자의 묵주", "은 성표", "축복받은 홀"], "도적": ["부싯돌 권총", "놋쇠 단발총", "쥐굴 수제 권총"]},    # 도적: PLACEHOLDER names
 	"head": ["케틀햇", "가죽 두건", "사제 베일"], "body": ["사슬 갑옷", "가죽 조끼", "수도복"], "shoe": ["판금 각반", "사냥꾼 장화", "헝겊 신"], "acc": ["구리 반지", "유리 펜던트", "낡은 브로치", "은 귀걸이"]}
 ## gear v3 numbers
 const GMUL := {"common": 1.0, "uncommon": 1.15, "rare": 1.3, "elite": 1.45, "epic": 1.65, "legend": 1.9, "unique": 2.1}
