@@ -10,7 +10,7 @@ extends RefCounted
 
 const CH := preload("res://scripts/chars.gd")
 const SK := preload("res://scripts/skins.gd")
-const ROSTER := ["estelle", "aida", "luce"]
+const ROSTER := ["estelle", "aida", "luce", "kenin"]
 const HDOOR := 3024.0         # town.gd HDOOR
 ## two walkable routes: "top" (streets, terrace) and "bot" (the lower walkway); they meet at both ends
 const JUNC := [1750.0, 6650.0]
@@ -19,11 +19,13 @@ const POI := [[450.0, "top", "store"], [1050.0, "top", "yard"], [1640.0, "top", 
 	[4650.0, "bot", "lower"], [5550.0, "bot", "lower"], [6880.0, "bot", "bath"], [7190.0, "bot", "well"], [7640.0, "bot", "forge"], [8040.0, "bot", "kiln"], [8300.0, "bot", "river"], [8950.0, "bot", "tree"]]
 const FAV := {"estelle": {"yard": 4.0, "forge": 3.0, "store": 2.0, "lamp": 1.0, "hall": 2.0, "camp": 1.0},
 	"aida": {"barn": 4.0, "wagon": 3.0, "well": 3.0, "kiln": 1.0, "board": 1.0, "tree": 1.0},
-	"luce": {"fountain": 4.0, "bench": 2.0, "river": 3.0, "tree": 3.0, "bath": 1.0, "hall": 1.0}}
+	"luce": {"fountain": 4.0, "bench": 2.0, "river": 3.0, "tree": 3.0, "bath": 1.0, "hall": 1.0},
+	"kenin": {"camp": 4.0, "wagon": 3.0, "store": 2.0, "board": 2.0, "forge": 1.0, "lower": 1.0}}
 const SOLO := {"estelle": ["오늘도 무사히, 아하하.", "의족 나사가 또 헐거워졌나…", "방패 끈 새로 갈아야겠어요.", "훈련장 한 판, 어때요?", "배고프다아…", "라운데라님, 오늘도 지켜봐 주세요.", "다들 다치지 말고 돌아오면 좋겠는데."],
 	"aida": ["…흙 냄새 좋네요.", "큭큭.", "험.", "…오늘은 다들 조용히 자네요.", "묘지 한 바퀴 돌고 올까요, 삽 챙겨서.", "…뭐예요, 아무것도 없네요.", "죽겠네요, 진짜."],
+	"kenin": ["(임시) 탄약은 넉넉하고…", "(임시) 폭탄 셋, 하나, 둘, 셋.", "(임시) 고글에 먼지가…"],     # PLACEHOLDER lines
 	"luce": ["힐해드려요?", "저는 루체에요!", "라운데라님~ 오늘 간식은 뭐예요?", "주여, 오늘도 평화롭게 해주소서~", "심심해써…", "고기 마니 올려서!", "분수에 동전 던지면 소원 들어줄까?"]}
-const BYE := {"estelle": "그럼 마을에 있을게요!", "aida": "…그럼 마을에 있을게요.", "luce": "루체는 분수대에 있을게요~"}
+const BYE := {"estelle": "그럼 마을에 있을게요!", "aida": "…그럼 마을에 있을게요.", "luce": "루체는 분수대에 있을게요~", "kenin": "(임시) 그럼 마을에 있을게."}
 ## small talk (the prototype marks these as placeholder lines): pair -> scenes of [speaker index into the pair, line]
 const CHAT := {
 	"estelle|aida": [[[0, "아이다씨! 오늘도 묘지 순찰 가세요?"], [1, "아뇨, 삽 닦는 날이에요."], [0, "아하하, 삽 닦는 날도 있구나."]],
@@ -40,7 +42,7 @@ const CHAT := {
 		[[1, "루체님, 머리에 잎 붙었어요."], [0, "어? 어디어디?"], [1, "…거기 말고요."]]]}
 ## the pace town life would like (px/ms); a walk is played at most TOWN_RATE x its native cadence to get near it, and
 ## always moves at the art's stride speed for that rate (town_gait), so the feet stay planted
-const WALKSP := {"estelle": 0.2, "aida": 0.18, "luce": 0.18}
+const WALKSP := {"estelle": 0.2, "aida": 0.18, "luce": 0.18, "kenin": 0.18}
 const TOWN_RATE := 1.3
 ## the title: the spots everyone leans toward (in place of their own favourites), the emotes, the passing distance,
 ## the pair cooldown
@@ -64,7 +66,7 @@ const TITLE_SPEED := 0.09     # … aiming at this ground speed (world px/ms); a
 ## played slow (rows 2 / 1, two flight frames in eight), a long stride: 에스텔 0.19, 아이다 ~33 cell px a frame = 0.145,
 ## 루체 ~49 = 0.20 px/ms at 145 / 140 ms a frame (the sole's travel along the feet line between frames while it is down
 ## × 0.5 × the draw scale / the frame time). Walking faster than this slides the soles, slower makes them skate backwards.
-const STRIDE := {"estelle": {2: 0.19}, "aida": {1: 0.145}, "luce": {1: 0.20}}
+const STRIDE := {"estelle": {2: 0.19}, "aida": {1: 0.145}, "luce": {1: 0.20}, "kenin": {1: 0.16}}
 const STRIDE_DEFAULT := 0.14
 var greet_cd := {}            # "a|b" -> ms until that pair may greet again
 var greets := 0               # greetings so far (tests)

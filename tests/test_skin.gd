@@ -43,7 +43,7 @@ func _initialize() -> void:
 	for s in SD.SKINS:
 		check(not ids.has(s["id"]), "unique id " + s["id"])
 		ids[s["id"]] = 1
-		check(s["c"] in ["estelle", "aida", "luce"], "member of " + s["id"])
+		check(s["c"] in ["estelle", "aida", "luce", "kenin"], "member of " + s["id"])
 		check(s.has("n") and s.has("d") and s["unlock"] is Dictionary and s["unlock"].has("kind") and s["unlock"].has("value") and s.has("dir"), "fields of " + s["id"])
 		check(String(s["unlock"]["kind"]) in ["default", "fame", "drop", "level", "shop", "story"], "unlock kind of " + s["id"])
 		kinds[s["unlock"]["kind"]] = 1
@@ -187,7 +187,7 @@ func _initialize() -> void:
 	ev.pressed = true
 	S.reset()
 	R._unhandled_input(ev)
-	check(S.owned.size() == 10, "the Page Up key itself (DEV.on in tests)")
+	check(S.owned.size() == 11, "the Page Up key itself (DEV.on in tests)")
 
 	# ---- shop (needs art) and equip, end to end with the copied files ----
 	if e2e:
@@ -246,7 +246,7 @@ func _initialize() -> void:
 	arena.world_started = false               # a load happens before the world starts
 	arena.save.apply(old)
 	arena.world_started = true
-	check(S.owned.size() == 4 and S.owns("estelle_s1") and SK.worn("estelle") == "estelle_base", "old save: 기본 for all, grade 2's costume handed out (%s)" % str(S.owned.keys()))
+	check(S.owned.size() == 5 and S.owns("estelle_s1") and SK.worn("estelle") == "estelle_base", "old save: 기본 for all, grade 2's costume handed out (%s)" % str(S.owned.keys()))
 	check(F.fx.feed.slice(nf).all(func(x): return not String(x["s"]).contains("의상")), "quietly (no costume notice on load)")
 	F.r = 1
 

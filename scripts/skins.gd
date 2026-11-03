@@ -22,7 +22,7 @@ extends RefCounted
 const SD := preload("res://scripts/skin_data.gd")
 const CH := preload("res://scripts/chars.gd")
 const CB := preload("res://scripts/char_bounds.gd")
-const ROSTER := ["estelle", "aida", "luce"]
+const ROSTER := ["estelle", "aida", "luce", "kenin"]
 const TAG := {"fame": "명성", "drop": "GET", "level": "기억", "shop": "옷장", "story": "이야기", "dev": "TEST"}
 
 static var cur = null              # the live instance (arena.skins)
@@ -83,7 +83,11 @@ static func path_of(id: String, c: String, key: String, i := 0) -> String:
 		if A.has("alt"):
 			var q := own_path(id, String(A["alt"]), i)
 			if q != "": return q
-	return base_path(c, key, i)
+	var bp := base_path(c, key, i)
+	# a member whose original art lacks a face of the standing picture (blink, smile, surprise) shows her st_base
+	var A2: Dictionary = SD.ASSETS.get(key, {})
+	if A2.has("alt") and bp != "" and not ResourceLoader.exists(bp): return base_path(c, String(A2["alt"]), i)
+	return bp
 
 ## the skin's own folder ("" = it is the original art)
 static func own_dir(id: String) -> String:

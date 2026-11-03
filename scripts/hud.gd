@@ -415,7 +415,13 @@ func _draw_portrait_top(ci: CanvasItem, vs: Vector2) -> void:
 	if _ult_full() and not arena.cfg.touch_ui():
 		us += "  [" + arena.cfg.key_name(int(arena.cfg.kb["ult"][0])) + "]"
 	UI.shadow_text(ci, UI.anton(true), Vector2(0, 37), us, 11, Color(SKY, a))
-	if P.who != "estelle":
+	if P.who == "kenin":
+		# 케닌: rounds and bombs left; an empty pistol counts down to its reload
+		var K = arena.kenin
+		var ks := ("재장전 %.1fs" % (maxf(0.0, K.RELOAD_FIELD - K.reload_t) / 1000.0)) if K.dry() else ("탄 %d/%d" % [K.ammo, K.AMMO])
+		ks += "  폭탄 %d/%d" % [K.bombs, K.BOMBS]
+		ci.draw_string(UI.noto(), Vector2(nw + 8.0, -4.0), ks, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1, 1, 1, (0.6 if K.dry() else 1.0) * a))
+	elif P.who != "estelle":
 		var cdv: float = P.heal_cd if P.who == "luce" else P.tp_cd
 		var sk := "힐" if P.who == "luce" else "균열"
 		var s := sk + (" %.1fs" % (cdv / 1000.0) if cdv > 0.0 else " 준비")

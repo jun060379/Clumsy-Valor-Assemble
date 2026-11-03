@@ -13,7 +13,8 @@ const TABS := [["attr", "상세", "STATUS"], ["gear", "장비", "GEAR"], ["skill
 const GSL := [["weapon", "WEAPON"], ["head", "HEAD"], ["body", "BODY"], ["shoe", "SHOES"], ["acc1", "ACC 1"], ["acc2", "ACC 2"], ["acc3", "ACC 3"]]
 const SHEET := {"estelle": ["에스텔 벨라시타", "전사 · 근접 · 디펜더", ["수호자", "받는 피해 25% 감소."]],
 	"aida": ["스나가와 아이다", "워락 · 근접 · 스트라이커", ["그림자 걸음", "적의 등 뒤에서 때리면 피해 2배 (뒷치기)."]],
-	"luce": ["루체 루멘", "사제 · 원거리 · 서포터", ["축복", "루체가 파티에 있으면 대기 중인 동료가 초당 체력 2씩 회복한다."]]}
+	"luce": ["루체 루멘", "사제 · 원거리 · 서포터", ["축복", "루체가 파티에 있으면 대기 중인 동료가 초당 체력 2씩 회복한다."]],
+	"kenin": ["케닌 클로", "도적 · 원거리 · 트릭스터", ["원호 사격", "장탄 6발 · 폭탄 3개. 다 쓰면 약해지고, 파티에 들어가 있는 동안 재장전이 빨라진다."]]}
 
 var c := "estelle"
 var tab := "attr"
@@ -37,7 +38,7 @@ var gd_t := 1e9                  # cx_gdpop on the gear card
 var open_t := 0.0
 # ---- presence on 상세 (react / sblink / --px --py): a tap smiles (♪, hop), three quick taps surprise (!!, shake);
 # the art blinks while it rests on its base face; the ground's dots follow the pointer
-const HXY := {"estelle": Vector2(0.58, 0.20), "aida": Vector2(0.58, 0.21), "luce": Vector2(0.58, 0.24)}
+const HXY := {"estelle": Vector2(0.58, 0.20), "aida": Vector2(0.58, 0.21), "luce": Vector2(0.58, 0.24), "kenin": Vector2(0.56, 0.2)}
 var react := ""                  # "" / "smile" / "sup"
 var react_t := 0.0               # ms left on that face
 var taps: Array = []             # tap times (ms) in the last 1.3 s

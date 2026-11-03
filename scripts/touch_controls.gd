@@ -38,8 +38,8 @@ const BTN := [
 const ULT_C := Vector2(132, 208)
 const ULT_W := 100.0
 const ULT_H := 40.0
-const SK_LBL := {"estelle": "가드", "aida": "균열", "luce": "힐"}
-const SK_ICON := {"estelle": preload("res://assets/ui/icons/sk_est_skill.png"), "aida": preload("res://assets/ui/icons/sk_aida_skill.png"), "luce": preload("res://assets/ui/icons/sk_luce_skill.png")}
+const SK_LBL := {"estelle": "가드", "aida": "균열", "luce": "힐", "kenin": "폭탄"}
+const SK_ICON := {"estelle": preload("res://assets/ui/icons/sk_est_skill.png"), "aida": preload("res://assets/ui/icons/sk_aida_skill.png"), "luce": preload("res://assets/ui/icons/sk_luce_skill.png"), "kenin": preload("res://assets/ui/icons/sk_kenin_skill.png")}
 ## SVG strokes on a 24 x 24 box (the prototype's button icons)
 const ICON := {
 	"dash": [[Vector2(5, 6), Vector2(11, 12), Vector2(5, 18)], [Vector2(12, 6), Vector2(18, 12), Vector2(12, 18)]],
@@ -244,6 +244,7 @@ func skill_cd() -> float:
 	var P = arena.player
 	if P.who == "luce": return clampf(maxf(0.0, P.heal_cd) / 9000.0, 0.0, 1.0)
 	if P.who == "aida": return clampf(maxf(0.0, P.tp_cd) / 3000.0, 0.0, 1.0)
+	if P.who == "kenin" and arena.kenin.bombs <= 0: return clampf(1.0 - arena.kenin.bomb_t / arena.kenin.BOMB_FIELD, 0.0, 1.0)
 	return 0.0
 
 ## interUI: what the attack button says when it will interact ('' = attack)

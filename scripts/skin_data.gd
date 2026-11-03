@@ -24,7 +24,7 @@ extends RefCounted
 ##   partial  true: "부분 완성" on the screens; done = the animations it has
 ##   placeholder  true: the name / description were invented and wait for the user's own (the 기본 entries: only the description)
 
-const BASE := {"estelle": "estelle_base", "aida": "aida_base", "luce": "luce_base"}
+const BASE := {"estelle": "estelle_base", "aida": "aida_base", "luce": "luce_base", "kenin": "kenin_base"}
 ## 초심's run and walk, played at sprite timing (tools/make_skin_chosim.py):
 ##   run: run_7f (fourth delivery, fringes cleaned by tools/fix_run7.py), 7 frames for two steps, rotated so its
 ##        footfalls (its frames 3 and 6) are frames 1 and 4; 620 ms a cycle (each step 310 ms) and a dip on each contact
@@ -83,6 +83,9 @@ const SKINS := [
 		# own standing art (st_base, st_cl) and walk (rows 35-37, sheet_5); the other sprites are the original's
 		"rows": [35, 36, 37], "anims": {"walk": [35, WALK_LUCE]}, "bob": {"walk": []}, "stride": {"walk": STRIDE_LUCE}, "done": ["walk"]},
 	{"id": "luce_s1", "c": "luce", "n": "성가대 수습복", "d": "성가대 수습 시절의 흰 옷. 이야기가 이어지면 받을 수 있다.", "unlock": {"kind": "story", "value": "luce_choir"}, "dir": ROOT + "luce_s1/", "placeholder": true},
+	# 케닌: the Sprite Flow sheets in assets/chars/kenin (4 used + an empty fifth); standing art / face / bust / ult art are
+	# PLACEHOLDER crops of the user's design image until the real pictures arrive
+	{"id": "kenin_base", "c": "kenin", "n": "기본", "d": "올리브색 로브와 남색 목도리, 놋쇠 고글. 등에는 두루마리 배낭.", "unlock": {"kind": "default", "value": 0}, "dir": "", "placeholder": true},
 	{"id": "luce_s2", "c": "luce", "n": "여름 휴가 차림", "d": "밀짚모자와 가벼운 원피스. 길드가 마을의 자랑이 된 기념.", "unlock": {"kind": "fame", "value": 3}, "dir": ROOT + "luce_s2/", "placeholder": true},
 ]
 
@@ -112,7 +115,7 @@ const ASSETS := {
 	"ult_art": {"base": "res://assets/ult/ult_art_{c}.png", "file": "ult_art"},
 	"doll": {"base": "res://assets/hall/{p}.png", "file": "doll"},
 }
-const BUST := {"estelle": "por_est", "aida": "por_aida", "luce": "por_luce"}
+const BUST := {"estelle": "por_est", "aida": "por_aida", "luce": "por_luce", "kenin": "por_kenin"}
 const DOLL := {"estelle": "dollP", "aida": "dollG", "luce": "dollC"}
 const EXT := [".png", ".webp"]
 

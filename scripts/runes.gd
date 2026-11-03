@@ -25,8 +25,8 @@ const GRADE := {"common": ["일반", Color("#b9b2a3")], "uncommon": ["고급", C
 const GORD := ["unique", "legend", "epic", "elite", "rare", "uncommon", "common"]
 const SLOTS := [["weapon", "무기"], ["head", "머리"], ["body", "몸통"], ["shoe", "신발"], ["acc1", "장신구 1"], ["acc2", "장신구 2"], ["acc3", "장신구 3"]]
 const SLOTN := {"weapon": "무기", "head": "머리", "body": "몸통", "shoe": "신발", "acc1": "장신구 1", "acc2": "장신구 2", "acc3": "장신구 3", "acc": "장신구"}
-const CLS := {"estelle": "전사", "aida": "워락", "luce": "사제"}
-const ROSTER := ["estelle", "aida", "luce"]
+const CLS := {"estelle": "전사", "aida": "워락", "luce": "사제", "kenin": "도적"}
+const ROSTER := ["estelle", "aida", "luce", "kenin"]
 ## rune kinds: w = weapon (cls or 공용), a = armor, x = accessory (unique ones are character-locked)
 const RUNE := {
 	"firmstep": {"n": "굳건한 걸음", "g": "rare", "k": "w", "cls": "전사", "d": "가드로 막을 때마다 공격력 +3% (최대 4중첩, 6초)"},
@@ -69,7 +69,7 @@ const GMAIN := {"weapon": 3.7, "천옷": 1.6, "경갑": 3.2, "중갑": 5.3}
 const GSUBMAX := {"atk": 5.8, "crit": 3.9, "hp": 7.0, "ms": 2.4, "heal": 5.8, "ult": 6.5}
 const NSUB := {"common": 1, "uncommon": 1, "rare": 2, "elite": 2, "epic": 3, "legend": 3, "unique": 4}
 ## base move speed per member (prototype STATS.ms): RUN = 0.36 × this × gear × 바람 걸음 (runeTick / switchChar)
-const BASE_MS := {"estelle": 0.95, "aida": 1.1, "luce": 1.0}
+const BASE_MS := {"estelle": 0.95, "aida": 1.1, "luce": 1.0, "kenin": 1.05}
 ## the dungeon caps what can drop (DUNGEONS[0] = 버섯 동굴)
 const DUN := {"id": "cave", "name": "버섯 동굴", "cap": "rare", "chest_cap": 2, "bonus": "elite", "mul": 1.0, "glv": [1, 6], "rank": 1}
 const REWARD := {"rune": ["룬", Color("#c58cff")], "iron": ["실링", Color("#ffd34d")], "gear": ["장비", Color("#ffd34d")], "heal": ["회복", Color("#9fe3a0")]}
@@ -84,7 +84,7 @@ const EFF := {"fire": {"ice": 1.5, "plant": 1.5, "fire": 0.5, "water": 0.5, "ear
 	"elec": {"water": 1.5, "wind": 1.5, "earth": 0.5, "elec": 0.5, "plant": 0.5}, "earth": {"fire": 1.5, "elec": 1.5, "wind": 0.5, "plant": 0.5},
 	"water": {"fire": 1.5, "earth": 1.5, "water": 0.5, "plant": 0.5}, "wind": {"plant": 1.5, "elec": 0.5, "earth": 0.5},
 	"plant": {"water": 1.5, "earth": 1.5, "fire": 0.5, "plant": 0.5, "wind": 0.5}, "dark": {"holy": 1.5, "dark": 0.5}, "phys": {}, "holy": {}}
-const ATKEL := {"estelle": ["phys"], "aida": ["dark", "phys"], "luce": ["holy"]}
+const ATKEL := {"estelle": ["phys"], "aida": ["dark", "phys"], "luce": ["holy"], "kenin": ["phys"]}
 const ENEMY := {
 	"dummy": {"name": "허수아비", "hp": 60, "atk": 0, "ms": 0.0, "atkEl": "phys", "defEl": ["phys"], "where": "훈련장", "desc": "훈련장에 줄지어 선 짚 허수아비. 맞아도 화내지 않고, 부서지면 잠시 뒤 누군가 다시 세워 둔다. 기술 연습용."},
 	"ghost": {"name": "유령", "hp": 30, "atk": 10, "ms": 0.09, "atkEl": "dark", "defEl": ["dark"], "where": "훈련장", "desc": "훈련장 구석을 떠도는 작은 유령. 가까이 오면 몸으로 부딪혀 온다. 어둠 그 자체라 신성한 빛에 크게 다친다."},
@@ -170,6 +170,9 @@ static func _default_gear() -> Dictionary:
 			"shoe": I.call("흙 묻은 장화", "rare", 4, "경갑", ["ms", 3], "breeze", 2104), "acc1": I.call("보라 꽃 머리핀", "rare", 3, "", ["crit", 2], "", 2105), "acc2": null, "acc3": null},
 		"luce": {"weapon": I.call("수습 사제의 묵주", "rare", 5, "", ["heal", 5], "lamp", 3101), "head": null, "body": I.call("수습 사제 로브", "rare", 4, "천옷", null, "prayer", 3103),
 			"shoe": I.call("헝겊 신", "common", 1, "천옷", null, "", 3104), "acc1": I.call("성표 귀걸이", "uncommon", 2, "", ["ult", 5], "", 3105), "acc2": null, "acc3": null},
+		# PLACEHOLDER: Kenin's starting gear (names / grades invented, wait for the user's own)
+		"kenin": {"weapon": I.call("부싯돌 권총", "rare", 5, "", ["crit", 3], "", 4101), "head": I.call("놋쇠 고글", "uncommon", 2, "천옷", null, "", 4102),
+			"body": I.call("올리브색 여행 로브", "rare", 4, "천옷", null, "", 4103), "shoe": null, "acc1": I.call("두루마리 배낭", "uncommon", 2, "", ["ult", 5], "", 4105), "acc2": null, "acc3": null},
 	}
 
 

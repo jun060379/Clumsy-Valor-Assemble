@@ -9,7 +9,7 @@ const UI := preload("res://scripts/ui_kit.gd")
 const TALK := preload("res://scripts/talk_fx.gd")
 ## VOICE: base pitch, wave, low-pass, blip length (s), volume, ms per letter
 const VOICE := {"bran": [131.0, "square", 1400.0, 0.055, 0.045, 42.0], "estelle": [392.0, "square", 3000.0, 0.04, 0.035, 30.0],
-	"aida": [294.0, "square", 2200.0, 0.035, 0.03, 28.0], "luce": [523.0, "triangle", 4000.0, 0.04, 0.06, 28.0], "def": [262.0, "square", 2400.0, 0.04, 0.035, 32.0]}
+	"aida": [294.0, "square", 2200.0, 0.035, 0.03, 28.0], "luce": [523.0, "triangle", 4000.0, 0.04, 0.06, 28.0], "kenin": [440.0, "square", 2800.0, 0.03, 0.03, 26.0], "def": [262.0, "square", 2400.0, 0.04, 0.035, 32.0]}
 const QUIET := " \t\n.,…?!~'\"·"
 static var _blips := {}
 var shown := 0.0                # letters of the current line on show

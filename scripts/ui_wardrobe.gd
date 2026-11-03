@@ -16,7 +16,8 @@ const WEAR := preload("res://scripts/ui_char_wear.gd")
 const BAGP := preload("res://scripts/ui_bag.gd")
 const MOVES := {"estelle": [["idle", "대기"], ["walk", "걷기"], ["attack1", "베기"], ["guard", "방패"]],
 	"aida": [["idle", "대기"], ["walk", "걷기"], ["attack1", "삽질"], ["mark", "균열"]],
-	"luce": [["idle", "대기"], ["walk", "걷기"], ["attack1", "빛"], ["heal", "치유"]]}
+	"luce": [["idle", "대기"], ["walk", "걷기"], ["attack1", "빛"], ["heal", "치유"]],
+	"kenin": [["idle", "대기"], ["walk", "걷기"], ["attack1", "사격"], ["bomb", "점착 폭탄"]]}
 
 var want_c := ""
 var c := "estelle"

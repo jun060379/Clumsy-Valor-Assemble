@@ -3,8 +3,8 @@ extends RefCounted
 ## slanted plates, CSS-style easing, a solid-silhouette material for the standing art.
 
 ## TXCOL: [theme colour, light partner] per member (the prototype calls Aida "shovel")
-const TXCOL := {"estelle": [Color("#ff3d7f"), Color("#ffe0ea")], "aida": [Color("#3ddc84"), Color("#e2ffe9")], "luce": [Color("#ffc21f"), Color("#fff3c8")]}
-const EN := {"estelle": "ESTELLE", "aida": "AYDA", "luce": "LUCE"}
+const TXCOL := {"estelle": [Color("#ff3d7f"), Color("#ffe0ea")], "aida": [Color("#3ddc84"), Color("#e2ffe9")], "luce": [Color("#ffc21f"), Color("#fff3c8")], "kenin": [Color("#8fbf3a"), Color("#eef8d8")]}
+const EN := {"estelle": "ESTELLE", "aida": "AYDA", "luce": "LUCE", "kenin": "KENIN"}
 
 ## Every font the game draws with (tools/make_fonts.py rebuilds them). The Noto ones carry all 11,172 Hangul syllables,
 ## the jamo, Latin-1 and the symbol blocks; Black Han Sans only has 2,581 syllables upstream and Anton no Hangul, so each

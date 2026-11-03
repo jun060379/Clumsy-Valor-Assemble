@@ -1,5 +1,5 @@
 extends RefCounted
-## The three party members: sheets, animation tables, stats. Carried over 1:1 from the web prototype
+## The party members: sheets, animation tables, stats. Carried over 1:1 from the web prototype
 ## (A_EST, A_SH = Aida, A_LU = Luce, VIRT, CHAR_SCALE, STATS, ROWFIX_SH).
 ## row = sheet row (sheet = row / 7, row % 7 inside it); each cell is 448x352. Row -1 = composite (see VIRT).
 
@@ -7,26 +7,30 @@ const CELL_W := 448
 const CELL_H := 352
 const ROWS_PER_SHEET := 7
 
-const NAME := {"estelle": "에스텔", "aida": "아이다", "luce": "루체"}
-const LATIN := {"estelle": "ESTELLE", "aida": "AYDA", "luce": "LUCE"}
-const COLOR := {"estelle": Color("#ff4d9a"), "aida": Color("#9a5cff"), "luce": Color("#ffc94d")}
-const SCALE := {"estelle": 1.3, "aida": 1.25, "luce": 1.2}
-const STATS := {"estelle": {"hp": 70.0, "atk": 1.0, "as": 0.95}, "aida": {"hp": 50.0, "atk": 1.2, "as": 1.1}, "luce": {"hp": 40.0, "atk": 0.9, "as": 1.0}}
+const NAME := {"estelle": "에스텔", "aida": "아이다", "luce": "루체", "kenin": "케닌"}
+const LATIN := {"estelle": "ESTELLE", "aida": "AYDA", "luce": "LUCE", "kenin": "KENIN"}
+const COLOR := {"estelle": Color("#ff4d9a"), "aida": Color("#9a5cff"), "luce": Color("#ffc94d"), "kenin": Color("#9cc14a")}
+const SCALE := {"estelle": 1.3, "aida": 1.25, "luce": 1.2, "kenin": 1.1}
+const STATS := {"estelle": {"hp": 70.0, "atk": 1.0, "as": 0.95}, "aida": {"hp": 50.0, "atk": 1.2, "as": 1.1}, "luce": {"hp": 40.0, "atk": 0.9, "as": 1.0}, "kenin": {"hp": 45.0, "atk": 1.0, "as": 1.0}}   # kenin: PLACEHOLDER numbers
 ## Aida's sheet rows were drawn at slightly different sizes: scale each row to match her idle pose
 const ROWFIX_AIDA := {8: 1 / 1.04, 9: 1 / 1.12, 14: 1 / 1.1, 15: 1 / 1.08, 16: 1 / 1.08, 17: 1 / 1.05, 18: 1 / 1.03, 19: 1 / 1.03, 20: 1 / 1.07}
 ## CHARS[c].bob: the body bobs with the stride (world px per frame of run / walk)
 const BOB := {"estelle": {"run": [0, 2, -3, -1, 0, 2, -3, -1], "walk": [0, 2, -3, -1, 0, 2, -3, -1]},
 	"aida": {"run": [0, 3, -4, -1, 0, 3, -4, -1], "walk": [0, 3, -4, -1, 0, 3, -4, -1]},
-	"luce": {"run": [0, 3, -4, -1, 0, 3, -4, -1], "walk": [0, 3, -4, -1, 0, 3, -4, -1]}}
+	"luce": {"run": [0, 3, -4, -1, 0, 3, -4, -1], "walk": [0, 3, -4, -1, 0, 3, -4, -1]},
+	"kenin": {"run": [0, 0, 0, 0, 0, 0, 0, 0], "walk": [0, 0, 0, 0, 0, 0, 0, 0]}}         # Sprite Flow frames carry their own bounce
 ## drawFrame's idle breathing: the top of the head in the source cell (legs stay, the torso stretches by whole pixels)
-const BREATH_TOP := {"estelle": 162, "aida": 155, "luce": 147}
+const BREATH_TOP := {"estelle": 162, "aida": 155, "luce": 147, "kenin": 154}
 ## PAL[CHAR].ghost: the afterimage tint (colour, how much of it over the sprite)
-const GHOST := {"estelle": [Color8(255, 170, 220), 0.75], "aida": [Color8(255, 170, 220), 0.75], "luce": [Color8(255, 225, 140), 0.8]}
+const GHOST := {"estelle": [Color8(255, 170, 220), 0.75], "aida": [Color8(255, 170, 220), 0.75], "luce": [Color8(255, 225, 140), 0.8], "kenin": [Color8(200, 230, 150), 0.75]}
 ## guard key = each member's skill; Estelle has the only shield
-const SKILL := {"estelle": "방패", "aida": "균열", "luce": "치유"}
-## who can answer which moment (QTE): Estelle covers a hit ally, Aida a finisher/parry, Luce someone in danger or a parry
-const QTE_WHO := {"hit": ["estelle"], "low": ["luce"], "finisher": ["aida"], "backstab": ["aida"], "parry": ["aida", "luce"]}
-const QTE_LBL := {"estelle": "수호", "aida": "기습", "luce": "구원"}
+const SKILL := {"estelle": "방패", "aida": "균열", "luce": "치유", "kenin": "점착 폭탄"}
+## who can answer which moment (QTE): Estelle covers a hit ally, Aida a finisher/parry, Luce someone in danger or a parry,
+## Kenin a finisher or a parry with covering fire (he answers from the bench: no swap, kenin.gd assist)
+const QTE_WHO := {"hit": ["estelle"], "low": ["luce"], "finisher": ["aida", "kenin"], "backstab": ["aida"], "parry": ["aida", "luce", "kenin"]}
+const QTE_LBL := {"estelle": "수호", "aida": "기습", "luce": "구원", "kenin": "원호"}
+## members whose QTE is answered from the bench without swapping in
+const QTE_STAY := ["kenin"]
 
 const COMMON := {
 	"charge": [-1, [110, 1000000000]], "acharge": [-1, [110, 1000000000]], "gcharge": [-1, [1000000000]], "cthrust": [-1, [45, 60, 220, 170]],
@@ -72,7 +76,30 @@ const A_LUCE := {
 	"heal": [21, [200, 200, 240, 220]], "lgather": [23, [110, 420, 420]], "lfinisher": [24, [70, 90, 220, 170, 200]], "lpunch": [22, [1000000000, 1000000000, 1000000000, 1000000000, 1000000000, 1000000000, 1000000000]],
 	"dash": [29, [35, 45, 55, 55, 60, 80]], "tag_in": [26, [70, 70, 60, 150, 120, 160]], "tag_out": [27, [150, 150, 150, 170]],
 }
-const TABLE := {"estelle": A_EST, "aida": A_AIDA, "luce": A_LUCE}
+## 케닌 클로: Sprite Flow Pro motions, trimmed and packed by tools/sprite_flow/ (trim.py, pack_kenin.py) (rows 0-23, sheets kenin_0..3).
+## Every shot's firing frame is the table's hit frame (KATK); the roll is the dash (9 frames, wall bounce in player.gd).
+const A_KENIN := {
+	"idle": [0, [300, 300, 300, 300, 300, 300, 300, 300]], "run": [1, [55, 55, 55, 55, 55, 55, 55, 55]], "walk": [1, [95, 95, 95, 95, 95, 95, 95, 95]],
+	"start": [2, [45, 55, 55, 55]], "stop": [3, [70, 90, 90, 110, 130]], "turn": [4, [55, 75, 55, 55]],
+	"jump": [5, [80, 70, 110, 160, 110, 120, 90, 120]], "runjump": [6, [80, 100, 130, 100, 110, 80, 90, 100]],
+	"attack1": [7, [60, 60, 70, 90, 80, 90]], "attack2": [8, [50, 60, 60, 90, 80, 90]], "attack3": [9, [70, 80, 140, 120, 110, 110, 120]],
+	"kneel": [10, [320, 300, 300, 320]], "kneel_attack": [11, [60, 60, 60, 90, 90, 110, 120]], "attack_high": [12, [60, 60, 70, 100, 90, 100]],
+	"air_combo": [13, [50, 50, 90, 50, 50, 90, 50, 50, 140]], "dive": [14, [70, 80, 120, 160, 110, 120, 110, 120]],
+	"double_jump": [15, [45, 45, 45, 45, 45, 45, 50, 60, 70]], "hurt": [16, [70, 110, 110, 110]], "death": [17, [150, 170, 170, 400]],
+	"bomb": [18, [60, 60, 60, 70, 70, 60, 60, 90, 110]],                     # 점착 폭탄: the bomb leaves the hand on frame 6
+	"detonate": [19, [1000000000, 1000000000, 1000000000, 1000000000, 1000000000, 1000000000, 1000000000, 1000000000, 1000000000]],   # ult 연쇄 기폭 (posed)
+	"headshot": [20, [50, 50, 60, 70, 90, 60, 80, 90, 100]],                 # QTE 원호 (drawn by kenin.gd, never played by the player)
+	"tag_out": [21, [150, 150, 150, 170, 170]], "teeter": [22, [150, 140, 150, 190, 150, 140]],
+	"dash": [23, [40, 45, 45, 45, 45, 45, 45, 70, 90]],                     # the roll: tuck, five spins, uncurl
+}
+## Kenin's shots: the frame the pistol fires, damage, knockback (kenin.gd fires them; no swing boxes)
+const KATK := {
+	"attack1": {"fire": [3], "dmg": 1.0, "kb": 3}, "attack2": {"fire": [3], "dmg": 1.0, "kb": 3},
+	"attack3": {"fire": [2], "dmg": 2.2, "kb": 9, "heavy": true}, "kneel_attack": {"fire": [3], "dmg": 1.2, "kb": 3},
+	"attack_high": {"fire": [3], "dmg": 1.4, "kb": 3, "up": true}, "air_combo": {"fire": [2, 5, 8], "dmg": 0.9, "kb": 2},
+	"dive": {"fire": [1], "dmg": 1.4, "kb": 2, "down": true},
+}
+const TABLE := {"estelle": A_EST, "aida": A_AIDA, "luce": A_LUCE, "kenin": A_KENIN}
 
 ## composite moves made of frames from other rows
 const VIRT := {

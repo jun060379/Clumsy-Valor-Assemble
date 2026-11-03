@@ -5,7 +5,7 @@ extends RefCounted
 ## Chapter tasks use either a counter (k) or a named function (fn) that fame.gd evaluates.
 
 const SD := preload("res://scripts/skin_data.gd")
-const CHN := {"estelle": "에스텔", "aida": "아이다", "luce": "루체"}
+const CHN := {"estelle": "에스텔", "aida": "아이다", "luce": "루체", "kenin": "케닌"}
 const FRANK := [{"n": "무명 길드", "need": 0}, {"n": "동네 소문", "need": 30}, {"n": "마을의 소문", "need": 130}, {"n": "마을의 자랑", "need": 330}, {"n": "영지의 용병단", "need": 630}, {"n": "이름난 길드", "need": 1030}, {"n": "전설의 시작", "need": 1530}]
 const FUNLOCK := [
 	["버섯 동굴 의뢰", "시설 복구 · 벽난로 · 샹들리에 · 대장간 풀무"],
@@ -13,7 +13,7 @@ const FUNLOCK := [
 	["새 의뢰 7건", "시설 복구 · 도서관 · 객실 · 목욕집 · 훈련장", "등급 보상 (향후 추가 예정)"],
 	["다음 장 (향후 추가 예정)"], ["다음 장 (향후 추가 예정)"], ["다음 장 (향후 추가 예정)"], ["다음 장 (향후 추가 예정)"]]
 const AMAX := 30
-const ALLC := ["estelle", "aida", "luce"]
+const ALLC := ["estelle", "aida", "luce", "kenin"]
 
 ## town requests (r = the rank they belong to, t = "trial" for the bureau's review), progress counter k
 const FQ := [
@@ -92,6 +92,7 @@ const FAC := [
 const FPEOPLE := [{"c": "estelle", "n": "에스텔", "role": "전사 · 근접 · 디펜더", "por": "res://assets/fame/por_est.png"},
 	{"c": "aida", "n": "아이다", "role": "워락 · 근접 · 스트라이커", "por": "res://assets/fame/por_aida.png", "sr": true},
 	{"c": "luce", "n": "루체", "role": "사제 · 원거리 · 서포터", "por": "res://assets/fame/por_luce.png", "sr": true},
+	{"c": "kenin", "n": "케닌", "role": "도적 · 원거리 · 트릭스터", "por": "res://assets/fame/por_kenin.png", "r": 2, "hint": "명성 2등급 즈음"},
 	{"b": true, "n": "브랜", "role": "전사 · 근접 · 디펜더", "por": "res://assets/bran/por.png", "sr": true},
 	{"n": "???", "role": "언젠가 길드를 찾아올 사람", "r": 4, "hint": "명성 4등급 즈음"}, {"n": "???", "role": "언젠가 길드를 찾아올 사람", "r": 5, "hint": "명성 5등급 즈음"}]
 

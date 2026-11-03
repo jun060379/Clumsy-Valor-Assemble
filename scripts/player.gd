@@ -115,7 +115,7 @@ var plat = null              # town: the sloped surface she stands on
 
 
 func _ready() -> void:
-	for c in ["estelle", "aida", "luce"]:
+	for c in CH.NAME:
 		for i in 5: SK.sheet(c, i)         # load the worn costume's sheets now (skins.gd resolves every draw)
 		hpm[c] = CH.STATS[c]["hp"]
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
@@ -253,7 +253,7 @@ func read_input() -> void:
 func auto_face() -> void:
 	if keys["left"] or keys["right"]:
 		return
-	var R := 420.0 if who == "luce" else 170.0 * CSCALE
+	var R := 420.0 if who == "luce" or who == "kenin" else 170.0 * CSCALE
 	var front := false
 	var back = null
 	for e in foes_alive():
@@ -292,7 +292,7 @@ func start_attack() -> void:
 
 func lunge_assist() -> void:
 	lunge = 0.0
-	if not on or who == "luce":
+	if not on or who == "luce" or who == "kenin":
 		return
 	var reach := 140.0 * CSCALE * MELEE_K
 	var best := INF
@@ -310,6 +310,43 @@ func lunge_assist() -> void:
 		best = minf(best, dx)
 	if best < INF:
 		lunge = best - (reach - 35.0)
+
+## Kenin: every attack frame in KATK's "fire" pulls the trigger once (kenin.gd flies the ball); flat shots lean toward
+## the nearest foe ahead a little (at most ~17°)
+func kenin_shoot() -> void:
+	var ka = CH.KATK.get(anim)
+	if ka == null or hit_done or not ka["fire"].has(f):
+		return
+	hit_done = true
+	fx_done = true
+	# the muzzle in world px (a cell draws at half size × CSCALE): chest height, just past the outstretched hands
+	var S := CSCALE
+	var mz := position + Vector2(dir * 34.0 * S, -44.0 * S)
+	var d := Vector2(dir, 0.0)
+	if ka.get("up", false):
+		mz = position + Vector2(dir * 22.0 * S, -84.0 * S)
+		d = Vector2(dir * 0.5, -0.866)
+	elif ka.get("down", false):
+		mz = position + Vector2(dir * 4.0 * S, -6.0 * S)
+		d = Vector2(dir * 0.17, 0.985)
+	else:
+		if anim == "kneel_attack": mz = position + Vector2(dir * 36.0 * S, -24.0 * S)
+		var tg = target(720.0)
+		if tg != null and (tg.position.x - position.x) * dir > 0.0:
+			var aim: Vector2 = (tg.position + Vector2(0, -55.0) - mz).normalized()
+			var ang := clampf(atan2(aim.y, absf(aim.x)), -0.3, 0.3)
+			d = Vector2(dir * cos(ang), sin(ang))
+	var was_dry: bool = arena.kenin.dry()
+	arena.kenin.fire(mz, d, ka["dmg"])
+	add_ghost(120.0, -dir * 10.0 * S)
+	if not was_dry:
+		if ka.get("heavy", false):
+			slide = -dir * 0.32 if on else slide          # the heavy shot's kick: a small skid back
+			arena.shake(4, -dir)
+			arena.hitstop = maxf(arena.hitstop, 35.0)
+			qte_offer("finisher")
+		else:
+			arena.shake(1.5, -dir)
 
 ## Luce: every strike is a gesture; the real hit is light the game draws
 func luce_gesture(atk) -> void:
@@ -344,6 +381,9 @@ func check_hits() -> void:
 	var atk = cur_atk()
 	if who == "luce":
 		luce_gesture(atk)
+		return
+	if who == "kenin":
+		kenin_shoot()
 		return
 	if atk == null or hit_done:
 		return
@@ -620,7 +660,10 @@ func step(dt: float) -> void:
 	var a := anim
 
 	# ---- state machine ----
-	if a == "hurt" or a == "death" or a == "tag_out":
+	if a == "hurt" and bounce_t > 0.0:
+		bounce_t -= dt
+		vx = -dir * 0.5 * maxf(0.0, bounce_t / BOUNCE)
+	elif a == "hurt" or a == "death" or a == "tag_out":
 		vx = 0.0
 	elif a == "tag_in" or a == "swap_in":
 		vx = 0.0
@@ -683,7 +726,12 @@ func step(dt: float) -> void:
 				_rev("skill")
 				if _rk() and arena.runes.has("clone"): arena.runes.clone_start()
 	elif a in ["dash", "airdash", "backstep"]:
-		if a == "dash":
+		if a == "dash" and who == "kenin":
+			# the roll: tuck, five spins at full tilt, uncurl (frames 7-8); a wall stops it dead (bounce below)
+			var spk: Array = [0.25, 0.75, 0.95, 0.95, 0.95, 0.9, 0.75, 0.25, 0.0]
+			vx = dir * (spk[f] if f < spk.size() else 0.0)
+			if f == 7 and move == dir: set_anim("run")
+		elif a == "dash":
 			var sp1: Array = [0.7, 0.85, 0.8, 0.35]
 			vx = dir * (sp1[f] if f < sp1.size() else 0.0)
 			if f == 3 and move == dir: set_anim("run")
@@ -708,6 +756,15 @@ func step(dt: float) -> void:
 			vy = -JUMPV
 			set_anim("runjump", 1)
 			arena.sfx("jump")
+	elif a == "bomb":
+		if on: vx = 0.0
+		else: vx *= pow(0.996, dt)
+		if f == 6 and not fx_done:
+			fx_done = true
+			var btg = target(460.0)
+			var btx: float = btg.position.x if btg != null and (btg.position.x - position.x) * dir > 0.0 else NAN
+			arena.kenin.throw_bomb(position + Vector2(dir * 14.0 * CSCALE, -80.0 * CSCALE), dir, btx)
+			_rev("skill")
 	elif a == "heal":
 		vx = 0.0
 		heal_t += dt
@@ -777,8 +834,8 @@ func step(dt: float) -> void:
 				vx = slide
 				if f == 2 and ft < 30.0: vx += dir * 0.25
 			if a == "attack2" and f == 2 and ft < 30.0: vx = dir * 0.3
-			if a == "attack3" and f == 2: vx = dir * 0.45
-			if a == "attack3" and f == 3 and ft < 40.0: vx = dir * 0.2
+			if a == "attack3" and f == 2 and who != "kenin": vx = dir * 0.45
+			if a == "attack3" and f == 3 and ft < 40.0 and who != "kenin": vx = dir * 0.2
 			if a == "lfinisher" and f == 2 and not fx_done:
 				fx_done = true
 				var tg = target(520.0)
@@ -797,7 +854,7 @@ func step(dt: float) -> void:
 				take("attack")
 				set_anim("attack2")
 				arena.sfx("swing")
-				position.x += dir * 8.0
+				if who != "kenin": position.x += dir * 8.0
 				lunge_assist()
 			elif a == "attack2" and chain_ok and want("attack"):
 				take("attack")
@@ -860,7 +917,10 @@ func step(dt: float) -> void:
 		elif f == 3:
 			set_anim("idle")
 
+	var want_x := position.x + vx * dt
 	physics(dt, a)
+	if who == "kenin" and anim == "dash" and f >= 1 and f <= 6 and absf(vx) > 0.5 and absf(position.x - want_x) > absf(vx * dt) * 0.6:
+		roll_bounce()
 	advance(dt, move)
 	tag_motion(dt)
 
@@ -869,6 +929,18 @@ func step(dt: float) -> void:
 	ghosts = ghosts.filter(func(g): return g["t"] < g["life"])
 	queue_redraw()
 
+
+## Kenin's roll hits a wall: the hurt frames, bounced back a little (no damage)
+const BOUNCE := 260.0
+var bounce_t := 0.0
+func roll_bounce() -> void:
+	set_anim("hurt")
+	bounce_t = BOUNCE
+	inv = maxf(inv, 300.0)
+	arena.shake(4, -dir)
+	arena.sfx("down", 0.6)
+	arena.dust(position + Vector2(dir * 18.0 * CSCALE, 0), -dir, false)
+	arena.spark(position + Vector2(dir * 30.0 * CSCALE, -40.0 * CSCALE), 5)
 
 ## guard key = each member's skill
 func use_skill(move: int) -> void:
@@ -892,6 +964,12 @@ func use_skill(move: int) -> void:
 			set_anim("heal")
 			heal_t = 0.0
 			arena.sfx("swing", 0.2)
+	elif who == "kenin":
+		if arena.kenin.can_throw():
+			if move != 0: dir = move
+			set_anim("bomb")
+		else:
+			arena.text(position + Vector2(0, -150.0 * CSCALE), "폭탄 없음", Color("#b9bfa8"))
 
 
 func locomotion(dt: float, move: int, a: String) -> void:
@@ -1230,6 +1308,11 @@ func advance(dt: float, move: int) -> void:
 				f = 0
 			elif n == "lgather":
 				f = 1                   # prayer hold: the two floating frames sway
+			elif n == "bomb":
+				if on: set_anim("kneel" if keys["down"] else "idle")
+				else:
+					anim = "jump"
+					f = 4
 			elif n in ["stop", "hurt", "attack1", "attack2", "attack3", "attack_high", "parry", "cthrust", "lfinisher", "heal"]:
 				set_anim("kneel" if keys["down"] else "idle")
 				if n.begins_with("attack"): combo_win = 0.0
@@ -1284,7 +1367,7 @@ func advance(dt: float, move: int) -> void:
 			else:
 				f = 0
 			break
-		if anim == "attack1" and f == 2 and keys["attack"] and on:
+		if anim == "attack1" and f == 2 and keys["attack"] and on and who != "kenin":
 			set_anim({"estelle": "charge", "aida": "acharge", "luce": "lgather"}[who], 1)
 			charge_t = 110.0
 			cfull = false
@@ -1308,6 +1391,7 @@ func advance(dt: float, move: int) -> void:
 
 # ---------- getting hit ----------
 func dash_inv() -> bool:
+	if who == "kenin" and anim == "dash": return f <= 6           # the roll is invincible until it uncurls
 	return (anim == "dash" and f <= 2) or (anim == "airdash" and f <= 3) or anim == "tp_in" or anim == "dig_in" or (anim == "dig_out" and f <= 1) or anim == "swap_in"
 
 func take_hit(m, raw: float) -> String:
@@ -1374,6 +1458,7 @@ func take_hit(m, raw: float) -> String:
 		die()
 	else:
 		qte_offer("hit", {"raw": raw, "taken": tk2, "victim": who})
+		bounce_t = 0.0
 		set_anim("hurt")
 	return "hit"
 
@@ -1462,7 +1547,7 @@ func party_step(dt: float) -> void:
 ## ROSTER: the members who have joined the guild (fame.rec), plus whoever is in control, in the prototype's order
 func roster() -> Array:
 	var F = arena.get("fame") if arena != null else null
-	return ["estelle", "aida", "luce"].filter(func(c): return c == who or party.has(c) or F == null or F.recruited(c))
+	return ["estelle", "aida", "luce", "kenin"].filter(func(c): return c == who or party.has(c) or F == null or F.recruited(c))
 
 func party_next():
 	var al: Array = party.filter(func(c): return c == who or hpm[c] > 0.0)
@@ -1483,13 +1568,15 @@ func party_input(to = null) -> void:
 		var nx = to if to != null and to != who and hpm[to] > 0.0 else _qte_member()
 		if nx == null: nx = party_next()
 		if nx != null and nx != who:
-			counter_swap(m, nx)
+			if CH.QTE_STAY.has(nx): counter_assist(m, nx)
+			else: counter_swap(m, nx)
 			return
 	if qte["t"] > 0.0:
 		# the swap key tags in whoever has the chance; a tapped portrait tags in only if that face has it
 		var c = (to if qte["who"].has(to) else null) if to != null else _qte_member()
 		if c != null:
-			swap(true, c)
+			if CH.QTE_STAY.has(c): bench_assist(c, null)
+			else: swap(true, c)
 			return
 	swap(false, to)
 
@@ -1638,6 +1725,34 @@ func tag_strike() -> void:
 		if d != R0 and (d.position.x - position.x) * dir > -30.0 and absf(d.position.x - position.x) < 200.0 and absf(d.position.y - position.y) < 60.0:
 			d.hit(2, dir * 8, atk_mul())
 
+## a QTE answered from the bench (Kenin): he appears, shoots and is gone; the one in control stays, and her swap is ready
+func bench_assist(c: String, tg) -> void:
+	if c == "kenin": arena.kenin.assist(tg if tg != null else qte_target())
+	qte_end()
+	swap_cd = 0.0
+	_rev("tag")
+	arena.flash = maxf(arena.flash, 0.12)
+	arena.text(position + Vector2(0, -150.0 * CSCALE), "원호!  " + CH.NAME[c], CH.COLOR[c].lightened(0.4))
+
+func qte_target():
+	return target(1100.0)
+
+## a glinting attack answered from the bench: the attack is cancelled as in a counter swap, the shot does the rest
+func counter_assist(m, c: String) -> void:
+	m.st = "hurt"
+	m.hurt_t = 1300.0
+	m.flared = false
+	m.flare_t = -1.0
+	m.atk_clock = 0.0
+	m.set_a("hurt")
+	m.cd = maxf(m.cd, 1600.0)
+	arena.proj = arena.proj.filter(func(p): return p["m"] != m or absf(p["x"] - position.x) > 500.0)
+	bench_assist(c, m)
+	arena.hitstop = maxf(arena.hitstop, 150.0)
+	arena.sfx("parry", 1.0, {"st": 7.0})
+	arena.text(Vector2(m.position.x, m.position.y - 190.0), "PARRY!", Color("#ffffff"))
+	arena.parry_word()
+
 ## swapping on a glinting attack: cancel it and tag in on that mob (x2.5), PARRY
 func counter_swap(m, nx: String) -> void:
 	m.st = "hurt"
@@ -1696,6 +1811,13 @@ func _draw() -> void:
 		var ofs := Vector2(o["x"] - o["dir"] * 140.0 * k, o["y"]) - position
 		var fr := mini(int(o["t"] / 150.0), 3)
 		draw_frame(o["c"], o["anim"], fr, ofs, -o["dir"] if not o["dead"] else o["dir"], Color(1, 1, 1, 1.0 - k), "", null, NAN, 0, "out" + str(o["c"]))
+	# Kenin's covering shot from the bench (kenin.gd assists): fades in, fires, fades out
+	if arena.kenin != null:
+		var tot: float = arena.kenin.assist_total()
+		for a in arena.kenin.assists:
+			var at: float = a["t"]
+			var al := minf(1.0, minf(at / 70.0, (tot - at) / 120.0))
+			draw_frame("kenin", "headshot", arena.kenin._as_frame(at), Vector2(a["x"], a["y"]) - position, a["dir"], Color(1, 1, 1, al))
 	# afterimages (ghostFx): the frame tinted with PAL[CHAR].ghost, smooth (never pixelated), 0.35 at birth
 	var gt: Array = CH.GHOST[who]
 	for g in ghosts:

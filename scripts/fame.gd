@@ -705,12 +705,22 @@ func settle_rec(party: Array) -> void:
 		bran = 1
 		for ch in ["aida", "luce"]:
 			if not rec.has(ch): rec.append(ch)
+	if r >= KENIN_RANK and not rec.has("kenin"): rec.append("kenin")
+
+## PLACEHOLDER (until the owner writes his arrival): Kenin joins with the guild's grade 2 approval
+const KENIN_RANK := 2
+func join_kenin() -> void:
+	if r < KENIN_RANK or rec.has("kenin"): return
+	rec.append("kenin")
+	log_add("케닌 클로 합류 (임시)", "people")
+	notice("케닌 합류 · 분수대에서 편성할 수 있다", "길드", Color("#9cc14a"), true, 3800.0)
 
 ## fameRankUp → rankCut
 func rank_up() -> void:
 	if r >= 7: return
 	r += 1
 	log_add("길드 등급 %d 「%s」 승인 · 길드 관리국" % [r, FD.FRANK[r - 1]["n"]], "rank")
+	join_kenin()
 	if arena.get("skins") != null: arena.skins.sync()      # the grade's costume reward (skin_data.gd fame)
 	fx.rank_cut()
 

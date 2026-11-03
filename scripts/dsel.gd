@@ -18,9 +18,9 @@ const DUN := [
 	{"id": "x1", "ok": false, "name": "???", "lv": "★★", "en": "UNKNOWN", "col": Color("#18181e"), "acc": Color("#8a8a9a"), "sub": "아직 아무것도 알려지지 않았다.", "rank": 1},
 	{"id": "x2", "ok": false, "name": "???", "lv": "★★★", "en": "UNKNOWN", "col": Color("#18181e"), "acc": Color("#8a8a9a"), "sub": "아직 아무것도 알려지지 않았다.", "rank": 1},
 ]
-const SEN := {"estelle": "ESTELLE", "aida": "AYDA", "luce": "LUCE"}
-const SFY := {"estelle": -0.15, "aida": -0.15, "luce": -0.25}
-const SCROP := {"estelle": Vector2(0.58, 0.09), "aida": Vector2(0.58, 0.09), "luce": Vector2(0.5, 0.11)}
+const SEN := {"estelle": "ESTELLE", "aida": "AYDA", "luce": "LUCE", "kenin": "KENIN"}
+const SFY := {"estelle": -0.15, "aida": -0.15, "luce": -0.25, "kenin": -0.2}
+const SCROP := {"estelle": Vector2(0.58, 0.09), "aida": Vector2(0.58, 0.09), "luce": Vector2(0.5, 0.11), "kenin": Vector2(0.5, 0.1)}
 
 var arena
 var sortie

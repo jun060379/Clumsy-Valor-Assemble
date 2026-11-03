@@ -400,7 +400,7 @@ func _initialize() -> void:
 	for i in 3: await process_frame
 	check(not T.active and not arena.title_mode, "the hand-off: the title off")
 	check(arena.level_kind() == "hall" and arena.level.fl == 1 and P.visible and (P.position - hall_at).length() < 2.0, "시작 restored the hall, floor 1, where she stood (%s)" % arena.level_kind())
-	check(arena.title_back.is_empty() and arena.cam_override == null and not folk.title_mode and folk.folk() == ["luce"], "the camera and the townsfolk are the game's again, the party hers (%s)" % [folk.folk()])
+	check(arena.title_back.is_empty() and arena.cam_override == null and not folk.title_mode and folk.folk() == (["luce", "kenin"] if arena.fame.recruited("kenin") else ["luce"]), "the camera and the townsfolk are the game's again, the party hers (%s)" % [folk.folk()])
 	check(P.party == ["estelle", "aida"] and P.who == "estelle" and arena.save.loaded_from == arena.save.path, "the party kept (%s)" % [P.party])
 	for i in 6:
 		B._process(0.05)

@@ -1472,7 +1472,7 @@ func _p_people(cr: Rect2) -> void:
 			_ci.draw_set_transform_matrix(m)
 		# .pl: the gradient foot, the name (Black Han Sans 18, in the book's ink) and the line under it
 		var nm: String = p["n"] if (in_g or not known) else "???"
-		var role: String = p["role"] if in_g else ("첫 의뢰를 마치면 에일린이 소개해 준다" if known else "%s · %s" % [p["role"], p["hint"]])
+		var role: String = p["role"] if in_g else ("첫 의뢰를 마치면 에일린이 소개해 준다" if known and not p.has("hint") else "%s · %s" % [p["role"], p["hint"]])
 		var rl := S.noto().get_multiline_string_size(role, HORIZONTAL_ALIGNMENT_LEFT, cw - 20.0, 11).y
 		var lh := 6.0 + 24.0 + rl + 8.0
 		var ly := ch - lh

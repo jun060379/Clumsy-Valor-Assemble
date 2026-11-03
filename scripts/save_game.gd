@@ -34,7 +34,7 @@ extends RefCounted
 
 const VERSION := 1
 const SLOTS := 3
-const NAMES := {"estelle": "에스텔", "aida": "아이다", "luce": "루체"}
+const NAMES := {"estelle": "에스텔", "aida": "아이다", "luce": "루체", "kenin": "케닌"}
 
 var arena
 var path := "user://save.json"      # the autosave
@@ -156,7 +156,7 @@ func newest() -> String:
 ## restore everything but the scene; returns the scene to go to [kind, Vector2, dir, floor] or [] when there is no save
 func apply(d: Dictionary) -> Array:
 	var P = arena.player
-	var roster := ["estelle", "aida", "luce"]
+	var roster := ["estelle", "aida", "luce", "kenin"]
 	var party: Array = []
 	for c in d.get("party", []):
 		if roster.has(c) and not party.has(c): party.append(String(c))

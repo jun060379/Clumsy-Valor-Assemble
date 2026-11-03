@@ -19,8 +19,8 @@ const EFF := {
 	"phys": {}, "holy": {},
 }
 ## party members: attack elements and own elements (the prototype calls Aida "shovel")
-const ATKEL := {"estelle": ["phys"], "aida": ["dark", "phys"], "luce": ["holy"]}
-const DEFEL := {"estelle": ["phys"], "aida": ["dark", "earth"], "luce": ["holy"]}
+const ATKEL := {"estelle": ["phys"], "aida": ["dark", "phys"], "luce": ["holy"], "kenin": ["phys"]}
+const DEFEL := {"estelle": ["phys"], "aida": ["dark", "earth"], "luce": ["holy"], "kenin": ["phys"]}
 
 static var _icons := {}
 

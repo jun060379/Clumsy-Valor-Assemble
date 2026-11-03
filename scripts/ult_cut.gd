@@ -13,7 +13,7 @@ const SK := preload("res://scripts/skins.gd")       # member art through the wor
 const PING := 110.0
 const SPLASH := 820.0
 const OUT := 150.0
-const VID := {"estelle": 2050.0, "aida": 1380.0, "luce": 2480.0}
+const VID := {"estelle": 2050.0, "aida": 1380.0, "luce": 2480.0, "kenin": 0.0}      # kenin: no clip yet (splash only)
 
 var arena
 var sortie

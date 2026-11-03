@@ -12,7 +12,7 @@ extends Node
 ##   set_state(d)  restores it (unknown node ids are dropped, an invalid tree is cleared so its points come back)
 
 const MD := preload("res://scripts/memory_data.gd")
-const ROSTER := ["estelle", "aida", "luce"]
+const ROSTER := ["estelle", "aida", "luce", "kenin"]
 ## normal and charged attacks, by animation (prototype NORM / HEAVY)
 const NORM := ["attack1", "attack2", "attack3", "attack_high", "air_combo", "air1", "air2", "air3", "lpunch"]
 const HEAVY := ["cthrust", "cwave", "lfinisher", "kneel_attack", "gcharge", "lgather", "heavy"]

@@ -11,21 +11,22 @@ extends Node2D
 ## detonation, the punch) plays ult.wav on the music's grid and ducks the track (arena.sfx "ult").
 
 const CH := preload("res://scripts/chars.gd")
-const ULTMAX := {"estelle": 390.0, "aida": 300.0, "luce": 240.0}
+const ULTMAX := {"estelle": 390.0, "aida": 300.0, "luce": 240.0, "kenin": 270.0}       # kenin: PLACEHOLDER
 const INFO := {
 	"estelle": {"name": "수호의 맹세", "sub": "ESTELLE BELLACITA", "col": Color8(255, 110, 190), "col2": Color8(255, 220, 240)},
 	"aida": {"name": "땅 밑의 문", "sub": "SUNAGAWA AYDA", "col": Color8(120, 50, 220), "col2": Color8(210, 180, 255)},
 	"luce": {"name": "루체 펀치", "sub": "LUCE LUMEN", "col": Color8(255, 200, 80), "col2": Color8(255, 248, 220)},
+	"kenin": {"name": "연쇄 기폭", "sub": "KENIN CLAW", "col": Color8(140, 180, 60), "col2": Color8(230, 245, 200)},
 }
-const PAL := {"estelle": ["#ffffff", "#ffd3ea", "#ff96d2", "#d650aa", "#7a2a66"], "aida": ["#ffffff", "#e9d2ff", "#b06cff", "#7a3ad0", "#3a1260"], "luce": ["#ffffff", "#ffe9a0", "#ffd34d", "#e8a33a", "#a8742a"]}
+const PAL := {"estelle": ["#ffffff", "#ffd3ea", "#ff96d2", "#d650aa", "#7a2a66"], "aida": ["#ffffff", "#e9d2ff", "#b06cff", "#7a3ad0", "#3a1260"], "luce": ["#ffffff", "#ffe9a0", "#ffd34d", "#e8a33a", "#a8742a"], "kenin": ["#ffffff", "#eef8d8", "#c4e07a", "#8fbf3a", "#4a6a1e"]}
 const IRIS := ["#ff6fae", "#ffa96b", "#ffe97a", "#86ffb4", "#6fd8ff", "#8f8cff", "#e07aff"]
 const CD := 30000.0
 const DMG := 2.5
 const VOW := 8000.0
 
 var arena
-var v := {"estelle": 0.0, "aida": 0.0, "luce": 0.0}
-var cd := {"estelle": 0.0, "aida": 0.0, "luce": 0.0}
+var v := {"estelle": 0.0, "aida": 0.0, "luce": 0.0, "kenin": 0.0}
+var cd := {"estelle": 0.0, "aida": 0.0, "luce": 0.0, "kenin": 0.0}
 var state := ""                 # "" / cut / act
 var t := 0.0
 var who := "estelle"
@@ -222,6 +223,8 @@ func step(dt: float) -> void:
 		if t >= 420.0: end()
 	elif who == "aida":
 		_step_aida(dt, P, S)
+	elif who == "kenin":
+		_step_kenin(dt, P, S)
 	else:
 		_step_luce(dt, P, S)
 
@@ -311,6 +314,36 @@ func _step_aida(_dt: float, P, S: float) -> void:
 			arena.hitstop = 100.0
 			arena.impact("ult", P.position + Vector2(P.dir * 120.0, -60.0), P.dir)   # 타격감
 		if u > 1250.0: end()
+
+## 케닌 「연쇄 기폭」: the pistol goes in the belt, the detonator box comes out of the backpack, a grin, the plunger slams
+## down: every sticky bomb and every QTE mark goes off (kenin.gd detonate_all), and a blast around the box itself
+func _step_kenin(_dt: float, P, S: float) -> void:
+	var D: int = P.dir
+	if t < 700.0:
+		pose("detonate", mini(4, int(t / 140.0)))
+	elif t < 1000.0:
+		pose("detonate", 5 if t < 850.0 else 6)
+		if once("grip"): arena.sfx("ui_ok", 0.6)
+	else:
+		pose("detonate", 7 if t < 1120.0 else 8)
+		if once("boom"):
+			var n: int = arena.kenin.detonate_all()
+			var bx: float = P.position.x + D * 40.0 * S
+			var by: float = P.position.y - 30.0 * S
+			fx.append({"k": "burst", "x": bx, "y": by, "r": 150.0, "t": 0.0, "life": 520.0})
+			for e in _foes():
+				if absf(e.position.x - bx) < 230.0 and absf(e.position.y - P.position.y) < 160.0: hit(e, 1.5)
+			arena.text(P.position + Vector2(0, -190.0 * S), "연쇄 기폭 ×%d" % n if n > 0 else "기폭!", Color("#e8ffb0"))
+			arena.sfx("ult", 1.0)              # the impact
+			arena.sfx("slam", 1.0)
+			arena.sfx("heavy", 0.9)
+			arena.post_wave(Vector2(bx, by), 1.6, 700.0, 0.5)
+			arena.post_ca(0.025)
+			arena.flash = 0.45
+			arena.shake(14.0 + minf(10.0, n * 1.5), D)
+			arena.hitstop = 110.0
+			arena.impact("ult", Vector2(bx, by), D)   # 타격감
+		if t >= 1650.0: end()
 
 func _step_luce(dt: float, P, S: float) -> void:
 	var D: int = P.dir

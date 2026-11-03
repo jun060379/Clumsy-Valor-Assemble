@@ -24,12 +24,13 @@ const DEV := preload("res://scripts/dev.gd")
 const UI_KIT := preload("res://scripts/ui_kit.gd")
 const POSTFX := preload("res://scripts/post_fx.gd")
 const PFX := preload("res://scripts/pfx.gd")
-const SPK := {"estelle": Color("#ffd9ea"), "aida": Color("#c9a6ff"), "luce": Color("#fff3c4")}             # PAL[].sp
-const SLC := {"estelle": Color(1, 120 / 255.0, 190 / 255.0, 0.9), "aida": Color(150 / 255.0, 90 / 255.0, 230 / 255.0, 0.95), "luce": Color(1, 215 / 255.0, 110 / 255.0, 0.95)}   # PAL[].slash
-const BUC := {"estelle": Color8(255, 200, 230), "aida": Color8(190, 150, 255), "luce": Color8(255, 240, 200)}   # PAL[].burst
+const SPK := {"estelle": Color("#ffd9ea"), "aida": Color("#c9a6ff"), "luce": Color("#fff3c4"), "kenin": Color("#e8f5c8")}             # PAL[].sp
+const SLC := {"estelle": Color(1, 120 / 255.0, 190 / 255.0, 0.9), "aida": Color(150 / 255.0, 90 / 255.0, 230 / 255.0, 0.95), "luce": Color(1, 215 / 255.0, 110 / 255.0, 0.95), "kenin": Color(170 / 255.0, 210 / 255.0, 90 / 255.0, 0.95)}   # PAL[].slash
+const BUC := {"estelle": Color8(255, 200, 230), "aida": Color8(190, 150, 255), "luce": Color8(255, 240, 200), "kenin": Color8(225, 240, 190)}   # PAL[].burst
 const FATIGUE := preload("res://scripts/fatigue.gd")
 const UIROOT := preload("res://scripts/ui_root.gd")
 const RUNES := preload("res://scripts/runes.gd")
+const KENIN := preload("res://scripts/kenin.gd")
 const FAME := preload("res://scripts/fame.gd")
 const SORTIE := preload("res://scripts/sortie.gd")
 const ULT := preload("res://scripts/ult.gd")
@@ -113,6 +114,7 @@ var ult                       # ult.gd: 기력 gauges, the ult moves and their w
 var save                      # save_game.gd: user://save.json
 var skins                     # skins.gd: costume skins (owned, worn) and the art resolver every screen draws members through
 var hit_by := ""              # who a delayed hit (Luce's light) belongs to, for its element
+var kenin                     # kenin.gd: Kenin's pistol, sticky bombs, marks and the bench assist
 var last_e := {}              # the last elemDamage result, so damage_text can split a hybrid hit per element
 
 var fx_layer: Node2D
@@ -175,6 +177,7 @@ func _ready() -> void:
 	runes = RUNES.new()
 	add_child(runes)
 	runes.setup(self)
+	kenin = KENIN.new(self)
 	fx_layer = Node2D.new()
 	fx_layer.z_index = 10
 	fx_layer.draw.connect(_draw_fx)
@@ -640,6 +643,12 @@ func clear_room() -> void:
 	mobs.clear()
 	proj.clear()
 	luce_fx.clear()
+	if kenin != null:
+		kenin.shots.clear()
+		kenin.bomb_fx.clear()
+		kenin.booms.clear()
+		kenin.marks.clear()
+		kenin.assists.clear()
 	fx.clear()
 	big_words.clear()
 	witch = 0.0
@@ -824,6 +833,7 @@ func _process(delta: float) -> void:
 			m.step(dt * wk)
 		step_proj(dt * wk)
 		step_luce(dt)
+		kenin.step(dt)
 		dodge_check()
 		eil.world(dt)
 		var lk := level_kind()
@@ -1514,6 +1524,7 @@ func _draw_txt(e: Dictionary, k: float) -> void:
 
 func _draw_fx() -> void:
 	_draw_luce()
+	kenin.draw(fx_layer)
 	for e in fx:
 		var k: float = e["t"] / e["life"]
 		match e["k"]:
