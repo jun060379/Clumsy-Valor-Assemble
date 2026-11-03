@@ -454,6 +454,7 @@ func rift_enter(to_x: float, to_y: float, quick: bool, snd := 0.0) -> void:
 	gate_out = Vector2.INF
 	gate_t = 0.0
 	if snd > 0.0: arena.sfx("dig", snd)
+	arena.sfx("rift", 0.9)                 # the portal dash's anime swipe
 
 func rift_exit() -> void:
 	position.x = dig_to
