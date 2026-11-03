@@ -613,8 +613,13 @@ func _win_setup() -> void:
 	m.shader = sh
 	win_cut.material = m
 	win_cut.draw.connect(func():
+		# everyone standing in front of the hall cuts the windows' glow (the player, the townsfolk, Eilin): the lights
+		# are drawn over the facade, so without the cut they'd paint over the people
 		var P = arena.player
-		if P.visible: P.draw_frame(P.who, P.anim, P.f, P.position, P.dir, Color.WHITE, "", win_cut))
+		if P.visible: P.draw_frame(P.who, P.anim, P.f, P.position, P.dir, Color.WHITE, "", win_cut)
+		if folk != null: folk.draw(win_cut)
+		var E = arena.eil
+		if E != null and E.map == "town" and not E.hide: E.draw_on(win_cut, roundf(E.x), roundf(E.y)))
 	win_sv.add_child(win_cut)
 
 func _win_on() -> bool:
