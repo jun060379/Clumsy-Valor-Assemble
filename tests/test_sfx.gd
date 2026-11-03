@@ -179,9 +179,13 @@ func _initialize() -> void:
 		stop_all()
 	check(not arena.has_method("loot_tink"), "the procedural tinks are gone")
 	# the landing gate: a touchdown from LAND_MIN px or more rings land.ogg, a kerb does not
-	P.air_top = P.position.y - P.LAND_MIN - 1.0
+	P.air_top = P.position.y - 160.0
 	P.land_sfx()
-	check(player_of("land") != null and near(player_of("land").volume_db, linear_to_db(0.45 * arena.LEVEL["land"]) - 4.0, 0.01), "a landing from %d px: land.ogg at 0.45" % int(P.LAND_MIN))
+	check(player_of("land") != null and near(player_of("land").volume_db, linear_to_db(0.6 * arena.LEVEL["land"]) - 4.0, 0.01), "a landing from 160 px: land.ogg at 0.6")
+	stop_all()
+	P.air_top = P.position.y - 40.0
+	P.land_sfx()
+	check(player_of("land") != null and player_of("land").volume_db < linear_to_db(0.6 * arena.LEVEL["land"]) - 4.0, "a small hop's landing: quieter")
 	stop_all()
 	P.air_top = P.position.y - 10.0
 	P.land_sfx()

@@ -935,7 +935,7 @@ const LEVEL := {"hit1": 0.9, "hit2": 0.9, "hit3": 0.9, "heavy": 1.0, "parry": 1.
 	"menu_move": 0.48, "menu_ok": 0.48, "menu_back": 0.54,
 	"jingle_lv": 0.93, "jingle_rank": 1.12, "jingle_quest": 1.17, "jingle_death": 0.86, "jingle_book": 0.80,
 	"impact_boss_in": 1.48, "impact_boss_down": 1.62,
-	"jump": 0.3, "djump": 0.32, "land": 0.38, "ult_sub": 0.63}
+	"jump": 0.06, "djump": 0.32, "land": 0.6, "ult_sub": 0.63}
 const DUCK := {"heavy": [4.0, 120.0], "parry": [4.0, 120.0], "ult": [6.0, 250.0]}
 const LAYERS := {}      # name -> [[file, vol]…] played with it, at the same moment (none now: the recordings stand alone)
 ## the pickup words (arena.text → the GET notice) and their sounds; 룬 and 장비 share pick_rune

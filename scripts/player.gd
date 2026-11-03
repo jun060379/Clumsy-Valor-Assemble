@@ -1148,8 +1148,11 @@ func physics(dt: float, a: String) -> void:
 
 
 ## touchdown after a jump or a fall of LAND_MIN px or more: land.ogg (never for a small step down)
+## the landing: on the touchdown frame itself (no snap, the file starts on its transient), every landing after a real
+## jump or fall, louder the further she fell
 func land_sfx() -> void:
-	if position.y - air_top >= LAND_MIN: arena.sfx("land", 0.45)
+	var h: float = position.y - air_top
+	if h >= 12.0: arena.sfx("land", lerpf(0.3, 0.6, clampf(h / 160.0, 0.0, 1.0)))
 
 ## a jump touching down: still running (a direction held, moving that way) lands straight into the run on a contact
 ## frame; the standing landing → idle → start → run stopped her and set off again after every run jump
