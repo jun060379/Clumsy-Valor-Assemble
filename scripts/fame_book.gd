@@ -14,6 +14,8 @@ const BOOKCOL := {"gbk": Color("#ffd34d"), "abk": Color("#7fd0ff")}
 const TABS := {"gbk": [["quest", "명성", "FAME"], ["fac", "시설", "FACILITY"], ["people", "동료", "MEMBERS"], ["dun", "던전", "DUNGEON"], ["rune", "룬 도감", "RUNES"]],
 	"abk": [["home", "개요", "OVERVIEW"], ["lv", "모험 레벨", "LEVEL"], ["ch", "모험 일지", "LOG"], ["day", "일일 훈련", "DAILY"]]}
 ## where the big number panel sits: L = top of the left column, R = shrunk into the bottom-right corner
+const HERO_S := Vector2(180.0, 80.0)      # the small hero (R docks with a left column: under the column)
+const HERO_M := Vector2(150.0, 42.0)      # the mini hero (R docks without a column: on the band, lower left)
 const HDOCK := {"quest": "L", "fac": "L", "home": "L", "lv": "L", "day": "L", "people": "R", "dun": "R", "rune": "R", "ch": "R"}
 const ORD := {"letter": 0, "done": 1, "run": 2, "wait": 2.5, "got": 3, "lock": 4}
 const INK := Color("#2b2218")
@@ -508,10 +510,14 @@ func _draw() -> void:
 				y = _goal(Rect2(lc.position.x, y + 6.0, lc.size.x - 8.0, 44.0), "받지 않은 레벨 보상 %d개" % n, "모험 레벨 탭에서 받기", Color("#7fd0ff"), func(): _go_tab("lv")) + 4.0
 			_info_menu(Rect2(lc.position.x, y + 8.0, lc.size.x, lc.end.y - y - 8.0), "exp", "EXP 획득처")
 		"day": _day_col(lc)
-		"dun": _dun_list(lc)
-		"ch": _ch_list(lc)
+		"dun": _dun_list(Rect2(lc.position, lc.size - Vector2(0, HERO_S.y + 10.0)))     # the small hero sits under the list
+		"ch": _ch_list(Rect2(lc.position, lc.size - Vector2(0, HERO_S.y + 10.0)))
 	pen.reset()
-	if dock == "R": _hero_at(Rect2(vs.x - 196.0, vs.y - 92.0, 180.0, 80.0), true)
+	if dock == "R":
+		# the small hero never sits on the paper (it covered the last row's rewards): under the left column when the
+		# tab has one, else as a mini badge on the band's lower left, beside the title
+		if left_w > 0.0: _hero_at(Rect2(lc.position.x, lc.end.y - HERO_S.y - 2.0, minf(HERO_S.x, lc.size.x - 8.0), HERO_S.y), true)
+		else: _hero_at(Rect2(pane.position.x + 6.0, pane.position.y - HERO_M.y - 8.0, HERO_M.x, HERO_M.y), true)
 	# the header on the band (headerFx), hidden under the wiper
 	if not hdr_hide:
 		_draw_title(vs, b)
@@ -988,10 +994,11 @@ func _hero(r: Rect2, small: bool) -> float:
 		need = (nx["need"] - lo) if nx != null else 1.0
 		l1 = "명성 %d" % fame.pts
 		l2 = "다음 %d" % nx["need"] if nx != null else "MAX"
-	var h := 80.0 if small else 128.0
+	var mini := small and r.size.y < HERO_S.y - 1.0
+	var h := (r.size.y if mini else 80.0) if small else 128.0
 	var w := r.size.x if not small else r.size.x
 	var p := r.position
-	var nfs := 54 if small else 76
+	var nfs := (30 if mini else 54) if small else 76
 	_ci.draw_set_transform(p + Vector2(0, 4), deg_to_rad(-1.5 if not small else 7.0 * 0.0 - 3.0))
 	var lr := Rect2(0, 0, w, h)
 	_ci.draw_colored_polygon(S.clip(Rect2(lr.position + Vector2(5, 5), lr.size), [[0, 0], [100, 3], [97, 100], [2, 95]]), fa)
@@ -1001,8 +1008,8 @@ func _hero(r: Rect2, small: bool) -> float:
 	_ci.draw_string(fi, Vector2(16 + 4, nfs * 0.86 + 4), num, HORIZONTAL_ALIGNMENT_LEFT, -1, nfs, Color.BLACK)
 	_ci.draw_string(fi, Vector2(16, nfs * 0.86), num, HORIZONTAL_ALIGNMENT_LEFT, -1, nfs, fa)
 	var tx := 16.0 + nw + 10.0
-	_ci.draw_string(S.anton(false, 1), Vector2(tx, nfs * 0.5), en, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.73, 0.73, 0.73))
-	var nmfs := S.fit_size(S.bhs(), nm, 18 if small else 22, w - tx - 10.0)
+	_ci.draw_string(S.anton(false, 1), Vector2(tx, nfs * 0.5), en, HORIZONTAL_ALIGNMENT_LEFT, -1, 8 if mini else 10, Color(0.73, 0.73, 0.73))
+	var nmfs := S.fit_size(S.bhs(), nm, (12 if mini else 18) if small else 22, w - tx - 10.0)
 	_ci.draw_string(S.bhs(), Vector2(tx, nfs * 0.5 + nmfs + 2.0), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, nmfs, Color.WHITE)
 	if not small:
 		var gy := nfs * 0.98 + 6.0
