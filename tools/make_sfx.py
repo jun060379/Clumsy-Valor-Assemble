@@ -1,5 +1,8 @@
 """Render the prototype's WebAudio sound recipes to WAV files (assets/sfx).
-The recipes are the same envelopes / band-passed noise / pitch sweeps as sfx() in the web build."""
+The recipes are the same envelopes / band-passed noise / pitch sweeps as sfx() in the web build.
+heavy / parry / hurt / thrust (now stab.wav) / dash (now dodge.wav) / ready (now ui1-3.wav) and the combo hits
+hit1-3.wav / ult.wav are produced sounds, not these recipes: NAMES leaves them out so a run never overwrites them
+(their old recipes stay below for the record)."""
 import numpy as np, wave, os, sys
 from scipy.signal import iirpeak, lfilter, butter
 SR = 44100
@@ -67,7 +70,7 @@ def recipe(name):
         s = S(0.4); x = osc('sine', 70, 420, 0.32); tt = np.arange(len(x)) / SR; s.add(x * 0.5 * np.minimum(1, tt / 0.05) * np.exp(-tt / 0.1))
     return s.render()
 
-NAMES = ['step', 'swing', 'hit', 'heavy', 'jump', 'djump', 'dive', 'slam', 'guard', 'parry', 'hurt', 'break', 'skid', 'ready', 'dig', 'dash', 'thrust', 'alert', 'alert_q', 'flare', 'boom', 'witch_end']
+NAMES = ['step', 'swing', 'hit', 'jump', 'djump', 'dive', 'slam', 'guard', 'break', 'skid', 'dig', 'alert', 'alert_q', 'flare', 'boom', 'witch_end']
 if __name__ == '__main__':
     os.makedirs(OUT, exist_ok=True)
     for n in NAMES:

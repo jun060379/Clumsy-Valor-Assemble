@@ -826,7 +826,7 @@ func _step_shields(dt: float) -> void:
 				f["hits"].append(e)
 				e.hit(2.0, f["dir"] * 5.0, P.atk_mul())
 				arena.spark(Vector2(f["x"], f["y"]), 10)
-				arena.sfx("hit", 0.7)
+				arena.sfx("hit1", 0.7)
 	shields = shields.filter(func(f): return f["t"] < f["life"])
 
 ## 그림자 분신: stays where she left and repeats her melee hits at half power

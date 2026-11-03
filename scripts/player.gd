@@ -335,7 +335,7 @@ func luce_gesture(atk) -> void:
 		var n := 2 if anim == "attack2" else 1
 		for i in n:
 			var o := Vector2(position.x - dir * (30.0 + i * 18.0), position.y - 125.0 * CSCALE - i * 16.0)
-			arena.bolt(o, tg, sz, 150.0 + i * 90.0, dir)
+			arena.bolt(o, tg, sz, 150.0 + i * 90.0, dir, hit_sound())
 		arena.sfx("thrust", 0.6)
 
 func check_hits() -> void:
@@ -378,7 +378,7 @@ func check_hits() -> void:
 	if hit_any:
 		hit_done = true
 		var heavy: bool = atk.get("heavy", false)
-		arena.sfx("heavy" if heavy else "hit")
+		arena.sfx(hit_sound())
 		if heavy: _rev("heavy")
 		if who == "aida" and _rk(): arena.runes.clone_hits(atk)
 		arena.hitstop = atk.get("stop", 55)
@@ -390,6 +390,17 @@ func check_hits() -> void:
 		if anim in ["attack3", "cthrust", "attack_high"] or (anim == "air_combo" and f >= 6):
 			qte_offer("finisher")
 
+
+## the hit's sound: the ground combo's n-th hit plays hit<n> (F / A / C), the air combo cycles 1 / 2 / 3 by its hit,
+## the kneeling slash and the dive are hit1, the upward slash hit2; the charged thrust lands heavy
+func hit_sound() -> String:
+	match anim:
+		"attack1", "kneel_attack", "dive": return "hit1"
+		"attack2", "attack_high": return "hit2"
+		"attack3": return "hit3"
+		"air_combo": return "hit1" if f < 3 else ("hit2" if f < 6 else "hit3")
+		"cthrust": return "heavy"
+	return "hit1"
 
 ## the foe as a vertical segment (ey-eh .. ey) tested against the swing: point-blank always counts,
 ## arcs test sample points against the crescent sector, thrusts use the box
@@ -1570,7 +1581,7 @@ func counter_swap(m, nx: String) -> void:
 	arena.hitstop = maxf(arena.hitstop, 190.0)
 	arena.flash = maxf(arena.flash, 0.5)
 	arena.shake(10, dir)
-	arena.sfx("parry", 1.0)
+	arena.sfx("parry", 1.0, {"st": 7.0})     # a glint caught: the perfect parry's fifth
 	arena.sfx("slam", 0.8)
 	arena.text(Vector2(tag_to, position.y - 190.0 * CSCALE), "PARRY!", Color("#ffffff"))
 	arena.parry_word()

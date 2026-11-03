@@ -23,6 +23,10 @@ started when the title went live carries the same timeline. `set_time` / `hold` 
 title track and the town cross-fade over 1.2 s and the town starts from 0. Both files sit at −14 LUFS, the BGM bus at
 −1 dB. On the web the track can only start after the first tap: the gate.
 
+`beat.gd` is one clock per track now (the dungeon's tracks ride it too, with measured beat maps, for the sound
+effects' 16th-note snaps — README, 소리): a bare `Beat.new()` is still exactly this title grid, and the static
+helpers (`bar_t`, `sec_t`, `section_at`, the constants) are the title's.
+
 ## Composition (fractions of the viewport)
 
 - pink field: polygon (0.44W,0)–(W,0)–(W,H)–(0.64W,H); black everywhere else. Section C: a thin band (0.70W / 0.88W)
