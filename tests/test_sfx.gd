@@ -125,7 +125,7 @@ func _initialize() -> void:
 	check(near(player_of("hit1").pitch_scale, 0.5, 0.001), "st -12 → 0.5")
 	stop_all()
 	arena.sfx("parry", 1.0, {"st": 7.0})
-	check(near(player_of("parry").pitch_scale, pow(2.0, 7.0 / 12.0), 0.001) and near(player_of("parry").volume_db, linear_to_db(1.1) - 4.0, 0.01), "parry +7 st → 1.498 (a fifth), at its 1.1 level")
+	check(near(player_of("parry").pitch_scale, pow(2.0, 7.0 / 12.0), 0.001) and near(player_of("parry").volume_db, linear_to_db(1.2) - 4.0, 0.01), "parry +7 st → 1.498 (a fifth), at its 1.2 level")
 	stop_all()
 	var pitches := {}
 	for i in 12:

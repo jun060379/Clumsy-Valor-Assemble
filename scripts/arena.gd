@@ -863,7 +863,7 @@ const REPEAT_K := 0.7
 var vari_last := {}
 var hit_last_ms := -99999.0
 const UI_CLICKS := ["ui1", "ui2", "ui3"]
-const LEVEL := {"hit1": 0.9, "hit2": 0.9, "hit3": 0.9, "heavy": 1.0, "parry": 1.1, "stab": 0.9, "guard": 0.9, "hurt": 0.9, "death": 1.0, "dodge": 0.6, "skid": 0.5, "ult": 1.0, "ult_charge": 0.8, "swing": 0.4,
+const LEVEL := {"hit1": 0.9, "hit2": 0.9, "hit3": 0.9, "heavy": 1.0, "parry": 1.2, "stab": 0.9, "guard": 0.9, "hurt": 0.9, "death": 1.0, "dodge": 0.6, "skid": 0.5, "ult": 1.0, "ult_charge": 0.8, "swing": 0.4,
 	"step_grass": 0.45, "step_stone": 0.5, "step_wood": 0.5, "step_run": 0.5, "tick": 0.5, "ui1": 0.8, "ui2": 0.5, "ui3": 0.55,
 	"pick_coin": 0.53, "pick_stone": 0.68, "pick_rune": 0.53,
 	"menu_move": 0.48, "menu_ok": 0.48, "menu_back": 0.54,
