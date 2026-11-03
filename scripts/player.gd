@@ -1099,6 +1099,14 @@ func physics(dt: float, a: String) -> void:
 					edge_idle = 0.0
 		elif anim != "teeter" and anim != "teeterL":
 			edge_idle = 0.0
+	# the landing sound leads the touchdown by LAND_LEAD frames (audio output latency, the clip's own attack): when the
+	# fall will reach the surface below within that, it's cued now, and the touchdown itself stays quiet
+	if vy < 0.0: land_cued = false          # going up again (a double jump): the next landing cues afresh
+	if not on and vy > 0.0 and not land_cued and a in ["jump", "runjump", "double_jump"]:
+		var ly := _land_y()
+		if ly < 1e8 and ly - position.y <= vy * dt * LAND_LEAD and ly >= position.y - 1.0:
+			land_cued = true
+			land_sfx()
 	var landed := false
 	if arena.level != null and arena.level.has_method("land"):
 		landed = arena.level.land(self, prev_x, dt)
@@ -1108,8 +1116,9 @@ func physics(dt: float, a: String) -> void:
 			air = 0
 			if a in ["jump", "runjump", "double_jump"]:
 				land_anim()
-				land_sfx()
+				if not land_cued: land_sfx()
 				arena.dust(position, 0, false)
+			land_cued = false
 		elif landed:
 			vy = 0.0
 		elif on:
@@ -1140,8 +1149,9 @@ func physics(dt: float, a: String) -> void:
 		air = 0
 		if a in ["jump", "runjump", "double_jump"]:
 			land_anim()
-			land_sfx()
+			if not land_cued: land_sfx()
 			arena.dust(position, 0, false)
+		land_cued = false
 	elif landed:
 		on = true
 	elif on:
@@ -1157,6 +1167,25 @@ func physics(dt: float, a: String) -> void:
 ## touchdown after a jump or a fall of LAND_MIN px or more: land.ogg (never for a small step down)
 ## the landing: on the touchdown frame itself (no snap, the file starts on its transient), every landing after a real
 ## jump or fall, louder the further she fell
+const LAND_LEAD := 3.0          # frames the landing sound leads the touchdown
+var land_cued := false
+
+## the surface under her feet (the nearest top at or below her): the level's floor where it has one, else the ground,
+## the solids' tops and the platforms under x
+func _land_y() -> float:
+	var best := 1e9
+	var L = arena.level
+	if L != null and L.has_method("floor_at"):
+		best = float(L.floor_at(position.x))
+	else:
+		best = arena.ground_y
+	for so in arena.solids:
+		if position.x > so.x - 2.0 and position.x < so.x + so.w + 2.0 and so.top >= position.y - 1.0: best = minf(best, so.top)
+	if not keys.get("down", false):
+		for pl in arena.platforms:
+			if position.x > pl.x - 2.0 and position.x < pl.x + pl.w + 2.0 and pl.y >= position.y - 1.0: best = minf(best, pl.y)
+	return best
+
 func land_sfx() -> void:
 	var h: float = position.y - air_top
 	if h >= 12.0: arena.sfx("land", lerpf(0.3, 0.6, clampf(h / 160.0, 0.0, 1.0)))
