@@ -1,5 +1,5 @@
 extends SceneTree
-## WP4 PARTY v2 (#pt2) and WP16 the witch-time slow bus.
+## 편성 (three slots and the desk of files) and WP16 the witch-time slow bus.
 var fails := 0
 
 func check(ok: bool, what: String) -> void:
@@ -34,12 +34,9 @@ func _initialize() -> void:
 	var pg = M.ext.get("party")
 	check(pg != null and M.page == "party" and pg.visible, "hub 파티 opens the party page")
 	check(not M.PAGE.has("party"), "party is off the 준비 중 list")
-	check(pg.sel == P.who, "opens on the leader (ptSel = CHAR)")
+	check(pg.at(pg.slot) == P.who and pg.mode == "slots", "opens on the leader's slot")
 	for i in 5: await process_frame
-	check(pg._L.size() == 3, "three columns for three recruits")
-	var on_w: float = pg._L[pg.sel]["r"].size.x
-	var off_w: float = pg._L["aida"]["r"].size.x
-	check(absf(on_w / off_w - 2.6) < 0.05, "the picked column is 2.6× wide (%.2f)" % (on_w / off_w))
+	check(pg._L.size() == 3, "three slots")
 	pg._key(KEY_ESCAPE)
 	await settle(U)
 	check(M.page == "hub", "Esc goes back to the hub it came from")
@@ -50,79 +47,75 @@ func _initialize() -> void:
 	M._bar_click("pty")
 	await process_frame
 	check(M.page == "party", "top bar 파티 opens it")
-	# a tap on another column picks it; the width eases over .55 s
 	for i in 3: await process_frame
-	var poly: PackedVector2Array = pg._L["aida"]["poly"]
-	var cpos := Vector2.ZERO
-	for p in poly: cpos += p
-	cpos /= poly.size()
-	_click(cpos)
+	# a tap on another slot picks it
+	var poly: PackedVector2Array = pg._L[1]["poly"]
+	_click(_center(poly))
 	await process_frame
-	check(pg.sel == "aida", "a tap picks Aida's column")
-	for i in 4: await process_frame
-	var k: float = pg.tr.get_v("flex_aida", 2.6, 550.0, "ez")
-	check(k > 1.0 and k < 2.6, "her column is widening (%.2f)" % k)
-	pg.tr.step(1000.0)
-	check(absf(pg.tr.get_v("flex_aida", 2.6, 550.0, "ez") - 2.6) < 0.001, "and settles at 2.6")
-
-	# ---- 빼기 / 넣기 ----
+	check(pg.slot == 1 and pg.mode == "slots", "a tap picks slot 02")
 	var B: Array = pg.bar()
-	check(B[0][1] == "빼기" and B[0][2] and B[1][2], "Aida in the party: 빼기 · 리더로 on")
-	pg.press("in")
-	check(not P.party.has("aida") and P.party.size() == 2, "빼기 takes her out")
-	B = pg.bar()
-	check(B[0][1] == "넣기" and B[0][2], "now 넣기")
-	pg.press("in")
-	check(P.party.has("aida") and P.party.size() == 3, "넣기 brings her back")
-	pg.pick("estelle")
-	B = pg.bar()
-	check(not B[0][2] and not B[1][2] and B[2][2], "the leader: 빼기 and 리더로 off, 정보 on")
-	pg.press("in")
-	check(P.party.has("estelle"), "a disabled 빼기 does nothing")
-	# ---- 리더로 for a member out of the party ----
-	pg.pick("luce")
-	pg.press("in")
-	check(not P.party.has("luce"), "Luce out")
+	check(B.size() == 4 and B[1][2] and B[2][2], "a filled slot: 교체 · 리더로 · 빼기 · 정보")
+	# ---- 빼기 / an empty slot / the desk ----
+	var c1: String = pg.at(1)
+	pg.press("out")
+	check(not P.party.has(c1) and P.party.size() == 2, "빼기 empties the slot")
+	pg.slot = 2
+	pg.slot = 2
+	check(pg.bar().size() == 1 and pg.bar()[0][0] == "swap", "an empty slot: 서류 넣기")
+	pg.press("swap")
+	check(pg.mode == "desk", "서류 넣기 opens the desk")
+	for i in 30: await process_frame
+	check(pg._F.size() == 3, "a file per recruit")
+	pg.file_tap(c1)
+	check(pg.dsel == c1, "a tap lifts the file")
+	pg.file_tap(c1)
+	check(P.party.has(c1) and P.party.find(c1) == P.party.size() - 1, "a second tap sends it to the empty slot")
+	check(await _until(func(): return pg.mode == "slots"), "stamped, back to the slots")
+	# a member in another slot trades places
+	var order0: Array = P.party.duplicate()
+	pg.slot = 0
+	pg.open_desk()
+	pg.dsel = order0[2]
+	pg.send()
+	check(P.party[0] == order0[2] and P.party[2] == order0[0], "a file from another slot trades places %s" % str(P.party))
+	await _until(func(): return pg.mode == "slots")
+	# a member left out replaces the one there (the leader hands over control)
+	pg.slot = 1 if P.party[1] != P.who else 2
+	var gone: String = P.party[pg.slot]
+	pg.press("out")
+	pg.slot = 0
+	var lead0: String = P.party[0]
+	pg.open_desk()
+	pg.dsel = gone
+	pg.send()
+	check(P.party[0] == gone and not P.party.has(lead0) or P.party[0] == gone, "a file left out takes the slot %s" % str(P.party))
+	check(P.who == gone or lead0 != P.who, "the leader's slot taken: the newcomer leads (%s)" % P.who)
+	await _until(func(): return pg.mode == "slots")
+	# 리더로
+	pg.slot = 1
+	var c2: String = pg.at(1)
 	pg.press("lead")
-	check(P.party.has("luce") and P.who == "luce", "리더로 brings her in and gives her control")
-	pg.pick("estelle")
-	pg.press("lead")
-	check(P.who == "estelle", "리더로 back to Estelle")
-	# taps on the bar go through the top layer
-	pg.pick("aida")
-	for i in 3: await process_frame
-	check(pg.top_hits.size() == 4, "bar ×3 and ✕ are tappable")
-	_click(_center(pg.top_hits[0][0]))
-	await process_frame
-	check(not P.party.has("aida"), "tapping 빼기 works")
-	_click(_center(pg.top_hits[0][0]))
-	await process_frame
-	check(P.party.has("aida"), "tapping 넣기 works")
+	check(P.who == c2, "리더로 gives control")
+	check(not pg.bar()[2][2] or P.party.size() > 1, "빼기 off for the last member")
 	# keys
-	pg.pick("estelle")
+	pg.slot = 0
 	pg._key(KEY_RIGHT)
-	check(pg.sel == "aida", "→ picks the next member")
-	pg._key(KEY_DOWN)
+	check(pg.slot == 1, "→ picks the next slot")
 	pg._key(KEY_ENTER)
-	check(not P.party.has("aida") and pg.focus == 0, "↓ Enter presses 빼기")
-	pg._key(KEY_ENTER)
-	pg._key(KEY_UP)
-	check(P.party.has("aida") and pg.focus == -1, "Enter again 넣기, ↑ back to the columns")
-
-	# ---- the save keeps the party ----
-	pg.pick("luce")
-	pg.press("in")
+	check(pg.mode == "desk", "Enter opens the desk")
+	pg._key(KEY_ESCAPE)
+	check(pg.mode == "slots" and M.page == "party", "Esc on the desk goes back to the slots")
+	# the save keeps the party
 	arena.save_now()
 	var d = JSON.parse_string(FileAccess.get_file_as_string(arena.save.path))
-	check(d is Dictionary and d.has("party") and not d["party"].has("luce") and d["party"].size() == 2, "the save keeps the party %s" % str(d.get("party") if d is Dictionary else null))
-	pg.press("in")
-
-	# ---- 정보: sweep → the character screen on that member ----
-	pg.pick("aida")
+	check(d is Dictionary and d.has("party") and d["party"] == P.party, "the save keeps the party in slot order %s" % str(d.get("party") if d is Dictionary else null))
+	# 정보: sweep → the character screen on that member
+	pg.slot = 0
+	var c3: String = pg.at(0)
 	pg.press("info")
 	await settle(U)
 	for i in 3: await process_frame
-	check(M.page == "char" and M.ext["char"].c == "aida", "정보 opens Aida's character screen")
+	check(M.page == "char" and M.ext["char"].c == c3, "정보 opens the character screen")
 	M.close_page()
 	await settle(U)
 
@@ -166,6 +159,13 @@ func _initialize() -> void:
 
 	print("w4 done, fails=%d" % fails)
 	quit()
+
+func _until(cond: Callable, ms := 4000.0) -> bool:
+	var t0 := Time.get_ticks_msec()
+	while not cond.call():
+		await process_frame
+		if Time.get_ticks_msec() - t0 > ms: return false
+	return true
 
 func _center(h) -> Vector2:
 	if h is Rect2: return h.get_center()
