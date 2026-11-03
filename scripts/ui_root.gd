@@ -71,7 +71,7 @@ func start_game(c: String) -> void:
 	P.last_hp = P.hp
 	arena.fade = 1.0
 	arena.fade_dir = -1
-	arena.sfx("ready", 0.6)
+	arena.sfx("ui_ok", 0.6)
 
 ## padPoll: the left stick steers every menu as the d-pad does (only while a screen covers the world; in play the
 ## stick is bound to the move actions)

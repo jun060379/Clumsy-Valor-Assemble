@@ -283,7 +283,7 @@ func _input(ev: InputEvent) -> void:
 	if confirm:
 		if left or right or up or down:
 			confirm_sel = 1 - confirm_sel
-			arena.sfx("step", 0.4)
+			arena.sfx("ui_move", 0.5)
 		elif ok: _confirm_pick(confirm_sel)
 		elif back: _confirm_pick(1)
 		elif tap != Vector2.INF:
@@ -292,7 +292,7 @@ func _input(ev: InputEvent) -> void:
 		return
 	if up or down:
 		sel = posmod(sel + (1 if down else -1), items.size())
-		arena.sfx("step", 0.4)
+		arena.sfx("ui_move", 0.5)
 	elif ok:
 		_pick(sel)
 	elif tap != Vector2.INF:
@@ -309,7 +309,7 @@ func _pick(k: int) -> void:
 				confirm = true
 				confirm_sel = 1
 				confirm_t = clock
-				arena.sfx("ready", 0.4)
+				arena.sfx("ui_ok", 0.5)
 			else: _begin()
 		"load":
 			if has_save: _begin()
@@ -318,8 +318,7 @@ func _pick(k: int) -> void:
 			in_opts = true
 			active = false
 			visible = false          # the settings page is drawn under this layer: step aside until it closes
-			arena.sfx("ready", 0.4)
-			ui_root.menu.open_page("opts")
+			ui_root.menu.open_page("opts")      # (its own ui_ok)
 		"quit":
 			get_tree().quit()
 
@@ -328,7 +327,7 @@ func _confirm_pick(k: int) -> void:
 	if k == 0:
 		fresh = true
 		_begin()
-	else: arena.sfx("step", 0.3)
+	else: arena.sfx("ui_back", 0.5)
 
 ## the outro: the burst, the logo leaves, the pink field grows, the sweep carries on into the game
 func _begin() -> void:

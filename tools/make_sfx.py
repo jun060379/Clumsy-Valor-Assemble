@@ -70,7 +70,7 @@ def recipe(name):
         s = S(0.4); x = osc('sine', 70, 420, 0.32); tt = np.arange(len(x)) / SR; s.add(x * 0.5 * np.minimum(1, tt / 0.05) * np.exp(-tt / 0.1))
     return s.render()
 
-NAMES = ['step', 'swing', 'hit', 'jump', 'djump', 'dive', 'slam', 'guard', 'break', 'skid', 'dig', 'alert', 'alert_q', 'flare', 'boom', 'witch_end']
+NAMES = ['step', 'swing', 'hit', 'dive', 'slam', 'guard', 'break', 'skid', 'dig', 'alert', 'alert_q', 'flare', 'boom', 'witch_end']   # jump / djump are the pack's OGGs now (their recipes stay above, unused)
 if __name__ == '__main__':
     os.makedirs(OUT, exist_ok=True)
     for n in NAMES:

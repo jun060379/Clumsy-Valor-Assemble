@@ -413,7 +413,7 @@ func step(dt: float) -> void:
 		var want := 1 if d < 90.0 else (0 if d > 130.0 else (1 if o > 0.5 else 0))
 		var n := clampf(o + (1.0 if want == 1 else -1.0) * dt / 180.0, 0.0, 1.0)
 		if n > 0.0 and o == 0.0:
-			arena.sfx("ready", 0.18)
+			arena.sfx("ui_move", 0.18)
 			odir[k] = 1 if P.position.x < wx else -1
 			draft = {"v": 1.0, "dir": 1 if P.position.x < wx else -1, "x": wx}
 		open[k] = n
@@ -449,7 +449,7 @@ func step(dt: float) -> void:
 		var ay := HD.prop_y(p)
 		var wnt := (absf(P.position.x - ax) < 120.0 and absf(P.position.y - ay) < 60.0) or (eh and absf(E.x - ax) < 110.0 and absf(E.y - ay) < 60.0)
 		var o2: float = arch_o.get(i, 0.0)
-		if wnt and o2 == 0.0: arena.sfx("ready", 0.15)
+		if wnt and o2 == 0.0: arena.sfx("ui_move", 0.15)
 		arch_o[i] = clampf(o2 + (1.0 if wnt else -1.0) * dt / 260.0, 0.0, 1.0)
 	_life(dt, P, AM)
 	# doors
@@ -676,11 +676,11 @@ func try_interact() -> bool:
 	var E = arena.eil
 	match d["act"]:
 		"town":
-			arena.sfx("ready", 0.6)
+			arena.sfx("ui_ok", 0.6)
 			arena.fade_then(func(): arena.go_town(Vector2(E.HDOOR, E.TTOP), 1))
 		"go":
 			var to: Array = d["to"]
-			arena.sfx("ready", 0.5)
+			arena.sfx("ui_ok", 0.5)
 			arena.fade_then(func(): arena.go_hall(to[0], Vector2(to[1], to[2]), 1))
 		"counter":
 			if E.at_desk(): E.talk()

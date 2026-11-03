@@ -1,10 +1,14 @@
 extends SceneTree
 ## The sound effects as instruments on the music (arena.gd sfx): the logical name → file map (thrust = stab, dash =
-## dodge, "ready" cycles ui1 / ui2 / ui3 never repeating, "hit" alone stays the old file), the combo's hit1 / hit2 /
-## hit3 by the player's attack, the per-file levels, the old two-argument calls, the pitch from semitones with witch
-## time's 0.62× on top, the jitter, the snap: a no-op in town, a hold of at most 90 ms onto the next 16th of the
-## dungeon clock (a held clock makes it exact), played from the scheduled list the next frame; the perfect parry's
-## +7 st; heavy / parry / ult ducking the music in the dungeon only.
+## dodge, "ready" cycles ui1 / ui2 / ui3 never repeating, "hit" alone stays the old file, ui_move / ui_ok / ui_back →
+## menu_move / menu_ok / menu_back), the pack's OGGs (sfx_stream loads <file>.ogg first, then .wav; jump / djump / land
+## are OGG now, hit1 stays WAV) with a LEVEL entry each, the pickup words → pick_coin / pick_stone / pick_rune (jitter
+## ±0.7 st, never snapped, vol 0.55), the ult's ult_sub layer at the same moment, the landing gate (LAND_MIN), the
+## death jingle and its duck, the boss impacts, the combo's hit1 / hit2 / hit3 by the player's attack, the per-file
+## levels, the old two-argument calls, the pitch from semitones with witch time's 0.62× on top, the jitter, the snap:
+## a no-op in town, a hold of at most 90 ms onto the next 16th of the dungeon clock (a held clock makes it exact),
+## played from the scheduled list the next frame; the perfect parry's +7 st; heavy / parry / ult ducking the music in
+## the dungeon only; the raw cues on the SFX bus.
 ## godot --headless --path . -s tests/test_sfx.gd
 
 var fails := 0
@@ -42,12 +46,27 @@ func _initialize() -> void:
 	var B = arena.bgm
 
 	print("-- the files")
-	for f in ["hit1", "hit2", "hit3", "heavy", "stab", "parry", "hurt", "dodge", "ult", "ui1", "ui2", "ui3", "hit", "swing", "guard", "slam", "step", "skid", "jump", "djump", "dive", "dig", "break", "boom", "witch_end", "flare", "alert", "alert_q"]:
+	for f in ["hit1", "hit2", "hit3", "heavy", "stab", "parry", "hurt", "dodge", "ult", "ui1", "ui2", "ui3", "hit", "swing", "guard", "slam", "step", "skid", "dive", "dig", "break", "boom", "witch_end", "flare", "alert", "alert_q"]:
 		var st = arena.sfx_stream(f)
 		check(st is AudioStreamWAV, "assets/sfx/%s.wav loads" % f)
 	for f in ["thrust", "dash", "ready"]:
 		check(not ResourceLoader.exists("res://assets/sfx/%s.wav" % f), "the old %s.wav is gone" % f)
 	check(arena.sfx_file("thrust") == "stab" and arena.sfx_file("dash") == "dodge" and arena.sfx_file("hit") == "hit" and arena.sfx_file("heavy") == "heavy", "logical → file: thrust = stab, dash = dodge, hit / heavy themselves")
+	# the pack: processed OGGs, loaded before any .wav of the same name
+	const PACK := ["pick_coin", "pick_stone", "pick_rune", "menu_move", "menu_ok", "menu_back", "jingle_lv", "jingle_rank", "jingle_quest", "jingle_death", "jingle_book", "impact_boss_in", "impact_boss_down", "jump", "djump", "land", "ult_sub"]
+	for f in PACK:
+		var st2 = arena.sfx_stream(f)
+		check(st2 is AudioStreamOggVorbis and not st2.loop, "assets/sfx/%s.ogg loads (a one-shot ogg)" % f)
+		check(not ResourceLoader.exists("res://assets/sfx/%s.wav" % f), "no %s.wav beside it" % f)
+		check(arena.LEVEL.has(f) and arena.LEVEL[f] > 0.0, "LEVEL has %s (%.2f)" % [f, float(arena.LEVEL.get(f, 0.0))])
+	check(arena.sfx_path("jump").ends_with("jump.ogg") and not ResourceLoader.exists("res://assets/sfx/jump.wav"), "a name with only .ogg (jump) resolves to the ogg")
+	check(arena.sfx_path("hit1").ends_with("hit1.wav") and not ResourceLoader.exists("res://assets/sfx/hit1.ogg"), "a name with only .wav (hit1) resolves to the wav")
+	check(arena.sfx_path("no_such_sound") == "" and arena.sfx_stream("no_such_sound") == null, "a missing name: no path, a null stream")
+	for f in ["jump", "djump", "land"]:
+		check(arena.sfx_stream(f) is AudioStreamOggVorbis and arena.sfx_stream(f).get_length() > 0.1, "%s.ogg: %.2f s" % [f, arena.sfx_stream(f).get_length()])
+	check(arena.sfx_file("ui_move") == "menu_move" and arena.sfx_file("ui_ok") == "menu_ok" and arena.sfx_file("ui_back") == "menu_back", "ui_move / ui_ok / ui_back → menu_move / menu_ok / menu_back")
+	check(arena.PICKUPS["실링"] == "pick_coin" and arena.PICKUPS["기억석"] == "pick_stone" and arena.PICKUPS["룬 · "] == "pick_rune" and arena.PICKUPS["장비"] == "pick_rune", "pickup words → pick_coin / pick_stone / pick_rune (룬 and 장비 share)")
+	check(arena.LAYERS["ult"] == [["ult_sub", 0.9]], "the ult layers ult_sub at 0.9")
 	var seq := []
 	for i in 9: seq.append(arena.sfx_file("ready"))
 	var norep := true
@@ -107,8 +126,59 @@ func _initialize() -> void:
 	check(near(player_of("hit1").pitch_scale, 2.0 * 0.62, 0.001), "witch time: 0.62× on top of the semitones (1.24)")
 	stop_all()
 	arena.sfx("boom", 0.9)
-	check(player_of("boom").pitch_scale == 1.0 and player_of("boom").bus == &"Master", "the raw cues (boom) stay dry and at 1×")
+	check(player_of("boom").pitch_scale == 1.0 and player_of("boom").bus == &"SFX", "the raw cues (boom) stay dry and at 1×, straight on the SFX bus")
 	arena.witch = 0.0
+	stop_all()
+	# the ult's sub layer: both files at once, the layer at 0.9 of the call's volume times its own level
+	arena.sfx("ult", 1.0)
+	check(player_of("ult") != null and player_of("ult_sub") != null and arena.sfx_due.is_empty(), "sfx('ult') in town: ult and ult_sub play together")
+	check(near(player_of("ult_sub").volume_db, linear_to_db(0.9 * 0.63) - 4.0, 0.01) and player_of("ult_sub").pitch_scale == 1.0, "ult_sub at 0.9 × its level (0.63)")
+	stop_all()
+	arena.sfx("ult", 0.5)
+	check(near(player_of("ult_sub").volume_db, linear_to_db(0.5 * 0.9 * 0.63) - 4.0, 0.01), "…times the caller's volume")
+	stop_all()
+	# the pickups: by the notice's word, with jitter, never snapped
+	for w in [["실링 +3", "pick_coin"], ["기억석 +1", "pick_stone"], ["룬 · 불씨", "pick_rune"], ["장비 · 낡은 검", "pick_rune"]]:
+		arena.text(Vector2(100, 100), w[0], Color.WHITE)
+		var pp = player_of(w[1])
+		check(pp != null and arena.sfx_due.is_empty(), "text('%s') rings %s at once" % [w[0], w[1]])
+		if pp != null:
+			check(near(pp.volume_db, linear_to_db(0.55 * arena.LEVEL[w[1]]) - 4.0, 0.01), "…at 0.55 × its level")
+			check(pp.pitch_scale >= pow(2.0, -0.7 / 12.0) - 0.001 and pp.pitch_scale <= pow(2.0, 0.7 / 12.0) + 0.001, "…within ±0.7 st (%.4f)" % pp.pitch_scale)
+		stop_all()
+	arena.text(Vector2(100, 100), "보상 · 실링 +6", Color.WHITE)
+	check(player_of("pick_coin") == null, "a line that does not start with a pickup word is plain floating text, no ring")
+	arena.text(Vector2(100, 100), "도감 등록: 고블린", Color.WHITE)
+	check(player_of("pick_coin") == null and player_of("pick_rune") == null, "…nor does any other text")
+	stop_all()
+	var pj := {}
+	for i in 10:
+		arena.text(Vector2(100, 100), "실링 +1", Color.WHITE)
+		pj[snappedf(player_of("pick_coin").pitch_scale, 0.0001)] = true
+		stop_all()
+	check(pj.size() >= 5, "the pickup jitter varies (%d distinct of 10)" % pj.size())
+	for k in [["sh", "pick_coin"], ["mem", "pick_stone"], ["rune", "pick_rune"], ["gear", "pick_rune"], ["skin", "pick_rune"]]:
+		arena.loot_pick(k[0])
+		check(player_of(k[1]) != null, "the chest's loot (%s) rings %s" % [k[0], k[1]])
+		stop_all()
+	check(not arena.has_method("loot_tink"), "the procedural tinks are gone")
+	# the landing gate: a touchdown from LAND_MIN px or more rings land.ogg, a kerb does not
+	P.air_top = P.position.y - P.LAND_MIN - 1.0
+	P.land_sfx()
+	check(player_of("land") != null and near(player_of("land").volume_db, linear_to_db(0.45 * arena.LEVEL["land"]) - 4.0, 0.01), "a landing from %d px: land.ogg at 0.45" % int(P.LAND_MIN))
+	stop_all()
+	P.air_top = P.position.y - 10.0
+	P.land_sfx()
+	check(player_of("land") == null, "a 10 px step down: quiet")
+	P.air_top = P.position.y
+	# the death jingle: in town, no dungeon track to duck
+	var hp0: float = P.hp
+	P.die()
+	check(player_of("jingle_death") != null and P.anim == "death", "die(): jingle_death with the death anim")
+	check(B.duck_t == 0.0 and B.duck_db == 0.0, "…no duck in town (no dungeon track)")
+	P.hp = hp0
+	P.set_anim("idle", 0)
+	P.dead_t = 0.0
 	stop_all()
 	arena.sfx("ui1", 0.4, {"delay_ms": 30.0})
 	check(player_of("ui1") == null and arena.sfx_due.size() == 1 and near(arena.sfx_due[0]["t"], 30.0), "delay_ms: scheduled, not played yet")
@@ -180,13 +250,45 @@ func _initialize() -> void:
 	# the ult's impact: snapped, the deep duck
 	C.set_time(line - 0.03)
 	arena.sfx("ult", 1.0)
-	check(player_of("ult") == null and arena.sfx_due.size() == 1 and near(arena.sfx_due[0]["t"], 30.0, 1.0), "the ult impact snaps too")
+	check(player_of("ult") == null and arena.sfx_due.size() == 2 and near(arena.sfx_due[0]["t"], 30.0, 1.0), "the ult impact snaps too (with its ult_sub layer: 2 due)")
 	arena.sfx_step(40.0)
 	check(player_of("ult") != null and B.duck_db == 6.0 and near(B.duck_t, 0.25, 0.001) and near(player_of("ult").volume_db, -4.0, 0.01), "…and ducks the music 6 dB for 250 ms when it sounds, at full level")
 	stop_all()
 	B.duck_t = 0.0
 	B.duck_db = 0.0
 	B.duck_v = 0.0
+	# the ult's sub layer is held with it
+	C.set_time(line - 0.03)
+	arena.sfx("ult", 1.0)
+	check(player_of("ult") == null and player_of("ult_sub") == null and arena.sfx_due.size() == 2 and near(arena.sfx_due[0]["t"], arena.sfx_due[1]["t"]), "ult + ult_sub: both held for the same 16th")
+	arena.sfx_step(40.0)
+	check(player_of("ult") != null and player_of("ult_sub") != null and arena.sfx_due.is_empty(), "…and sound together")
+	stop_all()
+	B.duck_t = 0.0
+	B.duck_db = 0.0
+	B.duck_v = 0.0
+	# the death jingle ducks the dungeon track 6 dB for 600 ms
+	var hp1: float = P.hp
+	P.die()
+	check(player_of("jingle_death") != null and B.duck_db == 6.0 and near(B.duck_t, 0.6, 0.001), "die() in the dungeon: jingle_death, the music ducked 6 dB for 600 ms")
+	P.hp = hp1
+	P.set_anim("idle", 0)
+	P.dead_t = 0.0
+	stop_all()
+	B.duck_t = 0.0
+	B.duck_db = 0.0
+	B.duck_v = 0.0
+	# the boss down: impact_boss_down lands 120 ms after the break
+	var bm = arena.spawn("boss", P.position.x + 300.0, 0.0)
+	await process_frame
+	bm.hp = 1.0
+	bm.hit(1.0, 0.0)
+	var due_down: Array = arena.sfx_due.filter(func(q): return q["file"] == "impact_boss_down")
+	check(bm.is_dead() and player_of("break") != null and due_down.size() == 1 and near(due_down[0]["t"], 120.0, 1.0), "the boss falls: break now, impact_boss_down due in 120 ms (%s)" % str(due_down.size()))
+	arena.sfx_step(130.0)
+	check(player_of("impact_boss_down") != null, "…and it sounds")
+	stop_all()
+	arena.hitstop = 0.0
 	# the perfect parry: a glinting blow parried rings a fifth up
 	C.set_time(line)
 	var m = arena.spawn("goblin", P.position.x + 120.0, 0.0)
@@ -210,6 +312,24 @@ func _initialize() -> void:
 	check(h3 != null and near(h3.pitch_scale, pow(2.0, 5.0 / 12.0), 0.001), "slow_bus.gd leaves the pool's own pitch alone (%.3f)" % h3.pitch_scale)
 	stop_all()
 	C.hold = false
+	# the boss card: impact_boss_in as the card comes up (sortie.pre_step)
+	var D = arena.level
+	var bk := ""
+	for k in D.rooms:
+		if D.rooms[k]["type"] == "boss": bk = k
+	var sv: bool = arena.sortie.tc.active
+	D.from = "L"
+	D.cur = bk
+	D.enter()
+	arena.fade_dir = 0
+	arena.sortie.last_cur = ""
+	D.room()["tc"] = false
+	var pre: bool = arena.sortie.pre_step()
+	check(pre and arena.sortie.tc.active and arena.sortie.tc.kind == "boss" and player_of("impact_boss_in") != null, "the boss room entered: the card plays with impact_boss_in")
+	arena.sortie.tc.active = sv
+	arena.sortie.tc.visible = false
+	stop_all()
+	arena.hitstop = 0.0
 	# the 배경음 setting off: no grid, so no snap
 	arena.music = false
 	await run(1.0)

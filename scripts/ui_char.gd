@@ -153,7 +153,7 @@ func _tab(k: String) -> void:
 	react_t = 0.0
 	mx.tab_changed()
 	if k == "wear": wr.reset()
-	sfx("ready", 0.2)
+	sfx("ui_move", 0.5)
 
 func _member(cc: String) -> void:
 	stat_scroll = 0.0
@@ -162,7 +162,7 @@ func _member(cc: String) -> void:
 	pend_c = cc
 	wipe_t = 0.0
 	wipe_kind = "member"
-	sfx("ready", 0.3)
+	sfx("ui_move", 0.5)
 
 ## ROSTER (cxOpen's .chars): the members who have joined, in the prototype's order
 func roster() -> Array:
@@ -493,7 +493,7 @@ func _gear(vs: Vector2, col: Color) -> void:
 		hit(poly, func():
 			if gi != ii:
 				_pick_gi(ii)
-				sfx("ready", 0.15))
+				sfx("ui_move", 0.5))
 		y += bh + 7.0
 	_gear_card(vs, col)
 
@@ -526,7 +526,7 @@ func _gear_card(vs: Vector2, col: Color) -> void:
 			draw_set_transform(Vector2.ZERO)
 			hit(_xr(xf, off), func():
 				R().gear_off(c, s)
-				sfx("ready", 0.4)
+				sfx("ui_ok", 0.5)
 				picking = false)
 		var yy := 34.0
 		if cands.is_empty():
@@ -549,7 +549,7 @@ func _gear_card(vs: Vector2, col: Color) -> void:
 			var b2: int = bi
 			hit(_xr(xf, rr), func():
 				if R().gear_on(c, s, b2):
-					sfx("ready", 0.5)
+					sfx("ui_ok", 0.5)
 					arena.text(arena.player.position + Vector2(0, -170), RN.pname(c) + " · " + R().gear[c][s]["n"] + " 장착", Color("#ffe9a8"))
 				picking = false)
 			yy += 44.0
@@ -597,7 +597,7 @@ func _gear_card(vs: Vector2, col: Color) -> void:
 	draw_set_transform(Vector2.ZERO)
 	hit(_xr(Transform2D(deg_to_rad(-3.0), Vector2(x, y)), btn), func():
 		picking = true
-		sfx("ready", 0.3))
+		sfx("ui_ok", 0.5))
 
 ## the 상세 art (left 4 %, top 4 %, full height); out > 0 = leaving the tab
 func _attr_art(vs: Vector2, out: float) -> void:

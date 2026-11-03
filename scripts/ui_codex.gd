@@ -289,7 +289,7 @@ func _copy(n: String, what) -> void:
 func close_book() -> void:
 	if busy or phase != "idle": return
 	busy = true
-	sfx("ready", 0.2)
+	sfx("ui_back", 0.5)
 	if cur >= 0:
 		# the entry page turns back to the index, then the cover shuts
 		_copy("fb", paint["pl"])

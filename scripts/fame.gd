@@ -150,7 +150,7 @@ func a_gain(n: int) -> void:
 			fx.lv_cut(lv0, alv)
 		else:
 			notice("모험가 Lv %d · 모험 수첩에서 보상 받기" % alv, "LEVEL UP", Color("#7fd0ff"), true, 3600.0)
-			arena.sfx("ready", 0.6)
+			arena.sfx("jingle_lv", 0.7)
 
 func lv_can() -> Array:
 	var L := []
@@ -553,7 +553,7 @@ func poll(force := false) -> void:
 		if init:
 			fx.title_card("letter", {})
 			notice("길드 관리국에서 서신이 왔다 · 에일린에게", "서신", Color("#ff5a5a"), true, 3800.0)
-			arena.sfx("ready", 0.5)
+			arena.sfx("ui_ok", 0.5)
 	for q in FD.FQ:
 		if q["r"] != r or got.has(q["id"]): continue
 		var st := f_state(q)
@@ -562,7 +562,9 @@ func poll(force := false) -> void:
 		if f_state(q) == "done" and not done_seen.has(q["id"]):
 			done_seen[q["id"]] = 1
 			var trial: bool = q.get("t", "") == "trial"
-			if init: notice(q["n"] + " 완료 · 에일린에게 보고", "심사" if trial else "의뢰", Color("#ff5a5a") if trial else Color("#ffd34d"), false, 3400.0)
+			if init:
+				notice(q["n"] + " 완료 · 에일린에게 보고", "심사" if trial else "의뢰", Color("#ff5a5a") if trial else Color("#ffd34d"), false, 3400.0)
+				arena.sfx("jingle_quest", 0.7)      # the request is done: its jingle with the notice
 	for i in FD.FCH.size():
 		for t in FD.FCH[i]["t"]:
 			if t_can(t, i) and not done_seen.has("t_" + t["id"]):

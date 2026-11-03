@@ -386,7 +386,7 @@ func talk(c: String) -> void:
 	var L: Array = SOLO[c]
 	n["talk_t"] = 2600.0
 	say(n, L[randi() % L.size()])
-	arena.sfx("ready", 0.35)
+	arena.sfx("ui_ok", 0.35)
 
 
 # ---------- drawing ----------

@@ -88,7 +88,7 @@ func gain(n: float) -> void:
 
 func _ready_fx() -> void:
 	var P = arena.player
-	arena.sfx("ready", 0.8)
+	arena.sfx("ui_ok", 0.8)
 	arena.text(P.position + Vector2(0, -150.0 * P.CSCALE), "궁극기 준비!", Color("#ffe9a8"))
 
 ## tryUlt
@@ -330,7 +330,7 @@ func _step_luce(dt: float, P, S: float) -> void:
 			var a := randf() * TAU
 			var r := 60.0 + randf() * 60.0
 			arena.fx.append({"k": "sp", "x": hx + cos(a) * r, "y": hy + sin(a) * r, "vx": -cos(a) * 0.25, "vy": -sin(a) * 0.25, "t": 0.0, "life": 220.0})
-		if t > 140.0 and once("chime"): arena.sfx("ready", 0.7)
+		if t > 140.0 and once("chime"): arena.sfx("ui_ok", 0.7)
 	elif t < 760.0:
 		pose("lpunch", 1)
 		var u := (t - 520.0) / 240.0

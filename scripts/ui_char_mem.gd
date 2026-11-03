@@ -150,7 +150,7 @@ func key(k: int) -> bool:
 				li = clampi(li + (-1 if k == KEY_UP else 1), lo, L.size() - 1)
 				if li >= 0 and li < top: top = li
 				if li >= 0 and li > top + _rows_fit - 1: top = li - _rows_fit + 1
-				p.sfx("ready", 0.12)
+				p.sfx("ui_move", 0.5)
 				return true
 			if k in [KEY_ENTER, KEY_SPACE]:
 				if li == -1: _look()
@@ -200,7 +200,7 @@ func _mem_key(k: int) -> bool:
 			nx = "RST" if r == 2 else "ABC".substr(r + 1, 1) + str(i)
 	if nx != sel:
 		sel = nx
-		p.sfx("ready", 0.12)
+		p.sfx("ui_move", 0.5)
 	return true
 
 
@@ -211,11 +211,11 @@ func _moves() -> Array:
 func _pick_move(j: int) -> void:
 	si = j
 	shout_t = 0.0
-	p.sfx("ready", 0.15)
+	p.sfx("ui_move", 0.5)
 
 func _node(id: String) -> void:
 	sel = id
-	p.sfx("ready", 0.18)
+	p.sfx("ui_move", 0.5)
 
 func _take() -> void:
 	var id := sel if not sel in ["LV", "RST"] else "A0"
@@ -227,10 +227,10 @@ func _take() -> void:
 	pop_t = 0.0
 
 func _drop() -> void:
-	if M().drop(p.c, sel): p.sfx("ready", 0.3)
+	if M().drop(p.c, sel): p.sfx("ui_ok", 0.5)
 
 func _reset() -> void:
-	if M().clear_nodes(p.c): p.sfx("ready", 0.4)
+	if M().clear_nodes(p.c): p.sfx("ui_ok", 0.5)
 
 func _level() -> void:
 	var c: String = p.c
@@ -313,7 +313,7 @@ func mem_talk() -> void:
 
 func _look() -> void:
 	clean = true
-	p.sfx("ready", 0.2)
+	p.sfx("ui_ok", 0.5)
 
 func _unclean() -> void:
 	clean = false

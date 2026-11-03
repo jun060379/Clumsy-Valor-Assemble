@@ -25,6 +25,9 @@ var clock := 0.0
 var sel := -1                    # keyboard / pad cursor: index into _rows() (-1 = none until a key is used)
 var sel_j := 0                   # …and which button in that row (key slots, presets)
 const LIVE := ["tog", "sld", "kb", "pre", "rmb"]
+## the volume sliders (settings.gd "audio" keys and their labels), 11 steps = 0 … 100 % by tens
+const VOLS := [["master", "전체 음량"], ["bgm", "배경음"], ["sfx", "효과음"], ["voice", "보이스"]]
+const VOL_STEPS := 11
 
 
 func _ready() -> void:
@@ -97,8 +100,18 @@ func _rows() -> Array:
 			"set": func(i): arena.weather = ["clear", "rain", "snow"][i]})
 		R.append({"k": "tog", "lab": "환경음", "o": ["켜기", "끄기"], "on": 0 if arena.ambient else 1,
 			"set": func(i): arena.ambient = i == 0})
-		R.append({"k": "tog", "lab": "배경음", "o": ["켜기", "끄기"], "on": 0 if arena.music else 1,
+		R.append({"k": "tog", "lab": "배경음 켜기/끄기", "o": ["켜기", "끄기"], "on": 0 if arena.music else 1,
 			"set": func(i): arena.music = i == 0})
+		# the volumes: 11 steps (0 … 100 %) onto the Master / BGM / SFX / Voice buses (settings.gd apply_audio); the
+		# 효과음 slider answers with a click so the level can be heard, the music is already playing for 배경음
+		for v in VOLS:
+			var key: String = v[0]
+			var pct := roundi(C.get_vol(key) * 100.0)
+			R.append({"k": "sld", "lab": "%s %d%%" % [v[1], pct], "n": VOL_STEPS, "on": roundi(C.get_vol(key) * (VOL_STEPS - 1)), "vol": key,
+				"set": func(i):
+					C.set_vol(key, float(i) / (VOL_STEPS - 1))
+					C.save()
+					if key == "sfx": arena.sfx("ui_ok", 0.5)})
 	# ctrlGuide
 	var d: String = C.act_dev()
 	var nm: String = {"kbm": "키보드 · 마우스", "pad": "패드", "touch": "터치"}[d]
@@ -134,7 +147,7 @@ func _input(ev: InputEvent) -> void:
 		cap = []
 		if k != KEY_ESCAPE:
 			arena.cfg.bind(a, i, 0 if k in [KEY_BACKSPACE, KEY_DELETE] else k)
-		arena.sfx("ready", 0.2)
+		arena.sfx("ui_ok" if k != KEY_ESCAPE else "ui_back", 0.5)
 		get_viewport().set_input_as_handled()
 		return
 	if ev is InputEventKey:
@@ -195,7 +208,7 @@ func _nav(d: int) -> void:
 	if not LIVE.has(rows[i]["k"]): return
 	sel = i
 	sel_j = 0
-	arena.sfx("step", 0.15)
+	arena.sfx("ui_move", 0.5)
 	# keep the row in the box
 	var rh := 33.0 if get_viewport_rect().size.y <= 420.0 else 38.0
 	var y := 0.0
@@ -223,7 +236,7 @@ func _side(d: int) -> void:
 		"rmb":
 			_activate()
 			return
-	arena.sfx("ready", 0.2)
+	_row_snd(R, "ui_move")
 
 func _activate() -> void:
 	var rows := _rows()
@@ -246,7 +259,12 @@ func _activate() -> void:
 		"rmb":
 			arena.cfg.rmb = "guard" if arena.cfg.rmb == "dash" else "dash"
 			arena.cfg.save()
-	arena.sfx("ready", 0.2)
+	_row_snd(R, "ui_ok")
+
+## a row's own answer: the 효과음 slider already clicks (its set plays ui_ok at the new level), every other row gets n
+func _row_snd(R: Dictionary, n: String) -> void:
+	if R.get("vol", "") == "sfx": return
+	arena.sfx(n, 0.5)
 
 func _click(p: Vector2) -> void:
 	if close_rect.grow(6).has_point(p):
@@ -256,7 +274,7 @@ func _click(p: Vector2) -> void:
 	for h in hits:
 		if Geometry2D.is_point_in_polygon(p, h[0]):
 			h[1].call()
-			arena.sfx("ready", 0.2)
+			_row_snd(h[2] if h.size() > 2 else {}, "ui_ok")
 			return
 	cap = []
 
@@ -386,7 +404,7 @@ func _row(ci: CanvasItem, xf: Transform2D, R: Dictionary, w: float, rh: float, a
 				var set_fn: Callable = R["set"]
 				hits.append([_xf_poly(xf * bx, poly), func():
 					set_fn.call(j)
-					arena.cfg.save()])
+					arena.cfg.save(), R])
 				x += bw + 4.0
 		"sld":
 			var n: int = R["n"]
@@ -395,7 +413,7 @@ func _row(ci: CanvasItem, xf: Transform2D, R: Dictionary, w: float, rh: float, a
 				var cell := _para_pts(x0 + k * 15.0, my - 9.0, 12.0, 18.0, 4.5)
 				ci.draw_colored_polygon(cell, Color(c, a) if k <= R["on"] else Color(0.2, 0.2, 0.2, a))
 				var set_fn2: Callable = R["set"]
-				hits.append([_xf_poly(xf, _para_pts(x0 + k * 15.0 - 1.5, my - 12.0, 15.0, 24.0, 4.5)), func(): set_fn2.call(k)])
+				hits.append([_xf_poly(xf, _para_pts(x0 + k * 15.0 - 1.5, my - 12.0, 15.0, 24.0, 4.5)), func(): set_fn2.call(k), R])
 		"okb":
 			var v: String = R["v"]
 			ci.draw_string(fb, Vector2(right - UI.text_w(fb, v, 12), my + 5.0), v, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1, 1, 1, 0.85 * a))

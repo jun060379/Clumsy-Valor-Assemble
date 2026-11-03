@@ -163,9 +163,14 @@ func _initialize() -> void:
 		check(false, "hall floor 0 has a landing")
 	P.position = Vector2(1760, arena.ground_y)
 
-	# ---- the lootGet tink ----
-	arena.loot_tink()
-	check(arena._tinks.size() == 6 and arena._tinks[0].data.size() == int(22050 * 0.14) * 2, "the tink: 140 ms triangle blips (6 pitches, 1.4-1.9 kHz)")
+	# ---- the lootGet ring: the pack's pickup sounds by the item's kind ----
+	for ap in arena.sfx_pool: ap.stop()
+	arena.loot_pick("mem")
+	var tk = null
+	for ap in arena.sfx_pool:
+		if ap.playing and ap.stream == arena.sfx_stream("pick_stone"): tk = ap
+	check(tk != null and not arena.has_method("loot_tink"), "the chest's 기억석 rings pick_stone (the procedural tink is gone)")
+	for ap in arena.sfx_pool: ap.stop()
 
 	# ---- Estelle's gcharge ----
 	arena.go_training()

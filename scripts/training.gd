@@ -173,7 +173,7 @@ func step(dt: float) -> void:
 func try_interact() -> bool:
 	if near_door == null:
 		return false
-	arena.sfx("ready", 0.6)
+	arena.sfx("ui_ok", 0.6)
 	arena.fade_then(func(): arena.go_town(Vector2(820.0 + 378.0, arena.ground_y), 1))
 	return true
 

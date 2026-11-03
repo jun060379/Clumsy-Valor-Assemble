@@ -157,7 +157,7 @@ func _once(D: Dictionary, key: String, at: float) -> bool:
 	return false
 
 func _lv_events() -> void:
-	if _once(lv, "rd", 560.0): _snd("ready", 0.5)
+	if _once(lv, "rd", 560.0): _snd("jingle_lv", 1.0)      # the number starts to assemble: the level-up jingle
 	if _once(lv, "land", 940.0): _snd("slam", 0.9)
 
 func _draw_lv(vs: Vector2) -> void:
@@ -333,7 +333,8 @@ func rank_cut() -> void:
 func _rk_events() -> void:
 	var t: float = rk["t"]
 	if _once(rk, "slam", 1110.0): _snd("slam", 0.9)
-	if _once(rk, "ready", 1500.0): _snd("ready", 0.8)
+	if _once(rk, "bands", 1500.0): _snd("ui_move", 0.8)
+	if _once(rk, "scene", RK_T1): _snd("jingle_rank", 1.0)      # the yellow scene: the rank-up jingle
 	if _once(rk, "num", RK_T1 + 1000.0): _snd("slam", 0.8)
 	if rk["out"] >= 0.0 and t - rk["out"] > 500.0:
 		rk = {}
@@ -342,7 +343,7 @@ func _rk_events() -> void:
 func _rk_close() -> void:
 	if rk.is_empty() or rk["t"] < RK_T1 + 2000.0 or rk["out"] >= 0.0: return
 	rk["out"] = rk["t"]
-	_snd("ready", 0.5)
+	_snd("ui_back", 0.5)
 
 func _draw_rk(vs: Vector2) -> void:
 	var t: float = rk["t"]

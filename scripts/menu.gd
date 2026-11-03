@@ -24,6 +24,9 @@ const ICON := {
 }
 ## TBX + fs + mnu, left to right as laid out
 const TB := [["fs", "전체화면"], ["gbk", "길드 수첩"], ["abk", "모험 수첩"], ["pty", "파티"], ["cxb", "캐릭터"], ["bgb", "가방"], ["mnu", "메뉴"]]
+## the paper screens: the 수첩 books (fame_book.gd) and Bran's choice page (ui_choice.gd, a dialog's choices) keep the
+## old rubber-stamp click ("ready" = ui1 / ui2 / ui3); every other screen uses ui_move / ui_ok / ui_back (arena.gd sfx)
+const PAPER := ["gbk", "abk", "bran"]
 ## PHM: key, name, English, line
 const PHM := [["party", "파티", "PARTY", "함께 던전에 나설 동료."], ["char", "캐릭터", "CHARACTER", "능력치 · 장비 · 스킬 · 기억 · 기록."], ["bag", "가방", "INVENTORY", "던전에서 얻은 장비와 룬, 재화."], ["forge", "대장간", "FORGE", "브랜에게 강화 · 각인 · 합성 · 계승을 맡긴다."], ["best", "적 도감", "BESTIARY", "만난 적과 상성을 정리한 기록."], ["opts", "설정", "CONFIG", "소리 · 화면 · 조작 · 테스트."], ["help", "조작 안내", "HOW TO", "터치와 키보드 조작법."]]
 ## pages without their system yet: title (English small line, Korean big line) and icon
@@ -157,7 +160,7 @@ func open_hub() -> void:
 	if page != "": return
 	ph_c = arena.player.who
 	_release_keys()
-	arena.sfx("ready", 0.4)
+	arena.sfx("ui_ok", 0.5)
 	ui_root.sweep.run(func(): _show_hub(true), UI.col(ph_c))
 
 func _show_hub(fresh: bool) -> void:
@@ -170,7 +173,7 @@ func _show_hub(fresh: bool) -> void:
 	_sel(ph_i, true)
 
 func close_hub() -> void:
-	arena.sfx("ready", 0.25)
+	arena.sfx("ui_back", 0.5)
 	ui_root.sweep.run(func(): page = "", UI.col(ph_c))
 
 ## phEnter
@@ -188,7 +191,7 @@ func open_char(c: String) -> void:
 func open_wardrobe(c := "") -> void:
 	if page != "": return
 	_release_keys()
-	arena.sfx("ready", 0.4)
+	arena.sfx("ui_ok", 0.5)
 	wardrobe.want_c = c
 	ui_root.sweep.run(func(): _open_page("wardrobe", false), UI.col(c if c != "" else arena.player.who))
 
@@ -196,7 +199,9 @@ func open_wardrobe(c := "") -> void:
 func open_page(k: String) -> void:
 	if page != "": return
 	_release_keys()
-	arena.sfx("ready", 0.4)
+	if k == "gbk" or k == "abk": pass                 # the books open with their own jingle (fame_book.gd)
+	elif PAPER.has(k): arena.sfx("ready", 0.4)        # Bran's choices: the stamp
+	else: arena.sfx("ui_ok", 0.5)
 	_open_page(k, false)
 
 func _open_page(k: String, via_hub: bool) -> void:
@@ -213,7 +218,7 @@ func _open_page(k: String, via_hub: bool) -> void:
 
 ## m2Close: back to the hub through the sweep when it came from there
 func close_page() -> void:
-	arena.sfx("ready", 0.25)
+	arena.sfx("ready" if PAPER.has(page) else "ui_back", 0.25 if PAPER.has(page) else 0.5)      # the paper screens keep the stamp
 	arena.save_now()          # gear, runes, the forge's work: kept the moment the page closes
 	if from_hub:
 		ui_root.sweep.run(func():
@@ -368,7 +373,7 @@ func _sel(i: int, quiet := false) -> void:
 	cur_t = 0.0 if not quiet else 9999.0
 	if not quiet:
 		info_t = 0.0
-		arena.sfx("ready", 0.18)
+		arena.sfx("ui_move", 0.5)
 	else:
 		info_t = 9999.0
 

@@ -320,7 +320,7 @@ func step(dt: float) -> void:
 			gate_open = true
 			open_k = 0.0
 			rm["cleared"] = true
-			arena.sfx("ready", 0.8)
+			arena.sfx("ui_ok", 0.8)
 			msg = "버섯 동굴 정복!" if rm["type"] == "boss" else "방 정리 — 문이 열렸다"
 			msg_t = 2200.0
 			if rm["type"] == "fight" and randf() < 0.55:
@@ -338,7 +338,7 @@ func step(dt: float) -> void:
 		P.hp = minf(P.MAX_HP, P.hp + P.MAX_HP * 0.5)
 		arena.ring(P.position + Vector2(0, -60), 30.0, Color("#bff0c0"))
 		arena.text(P.position + Vector2(0, -160), "모닥불 · 파티 체력 회복", Color("#bff0c0"))
-		arena.sfx("ready", 1.0)
+		arena.sfx("ui_ok", 1.0)
 	if chest != null and absf(P.position.x - chest["x"]) < 70.0 and absf(P.position.y - G) < 10.0:
 		rm["looted"] = true
 		chest = null
@@ -394,7 +394,7 @@ func try_interact() -> bool:
 	if near_gate == null:
 		return false
 	var d = near_gate
-	arena.sfx("ready", 0.6)
+	arena.sfx("ui_ok", 0.6)
 	arena.player.vx = 0.0
 	arena.player.set_anim("idle")
 	if d["town"]:

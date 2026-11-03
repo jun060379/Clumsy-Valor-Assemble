@@ -59,7 +59,7 @@ func step(dt: float) -> void:
 	var t0 := t
 	t += dt
 	if t0 < 120.0 and t >= 120.0:
-		arena.sfx("ready", 0.9)
+		arena.sfx("ui_ok", 0.9)
 		glass_ping()
 	if card_layer != null:
 		var vis := card_on()
@@ -199,7 +199,7 @@ func hit_chest() -> void:
 		arena.shake(9, 1)
 		arena.text(Vector2(C["x"], C["y"] - 170.0), CGN[C["gi"]] + "!", CGC[C["gi"]])
 		_vfx("up", Vector2(C["x"], C["y"] - chest_dims(C["gi"]).y * 0.5), C["gi"], 0)
-		arena.sfx("ready", 0.7 + C["gi"] * 0.08)
+		arena.sfx("ui_ok", 0.7 + C["gi"] * 0.08)
 	if C["hp"] <= 0: break_chest()
 
 func break_chest() -> void:
@@ -258,7 +258,7 @@ func _collect(o: Dictionary) -> void:
 		"skin": if arena.get("skins") != null: arena.skins.grant(o["v"], "drop")      # its GET notice comes from skins.gd
 	got.append({"kind": o["kind"], "v": o["v"]})
 	runes.changed()
-	arena.loot_tink()           # lootGet: the tink
+	arena.loot_pick(o["kind"])           # lootGet: the pickup's ring (pick_coin / pick_stone / pick_rune)
 
 ## lootTownGate: true = the town door stays shut for now
 func town_gate() -> bool:

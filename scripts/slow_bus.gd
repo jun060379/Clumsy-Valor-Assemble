@@ -5,11 +5,14 @@ extends Node
 ## starts plays at 0.62× (lower and slower, as createBufferSource / the -700 ¢ oscillators do); then it all recovers.
 ## The ramps are the prototype's setTargetAtTime time constants (on .06 / .08 / .1 s, off .18 / .2 / .25 s).
 ## Players join the bus by themselves when they enter the tree (node_added); one that must stay dry (the "boom" of
-## the slow-down and the witch-end chirp, which the prototype plays raw) sets its bus back to Master. A player with
-## the `own_pitch` meta (arena.gd's sfx pool: the combo's semitones, the jitter) sets its own pitch and applies the
-## 0.62× itself.
+## the slow-down and the witch-end chirp, which the prototype plays raw) goes straight to the "SFX" bus instead. The
+## Slow bus itself sends into "SFX" (settings.gd: the 효과음 slider), so everything that is not music rides that slider.
+## A player with the `own_pitch` meta (arena.gd's sfx pool: the combo's semitones, the jitter) sets its own pitch and
+## applies the 0.62× itself.
 
+const SETTINGS := preload("res://scripts/settings.gd")
 const BUS := &"Slow"
+const SEND := SETTINGS.SFX_BUS
 const CUT_ON := 520.0
 const CUT_OFF := 20000.0
 const GAIN_ON := 0.62
@@ -26,14 +29,17 @@ var fx := -1                     # the low-pass's effect index on the bus
 var players := {}                # AudioStreamPlayer -> [was playing, last position]
 
 
-## the "Slow" bus (from default_bus_layout.tres, or made here): a low-pass into Master
+## the "Slow" bus (from default_bus_layout.tres, or made here): a low-pass into the "SFX" bus (made first if missing:
+## a bus only sends to one before it, so SFX sits right after Master)
 static func ensure_bus() -> int:
+	SETTINGS.ensure_buses()
 	var i := AudioServer.get_bus_index(BUS)
 	if i < 0:
 		AudioServer.add_bus()
 		i = AudioServer.bus_count - 1
 		AudioServer.set_bus_name(i, BUS)
-		AudioServer.set_bus_send(i, &"Master")
+	if AudioServer.get_bus_send(i) != SEND and AudioServer.get_bus_index(SEND) >= 0 and AudioServer.get_bus_index(SEND) < i:
+		AudioServer.set_bus_send(i, SEND)
 	if lp_index(i) < 0:
 		var f := AudioEffectLowPassFilter.new()
 		f.cutoff_hz = CUT_OFF
@@ -59,7 +65,7 @@ func _walk(n: Node) -> void:
 
 func _added(n: Node) -> void:
 	if not (n is AudioStreamPlayer) or players.has(n): return
-	if n.bus == &"Master" and not n.has_meta("raw"): n.bus = BUS
+	if (n.bus == &"Master" or n.bus == SEND) and not n.has_meta("raw"): n.bus = BUS
 	players[n] = [false, 0.0]
 	n.tree_exiting.connect(func(): players.erase(n), CONNECT_ONE_SHOT)
 

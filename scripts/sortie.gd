@@ -129,6 +129,7 @@ func pre_step() -> bool:
 			if r["type"] == "boss" and not r["cleared"] and not r.get("tc", false):
 				r["tc"] = true
 				tc.play("boss")
+				arena.sfx("impact_boss_in", 1.0)
 				return true
 	else:
 		last_cur = ""

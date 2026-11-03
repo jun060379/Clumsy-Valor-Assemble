@@ -55,13 +55,13 @@ func show_it() -> void:
 	info_t = 9999.0
 	for a in ["left", "right", "up", "down", "jump", "attack", "guard", "dash", "ult", "swap"]:
 		if InputMap.has_action(a): Input.action_release(a)
-	arena.sfx("ready", 0.9)
+	arena.sfx("ui_ok", 0.9)
 
 ## the go button: art and panel leave, the slab swings away, then the RETURN sweep; the page goes once it is covered
 func leave() -> void:
 	if out_t >= 0.0: return
 	out_t = 0.0
-	arena.sfx("ready", 0.5)
+	arena.sfx("ui_back", 0.5)
 
 
 func _input(ev: InputEvent) -> void:
@@ -91,7 +91,7 @@ func _process(delta: float) -> void:
 	var n: int = loot["items"].size()
 	for i in n:
 		var at := 900.0 + i * 85.0 + 200.0
-		if was < at and t >= at: arena.sfx("ready", 0.12 + minf(0.2, i * 0.02))
+		if was < at and t >= at: arena.sfx("ui_move", 0.3 + minf(0.2, i * 0.02))
 	if out_t >= 0.0:
 		var w := out_t
 		out_t += dt
