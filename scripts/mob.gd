@@ -19,6 +19,7 @@ const DEF := {
 static var TEX := {}
 const EL := preload("res://scripts/elements.gd")
 const DUMMY := preload("res://scripts/dummy.gd")
+const ST := preload("res://scripts/status.gd")      # 공용 상태
 ## rimEntity for monsters: the 1-2 world px of outline that faces each of the (up to 3) strongest nearby lights, added in
 ## the light's colour (min(0.9, k * 2.4)); nothing on the far side
 const RIM_SH := """
@@ -141,12 +142,14 @@ func hit(dmg: float, kb: float, mul := 1.0) -> void:
 		return
 	var R = arena.get("runes")
 	if R != null: mul *= R.out_mul(self)
-	if has_meta("kvuln_t") and Time.get_ticks_msec() < int(get_meta("kvuln_t")): mul *= float(get_meta("kvuln", 1.0))    # 케닌 약점 표시
+	mul *= ST.dmg_mul(self)                    # 공용 상태: 취약, 그로기
+	if ST.no_kb(self): kb = 0.0                # 빙결: no knockback
 	var d: float = arena.elem_hit(position + Vector2(0, -95 if not M.has("fly") else -40), dmg * 10.0 * mul, M["defEl"], M.get("weak", []))   # elements (+ 신성 약점) + 기력
 	hp -= d
 	if R != null: hp -= R.after_hit(self)
 	last_dmg = d
 	hit_now = true
+	if hp > 0.0: ST.on_hit(arena, self)        # 출혈's extra damage, 띄움 kept up
 	flash = 120.0
 	kx = kb * 0.6
 	var hd := signf(position.x - arena.player.position.x)
@@ -263,6 +266,16 @@ func step(dt: float) -> void:
 		dead += dt
 		return
 
+	# 공용 상태: 경직 · 빙결 · 띄움 · 그로기 hold it (the hurt frame), no AI
+	if ST.step(arena, self, dt):
+		hit_now = false
+		last_dmg = 0.0
+		hurt_t = 0.0
+		st = "hurt"
+		if anim != "hurt": set_a("hurt")
+		f = mini(f, M["anims"]["hurt"][1] - 1) if M["anims"].has("hurt") else 0
+		return
+
 	# got hit -> short stagger (a skeleton may block with its shield instead), never mid-swing
 	if hit_now and anim != "hurt" and st != "atk":
 		if M.has("shield_p") and (P.position.x - position.x) * dir > 0.0 and randf() < M["shield_p"] and anim != "shield":
@@ -327,6 +340,7 @@ func step(dt: float) -> void:
 				set_a("idle")
 				st = "idle"
 				cd = M["cd"][0] + randf() * (M["cd"][1] - M["cd"][0])
+				react = maxf(react, ST.recovery(self))      # 둔화: a longer rest after the swing (its timing stays)
 		return
 
 	# vision: an unaware mob only sees what is in front of it
@@ -351,7 +365,7 @@ func step(dt: float) -> void:
 			var lo: float = pl.x + 30.0 if pl != null else maxf(80.0, home - 170.0)
 			var hi: float = pl.x + pl.w - 30.0 if pl != null else minf(arena.world_w - 80.0, home + 170.0)
 			if walk:
-				position.x += dir * M["ms"] * 0.42 * dt
+				position.x += dir * M["ms"] * 0.42 * ST.speed_mul(self) * dt
 				if position.x < lo:
 					position.x = lo
 					dir = 1
@@ -422,7 +436,7 @@ func step(dt: float) -> void:
 		if want == "close" or want == "away":
 			st = "run"
 			set_a("run")
-			position.x += (1.0 if want == "close" else -1.0) * dir * M["ms"] * (1.3 if phase == 1 else 1.0) * dt
+			position.x += (1.0 if want == "close" else -1.0) * dir * M["ms"] * (1.3 if phase == 1 else 1.0) * ST.speed_mul(self) * dt
 		else:
 			st = "idle"
 			set_a("idle")
@@ -468,12 +482,14 @@ func _draw() -> void:
 	draw_texture_rect_region(tex(A[0]), Rect2(-75.0 * s, -100.0 * s, 150.0 * s, 150.0 * s), Rect2(fr * 150, 0, 150, 150), Color(tint.r, tint.g, tint.b, alpha))
 	draw_set_transform(Vector2.ZERO)
 	if rim_n != null: rim_n.queue_redraw()
+	if not is_dead() and M.has("boss"): ST.draw(self, self, -100.0 * s - 12.0)      # (the boss bar lives in the HUD)
 	if not is_dead() and not M.has("boss"):
 		# small HP bar over the head
 		var bw := 36.0 if M.has("fly") else 44.0
 		var by := -(40.0 if M.has("fly") else (150.0 if kind == "skel" else 115.0))
 		DUMMY.bar(self, bar_st, 0.0, by, bw, maxf(0.0, hp) / max_hp, elite)    # H2.mob: slanted, ghost trail, hit flash
 		EL.draw_tag(self, 0.0, by - 5.0, M["defEl"])          # elTag: its own elements over the bar
+		ST.draw(self, self, by - 26.0)                         # 공용 상태 icons
 		if mark != "":
 			var k := minf(1.0, mark_t / 90.0)
 			var col := Color("#ffd23a") if mark == "!!" else Color("#cfd6e6")

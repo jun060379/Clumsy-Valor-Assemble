@@ -8,6 +8,7 @@ const RUNES := preload("res://scripts/runes.gd")
 const EL := preload("res://scripts/elements.gd")
 const DUMMY := preload("res://scripts/dummy.gd")
 const DEV := preload("res://scripts/dev.gd")
+const ST := preload("res://scripts/status.gd")
 const E: Dictionary = RUNES.ENEMY["ghost"]       # 유령: hp 30, atk 10, ms 0.09, dark / dark
 
 var arena
@@ -92,9 +93,11 @@ func hit(dmg: float, _kb: float, mul := 1.0) -> void:
 		P.qte_offer("backstab")
 		arena.text(position + Vector2(0, -100), "BACKSTAB", Color("#ffd34d"))
 		arena.flash = maxf(arena.flash, 0.15)
+	mul *= ST.dmg_mul(self)
 	var p := position + Vector2(0, -80)
 	var d: float = arena.elem_hit(p, dmg * 10.0 * mul, M["defEl"])
 	hp -= d
+	if hp > 0.0: ST.on_hit(arena, self)
 	if R != null: hp -= R.after_hit(self)
 	arena.damage_text(p, roundi(d), dmg > 1.0, Color("#cfe8ff"))
 	var hd := signf(position.x - P.position.x)
@@ -132,6 +135,7 @@ func step(dt: float) -> void:
 		queue_redraw()
 		return
 	if daze > 0.0: daze -= dt
+	if ST.step(arena, self, dt): daze = maxf(daze, 60.0)       # 경직 · 빙결 · 그로기 hold her too
 	if hurt_t > 0.0:
 		hurt_t -= dt
 		position.x += kb * dt * 0.3
@@ -180,6 +184,7 @@ func _draw() -> void:
 	draw_set_transform(Vector2.ZERO)
 	DUMMY.bar(self, bar_st, 0.0, y - 48.0, 40.0, maxf(0.0, hp) / max_hp, false)
 	EL.draw_tag(self, 0.0, y - 53.0, M["defEl"])
+	ST.draw(self, self, y - 74.0)
 
 static func _quad(pts: PackedVector2Array, a: Vector2, c: Vector2, b: Vector2) -> void:
 	for i in range(1, 11):

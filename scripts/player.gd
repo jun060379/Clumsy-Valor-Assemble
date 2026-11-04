@@ -7,6 +7,7 @@ extends Node2D
 const CH = preload("res://scripts/chars.gd")
 const SK := preload("res://scripts/skins.gd")
 const BAL := preload("res://scripts/balance.gd")
+const ST := preload("res://scripts/status.gd")      # 공용 상태 (P.ally: 보호막 · 강화 · 재생)
 
 const GRAV := 0.0021
 const JUMPV := 0.74
@@ -147,7 +148,7 @@ static func is_fly(e) -> bool:
 	return e.get("M") != null and e.M.has("fly")
 
 func atk_mul() -> float:
-	return CH.STATS[who]["atk"] * (arena.runes.atk_k(who) if _rk() else 1.0)
+	return CH.STATS[who]["atk"] * (arena.runes.atk_k(who) if _rk() else 1.0) * ST.atk_k(self)     # 강화
 
 
 # ---------- helpers ----------
@@ -1545,11 +1546,12 @@ func take_hit(m, raw: float) -> String:
 	if mg == "miss": return "miss"
 	raw *= arena.taken_mul(m)                              # the mob's attack element against her own (hurtAmt)
 	var auto: bool = (who == "estelle" and arena.auto_parry() > 0.0) or mg == "gp"   # 수호의 맹세: every blow is parried
-	if auto and not (anim == "parry" and f <= 1 and facing):
+	var pw := 1 + ST.parry_extra(m)                        # 둔화: a frame more to parry a slowed foe
+	if auto and not (anim == "parry" and f <= pw and facing):
 		dir = 1 if m.position.x > position.x else -1
 		set_anim("parry")
 		facing = true
-	if who == "estelle" and anim == "parry" and f <= 1 and facing:
+	if who == "estelle" and anim == "parry" and f <= pw and facing:
 		if auto and mg != "gp": arena.ult.rose_burst(position + Vector2(dir * 34.0 * CSCALE, -62.0 * CSCALE))
 		bash_t = 420.0
 		f = 2
@@ -1568,7 +1570,7 @@ func take_hit(m, raw: float) -> String:
 		_rev("skill")
 		return "parry"
 	if who == "estelle" and (anim == "guard" or anim == "parry" or anim == "backstep") and facing:
-		var tk := raw * 0.5 * 0.75 * _inm()
+		var tk := ST.absorb(self, raw * 0.5 * 0.75 * _inm())      # 보호막 first
 		hp -= tk
 		_rev("block")
 		arena.sfx("guard", 0.9)
@@ -1584,7 +1586,7 @@ func take_hit(m, raw: float) -> String:
 		arena.ult_gain(5.0)
 		if hp <= 0.0: die()
 		return "guard"
-	var tk2 := raw * (0.75 if who == "estelle" else 1.0) * _inm()    # Estelle's passive: 25% less damage taken
+	var tk2 := ST.absorb(self, raw * (0.75 if who == "estelle" else 1.0) * _inm())    # Estelle's passive: 25% less damage taken; 보호막 first
 	hp -= tk2
 	arena.ult_gain(12.0)
 	arena.post_ca(0.02)
@@ -1625,6 +1627,7 @@ func die() -> void:
 
 # ---------- party: switching, QTE tag-in, counter swap ----------
 func party_step(dt: float) -> void:
+	ST.ally_step(self, dt)                      # 강화 · 재생 clocks (재생 heals the bench too)
 	if swap_cd > 0.0: swap_cd -= dt
 	if party_lock > 0.0: party_lock -= dt
 	if qte_gap > 0.0: qte_gap -= dt
@@ -1807,6 +1810,9 @@ func swap(tag: bool, to = null) -> void:
 			swap_to = keep_x
 			position.x = clampf(keep_x - keep_dir * 170.0, 30.0, arena.world_w - 30.0)
 			set_anim("swap_in")
+		# a plain swap-in: the statuses on the foe ahead react at half strength
+		var sw = target(260.0)
+		if sw != null: ST.tag_react(arena, sw, false)
 		else:
 			set_anim("jump", 4)
 
@@ -1866,7 +1872,10 @@ func tag_strike() -> void:
 	var M := tag_mul
 	tag_mul = 1.0
 	if R0 != null and is_instance_valid(R0) and R0.alive():
-		R0.hit(BAL.p(who, "tag") * M, dir * 8.0, atk_mul())
+		var tm := ST.tag_mul(R0)                 # 취약: the tag-in blow lands as a sure crit
+		if tm > 1.0: arena.text(R0.position + Vector2(0, -200), "치명!", Color("#ff8a5a"))
+		R0.hit(BAL.p(who, "tag") * M * tm, dir * 8.0, atk_mul())
+		ST.tag_react(arena, R0, true)            # QTE tag-in: the statuses on it react, full strength
 		if R0.get("daze") != null: R0.daze = maxf(R0.daze, 500.0)     # the training ghost loses her for a moment
 	arena.hitstop = 120.0        # QA: the tag-in blow holds a beat
 	arena.shake(7, dir)

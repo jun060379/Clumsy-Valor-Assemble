@@ -218,7 +218,7 @@ func _initialize() -> void:
 	ok(await until(func(): return K.marked_count() == 0, 1500.0) and g2.hp < hp6, "시한 표식: stamps pop on their own")
 	K.assist(g2)
 	await until(func(): return K.assists.is_empty(), 3000.0)
-	ok(g2.has_meta("kvuln_t") and int(g2.get_meta("kvuln_t")) > Time.get_ticks_msec(), "약점 표시: the covering shot leaves the foe exposed")
+	ok(load("res://scripts/status.gd").has(g2, "vuln"), "약점 표시: the covering shot leaves the foe exposed (공용 취약)")
 	MM.T("kenin")["on"] = []
 	MM._fx_cache.clear()
 	K.ammo = K.amax()

@@ -6,6 +6,7 @@ extends Node2D
 const RUNES := preload("res://scripts/runes.gd")
 const EL := preload("res://scripts/elements.gd")
 const DEF_EL := ["phys"]
+const ST := preload("res://scripts/status.gd")
 
 var tex: Texture2D = preload("res://assets/props/dummy.png")
 var arena
@@ -50,6 +51,7 @@ func hit(dmg: float, kb: float, mul := 1.0) -> void:
 		return
 	var R = arena.get("runes")
 	if R != null: mul *= R.out_mul(self)
+	mul *= ST.dmg_mul(self)
 	var p := position + Vector2(0, -95)
 	var d: float = arena.elem_hit(p, dmg * 10.0 * mul, DEF_EL)
 	flash = 120.0
@@ -61,6 +63,7 @@ func hit(dmg: float, kb: float, mul := 1.0) -> void:
 		return
 	arena.damage_text(p, roundi(d), dmg > 1.0)
 	hp -= d
+	if hp > 0.0: ST.on_hit(arena, self)
 	arena.spark(position + Vector2(-signf(kb) * 10.0, -60), 14 if dmg > 1 else 8)
 	if arena.get("pfx") != null: arena.pfx.hit(position.x - signf(kb) * 10.0, position.y - 60.0, 1 if kb >= 0.0 else -1, 1.25 if dmg >= 2 else 1.0)
 	if R != null: hp -= R.after_hit(self)
@@ -77,6 +80,7 @@ func hit(dmg: float, kb: float, mul := 1.0) -> void:
 	arena.best = maxi(arena.best, arena.score)
 
 func step(dt: float) -> void:
+	if dead <= 0.0: ST.step(arena, self, dt)
 	if flash > 0.0: flash -= dt
 	if wob > 0.0: wob *= pow(0.995, dt)
 	if kx != 0.0:
@@ -113,6 +117,7 @@ func _draw() -> void:
 	if dead <= 0.0 and not inv:
 		bar(self, bar_st, 0.0, -108.0, 44.0, hp / max_hp, false)
 		EL.draw_tag(self, 0.0, -113.0, DEF_EL)
+		ST.draw(self, self, -134.0)
 
 ## H2.mob + ghostOf: a slim slanted bar over a foe's head; the lost part lingers white, the bar flashes white on a hit
 static func bar(ci: CanvasItem, st: Dictionary, x: float, y: float, w: float, f: float, elite: bool) -> void:

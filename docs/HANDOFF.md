@@ -208,6 +208,12 @@ main에 푸시하면 GitHub Actions가 웹·윈도우로 빌드해서 GitHub Pag
 - 키보드 기본 프리셋 = WASD + 마우스 (settings.gd KB_DEF, KB_VER 2: 이전 설정 파일은 새 기본값으로 시작): WASD 이동 · Space 점프 · 좌클릭/J 공격 · E 스킬 · Q 궁 · Shift/우클릭 대시 · Ctrl 교대(QTE 우선) · 1·2·3 슬롯 교대 · 마우스 조준 켜짐. 방향키형 프리셋은 조준 꺼짐. 안내 키 표시(kh)는 공격 키 이름을 따름.
 - 다운로드: Actions가 main 빌드마다 윈도우 zip을 Pages(/ClumsyValor-windows.zip)와 릴리스 latest-build에 올림 (README 링크).
 
+## 4-9. 공용 상태 (오너 2026-11-04, 기획서 「전투 시스템: 파티 유형과 상태」)
+- scripts/status.gd: 적 6종 취약 · 경직 · 띄움 · 둔화(→빙결) · 화상 · 출혈, 아군 3종 보호막 · 강화 · 재생. 적 쪽은 적 객체의 meta "st", 아군 쪽은 player meta "ally" (교대해도 같은 player라 보호막 · 강화가 자연히 넘어감).
+- 규칙: 누적형(경직 · 둔화 · 화상) 게이지 100, 같은 캐릭터는 갱신 · 다른 캐릭터는 단계 상승(최대 3, 취약 제외), 경직 · 빙결 끝나면 2초 면역, 화상 번짐은 시간 연장 안 함, 출혈은 타격마다 추가 피해(0.1초 간격), 보스 · 정예는 경직 · 띄움 · 빙결 → 그로기 게이지(300, 3초, 받피 +30%), 보스 같은 상태 재발동마다 필요치 +50%. 상태끼리 상쇄 없음.
+- 연결: mob/dummy/ghost hit → dmg_mul · on_hit, step → ST.step(잠금이면 AI 정지), 둔화 → 이동 속도 · 공격 후 react, 패링 창 +1프레임(player take_hit), QTE 태그 일격 → tag_mul(취약 ×1.5) + tag_react 강, 일반 교대 → tag_react 약. 케닌 QTE 취약이 공용 취약으로 이전(kvuln meta 삭제).
+- 아직 아무도 상태를 걸지 않음(케닌 취약만). 다음: 캐릭터별 배치. 아이콘은 임시 도형. 수치는 status.gd K (PLACEHOLDER, 밸런스 툴 미연결). 테스트 tests/test_status.gd, 캡처 tests/cap_status.gd.
+
 ## 5. 이번 세션에 끝낸 것 (모두 main, 푸시·배포 완료)
 
 - 타이틀 로고에 한글(동해독도체 B안), 붓 로고·그림 `d7601c9`

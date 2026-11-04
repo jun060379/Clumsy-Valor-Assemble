@@ -29,6 +29,7 @@ const FUSE := 2500.0
 # damage numbers live in balance.gd (BAL.p("kenin", …)); these read it
 const BOMB_R := 120.0
 const BAL := preload("res://scripts/balance.gd")
+const ST := preload("res://scripts/status.gd")
 var BOMB_DMG: float:
 	get: return BAL.p("kenin", "bomb")
 var BOMB_HEAD: float:
@@ -455,8 +456,7 @@ func _headshot(a: Dictionary) -> void:
 	add_marks(tg, MARK_QTE + int(nv("kQteMark")))
 	if nv("kQteVuln") > 0.0:
 		# 약점 표시: it takes more damage for 8 s (mob.gd reads the meta)
-		tg.set_meta("kvuln_t", Time.get_ticks_msec() + VULN_MS)
-		tg.set_meta("kvuln", 1.0 + nv("kQteVuln"))
+		ST.add(arena, tg, "vuln", nv("kQteVuln"), "kenin")       # 공용 상태 취약 (8 s)
 		arena.text(Vector2(tg.position.x, tg.position.y - 150.0), "약점 노출", Color("#ff8a6a"))
 	if nv("kQteBomb") > 0.0 and _bomb_on(tg) == null:
 		bomb_fx.append({"x": tg.position.x, "y": tg.position.y - 50.0, "vx": 0.0, "vy": 0.0, "m": tg, "ox": randf_range(-10.0, 10.0), "oy": -60.0, "on_floor": false, "t": 0.0, "fuse": FUSE * nm("kFuse"), "done": false})
@@ -655,21 +655,7 @@ func draw(g: CanvasItem) -> void:
 		cp.line(cr / PFX.S - 2, 0, cr / PFX.S + 3, 0, Color.WHITE)
 		cp.line(0, -cr / PFX.S - 3, 0, -cr / PFX.S + 2, Color.WHITE)
 		cp.line(0, cr / PFX.S - 2, 0, cr / PFX.S + 3, Color.WHITE)
-	# 약점 표시: a red cracked-shield mark over the foe while it lasts (blinks in its last second)
-	for e in arena.foes():
-		if not e.has_meta("kvuln_t"): continue
-		var left := float(e.get_meta("kvuln_t")) - t
-		if left <= 0.0 or (left < 1000.0 and int(t / 120.0) % 2 == 0): continue
-		var fly: bool = e.get("M") != null and e.M.has("fly")
-		var p := PFX.PX.new(g, e.position.x + 22.0, e.position.y - (60.0 if fly else 132.0))
-		var rc := Color("#ff5a3a")
-		p.rect(-3, -3, 7, 6, rc)
-		p.rect(-2, 3, 5, 1, rc)
-		p.rect(-1, 4, 3, 1, rc)
-		p.px(0, -2, Color.WHITE)
-		p.px(1, -1, Color.WHITE)
-		p.px(0, 0, Color.WHITE)
-		p.px(1, 1, Color.WHITE)
+	# (약점 표시 is the shared 취약 now: status.gd draws its icon over the foe)
 	for s in shots:
 		if s["t"] < 0.0: continue
 		var p := PFX.PX.new(g, s["x"], s["y"])
