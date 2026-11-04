@@ -481,7 +481,7 @@ func _draw() -> void:
 	draw_texture_rect_region(tex(A[0]), Rect2(-75.0 * s, -100.0 * s, 150.0 * s, 150.0 * s), Rect2(fr * 150, 0, 150, 150), Color(tint.r, tint.g, tint.b, alpha))
 	draw_set_transform(Vector2.ZERO)
 	if rim_n != null: rim_n.queue_redraw()
-	if not is_dead() and M.has("boss"): ST.draw(self, self, -100.0 * s - 12.0)      # (the boss bar lives in the HUD)
+	# (a boss's statuses and groggy gauge are drawn under its bar in the HUD: hud.gd _draw_boss_status)
 	if not is_dead() and not M.has("boss"):
 		# small HP bar over the head
 		var bw := 36.0 if M.has("fly") else 44.0

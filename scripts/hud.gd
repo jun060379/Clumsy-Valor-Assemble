@@ -6,6 +6,7 @@ extends Control
 
 const CH = preload("res://scripts/chars.gd")
 const UI := preload("res://scripts/ui_kit.gd")
+const STS := preload("res://scripts/status.gd")      # 공용 상태 (the boss row)
 const UIA := preload("res://scripts/ui_anim.gd")
 const TOUCH := preload("res://scripts/touch_controls.gd")
 const SK := preload("res://scripts/skins.gd")
@@ -881,6 +882,54 @@ func _draw_boss(ci: CanvasItem, vs: Vector2, b) -> void:
 	ci.draw_colored_polygon(pg.call(x - 2.0, bw + 4.0), Color(0, 0, 0, 0.6 * ba))
 	if g > 0.0: ci.draw_colored_polygon(pg.call(x, bw * g), Color(1, 1, 1, ba))
 	if f > 0.0: ci.draw_colored_polygon(pg.call(x, bw * f), Color(1, 1, 1, ba) if S["hf"] > 0.0 else Color("#e8243c", ba))
+	_draw_boss_status(ci, b, x, by + bh + 6.0, bw, ba)
+
+## under the boss bar (owner 2026-11-04: the head icons were too small and too high): the groggy gauge as its own
+## thin bar, then the statuses on it as labelled chips (name, stage / hits left, the time left as a sliver)
+func _draw_boss_status(ci: CanvasItem, b, x: float, y: float, bw: float, a: float) -> void:
+	var S: Dictionary = b.get_meta("st") if b.has_meta("st") else {}
+	var f := UI.bhs()
+	# groggy
+	var gd: Dictionary = S.get("groggy", {})
+	var on: bool = float(gd.get("t", 0.0)) > 0.0
+	var gk: float = clampf(float(gd["t"]) / STS.GROGGY.t, 0.0, 1.0) if on else clampf(float(gd.get("g", 0.0)) / STS.GROGGY.need, 0.0, 1.0)
+	var gw := bw * 0.6
+	var gc := Color("#ffd34d")
+	var sk := 2.0
+	var pg := func(x0: float, w0: float, h0: float) -> PackedVector2Array:
+		return PackedVector2Array([Vector2(x0 + sk, y), Vector2(x0 + w0 + sk, y), Vector2(x0 + w0, y + h0), Vector2(x0, y + h0)])
+	ci.draw_colored_polygon(pg.call(x - 1.0, gw + 2.0, 5.0), Color(0, 0, 0, 0.6 * a))
+	if gk > 0.0:
+		var pulse := (0.75 + 0.25 * sin(clock / 70.0)) if on else 1.0
+		ci.draw_colored_polygon(pg.call(x, gw * gk, 5.0), Color(gc, a * pulse))
+	var lab := "그로기!" if on else "그로기"
+	UI.shadow_text(ci, f, Vector2(x + gw + 8.0, y + 6.0), lab, 11, Color(gc, a) if on else Color(1, 1, 1, 0.75 * a))
+	# the statuses, right-aligned under the bar (the fatigue panel sits at the left)
+	var chips: Array = []
+	for k in STS.ORDER:
+		if STS.has(b, k): chips.append(k)
+	var widths: Array = []
+	var total := 0.0
+	for k in chips:
+		var d0: Dictionary = S[k]
+		var t1: String = STS.K[k].name
+		if k == "bleed": t1 += " %d" % int(d0.get("n", 0))
+		elif int(d0.get("stage", 1)) > 1: t1 += " %d단계" % int(d0["stage"])
+		widths.append(UI.text_w(f, t1, 12) + 14.0)
+		total += widths[-1] + 6.0
+	var cx := x + bw - total + 6.0
+	var cy := y + 12.0
+	for k in chips:
+		var d: Dictionary = S[k]
+		var c: Color = STS.K[k].col
+		var t0: String = STS.K[k].name
+		if k == "bleed": t0 += " %d" % int(d.get("n", 0))
+		elif int(d.get("stage", 1)) > 1: t0 += " %d단계" % int(d["stage"])
+		var tw := UI.text_w(f, t0, 12) + 14.0
+		ci.draw_colored_polygon(PackedVector2Array([Vector2(cx + 4, cy), Vector2(cx + tw + 4, cy), Vector2(cx + tw, cy + 18), Vector2(cx, cy + 18)]), Color(0, 0, 0, 0.7 * a))
+		ci.draw_rect(Rect2(cx + 2, cy + 15, (tw - 2.0) * clampf(float(d.get("t", 0.0)) / maxf(1.0, float(STS.K[k].get("t", 1.0))), 0.0, 1.0), 3), Color(c, a))
+		ci.draw_string(f, Vector2(cx + 8, cy + 13), t0, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(c.lightened(0.25), a))
+		cx += tw + 6.0
 
 
 ## HUD v3: room names go to the notice feed (H2.room), and the objective — "남은 적 N" on entering a room with
