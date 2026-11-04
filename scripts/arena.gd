@@ -114,6 +114,7 @@ var sortie                    # sortie.gd: dungeon select, band sweeps, entry da
 var ult                       # ult.gd: 기력 gauges, the ult moves and their world effects
 var save                      # save_game.gd: user://save.json
 var skins                     # skins.gd: costume skins (owned, worn) and the art resolver every screen draws members through
+var quiet_hit := false          # 처형 (player.gd): its blows skip the generic hit ring
 var hit_by := ""              # who a delayed hit (Luce's light) belongs to, for its element
 var kenin                     # kenin.gd: Kenin's pistol, sticky bombs, marks and the bench assist
 var last_e := {}              # the last elemDamage result, so damage_text can split a hybrid hit per element

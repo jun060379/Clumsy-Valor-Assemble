@@ -325,8 +325,8 @@ func dive_start(P) -> void:
 	var cs: float = P.CSCALE
 	_push({"k": "dive", "ch": P.who, "C": _pal(P.who), "x": P.position.x, "y0": P.position.y - 80.0 * cs, "y1": P.position.y - 30.0 * cs})
 
-func slam(x: float, y: float, ch: String) -> void:
-	_push({"k": "slam", "ch": ch, "C": _pal(ch), "x": x, "y": y})
+func slam(x: float, y: float, ch: String, up := false) -> void:
+	_push({"k": "slam", "ch": ch, "C": _pal(ch), "x": x, "y": y, "up": up})
 	dust(x + 14.0, y, 1, true)
 	dust(x - 14.0, y, -1, true)
 	if arena != null:
@@ -818,11 +818,12 @@ func _kill(e: Dictionary) -> void:
 		q.visible = false
 		pool.append(q)
 		e.erase("q")
-	var q2: Node2D = e.get("q2")
-	if q2 != null:
-		q2.visible = false
-		pool.append(q2)
-		e.erase("q2")
+	for k2 in ["q2", "q3", "q4"]:
+		var q2: Node2D = e.get(k2)
+		if q2 != null:
+			q2.visible = false
+			pool.append(q2)
+			e.erase(k2)
 
 func _sync_quads() -> void:
 	pass
@@ -1052,15 +1053,30 @@ func _slam(g: CanvasItem, e: Dictionary) -> bool:
 		var e3 := {"seed": e["seed"] - 1.0}
 		if not e.has("tq1"): e["tq1"] = e2
 		if not e.has("tq2"): e["tq2"] = e3
-		_tear_quad(e["tq1"], Vector2(e["x"] + 6.0, e["y"] - 3.0), Vector2(1, 0), 144.0 / S, F, stp)
-		_tear_quad(e["tq2"], Vector2(e["x"] - 6.0, e["y"] - 3.0), Vector2(-1, 0), 144.0 / S, F, stp)
+		# 처형 (owner 2026-11-04): the tears climb out of the floor, a V rising from the blow, not lying flat
+		var up: bool = e.get("up", false)
+		if up:
+			# 처형: the floor bursts open wide, four tears thrown up and out from the blow
+			if not e.has("tq3"): e["tq3"] = {"seed": e["seed"] + 2.0}
+			if not e.has("tq4"): e["tq4"] = {"seed": e["seed"] - 2.0}
+			_tear_quad(e["tq1"], Vector2(e["x"] + 10.0, e["y"] - 3.0), Vector2(0.86, -0.5), 200.0 / S, F, stp)
+			_tear_quad(e["tq2"], Vector2(e["x"] - 10.0, e["y"] - 3.0), Vector2(-0.86, -0.5), 200.0 / S, F, stp)
+			_tear_quad(e["tq3"], Vector2(e["x"] + 4.0, e["y"] - 3.0), Vector2(0.34, -0.94), 160.0 / S, F, stp)
+			_tear_quad(e["tq4"], Vector2(e["x"] - 4.0, e["y"] - 3.0), Vector2(-0.34, -0.94), 160.0 / S, F, stp)
+		else:
+			_tear_quad(e["tq1"], Vector2(e["x"] + 6.0, e["y"] - 3.0), Vector2(1, 0), 144.0 / S, F, stp)
+			_tear_quad(e["tq2"], Vector2(e["x"] - 6.0, e["y"] - 3.0), Vector2(-1, 0), 144.0 / S, F, stp)
 		e["q"] = e["tq1"].get("q")
 		e["q2"] = e["tq2"].get("q")
+		if e.has("tq3"):
+			e["q3"] = e["tq3"].get("q")
+			e["q4"] = e["tq4"].get("q")
 		if f < 2: p.rect(-4, -2, 9, 2, Color.WHITE)
 		var sh: Array = []
-		for i in 8:
+		for i in (14 if up else 8):
 			var d := 1.0 if i % 2 else -1.0
-			sh.append([d * (10.0 + i * 7.0), -3.0, d * 0.8, -1.6 - R.r() * 0.8])
+			if up: sh.append([d * (6.0 + i * 5.0), -6.0, d * (0.6 + R.r() * 0.9), -2.8 - R.r() * 1.8])        # thrown up and wide
+			else: sh.append([d * (10.0 + i * 7.0), -3.0, d * 0.8, -1.6 - R.r() * 0.8])
 		_tear_shards(p, F, 0.8, sh, e["seed"])
 		return true
 	var pal: Array = C

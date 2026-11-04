@@ -160,7 +160,7 @@ func hit(dmg: float, kb: float, mul := 1.0) -> void:
 		arena.punch(hp_at, 0.35 if dmg <= 1.0 else (0.6 if dmg < 3.0 else 1.0))
 	arena.damage_text(position + Vector2(0, -95 if not M.has("fly") else -40), roundi(d), dmg > 1.0)
 	arena.spark(position + Vector2(-hd * 10.0, -20.0 if M.has("fly") else -62.0 * M["s"] / 3.0), 14 if dmg > 1.0 else 8)
-	if arena.get("pfx") != null: arena.pfx.hit(position.x - hd * 10.0, position.y - (20.0 if M.has("fly") else 62.0 * M["s"] / 3.0), int(hd) if hd != 0.0 else 1, 1.25 if dmg >= 2.0 else 1.0)
+	if arena.get("pfx") != null and not arena.quiet_hit: arena.pfx.hit(position.x - hd * 10.0, position.y - (20.0 if M.has("fly") else 62.0 * M["s"] / 3.0), int(hd) if hd != 0.0 else 1, 1.25 if dmg >= 2.0 else 1.0)
 	if hp <= 0.0:
 		# hitDummy on hp<=0: break, a jolt of shake, sparks and dust ...
 		arena.sfx("down", 1.0)                 # a body goes down (the dummies keep their "break")

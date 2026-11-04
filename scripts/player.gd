@@ -2215,8 +2215,10 @@ func _draw() -> void:
 	if not anim in ["tp_in", "dig_out"] and (gclip != null or gdx != 0.0 or g_in != null or g_out != null): _rift_clean()
 	var br := t if anim == "idle" and not arena.ult_busy() else -1.0
 	var rim := col.a >= 1.0
+	if not ax_portals.is_empty(): _ax_draw_portals(false)
 	if gclip != null: draw_frame(who, an, fr2, Vector2(gdx, 0), dir, col, variant, null, gclip["x"] - position.x, gclip["keep"], "P", br, rim)
 	else: draw_frame(who, an, fr2, Vector2(gdx, 0), dir, col, variant, null, NAN, 0, "P", br, rim)
+	if not ax_portals.is_empty(): _ax_draw_portals(true)
 
 ## 캐릭터 도트화 (charPix): shaders/char_pix.gdshader. One shared material for the party, the townsfolk and the hero over
 ## the slow-time grade; a "marked" twin for the level nodes that draw Eilin among their props (her draws carry r + 1).
@@ -2449,13 +2451,17 @@ func draw_frame(c: String, an: String, fr: int, at: Vector2, d: int, col: Color,
 		bands = [[yW, float(CH.CELL_H), -BASE + yW * k, (CH.CELL_H - yW) * k],
 			[yN, yW, -BASE + (yN - dd * 2.0) * k, (yW - yN + dd * 2.0) * k + 0.5],
 			[0.0, yN, -BASE - dd * 2.0 * k, yN * k + 0.5]]
-	var pix := sk != "" and is_pix(ci.material) and col.g < 4.0
+	var rr: float = ax_rot if sk == "P" else 0.0       # 처형's tilt (rotated frames skip the pixel slot)
+	var pix := sk != "" and is_pix(ci.material) and col.g < 4.0 and rr == 0.0
 	if pix:
 		var wa: Vector2 = ci.get_global_transform() * at
 		var si := pix_slot(sk, c, row, rf[1], wa, d, sc, bands, rim)
 		if si >= 0: col.b += 4.0 * (si + 1)
 	var mode0: bool = pix_mat().get_shader_parameter("mode") == 0
-	ci.draw_set_transform(at, 0.0, Vector2(d, 1))
+	if rr != 0.0:
+		var pv := 90.0 * sc                              # about her middle, not her feet
+		ci.draw_set_transform_matrix(Transform2D(rr * d, at + Vector2(0, -pv)) * Transform2D(0.0, Vector2(d, 1), 0.0, Vector2(0, pv)))
+	else: ci.draw_set_transform(at, 0.0, Vector2(d, 1))
 	var parts: Array = []
 	if bands.size() == 1 or (pix and not mode0):
 		var y0: float = -BASE - (6.0 if bands.size() > 1 else 0.0)
@@ -2556,30 +2562,32 @@ func aida_emp_target():
 			best = m
 	return best
 
-## 처형 (owner 2026-11-04): she sinks into the ground, erupts under the foe swinging up (30%), hangs, fumbles and
-## catches the shovel, flips forward and drives it into the floor (70%). Sprite Flow motion in rows 30-33 (ax_*);
-## the height is in the frames, so she stays on her ground line and the foe is carried with her head (AX_TOP).
+## 처형 (owner 2026-11-04): three beats. In · out: she sinks through a portal opened on the floor and comes up out of
+## another under the foe, swinging up (30%). The float: she shoots up, slowing into the top, tosses the shovel and
+## catches it as she tilts clockwise. Catch · spin · slam: overhead, one forward somersault, then down faster and faster
+## into the floor (70%). Frames: rows 30-33 (ax_*, tools/sprite_flow/pack_aida_exec.py); the height is hers in game.
 const AX_SEQ := ["ax_sink", "ax_rise", "ax_spin", "ax_slam"]
-const AX_TOP := {"ax_sink": [162, 70, 31, 25], "ax_rise": [92, 173, 202, 205, 206, 204], "ax_spin": [208, 191, 192, 212, 205, 161, 158, 215, 212], "ax_slam": [209, 208, 129, 122, 100, 105, 151, 162]}
-const AX_HIT1 := ["ax_rise", 2]
+const AX_TOP := {"ax_sink": [127, 69, 31, 25, 25, 92], "ax_rise": [176, 205, 265, 236, 209, 226, 214, 209], "ax_spin": [163, 182, 156, 169, 177, 204, 215], "ax_slam": [162, 164, 163, 139, 118, 108, 162]}
+const AX_HIT1 := ["ax_rise", 0]
 const AX_HIT2 := ["ax_slam", 3]
+const AX_H := 150.0          # how high she flies (world px before CSCALE)
+var ax_rot := 0.0            # the sprite's clockwise tilt (rad) while she floats
+var ax_portals: Array = []   # [{x, y, t, life, r}] the floor portals, drawn flat (the z axis) around her
 
 func aida_exec(tg, k := 1.0) -> void:
 	if tg == null or not is_instance_valid(tg) or not tg.alive(): return
 	var g0: float = position.y
 	if ST.has(tg, "air"): g0 = float(ST.of(tg)["air"]["y0"])
 	elif not is_fly(tg): g0 = tg.position.y
-	a_exec = {"tg": tg, "t": 0.0, "k": k, "x": tg.position.x, "g0": g0, "hit1": false, "hit2": false, "exp": ST.exposed(tg)}
+	a_exec = {"tg": tg, "t": 0.0, "k": k, "x": tg.position.x, "g0": g0, "hit1": false, "hit2": false, "exp": ST.exposed(tg), "out": false}
 	dir = 1 if tg.position.x >= position.x else -1
 	a_follow = {}
 	vx = 0.0
 	vy = 0.0
-	inv = maxf(inv, 1700.0)
+	inv = maxf(inv, 1300.0)
 	set_anim("ax_sink", 0)
 	z_index = 2          # in front of the foe she carries
-	var gd = arena.pfx.gate(position.x, position.y, 120.0 * CSCALE, 1.4, 0.9)
-	gd["rel"] = true
-	a_exec["mark"] = arena.pfx.gate(tg.position.x if not is_fly(tg) else tg.position.x, g0, 60.0 * CSCALE, 2.0, 1.6)     # her sigil flickers under the foe
+	ax_portals = [{"x": position.x, "y": position.y, "t": 0.0, "life": 260.0, "r": 46.0 * CSCALE}]
 	arena.sfx("aida_open", 1.0)
 	arena.post_ca(0.02)
 
@@ -2596,6 +2604,40 @@ func _ax_at(tt: float) -> Array:
 			if tt < acc: return [an, i]
 	return []
 
+## when frame i of anim an starts (ms into the sequence)
+func _ax_t(an: String, i: int) -> float:
+	var acc := 0.0
+	for a2 in AX_SEQ:
+		var T: Array = SK.entry(who, a2)[1]
+		for j in T.size():
+			if a2 == an and j == i: return acc
+			acc += float(T[j])
+	return acc
+
+## her height: off the floor hard, easing into the top; a breath of float; then down faster and faster onto impact
+func _ax_alt(tt: float) -> float:
+	var H: float = a_exec.get("H", AX_H * CSCALE)
+	var t0 := _ax_t("ax_rise", 0)
+	var ta := _ax_t("ax_rise", 5)
+	var td := _ax_t("ax_spin", 5)
+	var ti := _ax_t("ax_slam", 3)
+	if tt < t0: return 0.0
+	if tt < ta: return H * (1.0 - pow(1.0 - (tt - t0) / (ta - t0), 3.2))
+	if tt < td: return H * (1.0 + 0.05 * (tt - ta) / (td - ta))
+	if tt < ti: return H * 1.05 * (1.0 - pow((tt - td) / (ti - td), 2.2))
+	return 0.0
+
+## the tilt: clockwise slowly while she floats and reaches for the shovel, back upright as the somersault takes over
+func _ax_tilt(tt: float) -> float:
+	var r0 := _ax_t("ax_rise", 2)
+	var r1 := _ax_t("ax_rise", 7)
+	var r2 := _ax_t("ax_spin", 0)
+	var r3 := _ax_t("ax_spin", 2)
+	if tt < r0 or tt >= r3: return 0.0
+	if tt < r1: return deg_to_rad(20.0) * smoothstep(0.0, 1.0, (tt - r0) / (r1 - r0))
+	if tt < r2: return deg_to_rad(20.0)
+	return deg_to_rad(20.0) * (1.0 - (tt - r2) / (r3 - r2))
+
 func _aexec_step(dt: float) -> void:
 	var tg = a_exec["tg"]
 	var live: bool = tg != null and is_instance_valid(tg) and tg.alive()
@@ -2603,58 +2645,110 @@ func _aexec_step(dt: float) -> void:
 	a_exec["t"] = t0 + dt
 	var tt: float = a_exec["t"]
 	var g0: float = a_exec["g0"]
+	for pt in ax_portals: pt["t"] += dt
+	ax_portals = ax_portals.filter(func(pt): return pt["t"] < pt["life"])
 	var cur := _ax_at(tt)
 	var prev := _ax_at(t0)
 	if cur.is_empty():
 		_aexec_end(tg, live)
 		return
 	if anim != cur[0] or f != cur[1]: set_anim(cur[0], cur[1])
-	# out of the ground under the foe, the moment the rise begins
-	if cur[0] == "ax_rise" and (prev.is_empty() or prev[0] == "ax_sink"):
-		if a_exec.get("mark") != null: a_exec["mark"]["rel"] = true
-		position.x = float(a_exec["x"]) - dir * 18.0 * CSCALE
-		position.y = g0
-		var up = arena.pfx.gate(position.x + dir * 18.0 * CSCALE, g0, 240.0 * CSCALE, 1.9, 1.5)
-		up["rel"] = true
+	# under the foe the second portal opens; she comes up out of it
+	if cur[0] == "ax_sink" and cur[1] >= 3 and not a_exec["out"]:
+		a_exec["out"] = true
+		position.x = float(a_exec["x"])                 # right under the foe
+		ax_portals.append({"x": position.x, "y": g0, "t": 0.0, "life": 300.0, "r": 58.0 * CSCALE})
 		arena.sfx("aida_close", 1.0)
-		arena.dust(position, 0, true)
-		arena.shake(6, dir)
-	position.y = g0
-	on = true
+	var alt := _ax_alt(tt)
+	position.y = g0 - alt
+	on = alt <= 0.0
 	vx = 0.0
 	vy = 0.0
-	# the foe rides with her head while she is up (rise · spin), pinned in the air
-	if live and cur[0] in ["ax_rise", "ax_spin"] and (cur[0] != "ax_rise" or cur[1] >= 2):
-		var top: float = float(AX_TOP[cur[0]][cur[1]])
-		tg.position.x = position.x + dir * 62.0 * CSCALE        # ahead of her, not on top of her
-		if not is_fly(tg):
-			tg.position.y = g0 - maxf(0.0, top - 70.0) * 0.5 * CSCALE
-			if ST.has(tg, "air"): ST.of(tg)["air"]["vy"] = 0.0
-	if live and cur[0] == "ax_slam" and cur[1] <= 2 and ST.has(tg, "air"): ST.of(tg)["air"]["vy"] = 1.8      # driven down
-	if cur[0] == "ax_spin" and cur[1] == 3 and (prev.is_empty() or prev[1] != 3): add_ghost(160.0)      # one trail at the flip, not every frame
-	# hits
-	if not a_exec["hit1"] and cur[0] == AX_HIT1[0] and cur[1] >= AX_HIT1[1] and live:
+	ax_rot = _ax_tilt(tt)
+	# the foe hangs where her swing left it while she flies past it; coming down, her feet drive it to the floor
+	if live and a_exec["hit1"] and not a_exec["hit2"] and not is_fly(tg):
+		var py: float = a_exec.get("py", tg.position.y)
+		tg.position.x = position.x + dir * 6.0 * CSCALE
+		tg.position.y = clampf(position.y + float(a_exec.get("fh", 0.0)), py, g0)
+		if ST.has(tg, "air"): ST.of(tg)["air"]["vy"] = 0.0
+	var fresh: bool = prev.is_empty() or prev != cur
+	# hit 1: out of the portal, the shovel swung up
+	if not a_exec["hit1"] and cur[0] == AX_HIT1[0] and cur[1] >= AX_HIT1[1]:
 		a_exec["hit1"] = true
-		tg.hit(_aexec_dmg() * 0.3, 0.0, atk_mul())
-		arena.slash_fx(Vector2(position.x + dir * 30.0 * CSCALE, position.y - 80.0 * CSCALE), 110.0 * CSCALE, deg_to_rad(120.0), deg_to_rad(-60.0), dir, Color("#e9d2ff"), 1.5)
-		arena.spark(tg.position + Vector2(0, -50), 14)
+		if live:
+			arena.quiet_hit = true
+			tg.hit(_aexec_dmg() * 0.3, 0.0, atk_mul())
+			arena.quiet_hit = false
+			if not is_fly(tg):
+				# popped up a little, held there; she must clear its head: fly that much higher
+				var fh: float = 124.0 * float(tg.M.get("s", 3.0)) / 3.0 if tg.get("M") is Dictionary else 120.0
+				a_exec["fh"] = fh
+				a_exec["py"] = g0 - 40.0 * CSCALE
+				a_exec["H"] = maxf(AX_H * CSCALE, 40.0 * CSCALE + fh + 30.0 * CSCALE)
+		# a rift torn straight up with the swing (not a swing arc: Aida's arcs trail a dimension tear off to the side)
+		var up = arena.pfx.gate(position.x + dir * 10.0 * CSCALE, g0, 200.0 * CSCALE, 1.6, 1.2)
+		up["rel"] = true
 		arena.sfx("aida_hit", 1.0)
-		arena.hitstop = maxf(arena.hitstop, 50.0)
-	if cur[0] == "ax_spin" and cur[1] == 2 and (prev.is_empty() or prev[1] != 2):
-		arena.hitstop = maxf(arena.hitstop, 80.0)        # the catch: a beat
-		arena.post_wave(position + Vector2(0, -110.0 * CSCALE), 0.7, 380.0, 0.18)
+		arena.dust(position, 0, true)
+		arena.shake(6, dir)
+		arena.hitstop = maxf(arena.hitstop, 45.0)
+	# the toss: a faint trail as she lets go; the catch: a beat and a small ring
+	if fresh and cur[0] == "ax_rise" and cur[1] == 1: add_ghost(140.0)
+	if fresh and cur[0] == "ax_rise" and cur[1] == 6:
+		arena.hitstop = maxf(arena.hitstop, 60.0)
+		arena.post_wave(position + Vector2(dir * 20.0, -120.0 * CSCALE), 0.6, 320.0, 0.16)
+		arena.sfx("aida_close", 0.6)
+	# the somersault: a trail (no swing arc: Aida's arcs are dimension tears, and a full circle tore the screen)
+	if fresh and cur[0] == "ax_spin" and cur[1] == 2: add_ghost(160.0)
+	if fresh and cur[0] == "ax_slam" and cur[1] == 0: add_ghost(120.0)
+	# hit 2: the slam
 	if not a_exec["hit2"] and cur[0] == AX_HIT2[0] and cur[1] >= AX_HIT2[1]:
 		a_exec["hit2"] = true
-		if live: tg.hit(_aexec_dmg() * 0.7, dir * 6.0, atk_mul())
-		arena.pfx.slam(position.x + dir * 30.0 * CSCALE, position.y, who)
-		arena.post_wave(position + Vector2(dir * 40.0, 0.0), 0.8, 420.0, 0.2)        # light: she must stay readable
+		if live:
+			if ST.has(tg, "air"):                 # driven into the floor: down now, the lift over
+				tg.position.y = float(ST.of(tg)["air"].get("y0", g0))
+				ST.of(tg)["air"]["t"] = 0.0
+			arena.quiet_hit = true
+			tg.hit(_aexec_dmg() * 0.7, dir * 6.0, atk_mul())
+			arena.quiet_hit = false
+		arena.pfx.slam(position.x + dir * 20.0 * CSCALE, position.y, who, true)
+		arena.post_wave(position + Vector2(dir * 40.0, 0.0), 0.8, 420.0, 0.2)
 		arena.shake(12, dir)
 		arena.flash = maxf(arena.flash, 0.15)
-		arena.hitstop = maxf(arena.hitstop, 130.0)
+		arena.hitstop = maxf(arena.hitstop, 110.0)
 		arena.sfx("heavy", 1.0)
 		arena.sfx("slam", 0.8)
 		arena.dust(position, dir, true)
+		ax_portals.append({"x": position.x + dir * 20.0 * CSCALE, "y": g0, "t": 0.0, "life": 300.0, "r": 120.0 * CSCALE, "burst": true})
+		arena.dust(position + Vector2(dir * 60.0 * CSCALE, 0), dir, true)
+		arena.dust(position - Vector2(dir * 60.0 * CSCALE, 0), -dir, true)
 		arena.text(position + Vector2(0, -175.0 * CSCALE), "처형!", Color("#e9d2ff"))
+
+## the floor portals, flat on the floor (an ellipse squashed to the z axis): `front` false draws the far half and the
+## hole (behind her), true the near rim over her legs, so she reads as sinking in / rising out
+func _ax_draw_portals(front: bool) -> void:
+	for pt in ax_portals:
+		var u: float = pt["t"] / pt["life"]
+		var open := minf(1.0, u / 0.22) if not pt.get("burst", false) else 1.0
+		var close := 1.0 if u < 0.7 else 1.0 - (u - 0.7) / 0.3
+		var k := open * close
+		if pt.get("burst", false): k = 1.0 - u
+		var R: float = pt["r"] * (0.5 + 0.5 * open) * (1.6 * u + 0.6 if pt.get("burst", false) else 1.0)
+		var c := Vector2(pt["x"], pt["y"]) - position
+		var sq := 0.26
+		draw_set_transform(c, 0.0, Vector2(1.0, sq))
+		if not front:
+			if not pt.get("burst", false):
+				draw_circle(Vector2.ZERO, R, Color(0.06, 0.0, 0.12, 0.92 * k))
+				draw_circle(Vector2.ZERO, R * 0.7, Color(0.25, 0.08, 0.45, 0.55 * k))
+				for i in 3:                     # the swirl
+					var a0: float = pt["t"] * 0.012 + i * TAU / 3.0
+					draw_arc(Vector2.ZERO, R * 0.55, a0, a0 + 1.6, 16, Color(0.8, 0.6, 1.0, 0.7 * k), 3.0)
+			draw_arc(Vector2.ZERO, R, PI, TAU, 32, Color(0.85, 0.65, 1.0, 0.9 * k), 5.0)
+		else:
+			draw_arc(Vector2.ZERO, R, 0.0, PI, 32, Color(0.95, 0.8, 1.0, k), 6.0)
+			draw_arc(Vector2.ZERO, R * 1.15, 0.2, PI - 0.2, 24, Color(0.7, 0.45, 1.0, 0.45 * k), 3.0)
+		draw_set_transform(Vector2.ZERO)
 
 func _aexec_end(tg, live: bool) -> void:
 	qte_offer("finisher")
@@ -2664,6 +2758,8 @@ func _aexec_end(tg, live: bool) -> void:
 	a_exec = {}
 	set_anim("idle")
 	z_index = 0
+	ax_rot = 0.0
+	ax_portals = []
 	inv = maxf(inv, 250.0)
 	# 기습의 문 (KEY): one more 처형 on another foe near
 	if was_exp and _av("riftChain") > 0.0 and k0 <= 1.0:
