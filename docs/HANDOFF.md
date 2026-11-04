@@ -214,6 +214,10 @@ main에 푸시하면 GitHub Actions가 웹·윈도우로 빌드해서 GitHub Pag
 - 연결: mob/dummy/ghost hit → dmg_mul · on_hit, step → ST.step(잠금이면 AI 정지), 둔화 → 이동 속도 · 공격 후 react, 패링 창 +1프레임(player take_hit), QTE 태그 일격 → tag_mul(취약 ×1.5) + tag_react 강, 일반 교대 → tag_react 약. 케닌 QTE 취약이 공용 취약으로 이전(kvuln meta 삭제).
 - 아직 아무도 상태를 걸지 않음(케닌 취약만). 다음: 캐릭터별 배치. 아이콘은 임시 도형. 수치는 status.gd K (PLACEHOLDER, 밸런스 툴 미연결). 테스트 tests/test_status.gd, 캡처 tests/cap_status.gd.
 
+## 4-10. 키워드 강조 (오너 2026-11-04)
+- scripts/ui_rich.gd: 스킬 · 노드 설명 속 공용 상태(취약 · 경직 · 띄움 · 둔화 · 빙결 · 화상 · 출혈 · 보호막 · 강화 · 재생), 그로기, 고유 자원(표식 · 징표)을 이름으로 찾아(긴 것 먼저) 굵게 · 색 · 밑줄로 그림. 누르면 설명 카드(아무 데나 누르면 닫힘). 설명 수치는 status.gd에서 읽음. 마크업 불필요.
+- 연결: ui_char_mem.gd rich() / draw_tip() — 스킬 탭 설명, 기억 노드 카드. 새 용어는 RICH.gloss()에 추가. 캡처 tests/cap_keywords.gd.
+
 ## 5. 이번 세션에 끝낸 것 (모두 main, 푸시·배포 완료)
 
 - 타이틀 로고에 한글(동해독도체 B안), 붓 로고·그림 `d7601c9`

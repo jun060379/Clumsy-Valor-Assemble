@@ -9,6 +9,7 @@ const UI := preload("res://scripts/ui_kit.gd")
 const UIA := preload("res://scripts/ui_anim.gd")
 const MD := preload("res://scripts/memory_data.gd")
 const ST := "res://assets/ui/st/"
+const RICH := preload("res://scripts/ui_rich.gd")    # 키워드 강조 + the explanation card
 const SK := preload("res://scripts/skins.gd")       # the skill / record art of the worn costume (the memorial and old art stay)
 const SPEC := {
 	"attr": {"shard": [[-6, -12, 66, 130], -7, [[18, 0], [100, 6], [84, 38], [96, 52], [70, 100], [0, 92], [10, 60], [0, 40]]], "edge": [[4, -8, 56, 120], -7, [[30, 0], [36, 0], [14, 100], [8, 100]]],
@@ -34,6 +35,9 @@ var p                       # ui_char.gd
 var sel := "A0"             # 기억: the node picked (or "LV" = the level button, "RST" = 초기화 for keys)
 var si := 0                 # 스킬: the move picked
 var shout_t := 9999.0       # its card popped
+var tip := ""               # the keyword whose card is open ("" = none)
+var tip_p := Vector2.ZERO   # where it was tapped (screen)
+var tip_t := 0.0            # since it opened (ms)
 var li := 0                 # 기록: the line picked (-1 = ◎ 감상)
 var top := 0                # 기록: first line shown
 var clean := false          # 감상: everything but the art hidden
@@ -82,6 +86,7 @@ func tab_changed() -> void:
 	clean = false
 	memo_t = 0.0
 	shout_t = 9999.0
+	tip = ""
 	if p.tab == "rec": li = -1 if memo() else 0
 
 func member_changed() -> void:
@@ -91,6 +96,7 @@ func member_changed() -> void:
 	top = 0
 	memo_t = 0.0
 	pop = ""
+	tip = ""
 
 ## leaving the record tab (or the member, or the page) ends whatever line was being said
 func hush() -> void:
@@ -101,6 +107,7 @@ func hush() -> void:
 
 func tick(dt: float) -> void:
 	shout_t += dt
+	tip_t += dt
 	pop_t += dt
 	memo_t += dt
 	jolt_t += dt
@@ -212,11 +219,13 @@ func _moves() -> Array:
 
 func _pick_move(j: int) -> void:
 	si = j
+	tip = ""
 	shout_t = 0.0
 	p.sfx("ui_move", 0.5)
 
 func _node(id: String) -> void:
 	sel = id
+	tip = ""
 	p.sfx("ui_move", 0.5)
 
 func _take() -> void:
@@ -337,6 +346,24 @@ func hitr(r: Rect2, cb: Callable) -> void:
 
 func hitp(poly: PackedVector2Array, cb: Callable) -> void:
 	p.hit(xf * poly, cb)
+
+## a text with its keywords lit (ui_rich.gd); tapping one opens its card
+func rich(at: Vector2, text: String, w: float, size: int, col: Color, a: float) -> float:
+	var x0 := xf
+	return RICH.draw(p, UI.noto(), at, text, w, size, col, a, func(term: String, r: Rect2):
+		var poly := PackedVector2Array([r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)])
+		p.hit(x0 * poly, func():
+			tip = term
+			tip_p = x0 * r.get_center()
+			tip_t = 0.0
+			p.sfx("ui_ok", 0.4)))
+
+## the open keyword card (screen space, over everything); any tap closes it
+func draw_tip(vs: Vector2) -> void:
+	if tip == "": return
+	var a := clampf(tip_t / 120.0, 0.0, 1.0)
+	p.hit(Rect2(Vector2.ZERO, vs), func(): tip = "")
+	RICH.draw_tip(p, UI.bhs(), UI.noto(), tip, tip_p, vs, a)
 
 ## a box turned about its centre (CSS rotate), as a transform whose origin is the box's top-left
 static func box_xf(r: Rect2, deg: float, sc := Vector2.ONE) -> Transform2D:
@@ -495,7 +522,7 @@ func _skill(vs: Vector2, col: Color) -> void:
 	var mv: Array = L[si]
 	var sr := Rect2(z.position.x + z.size.x * 0.04, z.position.y + z.size.y * 0.6, z.size.x * 0.94, 0.0)
 	var tw2 := sr.size.x - 44.0
-	var ph := UI.bhs().get_multiline_string_size(mv[0], HORIZONTAL_ALIGNMENT_LEFT, tw2, 22).y + 4.0 + UI.noto().get_multiline_string_size(mv[1], HORIZONTAL_ALIGNMENT_LEFT, tw2, 12).y * 1.1 + 34.0
+	var ph := UI.bhs().get_multiline_string_size(mv[0], HORIZONTAL_ALIGNMENT_LEFT, tw2, 22).y + 4.0 + RICH.height(UI.noto(), mv[1], tw2, 12) * 1.1 + 34.0
 	sr.size.y = maxf(z.size.y * 0.3, ph)
 	if sr.end.y > vs.y - 6.0: sr.position.y = vs.y - 6.0 - sr.size.y
 	var pu := UI.bk(clampf(shout_t / 450.0, 0.0, 1.0)) if shout_t < 450.0 else 1.0
@@ -506,8 +533,9 @@ func _skill(vs: Vector2, col: Color) -> void:
 	p.draw_colored_polygon(spoly, Color(1, 1, 1, a2))
 	var hy := 16.0 + UI.bhs().get_multiline_string_size(mv[0], HORIZONTAL_ALIGNMENT_LEFT, tw2, 22).y
 	p.draw_multiline_string(UI.bhs(), Vector2(22, 16.0 + UI.bhs().get_ascent(22)), mv[0], HORIZONTAL_ALIGNMENT_LEFT, tw2, 22, -1, Color(0, 0, 0, a2))
-	p.draw_multiline_string(UI.noto(), Vector2(22, hy + 4.0 + UI.noto().get_ascent(12)), mv[1], HORIZONTAL_ALIGNMENT_LEFT, tw2, 12, -1, Color(0, 0, 0, a2))
+	rich(Vector2(22, hy + 4.0), mv[1], tw2, 12, Color(0, 0, 0), a2)
 	reset_xf()
+	draw_tip(vs)
 
 ## 기억: the rec art at the right, the level row, the tree (three branches + cross column), the picked node's card
 func _mem(vs: Vector2, col: Color) -> void:
@@ -676,6 +704,8 @@ func _mem(vs: Vector2, col: Color) -> void:
 	# the card of the picked node
 	reset_xf()
 	_mcard(z, Z, col)
+	reset_xf()
+	draw_tip(vs)
 
 static func _closed(a: PackedVector2Array) -> PackedVector2Array:
 	var b := a.duplicate()
@@ -694,7 +724,7 @@ func _mcard(z: Rect2, Z: Transform2D, col: Color) -> void:
 	var st := "활성화됨" if has else (why if why != "" else ("포인트 부족" if Mm.pts_left(c) <= 0 else "활성화 가능"))
 	var w := z.size.x * 0.54
 	var tw2 := w - 24.0
-	var dh := UI.noto().get_multiline_string_size(d["d"], HORIZONTAL_ALIGNMENT_LEFT, tw2, 12).y
+	var dh := RICH.height(UI.noto(), d["d"], tw2, 12)
 	var h := 8.0 + 14.0 + 26.0 + dh + 8.0 + 26.0 + 10.0
 	var r := Rect2(z.size.x - w, z.size.y * 0.96 - h, w, h)
 	var e := ease_in(12)
@@ -709,7 +739,7 @@ func _mcard(z: Rect2, Z: Transform2D, col: Color) -> void:
 	if tx0 + tgw > w - 8.0: tx0 = w - 8.0 - tgw
 	UI.para(p, tx0, 30, tgw, 17, -3.0, Color(0, 0, 0, e))
 	p.draw_string(UI.bhs(), Vector2(tx0 + 6.0, 43), tg, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1, 1, 1, e))
-	p.draw_multiline_string(UI.noto(), Vector2(12, 54 + UI.noto().get_ascent(12)), d["d"], HORIZONTAL_ALIGNMENT_LEFT, tw2, 12, -1, Color(0.2, 0.2, 0.2, e))
+	rich(Vector2(12, 54), d["d"], tw2, 12, Color(0.2, 0.2, 0.2), e)
 	var by := 54.0 + dh + 8.0
 	var bx := 12.0
 	var go: String
