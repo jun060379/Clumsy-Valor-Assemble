@@ -56,6 +56,7 @@ var ft := 0.0
 var cd := 0.0
 var flash := 0.0
 var kx := 0.0
+var hold_t := 0.0             # 교대 패링: its swing hangs mid-air (ms) until the newcomer's blade meets it
 var tilt := 0.0               # 교대 패링: knocked back on its heels (rad, springs back; drawn with the body)
 var sq := 0.0                 # 타격감: squash-and-stretch ms left (x 1.18 / y 0.86 easing back over SQ_MS)
 const SQ_MS := 70.0
@@ -231,6 +232,9 @@ func step(dt: float) -> void:
 			arena.ring(position + Vector2(0, -40), 30.0)
 			arena.dust(position, 0, true)
 			arena.sfx("dig", 0.5)
+		return
+	if hold_t > 0.0:
+		hold_t -= dt
 		return
 	if mark != "":
 		mark_t += dt

@@ -2121,18 +2121,16 @@ func counter_assist(m, c: String) -> void:
 ## just stands, the next member's QTE is open (교대 → 교대). Poses from existing art (CP_POSE); mobs get no new art.
 const CP_IN := 120.0          # ms: the slide in
 const CP_WIN := 1000.0        # ms: the follow-up window closes
-const CP_POSE := {            # [in, clash, brace] per member: [anim, frame]. Non-Estelle poses are PLACEHOLDER tag_in frames
-	"estelle": [["guard", 0], ["guard", 1], ["guard", 2]], "aida": [["tag_in", 0], ["tag_in", 1], ["tag_in", 1]],
-	"luce": [["tag_in", 0], ["tag_in", 1], ["tag_in", 1]], "kenin": [["tag_in", 0], ["tag_in", 1], ["tag_in", 1]]}
+const CP_POSE := {            # [in, clash, after] per member: [anim, frame]. She DEFLECTS: a low lunge in, the rising cut
+	# knocks the blade up, the follow-through held as she is shoved. Non-Estelle poses are PLACEHOLDER tag_in frames
+	"estelle": [["dash", 2], ["attack2", 2], ["attack2", 3]], "aida": [["dash", 2], ["tag_in", 2], ["tag_in", 3]],
+	"luce": [["dash", 2], ["tag_in", 2], ["tag_in", 3]], "kenin": [["dash", 2], ["tag_in", 2], ["tag_in", 3]]}
 
 func counter_swap(m, nx: String) -> void:
-	m.st = "hurt"
-	m.hurt_t = 1300.0
+	# its swing hangs where it is (아슬아슬: the blade is already coming down) until her blade meets it at the clash
+	m.hold_t = CP_IN + 400.0
 	m.flared = false
 	m.flare_t = -1.0
-	m.atk_clock = 0.0
-	m.set_a("hurt")
-	m.cd = maxf(m.cd, 1800.0)
 	arena.proj = arena.proj.filter(func(p): return p["m"] != m or absf(p["x"] - position.x) > 500.0)
 	qte["who"] = [nx]
 	qte["t"] = maxf(qte["t"], 1.0)
@@ -2174,7 +2172,7 @@ func counter_swap(m, nx: String) -> void:
 func _cp_pose(i: int) -> void:
 	var ps: Array = CP_POSE.get(who, CP_POSE["aida"])[i]
 	var an: String = ps[0]
-	if air_tag and who == "estelle": an = "air_guard"
+	if air_tag and who == "estelle" and i > 0: an = "air_parry"
 	if anim != an or f != int(ps[1]): set_anim(an, int(ps[1]))
 
 func _cp_step(dt: float) -> void:
@@ -2204,12 +2202,18 @@ func _cp_step(dt: float) -> void:
 		if live:
 			var fp: Vector2 = m.flare_pos()
 			if fp.is_finite(): cpt = Vector2((cpt.x + fp.x) / 2.0, (cpt.y + fp.y) / 2.0)
-			m.kx = dir * 2.6                         # thrown back on its heels
-			m.tilt = dir * 0.2
+			m.hold_t = 0.0
+			m.st = "hurt"
+			m.atk_clock = 0.0
+			m.set_a("hurt")
+			m.cd = maxf(m.cd, 1800.0)
+			m.kx = dir * 3.2                         # its blade knocked up, thrown back on its heels
+			m.tilt = dir * 0.3
 			m.hurt_t = maxf(m.hurt_t, 1100.0)
 			if m.get("daze") != null: m.daze = maxf(m.daze, 600.0)
 			if who == "estelle": estg(m, E_STG["parry"])
 			elif ST.big(m): ST.add(arena, m, "stagger", 35.0, who)       # a boss: the groggy gauge takes the clash (PLACEHOLDER)
+		arena.slash_fx(Vector2(position.x + dir * 36.0 * CSCALE, position.y - 70.0 * CSCALE), 115.0 * CSCALE, deg_to_rad(70.0), deg_to_rad(-110.0), dir, Color("#fff1b0"), 1.4)
 		arena.hitstop = maxf(arena.hitstop, 230.0)
 		arena.flash = maxf(arena.flash, 0.5)
 		arena.shake(11, dir)
@@ -2233,8 +2237,8 @@ func _cp_step(dt: float) -> void:
 	if rt < 90.0:
 		var k1 := 1.0 - pow(1.0 - clampf(rt / 90.0, 0.0, 1.0), 3.0)
 		var k0 := 1.0 - pow(1.0 - clampf(r0 / 90.0, 0.0, 1.0), 3.0)
-		position.x -= dir * 26.0 * CSCALE * (k1 - k0)
-		ax_rot = -dir * 0.14 * (1.0 - k1)                 # knocked back on her heels, straightening as she stops
+		position.x -= dir * 18.0 * CSCALE * (k1 - k0)
+		ax_rot = -dir * 0.1 * (1.0 - k1)                 # knocked back on her heels, straightening as she stops
 		if r0 <= 0.0:
 			arena.dust(position, -dir, true)
 			add_ghost(120.0)
