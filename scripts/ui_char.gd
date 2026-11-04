@@ -733,7 +733,7 @@ static func match_text(cc: String) -> Array:
 	var out: Array = []
 	for e in EL.ATKEL.get(cc, ["phys"]):
 		if e == "holy":
-			out.append([EL.ELN["holy"], " 공격: 어둠을 가진 대상에 1.75배(다른 상성 무시), 그 외 모든 대상에 0.25배"])
+			out.append([EL.ELN["holy"], " 공격: 신성 약점인 대상(리빙데드 · 악마 · 흑마법사)에 2배, 그 외 모든 대상에 0.25배"])
 			continue
 		var g: Array = []
 		var b: Array = []
@@ -744,7 +744,7 @@ static func match_text(cc: String) -> Array:
 	var weak: Array = []
 	var res: Array = []
 	for a in EL.ELN:
-		var m: float = (1.75 if EL.DEFEL[cc].has("dark") else 0.25) if a == "holy" else EL.eff_mul(a, EL.DEFEL[cc])
+		var m: float = EL.eff_mul(a, EL.DEFEL[cc])
 		var ms := ("%s×%s" % [EL.ELN[a], str(m) if m != int(m) else str(int(m))])
 		if m > 1.0: weak.append(ms)
 		elif m < 1.0: res.append(ms)

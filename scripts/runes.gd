@@ -92,6 +92,7 @@ const SHC := Color("#ffd34d")
 const MEMC := Color("#8ff0e0")
 
 # ---------- bestiary data (ENEMY / BEST_INFO / OBSNOTE, MOBDEF descriptions) ----------
+const EL := preload("res://scripts/elements.gd")
 const ELN := {"phys": "물리", "fire": "화염", "ice": "냉기", "elec": "전기", "earth": "대지", "water": "수류", "wind": "바람", "holy": "신성", "dark": "어둠", "plant": "초목"}
 const EFF := {"fire": {"ice": 1.5, "plant": 1.5, "fire": 0.5, "water": 0.5, "earth": 0.5}, "ice": {"plant": 1.5, "wind": 1.5, "earth": 1.5, "fire": 0.5, "ice": 0.5, "water": 0.5},
 	"elec": {"water": 1.5, "wind": 1.5, "earth": 0.5, "elec": 0.5, "plant": 0.5}, "earth": {"fire": 1.5, "elec": 1.5, "wind": 0.5, "plant": 0.5},
@@ -103,9 +104,9 @@ const ENEMY := {
 	"ghost": {"name": "유령", "hp": 30, "atk": 10, "ms": 0.09, "atkEl": "dark", "defEl": ["dark"], "where": "훈련장", "desc": "훈련장 구석을 떠도는 작은 유령. 가까이 오면 몸으로 부딪혀 온다. 어둠 그 자체라 신성한 빛에 크게 다친다."},
 	"goblin": {"name": "고블린", "hp": 50, "atk": 8, "ms": 0.15, "atkEl": "phys", "defEl": ["phys"], "where": "버섯 동굴", "mob": true, "desc": "동굴 입구를 차지한 고블린. 겁이 많지만 무리를 지으면 대담해진다. 단검을 크게 휘두른다."},
 	"mush": {"name": "독버섯", "hp": 60, "atk": 7, "ms": 0.07, "atkEl": "plant", "defEl": ["plant"], "where": "버섯 동굴", "mob": true, "desc": "축축한 동굴 바닥에서 걸어 다니는 버섯. 가까이 붙으면 갓을 부풀려 포자를 터뜨린다. 초목이라 불에 약하다."},
-	"skel": {"name": "해골 광부", "hp": 80, "atk": 12, "ms": 0.08, "atkEl": "phys", "defEl": ["dark", "phys"], "where": "버섯 동굴", "mob": true, "desc": "폐광에서 일하다 쓰러진 광부의 유해. 아직도 녹슨 방패를 들고 앞을 막는다. 리빙 데드라 신성한 빛에 크게 다친다."},
-	"eye": {"name": "동굴 눈알", "hp": 35, "atk": 6, "ms": 0.11, "atkEl": "dark", "defEl": ["dark"], "where": "버섯 동굴", "mob": true, "desc": "천장에 매달려 있다가 날아오르는 눈알 박쥐. 멀리서 어둠 덩어리를 뱉는다. 높이 떠 있어 상단 공격이 잘 맞는다."},
-	"boss": {"name": "감독관 해골", "hp": 620, "atk": 18, "ms": 0.07, "atkEl": "dark", "defEl": ["dark", "earth"], "where": "버섯 동굴", "mob": true, "boss": true, "desc": "버섯 동굴 가장 깊은 곳, 무너진 갱도를 지키는 커다란 해골. 광부들을 부리던 감독관이었다고 한다. 검을 휘둘러 검기를 날린다."},
+	"skel": {"name": "해골 광부", "hp": 80, "atk": 12, "ms": 0.08, "atkEl": "phys", "defEl": ["dark", "phys"], "weak": ["holy"], "where": "버섯 동굴", "mob": true, "desc": "폐광에서 일하다 쓰러진 광부의 유해. 아직도 녹슨 방패를 들고 앞을 막는다. 리빙 데드라 신성한 빛에 크게 다친다."},
+	"eye": {"name": "동굴 눈알", "hp": 35, "atk": 6, "ms": 0.11, "atkEl": "dark", "defEl": ["dark"], "weak": ["holy"], "where": "버섯 동굴", "mob": true, "desc": "천장에 매달려 있다가 날아오르는 눈알 박쥐. 멀리서 어둠 덩어리를 뱉는다. 높이 떠 있어 상단 공격이 잘 맞는다."},
+	"boss": {"name": "감독관 해골", "hp": 620, "atk": 18, "ms": 0.07, "atkEl": "dark", "defEl": ["dark", "earth"], "weak": ["holy"], "where": "버섯 동굴", "mob": true, "boss": true, "desc": "버섯 동굴 가장 깊은 곳, 무너진 갱도를 지키는 커다란 해골. 광부들을 부리던 감독관이었다고 한다. 검을 휘둘러 검기를 날린다."},
 }
 const OBSNOTE := {"dummy": "허수아비를 다시 세우는 사람을 본 길드원은 없다. 아침이면 늘 서 있다.", "ghost": "유령은 언제나 훈련장 동쪽 구석, 메워진 우물 쪽으로만 사라진다.",
 	"goblin": "갱도 입구의 무리는 늘 동쪽 산맥 쪽에서 내려온다. 무언가에 쫓겨 오는 것처럼.", "mush": "광산 조합 장부에 따르면, 폐광 전에는 이 동굴에 버섯이 한 포기도 없었다.",
@@ -651,8 +652,8 @@ func _best_step(k: String) -> void:
 		return
 
 ## damage multiplier of an attack element vs a target's elements
-static func eff_mul(atk: String, defs: Array) -> float:
-	if atk == "holy": return 1.75 if defs.has("dark") else 0.25
+static func eff_mul(atk: String, defs: Array, weak: Array = []) -> float:
+	if atk == "holy": return EL.HOLY_WEAK if weak.has("holy") else EL.HOLY_BASE
 	var m := 1.0
 	for d in defs: m *= EFF.get(atk, {}).get(d, 1.0)
 	return m
@@ -764,7 +765,7 @@ func after_hit(e) -> float:
 	var P = arena.player
 	var c: String = P.who
 	if not has("ember", c) or rand() >= 0.1 * RV("ember", c): return 0.0
-	var defs: Array = ENEMY.get(String(e.get("kind")) if e.get("kind") != null else "", {}).get("defEl", ["phys"])
+	var defs: Array = ENEMY.get(String(e.get("kind")) if e.get("kind") != null else "", {}).get("defEl", ["phys"])      # (fire: 신성 약점 doesn't matter)
 	var v := maxi(1, roundi(0.5 * 10.0 * stats(c)["atk"] * eff_mul("fire", defs)))
 	arena.text(e.position + Vector2(18, -110), "-%d" % v, Color("#ff9d4d"))
 	arena.spark(e.position + Vector2(0, -60), 6)

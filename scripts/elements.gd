@@ -25,9 +25,13 @@ const DEFEL := {"estelle": ["phys"], "aida": ["dark", "earth"], "luce": ["holy"]
 static var _icons := {}
 
 
-static func eff_mul(atk: String, defs: Array) -> float:
+## 신성 (owner 2026-11-04): weak on most things, ×2 on a foe weak to it (리빙데드 · 악마 · 흑마법사: their "weak" list)
+const HOLY_WEAK := 2.0
+const HOLY_BASE := 0.25
+
+static func eff_mul(atk: String, defs: Array, weak: Array = []) -> float:
 	if atk == "holy":
-		return 1.75 if defs.has("dark") else 0.25
+		return HOLY_WEAK if weak.has("holy") else HOLY_BASE
 	var m := 1.0
 	var row: Dictionary = EFF.get(atk, {})
 	for d in defs:
@@ -35,12 +39,12 @@ static func eff_mul(atk: String, defs: Array) -> float:
 	return m
 
 ## elemDamage: base damage from member `who` against a target with elements `defs` -> {dmg, mul, parts}
-static func damage(base: float, who: String, defs: Array) -> Dictionary:
+static func damage(base: float, who: String, defs: Array, weak: Array = []) -> Dictionary:
 	var els: Array = ATKEL.get(who, ["phys"])
 	var tot := 0.0
 	var parts: Array = []
 	for e in els:
-		var m := eff_mul(e, defs)
+		var m := eff_mul(e, defs, weak)
 		var v := maxf(1.0, roundf(base / els.size() * m))
 		parts.append({"el": e, "dmg": v, "mul": m})
 		tot += v

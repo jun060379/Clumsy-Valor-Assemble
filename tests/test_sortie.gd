@@ -37,7 +37,7 @@ func _initialize() -> void:
 	ok(P.party == ["estelle", "aida", "luce"], "recruited, then taken along")
 
 	print("elements")
-	ok(is_equal_approx(EL.eff_mul("holy", ["dark"]), 1.75) and is_equal_approx(EL.eff_mul("holy", ["phys"]), 0.25), "holy x1.75 on dark, x0.25 otherwise")
+	ok(is_equal_approx(EL.eff_mul("holy", ["dark"], ["holy"]), 2.0) and is_equal_approx(EL.eff_mul("holy", ["dark"]), 0.25) and is_equal_approx(EL.eff_mul("holy", ["phys"]), 0.25), "holy x2 on a 신성 약점 foe, x0.25 otherwise")
 	ok(is_equal_approx(EL.eff_mul("fire", ["ice", "plant"]), 2.25), "multiplies over several own elements")
 	var E: Dictionary = EL.damage(10.0, "aida", ["dark", "phys"])
 	ok(E["dmg"] == 8.0 and E["parts"].size() == 2, "Aida's hybrid hit splits (dark 3 + phys 5 = %d)" % E["dmg"])
@@ -68,7 +68,7 @@ func _initialize() -> void:
 	P.switch_char("luce")
 	P.set_anim("idle", 0)
 	m.hit(1.0, 0.0, 1.0)
-	ok(is_equal_approx(h0 - m.hp, 18.0), "Luce's holy on the dark eye: 10 x 1.75 -> %.0f" % (h0 - m.hp))
+	ok(is_equal_approx(h0 - m.hp, 20.0), "Luce's holy on the eye (신성 약점): 10 x 2 -> %.0f" % (h0 - m.hp))
 	P.switch_char("estelle")
 	P.set_anim("idle", 0)
 	var g = arena.spawn("goblin", P.position.x + 120.0, 0.0)

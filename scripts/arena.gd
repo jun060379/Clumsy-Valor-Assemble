@@ -444,9 +444,9 @@ func ucut():
 	return sortie.ucut
 
 ## elemDamage + effTag + ultGain for a hit landing on a target with elements `defs`; returns the damage dealt
-func elem_hit(p: Vector2, base: float, defs: Array) -> float:
+func elem_hit(p: Vector2, base: float, defs: Array, weak: Array = []) -> float:
 	var who: String = hit_by if hit_by != "" else player.who
-	var E: Dictionary = ELEM.damage(base, who, defs)
+	var E: Dictionary = ELEM.damage(base, who, defs, weak)
 	last_e = E
 	ELEM.tag(self, p, E["mul"])
 	ult_gain(E["dmg"] * 0.7)

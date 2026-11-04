@@ -955,7 +955,7 @@ func _obs(ci: Control, x: float, y: float, w: float, k: String) -> float:
 		var xx := x
 		for c in arena.player.roster():     # ROSTER (8382)
 			var m := 0.0
-			for e in RN.ATKEL[c]: m += RN.eff_mul(e, defs) / RN.ATKEL[c].size()
+			for e in RN.ATKEL[c]: m += RN.eff_mul(e, defs, E.get("weak", [])) / RN.ATKEL[c].size()
 			var rr := roundf(m * 100.0) / 100.0
 			var s := "%s ×%s" % [RN.pname(c), RN.fmt(rr)]
 			ci.draw_string(f, Vector2(xx, y + em * 0.75), s, HORIZONTAL_ALIGNMENT_LEFT, -1, int(em * 0.74), Color("#2f7a3a") if rr > 1.0 else (RED if rr < 1.0 else INK2))
@@ -1028,5 +1028,5 @@ func _weak(k: String) -> String:
 	var defs: Array = RN.ENEMY[k]["defEl"]
 	var L: Array = []
 	for e in RN.ELN:
-		if RN.eff_mul(e, defs) > 1.0: L.append(RN.ELN[e])
+		if RN.eff_mul(e, defs, RN.ENEMY[k].get("weak", [])) > 1.0: L.append(RN.ELN[e])
 	return ("약점 · " + " ".join(L)) if not L.is_empty() else "약점 없음"

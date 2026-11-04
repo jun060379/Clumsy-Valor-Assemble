@@ -8,11 +8,11 @@ const DEF := {
 		"anims": {"idle": ["goblin_idle", 4, 140], "run": ["goblin_run", 8, 80], "atk": ["goblin_attack", 8, 75], "hurt": ["goblin_takehit", 4, 80], "die": ["goblin_death", 4, 130]}},
 	"mush": {"name": "독버섯", "atkEl": "plant", "defEl": ["plant"], "hp": 60, "atk": 7, "ms": 0.07, "s": 3.0, "range": 62, "aggro": 480, "cd": [1100, 1800], "hit": 6, "reach": 80, "burst_hit": 7,
 		"anims": {"idle": ["mush_idle", 4, 160], "run": ["mush_run", 8, 95], "atk": ["mush_attack", 8, 85], "burst": ["mush_attack3", 11, 80], "hurt": ["mush_takehit", 4, 85], "die": ["mush_death", 4, 140]}},
-	"skel": {"name": "해골 광부", "atkEl": "phys", "defEl": ["dark", "phys"], "hp": 80, "atk": 12, "ms": 0.08, "s": 3.0, "range": 88, "aggro": 560, "cd": [1200, 1900], "hit": 6, "reach": 120, "shield_p": 0.35,
+	"skel": {"name": "해골 광부", "atkEl": "phys", "defEl": ["dark", "phys"], "weak": ["holy"], "hp": 80, "atk": 12, "ms": 0.08, "s": 3.0, "range": 88, "aggro": 560, "cd": [1200, 1900], "hit": 6, "reach": 120, "shield_p": 0.35,
 		"anims": {"idle": ["skel_idle", 4, 160], "run": ["skel_walk", 4, 140], "atk": ["skel_attack", 8, 85], "shield": ["skel_shield", 4, 110], "hurt": ["skel_takehit", 4, 85], "die": ["skel_death", 4, 150]}},
-	"eye": {"name": "동굴 눈알", "atkEl": "dark", "defEl": ["dark"], "hp": 35, "atk": 6, "ms": 0.11, "s": 3.0, "fly": 68, "range": 300, "aggro": 640, "cd": [1500, 2300], "hit": 4, "ranged": "eye_proj",
+	"eye": {"name": "동굴 눈알", "atkEl": "dark", "defEl": ["dark"], "weak": ["holy"], "hp": 35, "atk": 6, "ms": 0.11, "s": 3.0, "fly": 68, "range": 300, "aggro": 640, "cd": [1500, 2300], "hit": 4, "ranged": "eye_proj",
 		"anims": {"idle": ["eye_flight", 8, 80], "run": ["eye_flight", 8, 70], "atk": ["eye_attack3", 6, 90], "hurt": ["eye_takehit", 4, 85], "die": ["eye_death", 4, 130]}},
-	"boss": {"name": "감독관 해골", "atkEl": "dark", "defEl": ["dark", "earth"], "hp": 620, "atk": 18, "ms": 0.07, "s": 4.0, "range": 120, "aggro": 2000, "cd": [900, 1400], "boss": true, "hit": 6, "reach": 160, "shield_p": 0.2,
+	"boss": {"name": "감독관 해골", "atkEl": "dark", "defEl": ["dark", "earth"], "weak": ["holy"], "hp": 620, "atk": 18, "ms": 0.07, "s": 4.0, "range": 120, "aggro": 2000, "cd": [900, 1400], "boss": true, "hit": 6, "reach": 160, "shield_p": 0.2,
 		"tint": Color(1.25, 0.72, 0.95),
 		"anims": {"idle": ["skel_idle", 4, 170], "run": ["skel_walk", 4, 150], "atk": ["skel_attack", 8, 80], "atk2": ["skel_attack2", 8, 85], "wave": ["skel_attack3", 6, 95], "shield": ["skel_shield", 4, 110], "hurt": ["skel_takehit", 4, 90], "die": ["skel_death", 4, 190]}},
 }
@@ -142,7 +142,7 @@ func hit(dmg: float, kb: float, mul := 1.0) -> void:
 	var R = arena.get("runes")
 	if R != null: mul *= R.out_mul(self)
 	if has_meta("kvuln_t") and Time.get_ticks_msec() < int(get_meta("kvuln_t")): mul *= float(get_meta("kvuln", 1.0))    # 케닌 약점 표시
-	var d: float = arena.elem_hit(position + Vector2(0, -95 if not M.has("fly") else -40), dmg * 10.0 * mul, M["defEl"])   # elements + 기력
+	var d: float = arena.elem_hit(position + Vector2(0, -95 if not M.has("fly") else -40), dmg * 10.0 * mul, M["defEl"], M.get("weak", []))   # elements (+ 신성 약점) + 기력
 	hp -= d
 	if R != null: hp -= R.after_hit(self)
 	last_dmg = d

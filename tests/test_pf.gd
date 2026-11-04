@@ -168,7 +168,7 @@ func _initialize() -> void:
 	ok(mt.size() == 2 and mt[0][0] == "물리" and mt[0][1] == " 공격: 유리 없음 / 불리 없음", "상성: 물리 공격: 유리 없음 / 불리 없음")
 	ok(mt[1][0] == "받는 피해" and mt[1][1] == ": 약점 없음 / 저항 신성×0.25", "상성: 받는 피해: 약점 없음 / 저항 신성×0.25")
 	var ml: Array = CH.match_text("luce")
-	ok(ml[0][1].begins_with(" 공격: 어둠을 가진 대상에 1.75배"), "상성: 신성 공격 line")
+	ok(ml[0][1].begins_with(" 공격: 신성 약점인 대상"), "상성: 신성 공격 line")
 	var ma: Array = CH.match_text("aida")
 	ok(ma.size() == 3 and ma[0][0] == "어둠" and ma[0][1] == " 공격: 유리 신성 / 불리 어둠", "상성: 아이다 어둠 공격")
 
