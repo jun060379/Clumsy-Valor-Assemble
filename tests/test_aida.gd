@@ -68,12 +68,30 @@ func _initialize() -> void:
 	var bs = gob(P.position.x + 500.0, "boss")
 	P.aida_launch(bs)
 	ok(not ST.has(bs, "air") and float(ST.of(bs).get("groggy", {}).get("g", 0.0)) > 0.0, "boss: groggy gauge")
+	ok(P.a_exec_cd > 0.0, "처형 alone: on cooldown now (%.0f ms)" % P.a_exec_cd)
+	ok(not P.a_follow.is_empty() and float(P.a_follow["t"]) > 800.0, "boss: the follow-up window still opens, 0.9 s")
+	var a2 = gob(P.position.x + 140.0)
+	ST.add(arena, a2, "air", -1.0, "aida")
+	ok(P.aida_emp_target() != a2, "cooldown: her own 띄움 does not open it")
+	print("cooldown over: the boss follow-up")
+	P.a_exec_cd = 0.0
+	P.a_follow = {"m": bs, "t": 900.0, "k": 1.0}
+	P.set_anim("idle")
+	Input.action_press("attack")
+	got = false
+	for i in 6:
+		await process_frame
+		if not P.a_exec.is_empty(): got = true
+	Input.action_release("attack")
+	ok(got, "3타 → 처형 on a boss (not lifted)")
+	await until(func(): return P.a_exec.is_empty())
 
 	print("무방비 ahead: no gathering")
 	var b = gob(P.position.x + 200.0)
 	ST.add(arena, b, "stagger", 100.0, "estelle")
 	P.dir = 1
-	ok(P.aida_emp_target() == b, "the staggered foe is her target (sigil)")
+	P.a_exec_cd = 5000.0
+	ok(P.aida_emp_target() == b, "the staggered foe (Estelle's 경직) is her target even on cooldown")
 	ok(is_equal_approx(arena.runes.out_mul(b), arena.runes.out_mul(a) * (1.2 if not ST.exposed(a) else 1.0)) or arena.runes.out_mul(b) > 1.15, "+20% on 무방비")
 
 	print("남은 균열")

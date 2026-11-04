@@ -111,6 +111,7 @@ var l_bless_t := 0.0        # Luce's 빛의 가호 (ms left): the one in control
 var l_bolt_cd := 0.0
 var a_follow := {}          # Aida: the follow-up window after a launch {"m", "t" ms, "k" damage bonus}
 var a_left := {}            # Aida's 남은 균열 (left where she swapped out) {"x", "y", "t" ms to the burst}
+var a_exec_cd := 0.0        # 처형's cooldown (ms): solo routes wait it out; a foe the party left 무방비 ignores it
 var a_exec := {}            # Aida's 처형 (the empowered strike's own motion) {"tg", "t", "k", "x", "g0", "top", "hit1", "hit2"}
 var a_emp := false          # the rift strike in flight is the empowered one (무방비 target: instant, full, bigger)
 var e_guard_t := 0.0        # 용감한 희생: Estelle's covering guard (ms left) takes the next blow
@@ -790,7 +791,7 @@ func step(dt: float) -> void:
 		var fm = a_follow["m"]
 		if float(a_follow["t"]) <= 0.0 or who != "aida" or not is_instance_valid(fm) or not fm.alive():
 			a_follow = {}
-		elif anim in ["attack3", "idle", "run", "stop", "attack1"] and want("attack") and ST.exposed(fm):
+		elif anim in ["attack3", "idle", "run", "stop", "attack1"] and want("attack") and (ST.exposed(fm) or ST.big(fm)) and (a_exec_cd <= 0.0 or ax_free(fm)):
 			# 추격 균열 베기: one more press after the launch → out of the rift behind the lifted foe, empowered
 			pressed["attack"] = false
 			take("attack")
@@ -1738,6 +1739,7 @@ func party_step(dt: float) -> void:
 	ST.ally_step(self, dt)
 	if l_bless_t > 0.0: l_bless_t -= dt
 	if l_bolt_cd > 0.0: l_bolt_cd -= dt
+	if a_exec_cd > 0.0: a_exec_cd -= dt
 	if not a_left.is_empty():
 		a_left["t"] = float(a_left["t"]) - dt
 		if float(a_left["t"]) <= 0.0:
@@ -2562,7 +2564,7 @@ func aida_emp_target():
 	var bdx := INF
 	for m in foes_alive():
 		var dx: float = (m.position.x - position.x) * dir
-		if dx > -10.0 and dx < R and absf(m.position.y - position.y) < 160.0 and dx < bdx and ST.exposed(m):
+		if dx > -10.0 and dx < R and absf(m.position.y - position.y) < 260.0 and dx < bdx and ST.exposed(m) and (a_exec_cd <= 0.0 or ax_free(m)):
 			bdx = dx
 			best = m
 	return best
@@ -2576,6 +2578,12 @@ const AX_TOP := {"ax_sink": [127, 69, 31, 25, 25, 92], "ax_rise": [176, 205, 265
 const AX_HIT1 := ["ax_rise", 0]
 const AX_HIT2 := ["ax_slam", 3]
 const AX_H := 150.0          # how high she flies (world px before CSCALE)
+const AX_CD := 6000.0        # 처형's cooldown alone (ms). PLACEHOLDER
+const AX_FOLLOW := 900.0     # the window after 3타 to press for it (ms)
+
+## a foe the party left 무방비 (경직 · 그로기: other members' work, not her own 띄움): 처형 on it ignores the cooldown
+func ax_free(e) -> bool:
+	return e != null and is_instance_valid(e) and (ST.has(e, "stagger") or ST.groggy_on(e))
 var ax_rot := 0.0            # the sprite's clockwise tilt (rad) while she floats
 var ax_portals: Array = []   # [{x, y, t, life, r}] the floor portals, drawn flat (the z axis) around her
 
@@ -2585,6 +2593,7 @@ func aida_exec(tg, k := 1.0) -> void:
 	if ST.has(tg, "air"): g0 = float(ST.of(tg)["air"]["y0"])
 	elif not is_fly(tg): g0 = tg.position.y
 	a_exec = {"tg": tg, "t": 0.0, "k": k, "x": tg.position.x, "g0": g0, "hit1": false, "hit2": false, "exp": ST.exposed(tg), "out": false}
+	if not ax_free(tg) and k >= 1.0: a_exec_cd = AX_CD         # the chain (기습의 문, k < 1) and party openings cost nothing
 	dir = 1 if tg.position.x >= position.x else -1
 	a_follow = {}
 	vx = 0.0
@@ -2819,7 +2828,8 @@ func _aexec_end(tg, live: bool) -> void:
 func aida_launch(e) -> void:
 	ST.add(arena, e, "air", -1.0, "aida")
 	if _av("airK") > 0.0 and ST.has(e, "air"): ST.of(e)["air"]["vy"] = float(ST.of(e)["air"]["vy"]) * (1.0 + _av("airK"))
-	if a_follow.is_empty() or not is_instance_valid(a_follow["m"]): a_follow = {"m": e, "t": 600.0, "k": 1.0}
+	# the follow-up window (owner 2026-11-04: 0.9 s); bosses / elites are not lifted but still open it
+	if a_follow.is_empty() or not is_instance_valid(a_follow["m"]): a_follow = {"m": e, "t": AX_FOLLOW, "k": 1.0}
 
 ## Estelle renewal (owner 2026-11-04): her blows build 경직 (only hers: 경직 is a status members apply, not a universal
 ## stagger). 방패 nodes: 단단한 테두리 (stgK) more gauge, 뒤흔들기 (stgImm) shorter immunity, 무너뜨리기 (groggyK) more
