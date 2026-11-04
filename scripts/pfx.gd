@@ -1044,94 +1044,67 @@ func _dive(g: CanvasItem, e: Dictionary) -> bool:
 const UP_SPIKES := [[-120.0, -30.0, 200.0, 0.6], [-80.0, -14.0, 240.0, 0.3], [-40.0, -6.0, 180.0, 0.1], [0.0, 0.0, 120.0, 0.0],
 	[36.0, 10.0, 170.0, 0.15], [76.0, 32.0, 220.0, 0.35], [116.0, 58.0, 250.0, 0.55]]
 
-## 처형's floor burst (owner 2026-11-04: one connected effect, natural): staged like hand-animated earth-spike spells
-## (anticipation crack → overshooting burst → hold → crumble). A crack of light runs out along the floor first; then
-## one jagged mound of the void tears up out of it with its spikes, each its own width, height, bend and moment (the
-## ones near the blow first), overshooting a little and settling; lit on one edge only; then it crumbles from the tips,
-## chunks breaking off and falling, rather than shrinking smoothly
+## 처형's floor shockwave (owner 2026-11-04: one connected effect, a shock wave, the sketch: thrown up and out over a
+## wide stretch, low in the middle, tall and leaning out at the edges). Staged the way pixel impact FX are: a flash;
+## the wave front (one band of the void with a lit rim) racing out and up in a V, thick at first and thinning; a flat
+## ring along the floor (the z axis); then the band tears apart into streaks that keep flying out and fade
 func crown(x: float, y: float, d := 1) -> void:
 	_push({"k": "crown", "x": x, "y": y, "d": d})
 
+const SW_W := 150.0          # half-width the wave reaches (px)
+const SW_H := 150.0          # how tall its edges rise (px)
+
 func _crown(g: CanvasItem, e: Dictionary) -> bool:
 	var F: float = e["t"] / FR
-	if F > 14.0: return false
+	if F > 12.0: return false
 	var p := PX.new(g, e["x"], e["y"])
 	var R := Rng.new(e["seed"])
-	var dd: float = e.get("d", 1)
-	var W: float = (absf(UP_SPIKES[0][0]) + 30.0) / S
-	# anticipation: the crack runs out both ways (frames 0-1.5), then stays as the mound's foot
-	var cw := W * clampf(F / 1.5, 0.0, 1.0)
-	if F < 3.0:
-		var cc: Color = TEARL[0] if F < 1.0 else TEARL[1]
-		var yy := 0.0
-		var xx := 0.0
-		while xx < cw:                      # a stepped, wandering crack
-			var nx := xx + 3.0 + R.r() * 4.0
-			var ny := clampf(yy + (R.r() - 0.5) * 2.0, -1.0, 1.0)
-			p.line(xx, yy, nx, ny, cc)
-			p.line(-xx, yy, -nx, ny, cc)
-			xx = nx
-			yy = ny
-	if F < 1.0: return true
-	# the spikes: [base x, width, height, lean, bend, start]
-	var sp: Array = []
-	for k in UP_SPIKES.size():
-		var u: Array = UP_SPIKES[k]
-		var bx: float = float(u[0]) / S * dd
-		var h: float = float(u[2]) / S * (0.8 + R.r() * 0.4)
-		var w: float = 4.0 + R.r() * 4.0 + h * 0.06
-		sp.append([bx, w, h, deg_to_rad(float(u[1]) * dd + (R.r() - 0.5) * 8.0), (R.r() - 0.3) * 0.25, 1.0 + float(u[3]) * 1.6 + R.r() * 0.5])
-	sp.sort_custom(func(a, b): return a[0] < b[0])
-	# crumble: from frame 7 each spike loses its top in steps
-	var pts: Array = [Vector2(-W, 0.0)]
-	var tips: Array = []
-	for k in sp.size():
-		var s2: Array = sp[k]
-		var gt := clampf((F - float(s2[5])) / 1.6, 0.0, 1.0)
-		# easeOutBack: a little over, then back
-		var c1 := 1.9
-		var gr := 1.0 + (c1 + 1.0) * pow(gt - 1.0, 3.0) + c1 * pow(gt - 1.0, 2.0) if gt > 0.0 else 0.0
-		var crum := 1.0 if F < 7.0 + k * 0.15 else maxf(0.0, 1.0 - floorf((F - 7.0 - k * 0.15) * 1.5) * 0.2)
-		var h: float = float(s2[2]) * gr * crum
-		var ang: float = s2[3]
-		var w: float = s2[1]
-		var bx: float = s2[0]
-		var mound := 3.0 + R.r() * 3.0
-		var dirv := Vector2(sin(ang), -cos(ang))
-		var nrm := Vector2(-dirv.y, dirv.x)
-		var tip := Vector2(bx, -mound) + dirv * h
-		var bend: float = float(s2[4]) * h
-		var midl := Vector2(bx, -mound) + dirv * h * 0.5 - nrm * w * 0.3 + nrm * bend
-		var midr := Vector2(bx, -mound) + dirv * h * 0.5 + nrm * w * 0.3 + nrm * bend
-		pts.append(Vector2(bx - w, -mound * 0.5))
-		pts.append(midl + Vector2((R.r() - 0.5) * 2.0, 0.0))
-		pts.append(tip)
-		pts.append(midr + Vector2((R.r() - 0.5) * 2.0, 0.0))
-		pts.append(Vector2(bx + w, -mound * 0.5))
-		tips.append([tip, Vector2(bx - w, -mound * 0.5), midl, crum, h])
-	pts.append(Vector2(W, 0.0))
-	p.poly(pts, TVOID)
-	# the outline: dark violet all round, the lit edge (toward the blow's light, up-left) pale
-	var dark: Color = TEARL[4]
-	var lit: Color = TEARL[0] if F < 3.0 else (TEARL[1] if F < 6.0 else TEARL[2])
-	for k in pts.size() - 1:
-		var a: Vector2 = pts[k]
-		var b: Vector2 = pts[k + 1]
-		p.line(a.x, a.y, b.x, b.y, lit if b.y < a.y else dark)
-	# the foot glow along the floor while it stands
-	if F < 8.0: p.line(-W, 0.0, W, 0.0, TEARL[3] if F > 4.0 else TEARL[1])
-	# chunks breaking off the tips and falling
-	for k in tips.size():
-		var tp: Array = tips[k]
-		if float(tp[3]) >= 1.0: continue
-		var age: float = F - (7.0 + k * 0.15)
-		for c in 2:
-			var cx: float = tp[0].x + (R.r() - 0.5) * 6.0 + (c - 0.5) * age * 2.0
-			var cy: float = tp[0].y - 2.0 + age * age * 1.2
-			if cy > 0.0: continue
-			var r := 1.5 + R.r() * 1.5
-			p.poly([Vector2(cx - r, cy), Vector2(cx, cy - r * 1.4), Vector2(cx + r, cy + r * 0.3)], TVOID)
-			p.px(cx, cy - r, lit)
+	var u := 1.0 - pow(1.0 - clampf(F / 5.0, 0.0, 1.0), 2.6)       # out fast, easing
+	var Wr: float = (14.0 + (SW_W - 14.0) * u) / S
+	var Hh: float = SW_H / S * u
+	var th := lerpf(0.55, 0.12, clampf(F / 6.0, 0.0, 1.0))          # the band thins
+	var tear := clampf((F - 5.0) / 6.0, 0.0, 1.0)                     # then tears apart
+	# flash
+	if F < 1.5:
+		var fw := 10.0 + F * 8.0
+		p.rect(-fw, -2.0, fw * 2.0 + 1.0, 3.0, Color.WHITE)
+		p.rect(-3.0, -10.0 + F * 3.0, 7.0, 9.0 - F * 3.0, Color.WHITE)
+	# the floor ring (squashed ellipse, front half)
+	if F < 8.0:
+		var rr := Wr * 1.15
+		var rc: Color = TEARL[1] if F < 3.0 else (TEARL[2] if F < 5.5 else TEARL[3])
+		for a in 48:
+			var t0 := PI * a / 48.0
+			p.px(cos(t0) * rr, sin(t0) * rr * 0.22, rc)
+			p.px(cos(t0) * rr, -sin(t0) * rr * 0.12, rc)
+	# the wave front: profile y(t) = -Hh * (0.18 + 0.82 |t|^1.6), leaning out at the edges
+	var N := 28
+	var outer: Array = []
+	var inner: Array = []
+	var jit: Array = []
+	for k in N + 1:
+		var t := -1.0 + 2.0 * k / N
+		var at := absf(t)
+		var hy := Hh * (0.18 + 0.82 * pow(at, 1.6)) * (0.9 + R.r() * 0.2)
+		var x := t * Wr + signf(t) * hy * 0.35 * at                     # the top leans outward
+		outer.append(Vector2(x, -hy))
+		var T := (70.0 * th + 6.0) / S                                 # a thick front, thinning as it flies
+		inner.append(Vector2(x - signf(t) * T * 0.5 * at, minf(0.0, -hy + T)))
+		jit.append(R.r())
+	var rim: Color = TEARL[0] if F < 2.5 else (TEARL[1] if F < 5.0 else (TEARL[2] if F < 8.0 else TEARL[3]))
+	for k in N:
+		if jit[k] < tear: continue                                  # torn away
+		var drift := Vector2(signf(outer[k].x) * tear * 10.0, -tear * 6.0)
+		var q := [outer[k] + drift, outer[k + 1] + drift, inner[k + 1] + drift, inner[k] + drift]
+		p.poly(q, TVOID)
+		p.line(q[0].x, q[0].y, q[1].x, q[1].y, rim)
+		if tear > 0.0:                                              # a streak trailing each torn piece
+			p.line(q[0].x, q[0].y, q[0].x - drift.x * 0.8, q[0].y - drift.y * 0.8, TEARL[3])
+	# the base: one connected foot of the void along the floor while the wave stands
+	if F < 7.0:
+		var fh := 3.0 * (1.0 - F / 7.0) + 1.0
+		p.poly([Vector2(-Wr, 0.0), Vector2(-Wr * 0.6, -fh), Vector2(0.0, -fh * 1.6), Vector2(Wr * 0.6, -fh), Vector2(Wr, 0.0)], TVOID)
+		p.line(-Wr, 0.0, Wr, 0.0, rim)
 	return true
 
 func _slam(g: CanvasItem, e: Dictionary) -> bool:
