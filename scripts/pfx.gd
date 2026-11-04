@@ -818,7 +818,7 @@ func _kill(e: Dictionary) -> void:
 		q.visible = false
 		pool.append(q)
 		e.erase("q")
-	for k2 in ["q2", "q3", "q4"]:
+	for k2 in ["q2", "q3", "q4", "q5", "q6", "q7", "q8"]:
 		var q2: Node2D = e.get(k2)
 		if q2 != null:
 			q2.visible = false
@@ -1039,6 +1039,10 @@ func _dive(g: CanvasItem, e: Dictionary) -> bool:
 		if b > a: p.line(xo, a, xo, b, C[0] if fade < 0.3 else C[3])
 	return true
 
+## 처형's floor burst: [x offset (px), lean (deg, + = right), length (px), delay (frames)]
+const UP_SPIKES := [[-120.0, -30.0, 200.0, 0.6], [-80.0, -14.0, 240.0, 0.3], [-40.0, -6.0, 180.0, 0.1], [0.0, 0.0, 120.0, 0.0],
+	[36.0, 10.0, 170.0, 0.15], [76.0, 32.0, 220.0, 0.35], [116.0, 58.0, 250.0, 0.55]]
+
 func _slam(g: CanvasItem, e: Dictionary) -> bool:
 	var F: float = e["t"] / FR
 	var f := int(floorf(F))
@@ -1056,21 +1060,20 @@ func _slam(g: CanvasItem, e: Dictionary) -> bool:
 		# 처형 (owner 2026-11-04): the tears climb out of the floor, a V rising from the blow, not lying flat
 		var up: bool = e.get("up", false)
 		if up:
-			# 처형: the floor bursts open wide, four tears thrown up and out from the blow
-			if not e.has("tq3"): e["tq3"] = {"seed": e["seed"] + 2.0}
-			if not e.has("tq4"): e["tq4"] = {"seed": e["seed"] - 2.0}
-			_tear_quad(e["tq1"], Vector2(e["x"] + 10.0, e["y"] - 3.0), Vector2(0.86, -0.5), 200.0 / S, F, stp)
-			_tear_quad(e["tq2"], Vector2(e["x"] - 10.0, e["y"] - 3.0), Vector2(-0.86, -0.5), 200.0 / S, F, stp)
-			_tear_quad(e["tq3"], Vector2(e["x"] + 4.0, e["y"] - 3.0), Vector2(0.34, -0.94), 160.0 / S, F, stp)
-			_tear_quad(e["tq4"], Vector2(e["x"] - 4.0, e["y"] - 3.0), Vector2(-0.34, -0.94), 160.0 / S, F, stp)
+			# 처형 (owner sketch 2026-11-04): spikes burst up out of the floor along a wide stretch, each from its own
+			# spot, leaning out more the farther from the blow; short in the middle, long and slanted at the edges
+			for i in UP_SPIKES.size():
+				var sp: Array = UP_SPIKES[i]
+				var kq := "tq%d" % (i + 1)
+				if not e.has(kq): e[kq] = {"seed": e["seed"] + 1.0 + i * 1.7}
+				var ang := deg_to_rad(float(sp[1]))
+				_tear_quad(e[kq], Vector2(e["x"] + float(sp[0]), e["y"] - 2.0), Vector2(sin(ang), -cos(ang)), float(sp[2]) / S, F - float(sp[3]), stp)
 		else:
 			_tear_quad(e["tq1"], Vector2(e["x"] + 6.0, e["y"] - 3.0), Vector2(1, 0), 144.0 / S, F, stp)
 			_tear_quad(e["tq2"], Vector2(e["x"] - 6.0, e["y"] - 3.0), Vector2(-1, 0), 144.0 / S, F, stp)
 		e["q"] = e["tq1"].get("q")
-		e["q2"] = e["tq2"].get("q")
-		if e.has("tq3"):
-			e["q3"] = e["tq3"].get("q")
-			e["q4"] = e["tq4"].get("q")
+		for i in range(2, 9):
+			if e.has("tq%d" % i): e["q%d" % i] = e["tq%d" % i].get("q")
 		if f < 2: p.rect(-4, -2, 9, 2, Color.WHITE)
 		var sh: Array = []
 		for i in (14 if up else 8):
