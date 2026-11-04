@@ -37,7 +37,7 @@ var kbm_t := -99999
 var stick := "float"       # float / fixed
 var kb := {}               # action -> [key, key]
 var rmb := "guard"
-var aim := "off"            # 마우스 조준: "mouse" = on a keyboard + mouse, ranged shots / Luce's strikes / Aida's sigil follow the pointer
+var aim := "off"            # 마우스 조준: "mouse" = on a keyboard + mouse, every attack turns to the pointer; ranged shots / Luce's strikes / Aida's sigil go to it
 var _touch_auto = null
 var qk := 1.0              # QK: render quality (1 → .8 → .6), lowered by qWatch when frames run long; saved
 var qw := {"n": 0, "s": 0.0, "cool": 0.0}

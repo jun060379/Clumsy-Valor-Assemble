@@ -121,6 +121,15 @@ func _initialize() -> void:
 	P.kenin_shoot()
 	ok(P.dir == -1 and float(arena.kenin.shots.back()["vx"]) < 0.0, "kenin: pointer behind → turns and shoots back")
 
+	P.switch_char("estelle")
+	P.on = true
+	P.dir = 1
+	P.aim_test = P.position + Vector2(-200.0, -20.0)
+	P.start_attack()
+	ok(P.dir == -1, "estelle: the swing turns to the pointer behind")
+	await frames(2)
+	P.set_anim("idle")
+
 	P.switch_char("aida")
 	P.tp_cd = 0.0
 	P.on = true

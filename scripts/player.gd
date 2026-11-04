@@ -243,6 +243,12 @@ func mouse_aim() -> bool:
 	return arena.cfg.aim == "mouse" and arena.cfg.act_dev() == "kbm" and arena.forced_keys() == null
 
 var aim_test := Vector2.INF      # tests: stands in for the pointer
+## 마우스 조준: every member turns to the pointer's side as a blow starts (a combo's next hit, a charged release too)
+func face_aim() -> void:
+	if not mouse_aim(): return
+	var adx := aim_pt().x - position.x
+	if absf(adx) > 8.0: dir = int(signf(adx))
+
 func aim_pt() -> Vector2:
 	return aim_test if aim_test.is_finite() else get_global_mouse_position()
 
@@ -317,9 +323,8 @@ func read_input() -> void:
 # ---------- attacks ----------
 ## with no direction held, a fresh attack turns toward a foe behind if nothing is in front
 func auto_face() -> void:
-	if mouse_aim() and (who == "luce" or who == "kenin"):
-		var adx := aim_pt().x - position.x
-		if absf(adx) > 8.0: dir = int(signf(adx))
+	if mouse_aim():
+		face_aim()
 		return
 	if keys["left"] or keys["right"]:
 		return
@@ -780,6 +785,7 @@ func step(dt: float) -> void:
 			arena.flash = 0.08
 		if not keys["attack"]:
 			var r := minf(1.0, (charge_t - 200.0) / 450.0)
+			face_aim()
 			if charge_t < 200.0:
 				if a == "gcharge": set_anim("guard", 1)      # a tap under the shield: back to guard
 				else: set_anim("attack1", 2)
@@ -931,6 +937,7 @@ func step(dt: float) -> void:
 			var air_ok := (f == 2 or f == 5) and ft > dur() * 0.55
 			if want("attack") and air_ok and combo_win > 0.0:
 				take("attack")
+				face_aim()
 				set_anim("air_combo", 3 if f < 3 else 6)
 				arena.sfx("swing")
 				combo_win = 0.0
@@ -961,12 +968,14 @@ func step(dt: float) -> void:
 			var chain_ok := (f == 3 and ft > dur() * 0.6) or f >= 4
 			if a == "attack1" and chain_ok and want("attack"):
 				take("attack")
+				face_aim()
 				set_anim("attack2")
 				arena.sfx("swing")
 				if who != "kenin": position.x += dir * 8.0
 				lunge_assist()
 			elif a == "attack2" and chain_ok and want("attack"):
 				take("attack")
+				face_aim()
 				set_anim("attack3")
 				arena.sfx("swing")
 				lunge_assist()

@@ -130,7 +130,7 @@ func _rows() -> Array:
 			R.append({"k": "kb", "lab": a[1], "a": a[0]})
 		R.append({"k": "okb", "lab": "마우스 좌클릭", "v": "공격"})
 		R.append({"k": "rmb", "lab": "마우스 우클릭"})
-		R.append({"k": "tog", "lab": "마우스 조준 (원거리 · 아이다 순간이동)", "o": ["끄기", "켜기"], "on": 1 if C.aim == "mouse" else 0,
+		R.append({"k": "tog", "lab": "마우스 조준", "o": ["끄기", "켜기"], "on": 1 if C.aim == "mouse" else 0,
 			"set": func(i): C.aim = "mouse" if i == 1 else "off"})
 		R.append({"k": "okb", "lab": "편성 슬롯으로 바로 교대", "v": "1 · 2 · 3"})
 		R.append({"k": "okb", "lab": "전체화면 · 닫기", "v": "F · Esc"})
