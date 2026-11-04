@@ -17,7 +17,9 @@ extends RefCounted
 const CH := preload("res://scripts/chars.gd")
 const PFX := preload("res://scripts/pfx.gd")
 
-const AMMO := 6
+const AMMO := 18                # owner 2026-11-04: ×3, every trigger pull is a 3-round burst (타다당)
+const BURST := 3
+const BURST_GAP := 55.0         # ms between the rounds of a burst
 const BOMBS := 3
 const RELOAD_FIELD := 15000.0      # owner 2026-11-04: long on purpose
 const RELOAD_BENCH := 1000.0       # the bench refills faster (6 s for the cylinder)
@@ -160,7 +162,7 @@ func step(dt: float) -> void:
 			reload_t = 0.0
 	elif ammo < amax():
 		reload_t += dt
-		var rb := RELOAD_BENCH * nm("kBench")
+		var rb := RELOAD_BENCH / BURST * nm("kBench")       # the bench refills a burst's worth as fast as one round was
 		while reload_t >= rb and ammo < amax():
 			reload_t -= rb
 			ammo += 1
@@ -191,23 +193,35 @@ func step(dt: float) -> void:
 
 
 # ---------- the pistol ----------
-## one shot from the muzzle (o) along d (a unit vector); empty = nothing comes out, the trigger clicks (returns false)
+## one trigger pull from the muzzle (o) along d (a unit vector): a burst of BURST rounds, BURST_GAP apart, each a third of
+## the damage (the same total, busier); only the burst's first round stamps a mark. Fewer left = fewer rounds.
+## Empty = nothing comes out, the trigger clicks (returns false).
 func fire(o: Vector2, d: Vector2, dmg: float) -> bool:
 	if ammo <= 0:
 		arena.sfx("ui_move", 0.7, {"st": -4.0})
 		arena.text(_P().position + Vector2(0, -150.0 * _P().CSCALE), "찰칵… 탄창 비었음", Color("#b9bfa8"))
 		return false
-	ammo -= 1
-	shots.append({"x": o.x, "y": o.y, "vx": d.x * SHOT_V, "vy": d.y * SHOT_V, "dmg": dmg, "dry": false, "t": 0.0, "mul": _mul()})
-	if ammo <= 0 and on_field(): _ran_dry()
-	# PLACEHOLDER sound: there is no gunshot in the packs yet (the stab, pitched up)
-	arena.sfx("thrust", 0.75, {"st": 5.0})
+	var n := mini(BURST, ammo)
+	ammo -= n
+	for i in n:
+		# a little spread so the three don't stack into one line
+		var dd := d.rotated(randf_range(-0.05, 0.05))
+		shots.append({"x": o.x, "y": o.y, "vx": dd.x * SHOT_V, "vy": dd.y * SHOT_V, "dmg": dmg / BURST, "dry": false, "t": -i * BURST_GAP, "mul": _mul(), "mk": i == 0, "o": o, "dir": d})
+		# PLACEHOLDER sound: there is no gunshot in the packs yet (the stab, pitched up); each round its own crack
+		arena.sfx("thrust", 0.6, {"st": 5.0 + i * 0.7 + randf() * 0.5, "delay_ms": i * BURST_GAP})
 	arena.pfx.hit(o.x, o.y, int(signf(d.x)) if d.x != 0.0 else 1, 0.8)
+	if ammo <= 0 and on_field(): _ran_dry()
 	return true
 
 func _step_shots(dt: float) -> void:
 	for s in shots:
+		var was: float = s["t"]
 		s["t"] += dt
+		if s["t"] < 0.0: continue                          # a burst's later round, not out yet
+		if was < 0.0 and s.has("o"):
+			# it leaves now: from the muzzle, a flash and a small kick
+			arena.pfx.hit(s["o"].x, s["o"].y, int(signf(s["dir"].x)) if s["dir"].x != 0.0 else 1, 0.6)
+			_shake(1.0, -int(signf(s["dir"].x)))
 		var x0: float = s["x"]
 		s["x"] += s["vx"] * dt
 		s["y"] += s["vy"] * dt
@@ -232,8 +246,8 @@ func _land_shot(s: Dictionary, m) -> void:
 	arena.spark(Vector2(s["x"], s["y"]), 4 if s["dry"] else 7)
 	arena.sfx("hit1", 0.4 if s["dry"] else 0.6)
 	if not s["dry"]:
-		arena.ult_gain(2.0)
-		add_marks(m, 1)
+		arena.ult_gain(2.0 / BURST)
+		if s.get("mk", true): add_marks(m, 1)
 		var b = _bomb_on(m)
 		if b != null:
 			_explode(b, BOMB_HEAD, true)
@@ -641,6 +655,7 @@ func draw(g: CanvasItem) -> void:
 		p.px(0, 0, Color.WHITE)
 		p.px(1, 1, Color.WHITE)
 	for s in shots:
+		if s["t"] < 0.0: continue
 		var p := PFX.PX.new(g, s["x"], s["y"])
 		var dl := Vector2(s["vx"], s["vy"]).normalized() * -5.0
 		if s["dry"]:

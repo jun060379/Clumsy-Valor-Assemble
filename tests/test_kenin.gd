@@ -69,7 +69,9 @@ func _initialize() -> void:
 	await frames(5)
 	var hp0: float = g.hp
 	K.fire(P.position + Vector2(40, -48), Vector2(1, 0), 1.0)
-	ok(K.ammo == K.AMMO - 1, "a shot spends a round (%d left)" % K.ammo)
+	ok(K.ammo == K.AMMO - K.BURST, "a trigger pull spends a 3-round burst (%d left)" % K.ammo)
+	await frames(2)
+	ok(K.shots.size() == K.BURST, "three rounds in the air, one after another")
 	ok(await until(func(): return g.hp < hp0, 3000.0), "the ball flies and hits (%.1f -> %.1f)" % [hp0, g.hp])
 	for i in K.amax(): K.fire(P.position + Vector2(40, -48), Vector2(1, 0), 1.0)
 	ok(K.ammo == 0 and K.dry(), "the cylinder runs dry")
@@ -187,7 +189,7 @@ func _initialize() -> void:
 	var MM = arena.runes.memory
 	MM.T("kenin")["on"] = ["A1", "A6", "B1", "B4", "C4", "C6"]     # 탄띠 · 비상 탄창 · 주머니 · 접촉 신관 · 시한 표식 · 약점 표시
 	MM._fx_cache.clear()
-	ok(K.amax() == K.AMMO + 2 and K.bmax() == K.BOMBS + 1, "장탄 +2, 폭탄 +1 (%d, %d)" % [K.amax(), K.bmax()])
+	ok(K.amax() == K.AMMO + 6 and K.bmax() == K.BOMBS + 1, "장탄 +6, 폭탄 +1 (%d, %d)" % [K.amax(), K.bmax()])
 	K.ammo = 1
 	K.spare_t = 0.0
 	K.fire(P.position + Vector2(40, -48), Vector2(1, 0), 1.0)
