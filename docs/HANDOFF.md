@@ -209,13 +209,13 @@ main에 푸시하면 GitHub Actions가 웹·윈도우로 빌드해서 GitHub Pag
 - 다운로드: Actions가 main 빌드마다 윈도우 zip을 Pages(/ClumsyValor-windows.zip)와 릴리스 latest-build에 올림 (README 링크).
 
 ## 4-9. 공용 상태 (오너 2026-11-04, 기획서 「전투 시스템: 파티 유형과 상태」)
-- scripts/status.gd: 적 6종 취약 · 경직 · 띄움 · 둔화(빙결 없음) · 화상 · 출혈, 아군 3종 보호막 · 강화 · 재생. 적 쪽은 적 객체의 meta "st", 아군 쪽은 player meta "ally" (교대해도 같은 player라 보호막 · 강화가 자연히 넘어감).
-- 규칙: 누적형(경직 · 둔화 · 화상) 게이지 100, 같은 캐릭터는 갱신 · 다른 캐릭터는 단계 상승(최대 3, 취약 제외), 경직 끝나면 2초 면역, 화상 번짐은 시간 연장 안 함, 출혈은 타격마다 추가 피해(0.1초 간격), 보스 · 정예는 경직 · 띄움 → 그로기 게이지(300, 3초, 받피 +30%), 보스 같은 상태 재발동마다 필요치 +50%. 상태끼리 상쇄 없음.
+- scripts/status.gd: 적 6종 취약 · 경직 · 띄움 · 둔화(빙결 없음) · 연소 · 출혈, 아군 3종 보호막 · 강화 · 재생. 적 쪽은 적 객체의 meta "st", 아군 쪽은 player meta "ally" (교대해도 같은 player라 보호막 · 강화가 자연히 넘어감).
+- 규칙: 누적형(경직 · 둔화 · 연소) 게이지 100, 같은 캐릭터는 갱신 · 다른 캐릭터는 단계 상승(최대 3, 취약 제외), 경직 끝나면 2초 면역, 연소 번짐은 시간 연장 안 함, 출혈은 타격마다 추가 피해(0.1초 간격), 보스 · 정예는 경직 · 띄움 → 그로기 게이지(300, 3초, 받피 +30%), 보스 같은 상태 재발동마다 필요치 +50%. 상태끼리 상쇄 없음.
 - 연결: mob/dummy/ghost hit → dmg_mul · on_hit, step → ST.step(잠금이면 AI 정지), 둔화 → 이동 속도 · 공격 후 react, 패링 창 +1프레임(player take_hit), QTE 태그 일격 → tag_mul(취약 ×1.5) + tag_react 강, 일반 교대 → tag_react 약. 케닌 QTE 취약이 공용 취약으로 이전(kvuln meta 삭제).
 - 아직 아무도 상태를 걸지 않음(케닌 취약만). 다음: 캐릭터별 배치. 아이콘은 임시 도형. 수치는 status.gd K (PLACEHOLDER, 밸런스 툴 미연결). 테스트 tests/test_status.gd, 캡처 tests/cap_status.gd.
 
 ## 4-10. 키워드 강조 (오너 2026-11-04)
-- scripts/ui_rich.gd: 스킬 · 노드 설명 속 공용 상태(취약 · 경직 · 띄움 · 둔화 · 화상 · 출혈 · 보호막 · 강화 · 재생), 그로기, 고유 자원(표식 · 징표)을 이름으로 찾아(긴 것 먼저) 굵게 · 색 · 밑줄로 그림. 누르면 설명 카드(아무 데나 누르면 닫힘). 설명 수치는 status.gd에서 읽음. 마크업 불필요.
+- scripts/ui_rich.gd: 스킬 · 노드 설명 속 공용 상태(취약 · 경직 · 띄움 · 둔화 · 연소 · 출혈 · 보호막 · 강화 · 재생), 그로기, 고유 자원(표식 · 징표)을 이름으로 찾아(긴 것 먼저) 굵게 · 색 · 밑줄로 그림. 누르면 설명 카드(아무 데나 누르면 닫힘). 설명 수치는 status.gd에서 읽음. 마크업 불필요.
 - 연결: ui_char_mem.gd rich() / draw_tip() — 스킬 탭 설명, 기억 노드 카드. 새 용어는 RICH.gloss()에 추가. 캡처 tests/cap_keywords.gd.
 
 ## 4-11. QTE: 패링이 모두의 기본 조건 (오너 2026-11-04)
@@ -236,7 +236,7 @@ main에 푸시하면 GitHub Actions가 웹·윈도우로 빌드해서 GitHub Pag
 
 ## 4-14. 루체 리뉴얼 + 상태 표시 (오너 2026-11-04)
 - 루체 = 필드 밖 딜포터. 기도(힐 = 공격력의 300% × 회복량, 쿨 14초; 가호 빛탄 회복 17%, 구원 400% — balance.gd luce heal · bless_heal · save_heal, player.luce_heal()) → 빛의 가호 12초: 조작 중인 동료의 적중마다(hit_by "" 일 때 mob/dummy/ghost.hit → player.bless_proc) 대기 중인 루체가 빛탄(BAL luce.bless_bolt 60%, 신성, 0.5초 간격, arena.bolt_as) + 파티 회복 1.5×. 교대해 나갈 때 강화 +15% 8초. QTE 구원: 보호막 20% + 가호. 노드 키: boltK · boltGap · bolt2(KEY) · buffK · blessT · boltHeal · buffMs · buffUlt · boltSlow(빛의 사슬), 성소는 기도 KEY로 이동.
-- 상태 표시: 보스는 HUD 보스 바 아래(hud.gd _draw_boss_status: 그로기 게이지 + 상태 칩), 일반 몹은 몸 연출(status.gd body_tint · draw_body) + 체력바 옆 큰 아이콘(draw_bar_icons: 취약 · 둔화 · 화상 · 출혈).
+- 상태 표시: 보스는 HUD 보스 바 아래(hud.gd _draw_boss_status: 그로기 게이지 + 상태 칩), 일반 몹은 몸 연출(status.gd body_tint · draw_body) + 체력바 옆 큰 아이콘(draw_bar_icons: 취약 · 둔화 · 연소 · 출혈).
 
 ## 4-15. 최종값 표시 · 무적 허수아비 (오너 2026-11-04)
 - 스킬 설명의 {c.key}는 이제 스탯을 반영한 최종값(계수 × 공격력, 회복은 × 회복량)으로 보이고 누르면 계산 내역 카드(ui_rich.gd value_of / segs "#c.key", ui_char_mem이 RICH.arena 설정). "×{…}"처럼 배율 자리는 %로 남김.
