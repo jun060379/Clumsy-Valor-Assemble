@@ -65,6 +65,9 @@ const A_AIDA := {
 	"mark": [20, [300, 300]], "amark": [-1, [300, 300]], "rturn": [-1, [60, 80, 60, 90]],
 	"dash": [29, [35, 45, 55, 55, 60, 80]], "tag_in": [25, [90, 90, 80, 230, 190, 260]], "tag_out": [26, [150, 150, 150, 170]],
 	# ult 땅 밑의 문: the reaching-hand rift poses (drawn only, posed frame by frame)
+	# 처형 (owner 2026-11-04): Sprite Flow Pro motion, packed by tools/sprite_flow/pack_aida_exec.py (rows 30-33)
+	"ax_sink": [30, [45, 45, 45, 60]], "ax_rise": [31, [50, 40, 40, 50, 60, 80]], "ax_spin": [32, [60, 50, 50, 60, 70, 50, 40, 40, 40]],
+	"ax_slam": [33, [40, 40, 70, 90, 60, 60, 70, 90]],
 	"umark": [-1, [150, 150]], "ucast": [21, [150, 150, 150, 150]], "ulunge": [22, [1000000000, 1000000000, 1000000000, 1000000000]], "ufin": [23, [1000000000, 1000000000, 1000000000, 1000000000]],
 }
 const A_LUCE := {

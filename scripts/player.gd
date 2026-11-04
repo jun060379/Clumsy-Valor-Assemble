@@ -799,6 +799,9 @@ func step(dt: float) -> void:
 			aida_exec(fm, k)
 	if not a_exec.is_empty():
 		_aexec_step(dt)
+		for g in ghosts: g["t"] += dt
+		ghosts = ghosts.filter(func(g): return g["t"] < g["life"])
+		queue_redraw()
 		return
 
 	tap_t += dt
@@ -2202,7 +2205,7 @@ func _draw() -> void:
 	if who == "estelle" and not on and (an == "guard" or an == "parry"):
 		an = "air_" + an
 	# invincible: she blinks out every other 60 ms (not while hurt or tagging in)
-	if inv > 0.0 and anim != "hurt" and anim != "tag_in" and int(t / 60.0) % 2 == 0 and not arena.ult_busy(): return
+	if inv > 0.0 and anim != "hurt" and anim != "tag_in" and a_exec.is_empty() and int(t / 60.0) % 2 == 0 and not arena.ult_busy(): return
 	var col := Color.WHITE
 	if anim == "hurt" and ft < 60.0: col.g = 3.0         # the hurt flash: white over the frame (char_pix flag 1)
 	col.a *= arena.ult_alpha()
@@ -2553,27 +2556,26 @@ func aida_emp_target():
 			best = m
 	return best
 
-## 처형 (owner 2026-11-04: the empowered strike gets its own motion, not the plain strike with effects): she sinks
-## into a rift, tears out of the ground under the foe with a rising swing (30%), hangs at the top, and drives it
-## into the floor with the shovel (70%). Built from her existing frames (dig_in · attack_high · dive) until a
-## dedicated sprite exists. Timings in ms: sink 0-150, rise 150-350, hang 350-470, slam 470-720.
-const AX_SINK := 150.0
-const AX_RISE := 350.0
-const AX_HANG := 470.0
-const AX_END := 720.0
+## 처형 (owner 2026-11-04): she sinks into the ground, erupts under the foe swinging up (30%), hangs, fumbles and
+## catches the shovel, flips forward and drives it into the floor (70%). Sprite Flow motion in rows 30-33 (ax_*);
+## the height is in the frames, so she stays on her ground line and the foe is carried with her head (AX_TOP).
+const AX_SEQ := ["ax_sink", "ax_rise", "ax_spin", "ax_slam"]
+const AX_TOP := {"ax_sink": [188, 81, 36, 29], "ax_rise": [107, 201, 235, 239, 240, 238], "ax_spin": [242, 222, 223, 246, 238, 187, 183, 250, 247], "ax_slam": [242, 241, 150, 142, 116, 122, 175, 188]}
+const AX_HIT1 := ["ax_rise", 2]
+const AX_HIT2 := ["ax_slam", 3]
 
 func aida_exec(tg, k := 1.0) -> void:
 	if tg == null or not is_instance_valid(tg) or not tg.alive(): return
 	var g0: float = position.y
 	if ST.has(tg, "air"): g0 = float(ST.of(tg)["air"]["y0"])
 	elif not is_fly(tg): g0 = tg.position.y
-	a_exec = {"tg": tg, "t": 0.0, "k": k, "x": tg.position.x, "g0": g0, "top": maxf(110.0 * CSCALE, g0 - tg.position.y + 70.0 * CSCALE), "hit1": false, "hit2": false, "exp": ST.exposed(tg)}
+	a_exec = {"tg": tg, "t": 0.0, "k": k, "x": tg.position.x, "g0": g0, "hit1": false, "hit2": false, "exp": ST.exposed(tg)}
 	dir = 1 if tg.position.x >= position.x else -1
 	a_follow = {}
 	vx = 0.0
 	vy = 0.0
-	inv = maxf(inv, AX_END + 200.0)
-	set_anim("dig_in", 0)
+	inv = maxf(inv, 1700.0)
+	set_anim("ax_sink", 0)
 	var gd = arena.pfx.gate(position.x, position.y, 120.0 * CSCALE, 1.4, 0.9)
 	gd["rel"] = true
 	a_exec["mark"] = arena.pfx.gate(tg.position.x if not is_fly(tg) else tg.position.x, g0, 60.0 * CSCALE, 2.0, 1.6)     # her sigil flickers under the foe
@@ -2583,6 +2585,16 @@ func aida_exec(tg, k := 1.0) -> void:
 func _aexec_dmg() -> float:
 	return BAL.p("aida", "rift_max") * _am("riftK") * float(a_exec["k"])
 
+## the frame of the 처형 sequence at time tt: [anim, frame] or [] once over
+func _ax_at(tt: float) -> Array:
+	var acc := 0.0
+	for an in AX_SEQ:
+		var T: Array = SK.entry(who, an)[1]
+		for i in T.size():
+			acc += float(T[i])
+			if tt < acc: return [an, i]
+	return []
+
 func _aexec_step(dt: float) -> void:
 	var tg = a_exec["tg"]
 	var live: bool = tg != null and is_instance_valid(tg) and tg.alive()
@@ -2590,67 +2602,60 @@ func _aexec_step(dt: float) -> void:
 	a_exec["t"] = t0 + dt
 	var tt: float = a_exec["t"]
 	var g0: float = a_exec["g0"]
-	if live: a_exec["x"] = tg.position.x
-	if tt < AX_SINK:
-		set_anim("dig_in", mini(3, int(tt / (AX_SINK / 4.0))))
+	var cur := _ax_at(tt)
+	var prev := _ax_at(t0)
+	if cur.is_empty():
+		_aexec_end(tg, live)
 		return
-	if t0 < AX_SINK:
-		# out of the ground under the foe: the floor tears open
+	if anim != cur[0] or f != cur[1]: set_anim(cur[0], cur[1])
+	# out of the ground under the foe, the moment the rise begins
+	if cur[0] == "ax_rise" and (prev.is_empty() or prev[0] == "ax_sink"):
 		if a_exec.get("mark") != null: a_exec["mark"]["rel"] = true
 		position.x = float(a_exec["x"]) - dir * 18.0 * CSCALE
 		position.y = g0
-		on = false
 		var up = arena.pfx.gate(position.x + dir * 18.0 * CSCALE, g0, 240.0 * CSCALE, 1.9, 1.5)
 		up["rel"] = true
 		arena.sfx("aida_close", 1.0)
 		arena.dust(position, 0, true)
 		arena.shake(6, dir)
-	if tt < AX_RISE:
-		var u := (tt - AX_SINK) / (AX_RISE - AX_SINK)
-		var e := 1.0 - pow(1.0 - u, 3.0)
-		position.y = g0 - float(a_exec["top"]) * e
-		set_anim("attack_high", mini(3, int(u * 4.0)))
-		if live and ST.has(tg, "air"): ST.of(tg)["air"]["vy"] = minf(float(ST.of(tg)["air"]["vy"]), -0.55)      # carried up with her
-		if not a_exec["hit1"] and u > 0.35 and live:
-			a_exec["hit1"] = true
-			tg.hit(_aexec_dmg() * 0.3, 0.0, atk_mul())
-			arena.slash_fx(Vector2(position.x + dir * 30.0 * CSCALE, position.y - 70.0 * CSCALE), 110.0 * CSCALE, deg_to_rad(120.0), deg_to_rad(-60.0), dir, Color("#e9d2ff"), 1.5)
-			arena.spark(tg.position + Vector2(0, -50), 14)
-			arena.sfx("aida_hit", 1.0)
-			arena.hitstop = maxf(arena.hitstop, 40.0)
-		if int(tt / 40.0) != int(t0 / 40.0): add_ghost(220.0)
-		return
-	if tt < AX_HANG:
-		if t0 < AX_RISE:
-			arena.hitstop = maxf(arena.hitstop, 90.0)
-			add_ghost(320.0)
-			arena.post_wave(position + Vector2(0, -60.0 * CSCALE), 0.9, 420.0, 0.22)
-		position.y = g0 - float(a_exec["top"])
-		set_anim("attack_high", 4)
-		if live and ST.has(tg, "air"): ST.of(tg)["air"]["vy"] = 0.0      # it hangs with her
-		return
-	if tt < AX_END:
-		var u2 := (tt - AX_HANG) / (AX_END - AX_HANG)
-		position.y = g0 - float(a_exec["top"]) * (1.0 - u2 * u2)
-		set_anim("dive", mini(5, int(u2 * 5.0)))
-		if live and ST.has(tg, "air"): ST.of(tg)["air"]["vy"] = 1.6      # driven down
-		if int(tt / 35.0) != int(t0 / 35.0): add_ghost(200.0)
-		return
-	# the slam lands
 	position.y = g0
 	on = true
-	if live and not a_exec["hit2"]:
+	vx = 0.0
+	vy = 0.0
+	# the foe rides with her head while she is up (rise · spin), pinned in the air
+	if live and cur[0] in ["ax_rise", "ax_spin"] and (cur[0] != "ax_rise" or cur[1] >= 2):
+		var top: float = float(AX_TOP[cur[0]][cur[1]])
+		tg.position.x = position.x + dir * 24.0 * CSCALE
+		if not is_fly(tg):
+			tg.position.y = g0 - maxf(0.0, top - 70.0) * 0.5 * CSCALE
+			if ST.has(tg, "air"): ST.of(tg)["air"]["vy"] = 0.0
+	if live and cur[0] == "ax_slam" and cur[1] <= 2 and ST.has(tg, "air"): ST.of(tg)["air"]["vy"] = 1.8      # driven down
+	if (prev.is_empty() or prev != cur) and cur[0] in ["ax_rise", "ax_spin"]: add_ghost(200.0)
+	# hits
+	if not a_exec["hit1"] and cur[0] == AX_HIT1[0] and cur[1] >= AX_HIT1[1] and live:
+		a_exec["hit1"] = true
+		tg.hit(_aexec_dmg() * 0.3, 0.0, atk_mul())
+		arena.slash_fx(Vector2(position.x + dir * 30.0 * CSCALE, position.y - 80.0 * CSCALE), 110.0 * CSCALE, deg_to_rad(120.0), deg_to_rad(-60.0), dir, Color("#e9d2ff"), 1.5)
+		arena.spark(tg.position + Vector2(0, -50), 14)
+		arena.sfx("aida_hit", 1.0)
+		arena.hitstop = maxf(arena.hitstop, 50.0)
+	if cur[0] == "ax_spin" and cur[1] == 2 and (prev.is_empty() or prev[1] != 2):
+		arena.hitstop = maxf(arena.hitstop, 80.0)        # the catch: a beat
+		arena.post_wave(position + Vector2(0, -110.0 * CSCALE), 0.7, 380.0, 0.18)
+	if not a_exec["hit2"] and cur[0] == AX_HIT2[0] and cur[1] >= AX_HIT2[1]:
 		a_exec["hit2"] = true
-		tg.hit(_aexec_dmg() * 0.7, dir * 6.0, atk_mul())
-	arena.pfx.slam(position.x, position.y, who)
-	arena.post_wave(position + Vector2(dir * 20.0, -20.0), 1.6, 620.0, 0.32)
-	arena.shake(12, dir)
-	arena.flash = maxf(arena.flash, 0.3)
-	arena.hitstop = maxf(arena.hitstop, 130.0)
-	arena.sfx("heavy", 1.0)
-	arena.sfx("slam", 0.8)
-	arena.dust(position, dir, true)
-	arena.text(position + Vector2(0, -175.0 * CSCALE), "처형!", Color("#e9d2ff"))
+		if live: tg.hit(_aexec_dmg() * 0.7, dir * 6.0, atk_mul())
+		arena.pfx.slam(position.x + dir * 30.0 * CSCALE, position.y, who)
+		arena.post_wave(position + Vector2(dir * 30.0, -20.0), 1.6, 620.0, 0.32)
+		arena.shake(12, dir)
+		arena.flash = maxf(arena.flash, 0.3)
+		arena.hitstop = maxf(arena.hitstop, 130.0)
+		arena.sfx("heavy", 1.0)
+		arena.sfx("slam", 0.8)
+		arena.dust(position, dir, true)
+		arena.text(position + Vector2(0, -175.0 * CSCALE), "처형!", Color("#e9d2ff"))
+
+func _aexec_end(tg, live: bool) -> void:
 	qte_offer("finisher")
 	_rev("heavy")
 	var was_exp: bool = a_exec["exp"]

@@ -54,11 +54,11 @@ func _initialize() -> void:
 	for i in 30:
 		await frames(1)
 		if not P.a_exec.is_empty(): break
-	await frames(13)
+	await frames(20)
 	await shot("aida_x_rise")
-	await frames(9)
+	await frames(20)
 	await shot("aida_x_hang")
-	await frames(14)
+	await frames(34)
 	await shot("aida_x_slam")
 	for i in 40:
 		await frames(1)
