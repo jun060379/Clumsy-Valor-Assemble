@@ -351,6 +351,62 @@ static func icons(e) -> Array:
 		elif float(gd.get("g", 0.0)) > 0.0: out.append(["groggy", Color("#ffd34d", 0.45), "", float(gd["g"]) / GROGGY.need])
 	return out
 
+## owner 2026-11-04: a foe's statuses show on its body (a tint, a flicker, drops) and, for the ones that need naming,
+## as big icons beside its HP bar. 경직 · 띄움 are plain from the body (it stops / it flies), so they get no icon.
+const BAR_ICONS := ["vuln", "slow", "burn", "bleed"]
+
+## the body's tint while a status is on it (multiplied into the sprite colour)
+static func body_tint(e) -> Color:
+	if not e.has_meta("st"): return Color.WHITE
+	var t := Time.get_ticks_msec() / 1000.0
+	var c := Color.WHITE
+	if has(e, "slow"): c *= Color(0.72, 0.88, 1.15)
+	if has(e, "burn"): c *= Color(1.18, 0.86 + 0.08 * sin(t * 13.0), 0.7)
+	if has(e, "stagger") or groggy_on(e): c *= Color(1.15, 1.1, 0.75) if int(t * 8.0) % 2 == 0 else Color.WHITE
+	return c
+
+## over the body: 화상 flames rising, 출혈 drops falling, 취약 a red rim blinking (its own canvas; feet at 0, top at -h)
+static func draw_body(ci: CanvasItem, e, h: float) -> void:
+	if not e.has_meta("st"): return
+	var t := Time.get_ticks_msec() / 1000.0
+	var seed := float(e.get_instance_id() % 97)
+	if has(e, "burn"):
+		for i in 4:
+			var ph := fmod(t * 1.6 + i * 0.25 + seed * 0.01, 1.0)
+			var px := sin(seed + i * 2.1) * h * 0.22
+			var py := -h * 0.25 - ph * h * 0.6
+			var r := (1.0 - ph) * 6.0 + 2.0
+			ci.draw_colored_polygon(PackedVector2Array([Vector2(px, py - r * 1.8), Vector2(px + r, py), Vector2(px - r, py)]), Color(1.0, 0.55 + 0.3 * (1.0 - ph), 0.15, 0.8 * (1.0 - ph)))
+	if has(e, "bleed"):
+		for i in 3:
+			var ph2 := fmod(t * 1.3 + i * 0.33 + seed * 0.02, 1.0)
+			var px2 := sin(seed * 1.7 + i * 2.7) * h * 0.18
+			ci.draw_circle(Vector2(px2, -h * 0.55 + ph2 * h * 0.5), 2.6, Color(0.85, 0.08, 0.15, 0.9 * (1.0 - ph2 * 0.6)))
+	if has(e, "vuln") and int(t * 4.0) % 2 == 0:
+		ci.draw_arc(Vector2(0, -h * 0.5), h * 0.42, 0.0, TAU, 28, Color(1.0, 0.35, 0.25, 0.7), 2.0, true)
+
+## big icons beside the HP bar (x, y = the bar's right end, its middle): a coloured badge with the status's first
+## letter, a stage / hits-left number under it. PLACEHOLDER art: plain shapes until the status icons exist.
+static func draw_bar_icons(ci: CanvasItem, e, x: float, y: float, font: Font) -> void:
+	if not e.has_meta("st"): return
+	var S: Dictionary = e.get_meta("st")
+	var cx := x + 14.0
+	for k in BAR_ICONS:
+		if not has(e, k): continue
+		var d: Dictionary = S[k]
+		var c: Color = K[k].col
+		ci.draw_circle(Vector2(cx, y), 11.0, Color(0.06, 0.04, 0.08, 0.9))
+		ci.draw_circle(Vector2(cx, y), 9.0, c)
+		var nm: String = String(K[k].name).substr(0, 1)
+		ci.draw_string(font, Vector2(cx - 7.0, y + 5.0), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.05, 0.03, 0.06))
+		var n := ""
+		if k == "bleed": n = str(int(d.get("n", 0)))
+		elif int(d.get("stage", 1)) > 1: n = str(int(d["stage"]))
+		if n != "":
+			ci.draw_string_outline(font, Vector2(cx + 5.0, y + 13.0), n, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, 4, Color(0.05, 0.03, 0.06))
+			ci.draw_string(font, Vector2(cx + 5.0, y + 13.0), n, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color.WHITE)
+		cx += 24.0
+
 ## the head row (on the foe's own canvas): up to 3 dots (the status's first letter, a stage / count beside it),
 ## the fullest gauge as a ring, "+n" for the rest. PLACEHOLDER art: plain shapes until the status icons exist.
 static func draw(ci: CanvasItem, e, y: float) -> void:

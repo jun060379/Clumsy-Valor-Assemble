@@ -117,7 +117,8 @@ func _draw() -> void:
 	if dead <= 0.0 and not inv:
 		bar(self, bar_st, 0.0, -108.0, 44.0, hp / max_hp, false)
 		EL.draw_tag(self, 0.0, -113.0, DEF_EL)
-		ST.draw(self, self, -134.0)
+		ST.draw_bar_icons(self, self, 22.0, -106.0, arena.font_black)
+		ST.draw_body(self, self, 90.0)
 
 ## H2.mob + ghostOf: a slim slanted bar over a foe's head; the lost part lingers white, the bar flashes white on a hit
 static func bar(ci: CanvasItem, st: Dictionary, x: float, y: float, w: float, f: float, elite: bool) -> void:

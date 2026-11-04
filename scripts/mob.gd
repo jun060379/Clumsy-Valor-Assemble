@@ -478,8 +478,10 @@ func _draw() -> void:
 	var sqs := squash()
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(dir * sqs.x, sqs.y))
 	var tint: Color = M.get("tint", Color(1.15, 0.8, 1.25) if elite else Color.WHITE)
-	draw_texture_rect_region(tex(A[0]), Rect2(-75.0 * s, -100.0 * s, 150.0 * s, 150.0 * s), Rect2(fr * 150, 0, 150, 150), Color(tint.r, tint.g, tint.b, alpha))
+	var stt: Color = ST.body_tint(self) if not is_dead() else Color.WHITE      # 공용 상태 on the body
+	draw_texture_rect_region(tex(A[0]), Rect2(-75.0 * s, -100.0 * s, 150.0 * s, 150.0 * s), Rect2(fr * 150, 0, 150, 150), Color(tint.r * stt.r, tint.g * stt.g, tint.b * stt.b, alpha))
 	draw_set_transform(Vector2.ZERO)
+	if not is_dead(): ST.draw_body(self, self, 40.0 if M.has("fly") else 62.0 * s / 3.0 * 1.6)
 	if rim_n != null: rim_n.queue_redraw()
 	# (a boss's statuses and groggy gauge are drawn under its bar in the HUD: hud.gd _draw_boss_status)
 	if not is_dead() and not M.has("boss"):
@@ -488,7 +490,7 @@ func _draw() -> void:
 		var by := -(40.0 if M.has("fly") else (150.0 if kind == "skel" else 115.0))
 		DUMMY.bar(self, bar_st, 0.0, by, bw, maxf(0.0, hp) / max_hp, elite)    # H2.mob: slanted, ghost trail, hit flash
 		EL.draw_tag(self, 0.0, by - 5.0, M["defEl"])          # elTag: its own elements over the bar
-		ST.draw(self, self, by - 26.0)                         # 공용 상태 icons
+		ST.draw_bar_icons(self, self, bw * 0.5, by + 2.0, arena.font_black)      # 공용 상태: big icons beside the bar
 		if mark != "":
 			var k := minf(1.0, mark_t / 90.0)
 			var col := Color("#ffd23a") if mark == "!!" else Color("#cfd6e6")

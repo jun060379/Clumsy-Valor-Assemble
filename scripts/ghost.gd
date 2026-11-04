@@ -184,7 +184,8 @@ func _draw() -> void:
 	draw_set_transform(Vector2.ZERO)
 	DUMMY.bar(self, bar_st, 0.0, y - 48.0, 40.0, maxf(0.0, hp) / max_hp, false)
 	EL.draw_tag(self, 0.0, y - 53.0, M["defEl"])
-	ST.draw(self, self, y - 74.0)
+	ST.draw_bar_icons(self, self, 20.0, y - 46.0, arena.font_black)
+	ST.draw_body(self, self, 50.0)
 
 static func _quad(pts: PackedVector2Array, a: Vector2, c: Vector2, b: Vector2) -> void:
 	for i in range(1, 11):
