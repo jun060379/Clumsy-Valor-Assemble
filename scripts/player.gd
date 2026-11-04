@@ -2587,7 +2587,7 @@ func aida_exec(tg, k := 1.0) -> void:
 	inv = maxf(inv, 1300.0)
 	set_anim("ax_sink", 0)
 	z_index = 2          # in front of the foe she carries
-	ax_portals = [{"x": position.x, "y": position.y, "t": 0.0, "life": 260.0, "r": 46.0 * CSCALE}]
+	ax_portals = [{"x": position.x, "y": position.y, "t": 0.0, "life": 300.0, "r": 64.0 * CSCALE}]
 	arena.sfx("aida_open", 1.0)
 	arena.post_ca(0.02)
 
@@ -2657,7 +2657,7 @@ func _aexec_step(dt: float) -> void:
 	if cur[0] == "ax_sink" and cur[1] >= 3 and not a_exec["out"]:
 		a_exec["out"] = true
 		position.x = float(a_exec["x"])                 # right under the foe
-		ax_portals.append({"x": position.x, "y": g0, "t": 0.0, "life": 300.0, "r": 58.0 * CSCALE})
+		ax_portals.append({"x": position.x, "y": g0, "t": 0.0, "life": 340.0, "r": 76.0 * CSCALE})
 		arena.sfx("aida_close", 1.0)
 	var alt := _ax_alt(tt)
 	position.y = g0 - alt
@@ -2724,32 +2724,68 @@ func _aexec_step(dt: float) -> void:
 		arena.dust(position - Vector2(dir * 60.0 * CSCALE, 0), -dir, true)
 		arena.text(position + Vector2(0, -175.0 * CSCALE), "처형!", Color("#e9d2ff"))
 
-## the floor portals, flat on the floor (an ellipse squashed to the z axis): `front` false draws the far half and the
-## hole (behind her), true the near rim over her legs, so she reads as sinking in / rising out
+## the floor portals, in the pixels and colours of Aida's other effects (pfx.gd: the void, the lavender tear ramp):
+## an eye of the void lying flat on the floor (squashed to the z axis). It opens from a white slit, its torn rim
+## flickers, tear-motes circle in it, and it shuts back to a slit and blinks out. `front` false draws the far half
+## (behind her), true the near half and rim (over her legs, so she reads as sinking in / rising out). The slam's
+## "burst" entry is a torn ring of light running out along the floor.
+const PFXS := preload("res://scripts/pfx.gd")
 func _ax_draw_portals(front: bool) -> void:
 	for pt in ax_portals:
 		var u: float = pt["t"] / pt["life"]
-		var open := minf(1.0, u / 0.22) if not pt.get("burst", false) else 1.0
-		var close := 1.0 if u < 0.7 else 1.0 - (u - 0.7) / 0.3
-		var k := open * close
-		if pt.get("burst", false): k = 1.0 - u
-		var R: float = pt["r"] * (0.5 + 0.5 * open) * (1.6 * u + 0.6 if pt.get("burst", false) else 1.0)
-		var c := Vector2(pt["x"], pt["y"]) - position
-		var sq := 0.26
-		draw_set_transform(c, 0.0, Vector2(1.0, sq))
-		if not front:
-			if not pt.get("burst", false):
-				draw_circle(Vector2.ZERO, R, Color(0.06, 0.0, 0.12, 0.92 * k))
-				draw_circle(Vector2.ZERO, R * 0.7, Color(0.25, 0.08, 0.45, 0.55 * k))
-				for i in 3:                     # the swirl
-					var a0: float = pt["t"] * 0.012 + i * TAU / 3.0
-					draw_arc(Vector2.ZERO, R * 0.55, a0, a0 + 1.6, 16, Color(0.8, 0.6, 1.0, 0.7 * k), 3.0)
-			draw_arc(Vector2.ZERO, R, PI, TAU, 32, Color(0.85, 0.65, 1.0, 0.9 * k), 5.0)
-		else:
-			draw_arc(Vector2.ZERO, R, 0.0, PI, 32, Color(0.95, 0.8, 1.0, k), 6.0)
-			draw_arc(Vector2.ZERO, R * 1.15, 0.2, PI - 0.2, 24, Color(0.7, 0.45, 1.0, 0.45 * k), 3.0)
-		draw_set_transform(Vector2.ZERO)
-
+		var px := PFXS.PX.new(self, pt["x"] - position.x, pt["y"] - position.y, 2.0)
+		var R: float = pt["r"] / 2.0
+		var TL: Array = PFXS.TEARL
+		var TV: Color = PFXS.TVOID
+		if pt.get("burst", false):
+			if not front: continue
+			var rr := R * (0.5 + 1.1 * u)
+			var c: Color = TL[0] if u < 0.25 else (TL[1] if u < 0.5 else (TL[2] if u < 0.75 else TL[3]))
+			for a in 64:
+				if (a * 7 + int(u * 9.0)) % 5 == 0: continue                  # torn, not a clean ring
+				var th := TAU * a / 64.0
+				var j := 1.0 + 0.08 * sin(a * 2.3)
+				px.px(cos(th) * rr * j, sin(th) * rr * 0.24 * j, c)
+			continue
+		# the eye: opens (0-0.2) from a slit, holds, shuts (0.75-0.95), a last white blink
+		var op := smoothstep(0.0, 0.2, u) * (1.0 - smoothstep(0.75, 0.95, u))
+		var rx := R * (0.55 + 0.45 * minf(1.0, u / 0.2))
+		var ry := R * 0.26 * op
+		if u < 0.06 or (u > 0.93 and u < 0.98):                             # the slit flashes white
+			if front: px.line(-rx, 0.0, rx, 0.0, Color.WHITE)
+			continue
+		if ry < 0.6: continue
+		var y0 := 0.0 if front else -ry
+		var y1 := ry if front else 0.0
+		# the void inside, a violet inner ring
+		var yy := int(floorf(y0))
+		while yy <= int(ceilf(y1)):
+			var f2 := 1.0 - pow(float(yy) / ry, 2.0)
+			if f2 > 0.0:
+				var hw := rx * sqrt(f2)
+				px.rect(-hw, yy, hw * 2.0 + 1.0, 1.0, TV)
+				if hw > 3.0:
+					px.px(-hw + 1.0, yy, TL[4])
+					px.px(hw - 1.0, yy, TL[4])
+			yy += 1
+		# the torn, flickering rim
+		var tt: float = pt["t"]
+		for a in 160:                       # dense enough for an unbroken rim at any size
+			var th := TAU * a / 160.0
+			var sy := sin(th)
+			if (sy >= 0.0) != front: continue
+			var tear := 1.0 + 0.1 * sin(a * 1.7 + tt * 0.02) + (0.12 if (a / 2 + int(tt / 60.0)) % 9 == 0 else 0.0)
+			var c: Color = TL[0] if sy > 0.3 else (TL[1] if absf(sy) < 0.3 else TL[2])
+			px.px(cos(th) * rx * tear, sy * ry * tear, c)
+			px.px(cos(th) * (rx * tear + 1.0), sy * (ry * tear + 0.6), TL[3])      # a violet glow just outside			if (a / 2 + int(tt / 45.0)) % 11 == 0: px.px(cos(th) * rx * tear, sy * ry * tear - 1.0, TL[1])   # a spark off the rim
+		# tear-motes circling inside
+		for m in 5:
+			var th := tt * 0.009 + m * TAU / 5.0
+			var sy := sin(th)
+			if (sy >= 0.0) != front: continue
+			px.px(cos(th) * rx * 0.6, sy * ry * 0.6, TL[2] if m % 2 else TL[1])
+		# the pupil: a thin dark slit of deeper void across the middle while it is open
+		if not front and op > 0.6: px.line(-rx * 0.35, -1.0, rx * 0.35, -1.0, TL[4])
 func _aexec_end(tg, live: bool) -> void:
 	qte_offer("finisher")
 	_rev("heavy")
