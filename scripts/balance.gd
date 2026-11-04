@@ -7,7 +7,7 @@ extends RefCounted
 
 const C := {
 	"estelle": {
-		"attack1": 110, "attack2": 110, "attack3": 220,          # 평타 1·2·3타
+		"attack1": 110, "attack2": 110, "attack3": 220,          # 일반 공격 1·2·3타
 		"attack_high": 200, "kneel_attack": 200,                  # 위 · 아래 공격
 		"air1": 100, "air2": 100, "air3": 200, "dive": 200, "dive_slam": 200,
 		"cthrust": 300, "cthrust_part": 200,                      # 차징 찌르기 (끝까지 모음 / 덜 모음)
@@ -27,7 +27,7 @@ const C := {
 		"ult_pass": 220, "ult_burst": 450,                        # 궁극기 [땅 밑의 문]: 균열이 지날 때 / 마지막 폭발(징표마다)
 	},
 	"luce": {
-		"bolt": 95,                                               # 평타 빛 화살 (2타는 2발)
+		"bolt": 95,                                               # 일반 공격 빛 화살 (2타는 2발)
 		"attack3": 190,                                           # 3타 빛 기둥
 		"attack_high": 190,                                       # 위 공격 번개
 		"air1": 95, "air2": 95, "air3": 105, "dive": 190, "dive_slam": 190,
