@@ -46,9 +46,9 @@ func _initialize() -> void:
 	var a = gob(x0 + 100.0)
 	ok(is_equal_approx(ST.dmg_mul(a), 1.0), "no status: x1")
 	ST.add(arena, a, "vuln", 0.25, "kenin")
-	ok(ST.has(a, "vuln") and is_equal_approx(ST.dmg_mul(a), 1.25), "취약 +25%")
+	ok(ST.has(a, "vuln") and is_equal_approx(ST.dmg_mul(a), 1.20), "취약: a fixed +20% whatever amount is passed")
 	ST.add(arena, a, "vuln", 0.20, "luce")
-	ok(is_equal_approx(ST.dmg_mul(a), 1.25), "another member's weaker 취약: no stage, the stronger stays")
+	ok(is_equal_approx(ST.dmg_mul(a), 1.20), "another member's 취약: no stage, still +20%")
 
 	print("gauges and stages")
 	var b = gob(x0 + 400.0)

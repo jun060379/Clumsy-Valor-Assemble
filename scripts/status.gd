@@ -67,7 +67,7 @@ static func atk_of(arena, c: String) -> float:
 static func _src(arena, src: String) -> String:
 	return src if src != "" else String(arena.player.who)
 
-## apply: gauge statuses take gauge points (100 fills a plain foe), vuln takes its strength (0.25 = +25%),
+## apply: gauge statuses take gauge points (100 fills a plain foe), vuln is a fixed +20% (the amount is ignored),
 ## the instant ones ignore amt
 static func add(arena, e, k: String, amt := -1.0, src := "") -> void:
 	if e == null or not is_instance_valid(e) or not e.alive(): return
@@ -78,7 +78,7 @@ static func add(arena, e, k: String, amt := -1.0, src := "") -> void:
 	match k:
 		"vuln":
 			d["t"] = K.vuln.t
-			d["k"] = maxf(float(d.get("k", 0.0)) if float(d.get("t", 0.0)) > 0.0 else 0.0, amt if amt >= 0.0 else K.vuln.mul)
+			d["k"] = K.vuln.mul          # owner 2026-11-04: 취약 is a fixed +20% from any source (the amount is ignored)
 		"stagger", "slow", "burn":
 			if k == "stagger" and big(e):
 				groggy(arena, e, amt if amt >= 0.0 else GAUGE)
@@ -271,7 +271,7 @@ static func dmg_mul(e) -> float:
 	if not e.has_meta("st"): return 1.0
 	var S: Dictionary = e.get_meta("st")
 	var m := 1.0
-	if has(e, "vuln"): m += float(S["vuln"].get("k", K.vuln.mul))
+	if has(e, "vuln"): m += K.vuln.mul
 	if S.has("groggy") and float(S["groggy"].get("t", 0.0)) > 0.0: m += GROGGY.mul
 	return m
 

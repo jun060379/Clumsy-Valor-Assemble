@@ -43,7 +43,6 @@ var MARK_DMG: float:
 func _in_ult() -> bool:
 	return arena.ult != null and arena.ult.state == "act" and arena.ult.who == "kenin"
 const MARK_QTE := 3
-const QTE_VULN := 0.25          # 원호 QTE: 취약 +25% (8 s). PLACEHOLDER
 const MARK_MAX := 8
 const VULN_MS := 8000
 const CHAIN_GAP0 := 110.0       # the chain: the first gap, then each gap ×CHAIN_ACC down to CHAIN_GAP_MIN
@@ -455,9 +454,9 @@ func _headshot(a: Dictionary) -> void:
 	tg.hit(HEAD_DMG * (1.0 + nv("kAssistDmg")), a["dir"] * 12.0, _mul())
 	arena.hit_by = ""
 	add_marks(tg, MARK_QTE + int(nv("kQteMark")))
-	# 약점 노출 (owner 2026-11-04: the QTE's own effect now, not a node): 공용 취약 for 8 s. 약점 폭로 (KEY) spreads it
-	# to every foe near the target, stronger
-	var vk: float = QTE_VULN + nv("kQteVulnAll")
+	# 약점 노출 (owner 2026-11-04: the QTE's own effect now, not a node): 공용 취약 (fixed +20%, 8 s). 약점 폭로 (KEY)
+	# spreads it to every foe near the target
+	var vk := -1.0
 	ST.add(arena, tg, "vuln", vk, "kenin")
 	if nv("kQteVulnAll") > 0.0:
 		for m in arena.player.foes_alive():

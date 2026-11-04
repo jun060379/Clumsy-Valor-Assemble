@@ -11,7 +11,7 @@ const ST := preload("res://scripts/status.gd")
 static func gloss() -> Dictionary:
 	var K: Dictionary = ST.K
 	return {
-		"취약": [K.vuln.col, "받는 피해가 늘어난다(기본 +%d%%, 기술마다 다름), %d초. 교대 일격이 확정 치명타가 된다. 다시 걸면 시간만 갱신, 단계는 오르지 않는다." % [roundi(K.vuln.mul * 100.0), roundi(K.vuln.t / 1000.0)]],
+		"취약": [K.vuln.col, "받는 피해가 늘어난다(+%d%% 고정), %d초. 교대 일격이 확정 치명타가 된다. 다시 걸면 시간만 갱신, 단계는 오르지 않는다." % [roundi(K.vuln.mul * 100.0), roundi(K.vuln.t / 1000.0)]],
 		"경직": [K.stagger.col, "게이지가 가득 차면 %.1f초 동안 행동이 끊기고 무방비가 된다. 끝나면 %d초 동안 다시 걸리지 않는다. 보스 · 정예는 그로기 게이지로 받는다." % [K.stagger.t / 1000.0, roundi(K.stagger.imm / 1000.0)]],
 		"띄움": [K.air.col, "적을 공중에 띄운다. 공중에서 맞을 때마다 조금 더 떠 있다(%d타까지). 보스 · 정예는 그로기 게이지로 받는다." % int(K.air.hits)],
 		"둔화": [K.slow.col, "게이지가 가득 차면 %d초 동안 이동이 느려지고 공격 뒤 빈틈이 길어진다. 공격이 날아오는 타이밍은 그대로, 패링 판정은 넓어진다." % roundi(K.slow.t / 1000.0)],
