@@ -975,7 +975,7 @@ func step(dt: float) -> void:
 			fx_done = true
 			_rev("skill")
 			_rev("heal")
-			var hv := float(roundi(15.0 * _lvh("luce")))    # renewal: 15 × level × 회복량 (the rest comes from 빛의 가호)
+			var hv := float(roundi(luce_heal("heal")))    # 공격력의 170% × 회복량 (the rest comes from 빛의 가호)
 			bless_start()
 			hp = minf(MAX_HP, hp + hv)
 			var al := 0
@@ -1920,8 +1920,9 @@ func swap(tag: bool, to = null) -> void:
 			ST.ally_add(self, "shield", _mhp(old) * 0.2)          # 구원: a shield for the one leaving (it stays with the party)
 			bless_start()
 		if nx == "luce" and q_low:
-			hpm[old] = minf(_mhp(old), hpm[old] + 30.0)
-			arena.text(position + Vector2(0, -175.0 * CSCALE), "구원! " + CH.NAME[old] + " +30", Color("#fff1b0"))
+			var sv := roundf(luce_heal("save_heal"))
+			hpm[old] = minf(_mhp(old), hpm[old] + sv)
+			arena.text(position + Vector2(0, -175.0 * CSCALE), "구원! " + CH.NAME[old] + " +%d" % int(sv), Color("#fff1b0"))
 		tag_mul = 2.0 if nx == "aida" else 1.0
 		if nx == "aida":
 			arena.text(position + Vector2(0, -175.0 * CSCALE), "기습! 교대 공격 2배", Color("#d7b8ff"))
@@ -2521,7 +2522,7 @@ func bless_proc(e) -> void:
 	for i in n:
 		arena.bolt_as(position + Vector2(-dir * (20.0 + i * 24.0), -150.0 * CSCALE - i * 14.0), e, "luce", dmg, lk)
 	if _lv("boltSlow") > 0.0: ST.add(arena, e, "slow", _lv("boltSlow"), "luce")      # 빛의 사슬
-	var hv := 1.5 * _lvh("luce") * _lm("boltHeal")
+	var hv := luce_heal("bless_heal") * _lm("boltHeal")
 	if hp > 0.0: hp = minf(MAX_HP, hp + hv)
 	for c in party:
 		if c != who and hpm[c] > 0.0: hpm[c] = minf(_mhp(c), hpm[c] + hv)
@@ -2569,6 +2570,13 @@ func _lvm(c: String) -> float:
 	return arena.runes.lvm(c) if _rk() else 1.0
 
 ## heals that grow with the level and 회복량 (30 × LVM × (1 + heal%))
+## Luce's heals follow her attack (owner 2026-11-04): coefficient % of her 공격력 (10 × atk × level × gear) × 회복량
+func luce_heal(key: String) -> float:
+	var R = arena.get("runes")
+	var ak: float = 10.0 * float(CH.STATS["luce"]["atk"]) * (R.atk_k("luce") if R != null else 1.0)
+	var hk: float = 1.0 + (R.gear_tot("luce")["heal"] / 100.0 if R != null else 0.0)
+	return BAL.p("luce", key) * ak * hk
+
 func _lvh(c: String) -> float:
 	return _lvm(c) * (1.0 + (arena.runes.gear_tot(c)["heal"] / 100.0 if _rk() else 0.0))
 
