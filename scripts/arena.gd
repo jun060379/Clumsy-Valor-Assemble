@@ -1321,8 +1321,8 @@ func charge_fx(_p: Vector2, _t: float, _col := Color.WHITE) -> void:
 # ---------- Luce's light ----------
 ## a light bolt: rises up-and-back, holds a beat, then shoots and homes in on the target; `snd` is the hit it lands
 ## with (the combo's hit1 / hit2 / hit3, from player.gd hit_sound)
-func bolt(o: Vector2, tg, sz: float, hold: float, d: int, snd := "hit1") -> void:
-	var b := {"by": player.who, "k": "bolt", "x": o.x, "y": o.y, "vx": d * 0.001, "vy": 0.0, "tg": tg, "sz": sz, "hold": hold, "hits": [], "home": 0.011, "dmg": BAL.p("luce", "bolt"), "mul": player.atk_mul(), "d": d, "t": 0.0, "life": 1100.0 + hold, "tr": [], "hold0": hold, "trT": 0.0, "snd": snd}
+func bolt(o: Vector2, tg, sz: float, hold: float, d: int, snd := "hit1", aim := Vector2.INF) -> void:
+	var b := {"aim": aim, "by": player.who, "k": "bolt", "x": o.x, "y": o.y, "vx": d * 0.001, "vy": 0.0, "tg": tg, "sz": sz, "hold": hold, "hits": [], "home": 0.011, "dmg": BAL.p("luce", "bolt"), "mul": player.atk_mul(), "d": d, "t": 0.0, "life": 1100.0 + hold, "tr": [], "hold0": hold, "trT": 0.0, "snd": snd}
 	if tg == null:
 		b["home"] = 0.0
 	luce_fx.append(b)
@@ -1356,7 +1356,8 @@ func step_luce(dt: float) -> void:
 			var live: bool = tg != null and is_instance_valid(tg) and tg.alive()
 			if f["hold"] > 0.0:
 				f["hold"] -= dt
-				var tp: Vector2 = (tg.position + Vector2(0, -50)) if live else Vector2(f["x"] + f["d"] * 400.0, f["y"] + 40.0)
+				var ap: Vector2 = f.get("aim", Vector2.INF)
+				var tp: Vector2 = (tg.position + Vector2(0, -50)) if live else (ap if ap.is_finite() else Vector2(f["x"] + f["d"] * 400.0, f["y"] + 40.0))
 				var dv := (tp - Vector2(f["x"], f["y"])).normalized()
 				f["y"] -= 0.01 * dt
 				if f["hold"] <= 0.0:

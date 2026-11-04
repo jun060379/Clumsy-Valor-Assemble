@@ -202,6 +202,11 @@ main에 푸시하면 GitHub Actions가 웹·윈도우로 빌드해서 GitHub Pag
   - 페이지 다시 만들기: `python3 -I tools/balance/export.py > data.json` 후 tools/balance/tool_template.html의 __DATA__ 자리에 넣어 같은 주소로 재게시(적용 뒤 "게임 값" 기준을 갱신할 때).
 - 기존 아이다 설명의 "뒷치기 피해 2배"는 구현돼 있지 않아 설명에서 뺌.
 
+## 4-8. 조작: 슬롯 교대 · 마우스 조준 (오너 2026-11-04)
+- 키보드 1 · 2 · 3 (숫자패드 포함): 편성 슬롯 순서(party 배열)대로 그 동료에게 바로 교대. 초상화 탭과 같은 party_input(c)을 탐 (QTE 중이면 그 동료에게 기회가 있을 때만 태그). 그 숫자키를 다른 행동에 묶으면 슬롯 교대는 꺼짐. 키보드일 때 HUD 초상화에 번호 표시.
+- 설정 '마우스 조준' (settings.gd aim = off / mouse, 기본 off, 키보드+마우스일 때만): 케닌 평사격은 포인터 쪽으로 (수평 ±57°까지, 뒤면 돌아섬), 루체 빛 화살 · 기둥 · 번개 · 심판의 번개는 포인터 밑의 적 (없으면 포인터 자리, 사거리 안), 아이다 표식은 포인터에서 시작해 따라감 (짧게 눌러도 포인터로 이동, 포인터를 자기 몸에 두면 뒤로 짧은 도약). player.gd mouse_aim() / luce_spot(). 테스트 tests/test_controls.gd, 캡처 tests/cap_controls.gd.
+- 다운로드: Actions가 main 빌드마다 윈도우 zip을 Pages(/ClumsyValor-windows.zip)와 릴리스 latest-build에 올림 (README 링크).
+
 ## 5. 이번 세션에 끝낸 것 (모두 main, 푸시·배포 완료)
 
 - 타이틀 로고에 한글(동해독도체 B안), 붓 로고·그림 `d7601c9`

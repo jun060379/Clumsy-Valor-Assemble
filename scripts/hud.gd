@@ -589,6 +589,13 @@ func _draw_party(ci: CanvasItem, vs: Vector2) -> void:
 			var nm: String = CH.NAME[c]
 			var nw := UI.text_w(UI.bhs(), nm, 11)
 			UI.shadow_text(ci, UI.bhs(), Vector2(r.position.x - 6.0 - nw, ctr.y + 4.0), nm, 11, Color(1, 1, 1, a))
+			# keyboard: the slot key (1 · 2 · 3) that swaps straight to this member
+			if arena.cfg.act_dev() == "kbm":
+				var sk := str(P.party.find(c) + 1)
+				var kc := r.position + Vector2(2.0, 2.0)
+				ci.draw_circle(kc, 8.0, Color(0, 0, 0, 0.8 * a))
+				ci.draw_arc(kc, 8.0, 0.0, TAU, 20, Color(col, a), 1.5, true)
+				UI.shadow_text(ci, UI.anton(), kc + Vector2(-UI.text_w(UI.anton(), sk, 11) / 2.0, 4.5), sk, 11, Color(1, 1, 1, a))
 		# ult-ready mark: a small cyan diamond at the face's lower right (.ps.uready::after)
 		if bench_ult_ready(c):
 			var dc := r.position + Vector2(48.0 - 3.0, 48.0 - 3.0)

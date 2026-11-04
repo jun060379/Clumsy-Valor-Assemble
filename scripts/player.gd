@@ -55,6 +55,8 @@ var drop_t := 0.0
 var tap_dir := 0
 var tap_t := 999.0
 var buf := {"attack": 0.0, "jump": 0.0, "guard": 0.0, "dash": 0.0, "swap": 0.0}
+var slot_req := -1         # 1 · 2 · 3 on the keyboard: swap straight to that party slot (consumed in the step)
+var slot_req_t := 0
 var mark_mouse := false    # mouse.moved: a real mouse has moved since the sigil came up (it then follows the pointer)
 var keys := {}
 var pressed := {}
@@ -226,6 +228,57 @@ func target(rng: float):
 func _input(ev: InputEvent) -> void:
 	if ev is InputEventMouseMotion and ev.device != InputEvent.DEVICE_ID_EMULATION and ev.relative.length() > 2.0:
 		mark_mouse = true
+	# 1 · 2 · 3 (top row or keypad): the party slot to swap to, unless the key is bound to something else
+	if ev is InputEventKey and ev.pressed and not ev.echo:
+		var k: int = ev.physical_keycode if ev.physical_keycode != 0 else ev.keycode
+		var i := [KEY_1, KEY_2, KEY_3].find(k)
+		if i < 0: i = [KEY_KP_1, KEY_KP_2, KEY_KP_3].find(k)
+		if i >= 0 and not (arena != null and arena.get("cfg") != null and arena.cfg.kb_uses(k)):
+			slot_req = i
+			slot_req_t = Time.get_ticks_msec()
+
+## 마우스 조준 (설정 · 키보드+마우스일 때만): Kenin's shots, Luce's bolts / pillar / lightning and Aida's sigil follow the pointer
+func mouse_aim() -> bool:
+	if arena == null or arena.get("cfg") == null: return false
+	return arena.cfg.aim == "mouse" and arena.cfg.act_dev() == "kbm" and arena.forced_keys() == null
+
+var aim_test := Vector2.INF      # tests: stands in for the pointer
+func aim_pt() -> Vector2:
+	return aim_test if aim_test.is_finite() else get_global_mouse_position()
+
+## the foe nearest p (its body, ~50 px up), within r
+func foe_near(p: Vector2, r: float):
+	var best = null
+	var bd := r
+	for e in foes_alive():
+		var d: float = p.distance_to(e.position + Vector2(0, -50.0))
+		if d < bd:
+			bd = d
+			best = e
+	return best
+
+func floor_y(x: float) -> float:
+	var L = arena.level
+	return L.floor_at(x) if L != null and L.has_method("floor_at") else arena.ground_y
+
+## where Luce's strike lands: the nearest foe in range, or with 마우스 조준 the foe under the pointer, else the pointer's
+## spot (within rng); turns her to face it. {"tg", "x", "y" (the ground there), "aim" (where a bolt with no foe flies)}
+func luce_spot(rng: float, ahead: float) -> Dictionary:
+	var tg = null
+	if mouse_aim():
+		var ap := aim_pt()
+		tg = foe_near(ap, 170.0)
+		if tg != null and absf(tg.position.x - position.x) > rng * 1.5: tg = null
+		if tg == null:
+			var x := clampf(clampf(ap.x, position.x - rng, position.x + rng), 30.0, arena.world_w - 30.0)
+			if absf(x - position.x) > 8.0: dir = int(signf(x - position.x))
+			return {"tg": null, "x": x, "y": floor_y(x), "aim": Vector2(x, minf(ap.y, floor_y(x) - 20.0))}
+	else:
+		tg = target(rng)
+	if tg != null:
+		dir = int(signf(tg.position.x - position.x)) if tg.position.x != position.x else dir
+		return {"tg": tg, "x": tg.position.x, "y": arena.ground_y if is_fly(tg) else tg.position.y, "aim": Vector2.INF}
+	return {"tg": null, "x": position.x + dir * ahead * CSCALE, "y": position.y, "aim": Vector2.INF}
 
 ## how high / low the sigil may go: the town reaches up the hill and down to the lower street, a cave room up to its
 ## ceiling, everywhere else 60 .. the ground
@@ -264,6 +317,10 @@ func read_input() -> void:
 # ---------- attacks ----------
 ## with no direction held, a fresh attack turns toward a foe behind if nothing is in front
 func auto_face() -> void:
+	if mouse_aim() and (who == "luce" or who == "kenin"):
+		var adx := aim_pt().x - position.x
+		if absf(adx) > 8.0: dir = int(signf(adx))
+		return
 	if keys["left"] or keys["right"]:
 		return
 	var R := 420.0 if who == "luce" or who == "kenin" else 170.0 * CSCALE
@@ -332,6 +389,10 @@ func kenin_shoot() -> void:
 		return
 	hit_done = true
 	fx_done = true
+	var aimm := mouse_aim()
+	if aimm and not ka.get("up", false) and not ka.get("down", false):
+		var adx := aim_pt().x - position.x
+		if absf(adx) > 8.0: dir = int(signf(adx))
 	# the muzzle in world px (a cell draws at half size × CSCALE): chest height, just past the outstretched hands
 	var S := CSCALE
 	var mz := position + Vector2(dir * 34.0 * S, -44.0 * S)
@@ -344,8 +405,13 @@ func kenin_shoot() -> void:
 		d = Vector2(dir * 0.17, 0.985)
 	else:
 		if anim == "kneel_attack": mz = position + Vector2(dir * 36.0 * S, -24.0 * S)
-		var tg = target(720.0)
-		if tg != null and (tg.position.x - position.x) * dir > 0.0:
+		var tg = null if aimm else target(720.0)
+		if aimm:
+			# 마우스 조준: straight at the pointer, up to ~57° off level
+			var av := aim_pt() - mz
+			var ang0 := clampf(atan2(av.y, absf(av.x)), -1.0, 1.0)
+			d = Vector2(dir * cos(ang0), sin(ang0))
+		elif tg != null and (tg.position.x - position.x) * dir > 0.0:
 			var aim: Vector2 = (tg.position + Vector2(0, -55.0) - mz).normalized()
 			var ang := clampf(atan2(aim.y, absf(aim.x)), -0.3, 0.3)
 			d = Vector2(dir * cos(ang), sin(ang))
@@ -382,17 +448,16 @@ func luce_gesture(atk) -> void:
 	hit_done = true
 	fx_done = true
 	add_ghost(140.0, -dir * 14.0 * CSCALE)
-	var tg = target(420.0)
-	if tg != null:
-		dir = int(signf(tg.position.x - position.x)) if tg.position.x != position.x else dir
-	var gy: float = (arena.ground_y if is_fly(tg) else tg.position.y) if tg != null else position.y
+	var sp := luce_spot(420.0, 80.0 if anim == "attack_high" else 95.0)
+	var tg = sp["tg"]
+	var gy: float = sp["y"]
 	if anim == "attack3":
-		arena.pillar(tg.position.x if tg != null else position.x + dir * 95.0 * CSCALE, gy, BAL.p("luce", "attack3"), dir)
+		arena.pillar(sp["x"], gy, BAL.p("luce", "attack3"), dir)
 		arena.sfx("heavy", 0.8)
 		arena.shake(5, dir)
 		arena.hitstop = 30.0
 	elif anim == "attack_high":
-		arena.lightning(tg.position.x if tg != null else position.x + dir * 80.0 * CSCALE, gy, 0.8, BAL.p("luce", "attack_high"), dir)
+		arena.lightning(sp["x"], gy, 0.8, BAL.p("luce", "attack_high"), dir)
 		arena.sfx("heavy", 0.7)
 		arena.shake(4, dir)
 		arena.hitstop = 25.0
@@ -401,7 +466,7 @@ func luce_gesture(atk) -> void:
 		var n := 2 if anim == "attack2" else 1
 		for i in n:
 			var o := Vector2(position.x - dir * (30.0 + i * 18.0), position.y - 125.0 * CSCALE - i * 16.0)
-			arena.bolt(o, tg, sz, 150.0 + i * 90.0, dir, hit_sound())
+			arena.bolt(o, tg, sz, 150.0 + i * 90.0, dir, hit_sound(), sp["aim"])
 		arena.sfx("thrust", 0.6)
 
 func check_hits() -> void:
@@ -742,7 +807,12 @@ func step(dt: float) -> void:
 		mark_t += dt
 		# keys / the stick steer the sigil; on PC the mouse drags it once it has moved
 		var sp := 0.55 * dt
-		if mark_mouse:
+		var aim_on := mouse_aim()
+		if aim_on:
+			var mw0 := aim_pt()
+			mx = mw0.x
+			my = mw0.y
+		elif mark_mouse:
 			var mw := get_global_mouse_position()
 			mx += (mw.x - mx) * minf(1.0, dt / 60.0)
 			my += (mw.y - my) * minf(1.0, dt / 60.0)
@@ -757,7 +827,8 @@ func step(dt: float) -> void:
 		arena.mark_pos = Vector2(mx, my)
 		if not keys["guard"]:
 			arena.mark_pos = Vector2.INF
-			if mark_t < 150.0 or Vector2(mx, my).distance_to(position) < 16.0:
+			# a tap hops back — with 마우스 조준 a quick click still goes to the pointer (only the pointer on her hops back)
+			if (mark_t < 150.0 and not aim_on) or Vector2(mx, my).distance_to(position) < (40.0 if aim_on else 16.0):
 				rift_enter(position.x - dir * 90.0 * CSCALE, NAN, false, 0.8)    # tap = short hop backwards through a hole
 			else:
 				rift_enter(mx, my, false, 1.0)
@@ -878,10 +949,8 @@ func step(dt: float) -> void:
 			if a == "attack3" and f == 3 and ft < 40.0 and who != "kenin": vx = dir * 0.2
 			if a == "lfinisher" and f == 2 and not fx_done:
 				fx_done = true
-				var tg = target(520.0)
-				if tg != null: dir = int(signf(tg.position.x - position.x)) if tg.position.x != position.x else dir
-				var gy: float = (arena.ground_y if is_fly(tg) else tg.position.y) if tg != null else position.y
-				arena.lightning(tg.position.x if tg != null else position.x + dir * 95.0 * CSCALE, gy, 1.0 + cw_r * 1.2, lerpf(BAL.p("luce", "lfinisher_min"), BAL.p("luce", "lfinisher_max"), clampf(cw_r, 0.0, 1.0)), dir)
+				var sp := luce_spot(520.0, 95.0)
+				arena.lightning(sp["x"], sp["y"], 1.0 + cw_r * 1.2, lerpf(BAL.p("luce", "lfinisher_min"), BAL.p("luce", "lfinisher_max"), clampf(cw_r, 0.0, 1.0)), dir)
 				arena.shake(6.0 + cw_r * 8.0, dir)
 				arena.hitstop = 40.0 + cw_r * 50.0
 				arena.flash = 0.25 + cw_r * 0.2
@@ -998,6 +1067,11 @@ func use_skill(move: int) -> void:
 			mx = position.x
 			my = position.y
 			mark_mouse = false
+			if mouse_aim():
+				mark_mouse = true          # 마우스 조준: the sigil starts at the pointer
+				var ap := aim_pt()
+				mx = ap.x
+				my = ap.y
 			if on: arena.sfx("swing", 0.3)      # the air sigil comes up silently
 	elif who == "luce":
 		if heal_cd <= 0.0 and on:
@@ -1591,6 +1665,11 @@ func party_step(dt: float) -> void:
 	if pressed["swap"] or want("swap"):
 		take("swap")
 		party_input()
+	if slot_req >= 0:
+		var si := slot_req
+		slot_req = -1
+		if Time.get_ticks_msec() - slot_req_t < 250 and si < party.size() and party[si] != who and arena.forced_keys() == null:
+			party_input(party[si])
 	if tag_timer > 0.0:
 		tag_timer -= dt
 		if tag_timer <= 0.0 and not tag_hit:
