@@ -22,10 +22,14 @@ const R_SHIFT := KEY_SHIFT | (KEY_LOCATION_RIGHT << SIDE_SH)
 const L_CTRL := KEY_CTRL | (KEY_LOCATION_LEFT << SIDE_SH)
 const R_CTRL := KEY_CTRL | (KEY_LOCATION_RIGHT << SIDE_SH)
 const MODS := [KEY_SHIFT, KEY_CTRL, KEY_ALT, KEY_META]
-## KB_PRE (each action two slots; 0 = empty)
+## KB_PRE (each action two slots; 0 = empty). The default is WASD + 마우스 (owner 2026-11-04): WASD move, Space jump,
+## left click / J attack, E skill, Q ult, Shift or right click dash, Ctrl swap (a QTE first), 1 · 2 · 3 a party slot,
+## 마우스 조준 on. KB_VER: a settings file from before that default starts over on it.
+const KB_VER := 2
+const KB_DEF := "wasd"
 const PRE := {
-	"arrow": {"n": "방향키형", "left": [KEY_LEFT, 0], "right": [KEY_RIGHT, 0], "up": [KEY_UP, 0], "down": [KEY_DOWN, 0], "jump": [KEY_Z, 0], "attack": [KEY_X, 0], "guard": [KEY_A, 0], "dash": [L_SHIFT, 0], "ult": [KEY_D, 0], "swap": [L_CTRL, R_CTRL], "rmb": "guard"},
-	"wasd": {"n": "WASD + 마우스형", "left": [KEY_A, 0], "right": [KEY_D, 0], "up": [KEY_W, 0], "down": [KEY_S, 0], "jump": [KEY_SPACE, 0], "attack": [KEY_J, 0], "guard": [KEY_E, 0], "dash": [L_SHIFT, 0], "ult": [KEY_Q, 0], "swap": [KEY_R, 0], "rmb": "dash"},
+	"arrow": {"n": "방향키형", "left": [KEY_LEFT, 0], "right": [KEY_RIGHT, 0], "up": [KEY_UP, 0], "down": [KEY_DOWN, 0], "jump": [KEY_Z, 0], "attack": [KEY_X, 0], "guard": [KEY_A, 0], "dash": [L_SHIFT, 0], "ult": [KEY_D, 0], "swap": [L_CTRL, R_CTRL], "rmb": "guard", "aim": "off"},
+	"wasd": {"n": "WASD + 마우스형", "left": [KEY_A, 0], "right": [KEY_D, 0], "up": [KEY_W, 0], "down": [KEY_S, 0], "jump": [KEY_SPACE, 0], "attack": [KEY_J, 0], "guard": [KEY_E, 0], "dash": [L_SHIFT, 0], "ult": [KEY_Q, 0], "swap": [L_CTRL, R_CTRL], "rmb": "dash", "aim": "mouse"},
 }
 const ARROWS := [[KEY_LEFT, "left"], [KEY_RIGHT, "right"], [KEY_UP, "up"], [KEY_DOWN, "down"]]
 
@@ -37,7 +41,7 @@ var kbm_t := -99999
 var stick := "float"       # float / fixed
 var kb := {}               # action -> [key, key]
 var rmb := "guard"
-var aim := "off"            # 마우스 조준: "mouse" = on a keyboard + mouse, every attack turns to the pointer; ranged shots / Luce's strikes / Aida's sigil go to it
+var aim := "mouse"            # 마우스 조준: "mouse" = on a keyboard + mouse, every attack turns to the pointer; ranged shots / Luce's strikes / Aida's sigil go to it
 var _touch_auto = null
 var qk := 1.0              # QK: render quality (1 → .8 → .6), lowered by qWatch when frames run long; saved
 var qw := {"n": 0, "s": 0.0, "cool": 0.0}
@@ -47,8 +51,9 @@ var vol := AUDIO_DEF.duplicate()      # master / bgm / sfx / voice, 0..1 (the �
 
 func _init(a) -> void:
 	arena = a
-	kb = preset("arrow")
-	rmb = "guard"
+	kb = preset(KB_DEF)
+	rmb = String(PRE[KB_DEF]["rmb"])
+	aim = String(PRE[KB_DEF]["aim"])
 	var cf := ConfigFile.new()
 	if cf.load(PATH) != OK:
 		return
@@ -63,8 +68,10 @@ func _init(a) -> void:
 	arena.ambient = bool(cf.get_value("ui", "ambient", true))
 	arena.music = bool(cf.get_value("ui", "bgm", true))
 	qk = clampf(float(cf.get_value("ui", "qk", 1.0)), 0.6, 1.0)
-	rmb = String(cf.get_value("keys", "rmb", "guard"))
-	aim = String(cf.get_value("keys", "aim", "off"))
+	if int(cf.get_value("keys", "ver", 1)) < KB_VER:
+		return          # the old default (방향키형): start over on the new one
+	rmb = String(cf.get_value("keys", "rmb", rmb))
+	aim = String(cf.get_value("keys", "aim", aim))
 	for a2 in ACTS:
 		var v = cf.get_value("keys", a2[0], null)
 		if v is Array and v.size() == 2:
@@ -86,6 +93,7 @@ func save() -> void:
 		cf.set_value("audio", k, vol[k])
 	cf.set_value("keys", "rmb", rmb)
 	cf.set_value("keys", "aim", aim)
+	cf.set_value("keys", "ver", KB_VER)
 	for a in ACTS:
 		cf.set_value("keys", a[0], kb[a[0]])
 	cf.save(PATH)
@@ -135,6 +143,7 @@ static func preset(k: String) -> Dictionary:
 func use_preset(k: String) -> void:
 	kb = preset(k)
 	rmb = String(PRE[k]["rmb"])
+	aim = String(PRE[k]["aim"])
 	apply_keys()
 
 ## kbApply: rebuild the keyboard events of every action (pad events stay). Arrow keys always move unless given to something else.
@@ -236,10 +245,14 @@ func act_dev() -> String:
 	if dev != "auto": return dev
 	return "touch" if touch_ui() else last
 
-## KH: the key glyph in front of a prompt: "X " on keyboard, "Ⓧ " on a pad, nothing on touch
+## KH: the key glyph in front of a prompt: the attack key on keyboard ("J " on the WASD default), "Ⓧ " on a pad,
+## nothing on touch
 func kh() -> String:
 	var d := act_dev()
-	return "" if d == "touch" else ("Ⓧ " if d == "pad" else "X ")
+	if d == "touch": return ""
+	if d == "pad": return "Ⓧ "
+	var k: int = int(kb.get("attack", [0, 0])[0])
+	return (key_name(k) + " ") if k != 0 else "클릭 "
 
 ## qWatch: 150 frames averaging over 24 ms lower QK by .2 (to .6), then 3 s before it looks again (menus and the title
 ## don't count). Returns true when QK dropped.
