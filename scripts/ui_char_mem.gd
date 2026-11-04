@@ -215,7 +215,8 @@ func _mem_key(k: int) -> bool:
 # ---------- actions ----------
 func _moves() -> Array:
 	var L: Array = MD.MOVES[p.c].filter(func(m): return not (String(m[0]).begins_with("상단") or String(m[0]).begins_with("공중")))
-	return L.map(func(m): return [m[0], BAL.fmt(String(m[1]))] + m.slice(2))      # coefficients from balance.gd
+	RICH.arena = p.arena
+	return L.map(func(m): return [m[0], String(m[1])] + m.slice(2))      # {c.key} stays: ui_rich shows it as the final value (tap → breakdown)
 
 func _pick_move(j: int) -> void:
 	si = j

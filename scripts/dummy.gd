@@ -60,6 +60,10 @@ func hit(dmg: float, kb: float, mul := 1.0) -> void:
 	if inv:
 		arena.last_e = {}
 		arena.text(p, "-%d" % roundi(d), Color("#ffe9a8"))     # the unbreakable row: a plain number, no element split
+		# owner 2026-11-04: the unbreakable dummy takes every effect like any foe (statuses, 출혈, 빛의 가호…), only its HP stays
+		if not ST._in:
+			ST.on_hit(arena, self)
+			if arena.hit_by == "": arena.player.bless_proc(self)
 		return
 	arena.damage_text(p, roundi(d), dmg > 1.0)
 	hp -= d
@@ -113,11 +117,13 @@ func _draw() -> void:
 	draw_set_transform(Vector2.ZERO, rot, Vector2.ONE)
 	# a hit flashes it: the sprite added onto itself at 0.7 (an overbright modulate)
 	var k := 1.7 if flash > 0.0 else 1.0
-	draw_texture_rect(tex, Rect2(-w / 2.0, -h, w, h), false, Color(k, k, k, a))
+	var stt: Color = ST.body_tint(self) if dead <= 0.0 else Color.WHITE
+	draw_texture_rect(tex, Rect2(-w / 2.0, -h, w, h), false, Color(k * stt.r, k * stt.g, k * stt.b, a))
 	draw_set_transform(Vector2.ZERO)
 	if dead <= 0.0 and not inv:
 		bar(self, bar_st, 0.0, -108.0, 44.0, hp / max_hp, false)
 		EL.draw_tag(self, 0.0, -113.0, DEF_EL)
+	if dead <= 0.0:
 		ST.draw_bar_icons(self, self, 22.0, -106.0, arena.font_black)
 		ST.draw_body(self, self, 90.0)
 

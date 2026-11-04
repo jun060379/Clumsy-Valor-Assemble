@@ -27,6 +27,29 @@ static func gloss() -> Dictionary:
 
 static var _keys: Array = []
 
+## 계수 → 최종값 (owner 2026-11-04): a skill text's {c.key} shows the number it deals / heals with the member's stats
+## now; tapping it opens the breakdown. The provider (ui_char_mem.gd) sets arena so the stats can be read.
+static var arena = null
+const HEALS := ["luce.heal", "luce.bless_heal", "luce.save_heal"]
+const BAL := preload("res://scripts/balance.gd")
+const CH := preload("res://scripts/chars.gd")
+
+## [final value, coefficient %, 공격력, 회복량 %] for "c.key"
+static func value_of(ck: String) -> Array:
+	var parts := ck.split(".")
+	var c := parts[0]
+	var pc: int = BAL.pct(c, parts[1])
+	var R = arena.get("runes") if arena != null else null
+	var ak: float = 10.0 * float(CH.STATS.get(c, {"atk": 1.0})["atk"]) * (R.atk_k(c) if R != null else 1.0)
+	var hk := 0.0
+	if HEALS.has(ck) and R != null: hk = float(R.gear_tot(c)["heal"])
+	var v := pc / 100.0 * ak * (1.0 + hk / 100.0)
+	return [v, pc, ak, hk]
+
+static func value_text(ck: String) -> String:
+	var v: float = value_of(ck)[0]
+	return str(roundi(v)) if v >= 10.0 else ("%.1f" % v)
+
 static func _sorted_keys() -> Array:
 	if _keys.is_empty():
 		_keys = gloss().keys()
@@ -40,6 +63,21 @@ static func segs(text: String) -> Array:
 	var buf := ""
 	var i := 0
 	while i < text.length():
+		# a coefficient token {c.key} → its final value, tappable (term "#c.key")
+		if text[i] == "{":
+			var j := text.find("}", i)
+			if j > i and text.substr(i + 1, j - i - 1).find(".") > 0:
+				var ck := text.substr(i + 1, j - i - 1)
+				if buf.ends_with("×"):
+					# a multiplier (폭탄 피해 ×100%), not a share of 공격력: it stays a percentage
+					buf += "%d%%" % BAL.pct(ck.split(".")[0], ck.split(".")[1])
+					i = j + 1
+					continue
+				if buf != "": out.append([buf, ""])
+				buf = ""
+				out.append([value_text(ck), "#" + ck])
+				i = j + 1
+				continue
 		var hit := ""
 		for k in keys:
 			if text.substr(i, String(k).length()) == k:
@@ -132,7 +170,7 @@ static func draw(ci: CanvasItem, font: Font, pos: Vector2, text: String, width: 
 			if term == "":
 				ci.draw_string(font, p, s, HORIZONTAL_ALIGNMENT_LEFT, -1, size, Color(col, a))
 				continue
-			var kc: Color = G[term][0]
+			var kc: Color = Color("#5aa0ff") if term.begins_with("#") else G[term][0]
 			if light: kc = kc.darkened(0.35)
 			var w := _w(font, s, size)
 			ci.draw_string(font, p, s, HORIZONTAL_ALIGNMENT_LEFT, -1, size, Color(kc, a))
@@ -145,6 +183,18 @@ static func draw(ci: CanvasItem, font: Font, pos: Vector2, text: String, width: 
 ## kept inside vs. Returns the card's rect.
 static func draw_tip(ci: CanvasItem, title_font: Font, font: Font, term: String, p: Vector2, vs: Vector2, a: float) -> Rect2:
 	var G := gloss()
+	if term.begins_with("#"):
+		# a value's breakdown: 계수 × 공격력 (× 회복량) = 최종
+		var ck := term.substr(1)
+		var V := value_of(ck)
+		var heal := HEALS.has(ck)
+		var title := ("회복 " if heal else "피해 ") + value_text(ck)
+		var desc := "계수 %d%% × 공격력 %s" % [V[1], ("%.1f" % V[2])]
+		if heal: desc += " × 회복량 +%d%%" % roundi(V[3])
+		desc += " = %s\n공격력 = 10 × 기본 공격 × 레벨 성장 × 장비. 실제 피해는 여기에 속성 · 룬 · 노드 · 치명 · 적의 상태가 더해진다." % value_text(ck)
+		if heal: desc = desc.replace("실제 피해는 여기에 속성 · 룬 · 노드 · 치명 · 적의 상태가 더해진다.", "회복량은 장비 · 노드로 오른다.")
+		G = {title: [Color("#5aa0ff"), desc]}
+		term = title
 	if not G.has(term): return Rect2()
 	var w := minf(300.0, vs.x - 24.0)
 	var tw := w - 28.0

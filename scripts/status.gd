@@ -245,7 +245,9 @@ static func deal(arena, e, v: float, col: Color) -> void:
 	var n := maxi(1, roundi(v))
 	arena.text(e.position + Vector2(randf_range(-14, 14), -100), "-%d" % n, col)
 	_in = true
-	if e.hp - n <= 0.0:
+	if e.get("inv") == true:
+		pass                                  # the unbreakable dummy: the number shows, its HP stays
+	elif e.hp - n <= 0.0:
 		e.hp = 0.5
 		e.hit(0.0001, 0.0)
 	else:
