@@ -17,7 +17,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Godot + its export templates (~1 GB) and the import cache are kept between runs: only a cold run downloads
+      - uses: actions/cache@v4
+        id: godot
+        with:
+          path: |
+            godot
+            ~/.local/share/godot/export_templates
+          key: godot-${{ env.GODOT }}
+      - uses: actions/cache@v4
+        with:
+          path: .godot
+          key: import-${{ env.GODOT }}-${{ hashFiles('**/*.import') }}
+          restore-keys: import-${{ env.GODOT }}-
       - name: Godot + export templates
+        if: steps.godot.outputs.cache-hit != 'true'
         run: |
           wget -q https://github.com/godotengine/godot/releases/download/${GODOT}-stable/Godot_v${GODOT}-stable_linux.x86_64.zip
           wget -q https://github.com/godotengine/godot/releases/download/${GODOT}-stable/Godot_v${GODOT}-stable_export_templates.tpz
@@ -37,7 +51,7 @@ jobs:
           grep -q "index.pck?v=" build/web/index.html
           ./godot --headless --export-release "Windows" build/windows/ClumsyValor.exe
           # one-click download of the newest Windows build: on the Pages site, and as the repo's latest release
-          (cd build/windows && zip -q -9 ../web/ClumsyValor-windows.zip *)
+          (cd build/windows && zip -q -6 ../web/ClumsyValor-windows.zip *)
           ls -la build/web/ClumsyValor-windows.zip
       - name: Latest release
         env:
