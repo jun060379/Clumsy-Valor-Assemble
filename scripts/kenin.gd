@@ -196,7 +196,7 @@ func step(dt: float) -> void:
 ## one round from the muzzle (o) along d (a unit vector), a third of a pull's damage; player.gd replays the fire frame for
 ## each round of the BURST (first = the burst's opening round: only it stamps a mark). Empty = nothing comes out, the
 ## trigger clicks on the opening round (returns false; the burst stops).
-func fire(o: Vector2, d: Vector2, dmg: float, first := true) -> bool:
+func fire(o: Vector2, d: Vector2, dmg: float, first := true, big := false) -> bool:
 	if ammo <= 0:
 		if first:
 			arena.sfx("ui_move", 0.7, {"st": -4.0})
@@ -204,10 +204,17 @@ func fire(o: Vector2, d: Vector2, dmg: float, first := true) -> bool:
 		return false
 	ammo -= 1
 	var dd := d.rotated(randf_range(-0.05, 0.05))
-	shots.append({"x": o.x, "y": o.y, "vx": dd.x * SHOT_V, "vy": dd.y * SHOT_V, "dmg": dmg / BURST, "dry": false, "t": 0.0, "mul": _mul(), "mk": first})
-	# PLACEHOLDER sound: there is no gunshot in the packs yet (the stab, pitched up); each round its own crack
-	arena.sfx("thrust", 0.6, {"st": 5.0 + randf() * 1.2})
-	arena.pfx.hit(o.x, o.y, int(signf(d.x)) if d.x != 0.0 else 1, 0.7)
+	if big: dd = d
+	shots.append({"x": o.x, "y": o.y, "vx": dd.x * SHOT_V * (1.25 if big else 1.0), "vy": dd.y * SHOT_V * (1.25 if big else 1.0), "dmg": dmg / BURST, "dry": false, "t": 0.0, "mul": _mul(), "mk": first or big, "big": big})
+	# PLACEHOLDER sound: there is no gunshot in the packs yet (the stab, pitched up); each round its own crack, the big one a boom
+	if big:
+		arena.sfx("thrust", 0.9, {"st": 1.0})
+		arena.sfx("heavy", 0.7, {"st": 2.0})
+		arena.pfx.hit(o.x, o.y, int(signf(d.x)) if d.x != 0.0 else 1, 1.5)
+		arena.post_wave(o, 0.6, 360.0, 0.15)
+	else:
+		arena.sfx("thrust", 0.6, {"st": 5.0 + randf() * 1.2})
+		arena.pfx.hit(o.x, o.y, int(signf(d.x)) if d.x != 0.0 else 1, 0.7)
 	_shake(1.0, -int(signf(d.x)) if d.x != 0.0 else 1)
 	if ammo <= 0 and on_field(): _ran_dry()
 	return true
@@ -234,10 +241,15 @@ func _step_shots(dt: float) -> void:
 func _land_shot(s: Dictionary, m) -> void:
 	arena.hit_by = "kenin"
 	if nv("kMarked") > 0.0 and marks.has(m.get_instance_id()): s["dmg"] *= 1.0 + nv("kMarked")    # 명사수
-	m.hit(s["dmg"], signf(s["vx"]) * (1.5 if s["dry"] else 3.0), s["mul"])
+	var big: bool = s.get("big", false)
+	m.hit(s["dmg"], signf(s["vx"]) * (9.0 if big else (1.5 if s["dry"] else 3.0)), s["mul"])
 	arena.hit_by = ""
-	arena.spark(Vector2(s["x"], s["y"]), 4 if s["dry"] else 7)
-	arena.sfx("hit1", 0.4 if s["dry"] else 0.6)
+	arena.spark(Vector2(s["x"], s["y"]), 12 if big else (4 if s["dry"] else 7))
+	arena.sfx("hit3" if big else "hit1", 0.9 if big else (0.4 if s["dry"] else 0.6))
+	if big:
+		arena.hitstop = maxf(arena.hitstop, 60.0)
+		arena.pfx.hit(s["x"], s["y"], int(signf(s["vx"])), 1.3)
+		_shake(4.0, int(signf(s["vx"])))
 	if not s["dry"]:
 		arena.ult_gain(2.0 / BURST)
 		if s.get("mk", true): add_marks(m, 1)
@@ -654,6 +666,11 @@ func draw(g: CanvasItem) -> void:
 		if s["dry"]:
 			p.px(0, 0, Color("#b9bfa8"))
 			p.px(dl.x * 0.4, dl.y * 0.4, Color(0.72, 0.75, 0.66, 0.5))
+		elif s.get("big", false):
+			# the finisher's big round: a fat slug with a long hot trail
+			p.line(dl.x * 3.0, dl.y * 3.0, 0, 0, Color("#f08a3a"))
+			p.line(dl.x * 1.6, dl.y * 1.6, 0, 0, BRASS)
+			p.disc(0, 0, 1.6, Color.WHITE)
 		else:
 			p.line(dl.x, dl.y, 0, 0, BRASS)
 			p.px(0, 0, Color.WHITE)

@@ -347,23 +347,30 @@ func kenin_shoot() -> void:
 			var ang := clampf(atan2(aim.y, absf(aim.x)), -0.3, 0.3)
 			d = Vector2(dir * cos(ang), sin(ang))
 	var kd: float = ka["dmg"]
-	if ka.get("heavy", false) or (anim == "air_combo" and f == 8): kd *= 1.0 + arena.kenin.nv("kHeavyShot")    # 헤드샷 연습
+	var heavy: bool = ka.get("heavy", false) or (anim == "air_combo" and f == 8)
+	if heavy: kd *= 1.0 + arena.kenin.nv("kHeavyShot")    # 헤드샷 연습
 	var first := k_rep <= 0
 	k_rep = (arena.kenin.BURST - 1) if first else k_rep - 1
-	if not arena.kenin.fire(mz, d, kd, first):
+	var last := k_rep == 0
+	# a finisher (3타, the air combo's last) goes 따닥 — 팡: two light rounds, then one big round carrying half the damage
+	var big := heavy and last
+	var share := 1.0
+	if heavy: share = (0.5 if big else 0.25) * arena.kenin.BURST
+	if not arena.kenin.fire(mz, d, kd * share, first, big):
 		k_rep = 0
 		# empty: no shot; on the ground he stops and looks at the pistol
 		if on: set_anim("kdry")
 		return
 	add_ghost(120.0, -dir * 10.0 * S)
-	if true:
-		if ka.get("heavy", false):
-			slide = -dir * 0.32 if on else slide          # the heavy shot's kick: a small skid back
-			arena.shake(4, -dir)
-			arena.hitstop = maxf(arena.hitstop, 35.0)
-			qte_offer("finisher")
-		else:
-			arena.shake(1.5, -dir)
+	if big:
+		slide = -dir * 0.32 if on else slide          # the big round's kick: a skid back
+		arena.shake(6, -dir)
+		arena.hitstop = maxf(arena.hitstop, 70.0)
+		arena.flash = maxf(arena.flash, 0.1)
+		add_ghost(180.0, -dir * 22.0 * S)
+		if ka.get("heavy", false): qte_offer("finisher")
+	else:
+		arena.shake(1.5, -dir)
 
 ## Luce: every strike is a gesture; the real hit is light the game draws
 func luce_gesture(atk) -> void:
