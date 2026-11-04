@@ -418,7 +418,6 @@ func _draw_cpu() -> void:
 			"airb": alive = _airb(g, e)
 			"dive": alive = _dive(g, e)
 			"slam": alive = _slam(g, e)
-			"crown": alive = _crown(g, e)
 			"chg": alive = _charge(g, e)
 			"gate": alive = _gate(e)
 			"pil": alive = _pillar(g, e)
@@ -819,7 +818,7 @@ func _kill(e: Dictionary) -> void:
 		q.visible = false
 		pool.append(q)
 		e.erase("q")
-	for k2 in ["q2", "q3", "q4", "q5", "q6", "q7", "q8"]:
+	for k2 in ["q2", "q3", "q4"]:
 		var q2: Node2D = e.get(k2)
 		if q2 != null:
 			q2.visible = false
@@ -1040,73 +1039,6 @@ func _dive(g: CanvasItem, e: Dictionary) -> bool:
 		if b > a: p.line(xo, a, xo, b, C[0] if fade < 0.3 else C[3])
 	return true
 
-## 처형's floor burst: [x offset (px), lean (deg, + = right), length (px), delay (frames)]
-const UP_SPIKES := [[-120.0, -30.0, 200.0, 0.6], [-80.0, -14.0, 240.0, 0.3], [-40.0, -6.0, 180.0, 0.1], [0.0, 0.0, 120.0, 0.0],
-	[36.0, 10.0, 170.0, 0.15], [76.0, 32.0, 220.0, 0.35], [116.0, 58.0, 250.0, 0.55]]
-
-## 처형's floor shockwave (owner 2026-11-04: one connected effect, a shock wave, the sketch: thrown up and out over a
-## wide stretch, low in the middle, tall and leaning out at the edges). Staged the way pixel impact FX are: a flash;
-## the wave front (one band of the void with a lit rim) racing out and up in a V, thick at first and thinning; a flat
-## ring along the floor (the z axis); then the band tears apart into streaks that keep flying out and fade
-func crown(x: float, y: float, d := 1) -> void:
-	_push({"k": "crown", "x": x, "y": y, "d": d})
-
-const SW_W := 150.0          # half-width the wave reaches (px)
-const SW_H := 150.0          # how tall its edges rise (px)
-
-func _crown(g: CanvasItem, e: Dictionary) -> bool:
-	var F: float = e["t"] / FR
-	if F > 12.0: return false
-	var p := PX.new(g, e["x"], e["y"])
-	var R := Rng.new(e["seed"])
-	var u := 1.0 - pow(1.0 - clampf(F / 5.0, 0.0, 1.0), 2.6)       # out fast, easing
-	var Wr: float = (14.0 + (SW_W - 14.0) * u) / S
-	var Hh: float = SW_H / S * u
-	var th := lerpf(0.55, 0.12, clampf(F / 6.0, 0.0, 1.0))          # the band thins
-	var tear := clampf((F - 5.0) / 6.0, 0.0, 1.0)                     # then tears apart
-	# flash
-	if F < 1.5:
-		var fw := 10.0 + F * 8.0
-		p.rect(-fw, -2.0, fw * 2.0 + 1.0, 3.0, Color.WHITE)
-		p.rect(-3.0, -10.0 + F * 3.0, 7.0, 9.0 - F * 3.0, Color.WHITE)
-	# the floor ring (squashed ellipse, front half)
-	if F < 8.0:
-		var rr := Wr * 1.15
-		var rc: Color = TEARL[1] if F < 3.0 else (TEARL[2] if F < 5.5 else TEARL[3])
-		for a in 48:
-			var t0 := PI * a / 48.0
-			p.px(cos(t0) * rr, sin(t0) * rr * 0.22, rc)
-			p.px(cos(t0) * rr, -sin(t0) * rr * 0.12, rc)
-	# the wave front: profile y(t) = -Hh * (0.18 + 0.82 |t|^1.6), leaning out at the edges
-	var N := 28
-	var outer: Array = []
-	var inner: Array = []
-	var jit: Array = []
-	for k in N + 1:
-		var t := -1.0 + 2.0 * k / N
-		var at := absf(t)
-		var hy := Hh * (0.18 + 0.82 * pow(at, 1.6)) * (0.9 + R.r() * 0.2)
-		var x := t * Wr + signf(t) * hy * 0.35 * at                     # the top leans outward
-		outer.append(Vector2(x, -hy))
-		var T := (70.0 * th + 6.0) / S                                 # a thick front, thinning as it flies
-		inner.append(Vector2(x - signf(t) * T * 0.5 * at, minf(0.0, -hy + T)))
-		jit.append(R.r())
-	var rim: Color = TEARL[0] if F < 2.5 else (TEARL[1] if F < 5.0 else (TEARL[2] if F < 8.0 else TEARL[3]))
-	for k in N:
-		if jit[k] < tear: continue                                  # torn away
-		var drift := Vector2(signf(outer[k].x) * tear * 10.0, -tear * 6.0)
-		var q := [outer[k] + drift, outer[k + 1] + drift, inner[k + 1] + drift, inner[k] + drift]
-		p.poly(q, TVOID)
-		p.line(q[0].x, q[0].y, q[1].x, q[1].y, rim)
-		if tear > 0.0:                                              # a streak trailing each torn piece
-			p.line(q[0].x, q[0].y, q[0].x - drift.x * 0.8, q[0].y - drift.y * 0.8, TEARL[3])
-	# the base: one connected foot of the void along the floor while the wave stands
-	if F < 7.0:
-		var fh := 3.0 * (1.0 - F / 7.0) + 1.0
-		p.poly([Vector2(-Wr, 0.0), Vector2(-Wr * 0.6, -fh), Vector2(0.0, -fh * 1.6), Vector2(Wr * 0.6, -fh), Vector2(Wr, 0.0)], TVOID)
-		p.line(-Wr, 0.0, Wr, 0.0, rim)
-	return true
-
 func _slam(g: CanvasItem, e: Dictionary) -> bool:
 	var F: float = e["t"] / FR
 	var f := int(floorf(F))
@@ -1124,13 +1056,21 @@ func _slam(g: CanvasItem, e: Dictionary) -> bool:
 		# 처형 (owner 2026-11-04): the tears climb out of the floor, a V rising from the blow, not lying flat
 		var up: bool = e.get("up", false)
 		if up:
-			pass                 # 처형: the burst is one shape of its own (crown), only the shards here
+			# 처형: the floor bursts open wide, four tears thrown up and out from the blow
+			if not e.has("tq3"): e["tq3"] = {"seed": e["seed"] + 2.0}
+			if not e.has("tq4"): e["tq4"] = {"seed": e["seed"] - 2.0}
+			_tear_quad(e["tq1"], Vector2(e["x"] + 10.0, e["y"] - 3.0), Vector2(0.86, -0.5), 200.0 / S, F, stp)
+			_tear_quad(e["tq2"], Vector2(e["x"] - 10.0, e["y"] - 3.0), Vector2(-0.86, -0.5), 200.0 / S, F, stp)
+			_tear_quad(e["tq3"], Vector2(e["x"] + 4.0, e["y"] - 3.0), Vector2(0.34, -0.94), 160.0 / S, F, stp)
+			_tear_quad(e["tq4"], Vector2(e["x"] - 4.0, e["y"] - 3.0), Vector2(-0.34, -0.94), 160.0 / S, F, stp)
 		else:
 			_tear_quad(e["tq1"], Vector2(e["x"] + 6.0, e["y"] - 3.0), Vector2(1, 0), 144.0 / S, F, stp)
 			_tear_quad(e["tq2"], Vector2(e["x"] - 6.0, e["y"] - 3.0), Vector2(-1, 0), 144.0 / S, F, stp)
 		e["q"] = e["tq1"].get("q")
-		for i in range(2, 9):
-			if e.has("tq%d" % i): e["q%d" % i] = e["tq%d" % i].get("q")
+		e["q2"] = e["tq2"].get("q")
+		if e.has("tq3"):
+			e["q3"] = e["tq3"].get("q")
+			e["q4"] = e["tq4"].get("q")
 		if f < 2: p.rect(-4, -2, 9, 2, Color.WHITE)
 		var sh: Array = []
 		for i in (14 if up else 8):
