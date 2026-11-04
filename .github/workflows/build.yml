@@ -4,7 +4,7 @@ on:
     branches: [main]
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write      # the "latest-build" release (one-click download of the newest Windows build)
   pages: write
   id-token: write
 concurrency:
@@ -36,6 +36,17 @@ jobs:
           sed -i "s#GODOT_CONFIG = {#GODOT_CONFIG = {\"mainPack\":\"index.pck?v=${GITHUB_SHA::7}\",#" build/web/index.html
           grep -q "index.pck?v=" build/web/index.html
           ./godot --headless --export-release "Windows" build/windows/ClumsyValor.exe
+          # one-click download of the newest Windows build: on the Pages site, and as the repo's latest release
+          (cd build/windows && zip -q -9 ../web/ClumsyValor-windows.zip *)
+          ls -la build/web/ClumsyValor-windows.zip
+      - name: Latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest-build --yes --cleanup-tag || true
+          gh release create latest-build build/web/ClumsyValor-windows.zip --target "$GITHUB_SHA" --latest \
+            --title "최신 빌드 $(date -u -d '+9 hours' +%m-%d\ %H:%M) · ${GITHUB_SHA::7}" \
+            --notes "main의 최신 커밋을 자동으로 빌드한 Windows 버전. 압축을 풀고 ClumsyValor.exe 실행."
       - uses: actions/upload-artifact@v4
         with:
           name: ClumsyValor-windows

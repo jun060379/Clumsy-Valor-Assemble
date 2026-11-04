@@ -7,7 +7,8 @@
 고도 4 (GDScript) 이식판. main 브랜치에 올라가면 자동으로 빌드된다.
 
 - 웹: https://jun060379.github.io/Clumsy-Valor-Assemble/
-- 윈도우: Actions → 최신 build → Artifacts의 ClumsyValor-windows
+- 윈도우 최신 빌드 바로 받기: https://jun060379.github.io/Clumsy-Valor-Assemble/ClumsyValor-windows.zip
+  (또는 https://github.com/jun060379/Clumsy-Valor-Assemble/releases/latest/download/ClumsyValor-windows.zip — main에 올라갈 때마다 자동 갱신, 로그인 필요 없음)
 
 ## 조작 (방향키형 · 설정에서 WASD + 마우스형으로 바꾸거나 칸마다 키를 바꿀 수 있다)
 
