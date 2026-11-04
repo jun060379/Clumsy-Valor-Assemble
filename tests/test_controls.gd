@@ -129,6 +129,10 @@ func _initialize() -> void:
 	ok(P.dir == -1, "estelle: the swing turns to the pointer behind")
 	await frames(2)
 	P.set_anim("idle")
+	P.dir = 1
+	P.use_skill(1)
+	ok(P.dir == -1, "estelle: the skill turns to the pointer, not the held key")
+	P.set_anim("idle")
 
 	P.switch_char("aida")
 	P.tp_cd = 0.0

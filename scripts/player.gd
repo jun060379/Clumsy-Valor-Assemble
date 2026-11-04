@@ -880,6 +880,12 @@ func step(dt: float) -> void:
 			fx_done = true
 			var btg = target(460.0)
 			var btx: float = btg.position.x if btg != null and (btg.position.x - position.x) * dir > 0.0 else NAN
+			if mouse_aim():
+				# 마우스 조준: the lob reaches for the foe under the pointer, else the pointer's spot
+				var bap := aim_pt()
+				var bf = foe_near(bap, 170.0)
+				face_aim()
+				btx = bf.position.x if bf != null else bap.x
 			arena.kenin.throw_bomb(position + Vector2(dir * 14.0 * CSCALE, -80.0 * CSCALE), dir, btx)
 			_rev("skill")
 	elif a == "heal":
@@ -981,6 +987,7 @@ func step(dt: float) -> void:
 				lunge_assist()
 			if f >= 3 and want("guard") and who == "estelle":
 				take("guard")
+				face_aim()
 				if _shield_throw(): pass
 				else:
 					set_anim("parry")
@@ -1062,6 +1069,8 @@ func roll_bounce() -> void:
 
 ## guard key = each member's skill
 func use_skill(move: int) -> void:
+	if mouse_aim(): move = 0            # 마우스 조준: the skill goes the pointer's way, not the held key's
+	face_aim()
 	if who == "estelle":
 		if _shield_throw(): return
 		set_anim("parry")
