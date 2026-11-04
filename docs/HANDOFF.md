@@ -197,6 +197,9 @@ main에 푸시하면 GitHub Actions가 웹·윈도우로 빌드해서 GitHub Pag
 - 목표 비율(지속 딜): 아이다 100 · 케닌 90(폭딜은 더 높게, 탄 제약) · 루체 75(딜포터) · 에스텔 70. 1차 값은 임시.
 - 궁 1대상 피해: 에스텔 500% · 아이다 220%+450% · 루체 900%(일직선) · 케닌 약 1080%(사격 24×15% + 표식 24×15% + 폭탄 6×60%). 케닌 궁은 전엔 약 7000%였음.
 - 측정 스크립트 `tools/balance/measure.gd`(6초 연타 + 궁 1대상). 루체의 유도탄은 이 연타 방식으로 잘 안 재짐.
+- **밸런스 조정판** (오너 요청 2026-11-04): https://claude.ai/artifact/EMPz1CwpPnTa4vecq7gUyG — 오너는 기준 딜·궁 크기·광역 할인·목표 비율·기술 비중만 만지고, 계수는 자동 계산. "게임에 적용 요청"을 누르면 페이지 저장소 balance/current에 status "requested"로 저장됨.
+  - 적용 절차(Claude): ArtifactData get balance/current → 파일로 저장 → `python3 -I tools/balance/apply.py 그파일` → data/balance.json 생김(게임은 이 값을 balance.gd 표보다 우선) → 테스트·커밋·배포 → 문서에 status "applied", applied_note 기록.
+  - 페이지 다시 만들기: `python3 -I tools/balance/export.py > data.json` 후 tools/balance/tool_template.html의 __DATA__ 자리에 넣어 같은 주소로 재게시(적용 뒤 "게임 값" 기준을 갱신할 때).
 - 기존 아이다 설명의 "뒷치기 피해 2배"는 구현돼 있지 않아 설명에서 뺌.
 
 ## 5. 이번 세션에 끝낸 것 (모두 main, 푸시·배포 완료)

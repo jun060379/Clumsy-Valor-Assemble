@@ -1,0 +1,284 @@
+<title>어설픈 용맹 밸런스</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Gothic+A1:wght@400;600;800&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* layout: a control strip of the owner's few knobs on top, then one card per member — result first, the parts after */
+:root{
+  --bg:#f3f0ea; --panel:#fffdf9; --ink:#1f1a24; --muted:#6c6474; --line:#e2dbe6; --soft:#efe9f2;
+  --good:#2f8f5b; --warn:#c07a12; --bad:#c23b3b; --accent:#5b3fd0;
+  --c-estelle:#e2417f; --c-aida:#8a52e8; --c-luce:#d99a14; --c-kenin:#6f9a2a;
+  --display:"Black Han Sans","Gothic A1",system-ui,sans-serif; --body:"Gothic A1",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#17141c;--panel:#211d28;--ink:#f1edf6;--muted:#a69fb0;--line:#342e3d;--soft:#2a2533;--good:#5fc48a;--warn:#e7a33c;--bad:#ef6a6a;--accent:#a28bff;--c-estelle:#ff6fa6;--c-aida:#b48cff;--c-luce:#ffc94d;--c-kenin:#a6cf5a;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#17141c;--panel:#211d28;--ink:#f1edf6;--muted:#a69fb0;--line:#342e3d;--soft:#2a2533;--good:#5fc48a;--warn:#e7a33c;--bad:#ef6a6a;--accent:#a28bff;--c-estelle:#ff6fa6;--c-aida:#b48cff;--c-luce:#ffc94d;--c-kenin:#a6cf5a;color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.5}
+.wrap{max-width:1080px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 120px;display:flex;flex-direction:column;gap:18px}
+h1{font-family:var(--display);font-weight:400;font-size:30px;margin:0;letter-spacing:.01em}
+h2{font-family:var(--display);font-weight:400;font-size:20px;margin:0}
+.sub{color:var(--muted);font-size:13px;margin:2px 0 0}
+.knobs{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px 18px}
+.knob{display:flex;flex-direction:column;gap:6px;min-width:0}
+.knob label{font-weight:800;font-size:13px}
+.knob .hint{color:var(--muted);font-size:12px}
+.row{display:flex;align-items:center;gap:10px}
+input[type=range]{flex:1;min-width:0;accent-color:var(--accent)}
+.val{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600;min-width:62px;text-align:right}
+.targets{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.summary{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.bar{display:grid;grid-template-columns:72px 1fr 110px;align-items:center;gap:10px}
+.bar .nm{font-weight:800}
+.track{position:relative;height:16px;background:var(--soft);border-radius:8px;overflow:hidden}
+.fill{position:absolute;inset:0 auto 0 0;border-radius:8px}
+.tick{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink);opacity:.55}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:13px;text-align:right}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,480px),1fr));gap:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0;border-top:6px solid var(--cc)}
+.head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.role{color:var(--muted);font-size:12px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.stat{background:var(--soft);border-radius:10px;padding:8px 10px;min-width:0}
+.stat b{display:block;font-family:var(--mono);font-size:16px}
+.stat span{color:var(--muted);font-size:11px}
+.pill{display:inline-block;font-size:12px;font-weight:800;padding:2px 9px;border-radius:999px;background:var(--soft)}
+.pill.ok{color:var(--good)} .pill.warn{color:var(--warn)} .pill.bad{color:var(--bad)}
+.tbl{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{color:var(--muted);font-weight:600;text-align:left;padding:4px 6px;border-bottom:1px solid var(--line);font-size:12px}
+td{padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
+td.p{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;font-weight:600;white-space:nowrap}
+td.d{color:var(--muted);font-size:12px;font-family:var(--mono);text-align:right;white-space:nowrap}
+.grp td{background:var(--soft);font-weight:800;font-size:12px}
+input.w{width:64px;font-family:var(--mono);font-size:13px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);text-align:right}
+button{font-family:var(--body);font-weight:800;font-size:13px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:8px 12px;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.pin{padding:2px 7px;font-size:12px;border-radius:6px}
+button.pin.on{background:var(--ink);color:var(--panel)}
+.dock{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--line);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-top:10px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:5}
+.dock .in{max-width:1080px;margin:0 auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.dock .msg{flex:1;min-width:180px;font-size:13px;color:var(--muted)}
+.primary{background:var(--accent);color:#fff;border-color:transparent}
+.how{color:var(--muted);font-size:12.5px;max-width:70ch}
+.chg{color:var(--warn);font-weight:800}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>밸런스 조정판</h1>
+    <p class="sub">위의 몇 가지만 정하면 아래 계수가 전부 자동으로 계산돼요. 숫자는 모두 공격력 대비 %예요.</p>
+  </header>
+
+  <section class="knobs" aria-label="전체 기준">
+    <div class="knob"><label for="k-anchor">기준 딜 · 아이다 평타 1타</label><div class="row"><input id="k-anchor" type="range" min="60" max="200" step="5"><span class="val" id="v-anchor"></span></div><span class="hint">모든 캐릭터 딜의 기준점. 올리면 전원이 같이 세져요.</span></div>
+    <div class="knob"><label for="k-ult">궁극기 크기</label><div class="row"><input id="k-ult" type="range" min="1" max="10" step="0.25"><span class="val" id="v-ult"></span></div><span class="hint">궁 1회 = 그 캐릭터 평타 연타 몇 초 분량인지.</span></div>
+    <div class="knob"><label for="k-aoe">광역 할인</label><div class="row"><input id="k-aoe" type="range" min="40" max="100" step="5"><span class="val" id="v-aoe"></span></div><span class="hint">여러 적을 맞히는 궁은 단일 대상 궁의 몇 %로.</span></div>
+    <div class="knob"><label for="k-ttk">고블린을 평타 몇 대에</label><div class="row"><input id="k-ttk" type="range" min="2" max="12" step="1"><span class="val" id="v-ttk"></span></div><span class="hint">1레벨 기준 목표. 아래 처치 타수 비교에만 쓰여요.</span></div>
+  </section>
+
+  <section class="summary" aria-label="목표와 결과">
+    <div class="head"><h2>포지션별 딜 비율</h2><span class="role">막대 = 공격하는 동안 초당 딜 · 세로선 = 목표</span></div>
+    <div class="targets" id="targets"></div>
+    <div id="bars"></div>
+    <p class="how">케닌은 탄 18발을 쏘는 동안의 값이에요. 다 쓰면 재장전해야 해서, 실제 평균은 이보다 낮고 폭탄·기폭이 순간 화력을 채워요.</p>
+  </section>
+
+  <section class="cards" id="cards"></section>
+</div>
+
+<div class="dock"><div class="in">
+  <span class="msg" id="msg">바뀐 값이 없어요.</span>
+  <button id="reset" type="button">게임에 있는 값으로</button>
+  <button id="apply" class="primary" type="button">게임에 적용 요청</button>
+</div></div>
+
+<script>
+const DATA = __DATA__;
+const NAMES = {estelle:"에스텔", aida:"아이다", luce:"루체", kenin:"케닌"};
+const ROLES = {estelle:"전사 · 근접 · 디펜더", aida:"워락 · 근접 · 스트라이커", luce:"사제 · 원거리 · 서포터", kenin:"도적 · 원거리 · 트릭스터"};
+const ORDER = ["aida","kenin","luce","estelle"];
+// what each key is, grouped; "base" = the move every weight is measured against
+const KEYS = {
+  estelle:{base:"attack1", combo:["attack1","attack2","attack3"], groups:[
+    ["평타",[["attack1","1타"],["attack2","2타"],["attack3","3타"]]],
+    ["모으기·위아래·공중",[["cthrust","차징 찌르기 (끝까지)"],["cthrust_part","차징 찌르기 (덜 모음)"],["attack_high","올려베기"],["kneel_attack","하단베기"],["air1","공중 1타"],["air2","공중 2타"],["air3","공중 3타"],["dive","낙하 찍기"],["dive_slam","착지 충격"]]],
+    ["스킬·QTE",[["parry_bash","패링 방패 강타"],["shieldthrow","[방패 던지기] 룬"],["tag","교대 일격"]]]],
+    ult:{aoe:true, parts:[["ult","수호의 맹세",1,1]]}},
+  aida:{base:"attack1", combo:["attack1","attack2","attack3"], groups:[
+    ["평타",[["attack1","1타"],["attack2","2타"],["attack3","3타"]]],
+    ["모으기·위아래·공중",[["rift_min","균열 베기 (최소)"],["rift_max","균열 베기 (최대)"],["attack_high","올려치기"],["kneel_attack","바닥 쓸기"],["air1","공중 1타"],["air2","공중 2타"],["air3","공중 3타"],["dive","낙하"],["dive_slam","착지 충격"]]],
+    ["스킬·QTE",[["tag","교대 일격 (기습은 ×2)"]]],
+    ["배율 (고정 %)",[["clone","[그림자 분신] 룬: 아이다 공격의","fixed"]]]],
+    ult:{aoe:true, parts:[["ult_pass","땅 밑의 문 · 균열 통과",1,0.33],["ult_burst","땅 밑의 문 · 폭발",1,0.67]]}},
+  luce:{base:"bolt", combo:["bolt","bolt","bolt","attack3"], groups:[
+    ["평타",[["bolt","빛탄 (1타 1발, 2타 2발)"],["attack3","3타 빛기둥"]]],
+    ["모으기·위아래·공중",[["lfinisher_min","심판의 번개 (최소)"],["lfinisher_max","심판의 번개 (최대)"],["attack_high","낙뢰"],["air1","공중 1타"],["air2","공중 2타"],["air3","공중 3타"],["dive","낙하"],["dive_slam","착지 충격"]]],
+    ["스킬·QTE",[["tag","교대 일격"]]]],
+    ult:{aoe:true, parts:[["ult","루체 펀치 (일직선)",1,1]]}},
+  kenin:{base:"attack1", combo:["attack1","attack2","attack3"], groups:[
+    ["평타 (한 번 당길 때 3발 합계)",[["attack1","1타"],["attack2","2타"],["attack3","3타 (따닥—팡)"]]],
+    ["위아래·공중",[["attack_high","위로 쏘기"],["kneel_attack","엎드려 쏘기"],["air_combo","공중 연사 (사격마다)"],["dive","아래로 쏘기"]]],
+    ["폭탄·표식·원호",[["bomb","점착 폭탄"],["mark","표식 하나 터짐"],["dud","빈 기폭 상자"],["headshot","QTE 원호 헤드샷"]]],
+    ["배율 (고정 %)",[["bomb_head","폭탄 붙은 적에게 총알: 폭탄 피해의","fixed"],["chain_bomb","연쇄에서 폭탄: 폭탄 피해의","fixed"]]]],
+    ult:{aoe:false, parts:[["ult_shot","연쇄 기폭 · 사격",24,0.33],["ult_mark","연쇄 기폭 · 표식",24,0.33],["ult_bomb","연쇄 기폭 · 폭탄",6,0.34]]}},
+};
+const COMBO_MS = c => (DATA.ms[c].attack1 + DATA.ms[c].attack2 + DATA.ms[c].attack3) / DATA.stats[c].as;
+const ATK = (c, lv) => 10 * DATA.stats[c].atk * DATA.lvcurve[lv];
+
+function defaults(){
+  const st = {knobs:{anchor:DATA.C.aida.attack1, ult:0, aoe:70, ttk:5, target:{}}, w:{}, pin:{}};
+  // weights from the game's numbers, so the defaults reproduce them
+  for (const c of ORDER){
+    const K = KEYS[c], C = DATA.C[c], b = C[K.base];
+    st.w[c] = {}; st.pin[c] = {};
+    for (const [, rows] of K.groups) for (const [k,, kind] of rows) st.w[c][k] = kind === "fixed" ? C[k] : +(C[k] / b).toFixed(4);
+  }
+  // targets, ult size, each member's ult weight and its parts' shares: all read off the game's current numbers,
+  // so the page opens on exactly what the game has
+  const d0 = {}; for (const c of ORDER) d0[c] = dpsOf(c, DATA.C[c]);
+  for (const c of ORDER) st.knobs.target[c] = +(d0[c] / d0.aida * 100).toFixed(2);
+  const ultNow = c => KEYS[c].ult.parts.reduce((s,[k,, n]) => s + DATA.C[c][k] * n, 0);
+  const perSec = c => KEYS[c].combo.reduce((s,k) => s + DATA.C[c][k], 0) / (COMBO_MS(c) / 1000);
+  st.knobs.ult = Math.max(1, Math.min(10, Math.round(ultNow("aida") / (perSec("aida") * st.knobs.aoe / 100) * 4) / 4));
+  st.uw = {}; st.us = {};
+  for (const c of ORDER){
+    const K = KEYS[c];
+    st.uw[c] = +(ultNow(c) / (perSec(c) * st.knobs.ult * (K.ult.aoe ? st.knobs.aoe / 100 : 1))).toFixed(4);
+    st.us[c] = {}; for (const [k,, n] of K.ult.parts) st.us[c][k] = +(DATA.C[c][k] * n / ultNow(c)).toFixed(5);
+  }
+  return st;
+}
+// coefficient sum of one ground combo ÷ its time × 공격력 (per second)
+function dpsOf(c, C){
+  const sum = KEYS[c].combo.reduce((s,k) => s + C[k], 0) / 100;
+  return sum * ATK(c,1) / (COMBO_MS(c) / 1000);
+}
+function compute(st){
+  const out = {}, info = {};
+  const aidaW = KEYS.aida.combo.reduce((s,k) => s + st.w.aida[k], 0);
+  const refDps = (st.knobs.anchor / 100) * aidaW * ATK("aida",1) / (COMBO_MS("aida") / 1000);
+  for (const c of ORDER){
+    const K = KEYS[c], W = st.w[c];
+    const wsum = K.combo.reduce((s,k) => s + W[k], 0);
+    const want = refDps * st.knobs.target[c] / 100;
+    const base = want * (COMBO_MS(c) / 1000) / (ATK(c,1) * wsum) * 100;
+    const C = {};
+    for (const [, rows] of K.groups) for (const [k,, kind] of rows){
+      C[k] = kind === "fixed" ? W[k] : base * W[k];
+      if (st.pin[c][k] != null) C[k] = st.pin[c][k];
+    }
+    // ult: N seconds of this member's own combo output, AoE ones discounted
+    const perSec = KEYS[c].combo.reduce((s,k) => s + C[k], 0) / (COMBO_MS(c) / 1000);
+    const total = perSec * st.knobs.ult * (K.ult.aoe ? st.knobs.aoe / 100 : 1) * (st.uw[c] ?? 1);
+    for (const [k,, n, share] of K.ult.parts){ const sh = (st.us[c] && st.us[c][k] != null) ? st.us[c][k] : share; C[k] = st.pin[c][k] != null ? st.pin[c][k] : total * sh / n; }
+    if (DATA.C[c].tag === 0) C.tag = 0;
+    for (const k in C) C[k] = Math.round(C[k]);
+    out[c] = C;
+    info[c] = {dps: dpsOf(c, C), ultTotal: K.ult.parts.reduce((s,[k,, n]) => s + C[k] * n, 0), base: C[K.base]};
+  }
+  return {C: out, info};
+}
+
+let st = defaults(), saved = null, db = null, lastStatus = null;
+const $ = id => document.getElementById(id);
+
+function knobUI(){
+  const set = (id, v, txt) => { $("k-"+id).value = v; $("v-"+id).textContent = txt; };
+  set("anchor", st.knobs.anchor, st.knobs.anchor + "%");
+  set("ult", st.knobs.ult, st.knobs.ult + "초");
+  set("aoe", st.knobs.aoe, st.knobs.aoe + "%");
+  set("ttk", st.knobs.ttk, st.knobs.ttk + "대");
+}
+function render(){
+  knobUI();
+  const R = compute(st);
+  // targets
+  $("targets").innerHTML = ORDER.map(c => `<div class="knob"><label for="t-${c}" style="color:var(--c-${c})">${NAMES[c]} 목표</label><div class="row"><input id="t-${c}" type="range" min="30" max="130" step="1" value="${st.knobs.target[c]}" ${c==="aida"?"disabled":""}><span class="val">${Math.round(st.knobs.target[c])}</span></div><span class="hint">${c==="aida"?"기준 (100 고정)":ROLES[c].split(" · ")[2]}</span></div>`).join("");
+  ORDER.forEach(c => { if (c !== "aida") $("t-"+c).oninput = e => { st.knobs.target[c] = +e.target.value; render(); }; });
+  const max = Math.max(...ORDER.map(c => R.info[c].dps), 1) * 1.15;
+  const ref = R.info.aida.dps;
+  $("bars").innerHTML = ORDER.map(c => {
+    const d = R.info[c].dps, pct = d / ref * 100, tgt = st.knobs.target[c];
+    return `<div class="bar"><span class="nm" style="color:var(--c-${c})">${NAMES[c]}</span><div class="track"><div class="fill" style="width:${d/max*100}%;background:var(--c-${c})"></div><div class="tick" style="left:${ref*tgt/100/max*100}%"></div></div><span class="num">${d.toFixed(1)}/초 · ${Math.round(pct)}</span></div>`;
+  }).join("");
+  // cards
+  $("cards").innerHTML = ORDER.map(c => card(c, R)).join("");
+  ORDER.forEach(c => {
+    document.querySelectorAll(`[data-c="${c}"] input.w`).forEach(inp => inp.onchange = e => {
+      const k = e.target.dataset.k, v = Math.max(0, +e.target.value || 0);
+      if (k === "_uw") st.uw[c] = v; else st.w[c][k] = v;
+      render();
+    });
+    document.querySelectorAll(`[data-c="${c}"] button.pin`).forEach(b => b.onclick = e => {
+      const k = e.currentTarget.dataset.k, R2 = compute(st);
+      if (st.pin[c][k] != null) delete st.pin[c][k]; else st.pin[c][k] = R2.C[c][k];
+      render();
+    });
+  });
+  const chg = changed(R.C);
+  $("msg").innerHTML = statusText(chg);
+  return R;
+}
+function card(c, R){
+  const C = R.C[c], I = R.info[c], K = KEYS[c], s = DATA.stats[c];
+  const gob = DATA.mobs.goblin || 50;
+  const hits = Math.ceil(gob / (ATK(c,1) * I.base / 100));
+  const pr = st.knobs.ttk, cls = hits <= pr ? "ok" : (hits <= pr + 2 ? "warn" : "bad");
+  const rows = K.groups.map(([g, list]) => `<tr class="grp"><td colspan="4">${g}</td></tr>` + list.map(([k, label, kind]) => {
+    const was = DATA.C[c][k], now = C[k], d = now - was;
+    const pinned = st.pin[c][k] != null;
+    const wcell = kind === "fixed" ? `<input class="w" data-k="${k}" type="number" step="5" value="${st.w[c][k]}" aria-label="${label} 배율">` : `<input class="w" data-k="${k}" type="number" step="0.05" value="${(+st.w[c][k]).toFixed(2)}" aria-label="${label} 비중">`;
+    return `<tr><td>${label}</td><td>${k === K.base ? "기준" : wcell}</td><td class="p">${now}%</td><td class="d">${d ? `<span class="chg">${d>0?"+":""}${d}</span>` : ""} <button class="pin ${pinned?"on":""}" data-k="${k}" type="button" title="이 값 고정">${pinned?"고정됨":"고정"}</button></td></tr>`;
+  }).join("")).join("");
+  const ultRows = `<tr><td>궁 크기 비중 (1 = 기준 크기)</td><td><input class="w uw" data-k="_uw" type="number" step="0.05" value="${(+st.uw[c]).toFixed(2)}" aria-label="궁 크기 비중"></td><td class="p">${Math.round(I.ultTotal)}%</td><td class="d">1대상 합계</td></tr>` + K.ult.parts.map(([k, label, n]) => {
+    const was = DATA.C[c][k], now = C[k], d = now - was;
+    return `<tr><td>${label}${n>1?` × ${n}`:""}</td><td>자동</td><td class="p">${now}%</td><td class="d">${d ? `<span class="chg">${d>0?"+":""}${d}</span>` : ""}</td></tr>`;
+  }).join("");
+  return `<article class="card" data-c="${c}" style="--cc:var(--c-${c})">
+    <div class="head"><h2 style="color:var(--c-${c})">${NAMES[c]}</h2><span class="role">${ROLES[c]}</span></div>
+    <div class="stats">
+      <div class="stat"><b>${Math.round(s.hp)}→${Math.round(s.hp*4)}</b><span>체력 1→12레벨</span></div>
+      <div class="stat"><b>${Math.round(ATK(c,1))}→${Math.round(ATK(c,12))}</b><span>공격력</span></div>
+      <div class="stat"><b>${I.dps.toFixed(1)}</b><span>초당 딜 (1레벨)</span></div>
+      <div class="stat"><b>${Math.round(I.ultTotal)}%</b><span>궁 1대상</span></div>
+    </div>
+    <div class="row"><span class="pill ${cls}">고블린 ${hits}대</span><span class="role">1타 ${I.base}% 기준 · 목표 ${pr}대</span></div>
+    <div class="tbl"><table><thead><tr><th>기술</th><th>비중</th><th style="text-align:right">계수</th><th style="text-align:right">변화</th></tr></thead><tbody>${rows}<tr class="grp"><td colspan="4">궁극기 (크기·광역 할인으로 자동)</td></tr>${ultRows}</tbody></table></div>
+  </article>`;
+}
+function diffs(C){ const o=[]; for (const c of ORDER) for (const k in C[c]) if (C[c][k] !== DATA.C[c][k]) o.push(c+"."+k+":"+DATA.C[c][k]+"→"+C[c][k]); return o; }
+function changed(C){ let n = 0; for (const c of ORDER) for (const k in C[c]) if (C[c][k] !== DATA.C[c][k]) n++; return n; }
+function statusText(chg){
+  const s = lastStatus;
+  let t = chg ? `게임과 다른 값 ${chg}개.` : "게임과 같은 값이에요.";
+  if (s && s.status === "requested") t += " 적용 요청됨 · Claude에게 \"적용\"이라고 말하면 반영돼요.";
+  if (s && s.status === "applied") t += ` 마지막 적용: ${s.applied_note || "완료"}.`;
+  if (!db) t += " (저장 기능이 꺼져 있어 이 화면에서만 바뀌어요.)";
+  return t;
+}
+for (const id of ["anchor","ult","aoe","ttk"]) $("k-"+id).addEventListener("input", e => { st.knobs[id] = +e.target.value; render(); });
+$("reset").onclick = () => { st = defaults(); render(); };
+$("apply").onclick = async () => {
+  const R = compute(st);
+  if (!db){ $("msg").textContent = "이 화면에서는 저장할 수 없어요. 숫자를 캡처해 Claude에게 보내 주세요."; return; }
+  $("apply").disabled = true;
+  try {
+    await db.doc("balance/current").set({C: R.C, knobs: st.knobs, w: st.w, pin: st.pin, uw: st.uw, us: st.us, status: "requested", requested_at: Date.now()});
+    $("msg").textContent = "적용 요청을 저장했어요. Claude에게 \"적용\"이라고 말하면 게임에 반영돼요.";
+  } catch (e) { $("msg").textContent = "저장하지 못했어요: " + (e && e.message ? e.message : e); }
+  $("apply").disabled = false;
+};
+render();
+(async () => {
+  try {
+    db = await claude.use("db");
+    if (!db) { render(); return; }
+    const timer = setTimeout(() => render(), 10000);
+    db.doc("balance/current").onSnapshot(snap => {
+      clearTimeout(timer);
+      const d = snap && snap.exists ? snap.data() : null;
+      lastStatus = d;
+      if (d && !saved && d.status === "requested"){ saved = d; for (const k of ["knobs","w","pin","uw","us"]) if (d[k]) st[k] = d[k]; }
+      render();
+    }, () => { clearTimeout(timer); render(); });
+  } catch (e) { render(); }
+})();
+</script>

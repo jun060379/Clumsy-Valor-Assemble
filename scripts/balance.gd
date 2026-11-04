@@ -50,8 +50,22 @@ const C := {
 }
 const COMMON := {"dive_slam": 200, "tag": 200}
 
+## data/balance.json (written by the balance tool, tools/balance/apply.py) overrides the table above key by key
+const JSON_PATH := "res://data/balance.json"
+static var _J = null
+
+static func _json() -> Dictionary:
+	if _J == null:
+		_J = {}
+		if FileAccess.file_exists(JSON_PATH):
+			var d = JSON.parse_string(FileAccess.get_file_as_string(JSON_PATH))
+			if d is Dictionary and d.get("C") is Dictionary: _J = d["C"]
+	return _J
+
 ## the coefficient as a multiplier of 공격력 ÷ 10 (what mob.hit takes: hit(1.0) = 공격력 × 100%)
 static func p(c: String, key: String, fallback := -1.0) -> float:
+	var J: Dictionary = _json().get(c, {})
+	if J.has(key): return float(J[key]) / 100.0
 	var T: Dictionary = C.get(c, {})
 	if T.has(key): return float(T[key]) / 100.0
 	if COMMON.has(key): return float(COMMON[key]) / 100.0
