@@ -31,6 +31,7 @@ const HEAD_DMG := 4.0
 const MARK_DMG := 1.6           # one stamp popping
 const MARK_QTE := 3
 const MARK_MAX := 8
+const VULN_MS := 8000
 const CHAIN_GAP0 := 110.0       # the chain: the first gap, then each gap ×CHAIN_ACC down to CHAIN_GAP_MIN
 const CHAIN_ACC := 0.86
 const CHAIN_GAP_MIN := 38.0
@@ -60,8 +61,8 @@ func _init(a) -> void:
 	arena = a
 
 func reset() -> void:
-	ammo = AMMO
-	bombs = BOMBS
+	ammo = amax()
+	bombs = bmax()
 	reload_t = 0.0
 	bomb_t = 0.0
 	shots.clear()
@@ -70,6 +71,49 @@ func reset() -> void:
 	marks.clear()
 	assists.clear()
 	chain.clear()
+
+# ---------- memory nodes (memory_data.gd NODES.kenin: the k* keys) ----------
+var spare_t := 0.0              # 비상 탄창: time until it can fire again
+var was_field := false
+
+func _mem():
+	var R = arena.get("runes")
+	return R.memory if R != null and R.get("memory") != null else null
+
+## a node value (additive keys: kAmmo, kBombs, kHeavyShot …; 0 when not taken)
+func nv(key: String) -> float:
+	var M = _mem()
+	return M.val("kenin", key) if M != null else 0.0
+
+## a node multiplier (kReload, kBench, kFuse, kBombR; 1 when not taken)
+func nm(key: String) -> float:
+	var M = _mem()
+	return M.mul("kenin", key) if M != null else 1.0
+
+func amax() -> int:
+	return AMMO + int(nv("kAmmo"))
+
+func bmax() -> int:
+	return BOMBS + int(nv("kBombs"))
+
+func reload_need() -> float:
+	return RELOAD_FIELD * nm("kReload")
+
+func bomb_need(field: bool) -> float:
+	return (BOMB_FIELD if field else BOMB_BENCH * nm("kBench"))
+
+## the cylinder just ran dry (out front): 비상 탄창, 빈 탄창 털기 (kdry event), 탄피 폭탄
+func _ran_dry() -> void:
+	var P = _P()
+	var M = _mem()
+	if M != null: M.ev("kdry")
+	if nv("kDryBlast") > 0.0: dud_blast(P.position + Vector2(0, -20.0))
+	if nv("kSpare") > 0.0 and spare_t <= 0.0:
+		spare_t = nv("kSpare")
+		ammo = amax()
+		reload_t = 0.0
+		arena.sfx("ui_ok", 0.7, {"st": 4.0})
+		arena.big_word("비상 탄창!", Color("#e8ffb0"), 600.0, Vector2.ZERO, P.position + Vector2(0, -170.0 * P.CSCALE))
 
 ## no screen shake while his ult plays (owner 2026-11-04: the ult read better still)
 func _shake(amt: float, d: int) -> void:
@@ -98,27 +142,33 @@ func step(dt: float) -> void:
 	var P = _P()
 	if P == null: return
 	var field := on_field()
+	if spare_t > 0.0: spare_t -= dt
+	if field and not was_field and nv("kTagReload") > 0.0 and ammo < amax():
+		ammo = amax()                                       # 교대 장전
+		reload_t = 0.0
+		arena.text(P.position + Vector2(0, -150.0 * P.CSCALE), "교대 장전", Color("#e2f5b8"))
+	was_field = field
 	if field:
 		if ammo <= 0:
 			reload_t += dt
-			if reload_t >= RELOAD_FIELD:
-				ammo = AMMO
+			if reload_t >= reload_need():
+				ammo = amax()
 				reload_t = 0.0
 				arena.sfx("ui_ok", 0.5)
 				arena.text(P.position + Vector2(0, -150.0 * P.CSCALE), "재장전 완료", Color("#e2f5b8"))
 		else:
 			reload_t = 0.0
-	elif ammo < AMMO:
+	elif ammo < amax():
 		reload_t += dt
-		while reload_t >= RELOAD_BENCH and ammo < AMMO:
-			reload_t -= RELOAD_BENCH
+		var rb := RELOAD_BENCH * nm("kBench")
+		while reload_t >= rb and ammo < amax():
+			reload_t -= rb
 			ammo += 1
-	if bombs < BOMBS:
+	if bombs < bmax():
 		bomb_t += dt
-		var need := BOMB_FIELD if field else BOMB_BENCH
-		if bomb_t >= need:
+		if bomb_t >= bomb_need(field):
 			bomb_t = 0.0
-			bombs = BOMBS
+			bombs = bmax()
 			if field:
 				arena.sfx("ui_ok", 0.5, {"st": -3.0})
 				arena.text(P.position + Vector2(0, -150.0 * P.CSCALE), "폭탄 보충", Color("#e2f5b8"))
@@ -134,6 +184,9 @@ func step(dt: float) -> void:
 		if e == null or not is_instance_valid(e) or not e.alive(): marks.erase(k)
 		else:
 			for q in marks[k]["pts"]: q["t"] += dt
+	var mf := nv("kMarkFuse")
+	if mf > 0.0 and chain.is_empty():
+		_mark_fuses(mf)
 	_step_chain(dt)
 
 
@@ -146,6 +199,7 @@ func fire(o: Vector2, d: Vector2, dmg: float) -> bool:
 		return false
 	ammo -= 1
 	shots.append({"x": o.x, "y": o.y, "vx": d.x * SHOT_V, "vy": d.y * SHOT_V, "dmg": dmg, "dry": false, "t": 0.0, "mul": _mul()})
+	if ammo <= 0 and on_field(): _ran_dry()
 	# PLACEHOLDER sound: there is no gunshot in the packs yet (the stab, pitched up)
 	arena.sfx("thrust", 0.75, {"st": 5.0})
 	arena.pfx.hit(o.x, o.y, int(signf(d.x)) if d.x != 0.0 else 1, 0.8)
@@ -172,6 +226,7 @@ func _step_shots(dt: float) -> void:
 
 func _land_shot(s: Dictionary, m) -> void:
 	arena.hit_by = "kenin"
+	if nv("kMarked") > 0.0 and marks.has(m.get_instance_id()): s["dmg"] *= 1.0 + nv("kMarked")    # 명사수
 	m.hit(s["dmg"], signf(s["vx"]) * (1.5 if s["dry"] else 3.0), s["mul"])
 	arena.hit_by = ""
 	arena.spark(Vector2(s["x"], s["y"]), 4 if s["dry"] else 7)
@@ -200,7 +255,7 @@ func throw_bomb(o: Vector2, d: int, tx := NAN) -> void:
 	bomb_t = 0.0                # the refill clock starts over from the last throw
 	var v := 0.5
 	if not is_nan(tx) and (tx - o.x) * d > 0.0: v = clampf(absf(tx - o.x) / 290.0, 0.3, 1.1)
-	bomb_fx.append({"x": o.x, "y": o.y, "vx": d * v, "vy": -0.3, "m": null, "ox": 0.0, "oy": 0.0, "on_floor": false, "t": 0.0, "fuse": FUSE, "done": false})
+	bomb_fx.append({"x": o.x, "y": o.y, "vx": d * v, "vy": -0.3, "m": null, "ox": 0.0, "oy": 0.0, "on_floor": false, "t": 0.0, "fuse": FUSE * nm("kFuse"), "done": false})
 	arena.sfx("swing", 0.5)
 
 func _bomb_on(m):
@@ -231,6 +286,7 @@ func _step_bombs(dt: float) -> void:
 					b["ox"] = clampf(b["x"] - e.position.x, -14.0, 14.0)
 					b["oy"] = clampf(b["y"] - e.position.y, -80.0, -30.0)
 					arena.sfx("ui_move", 0.6, {"st": -7.0})        # the squelch of the glue (PLACEHOLDER)
+					if nv("kInstant") > 0.0: b["fuse"] = 0.0        # 접촉 신관
 					break
 			var fy := _floor(b["x"])
 			if b["m"] == null and b["y"] >= fy:
@@ -248,16 +304,16 @@ func _explode(b: Dictionary, k: float, head: bool) -> void:
 	if b["done"]: return
 	b["done"] = true
 	var c := Vector2(b["x"], b["y"])
-	var R := BOMB_R * (1.15 if k > 1.0 else 1.0)
+	var R := BOMB_R * (1.15 if k > 1.0 else 1.0) * nm("kBombR")
 	arena.hit_by = "kenin"
 	for e in arena.foes():
 		var ec: Vector2 = Vector2(e.position.x, e.position.y - 50.0)
 		if ec.distance_to(c) < R + 30.0:
 			var dd := signf(e.position.x - c.x) if e.position.x != c.x else 1.0
-			e.hit(BOMB_DMG * k, dd * 9.0, _mul())
-			if not in_chain: add_marks(e, 1)
+			e.hit(BOMB_DMG * k * (1.0 + nv("kBombDmg")), dd * 9.0, _mul())
+			if not in_chain: add_marks(e, 1 + int(nv("kBombMark")))
 	arena.hit_by = ""
-	booms.append({"x": c.x, "y": c.y, "t": 0.0, "life": 420.0, "big": k > 1.0})
+	booms.append({"x": c.x, "y": c.y, "t": 0.0, "life": 420.0, "big": k > 1.0, "r": R})
 	arena.sfx("heavy", 1.0)
 	arena.sfx("slam", 0.5)          # PLACEHOLDER: no explosion in the packs yet
 	_shake(7.0 if k > 1.0 else 5.0, 1)
@@ -272,10 +328,27 @@ func _explode(b: Dictionary, k: float, head: bool) -> void:
 func _as_ms() -> Array:
 	return CH.A_KENIN["headshot"][1]
 
+## owner 2026-11-04: he rolls in slowly (데구르르), uncurls where he can be seen, then fires one heavy shot
+const AS_ROLL := 720.0
+const AS_UNCURL := 260.0
+
+func assist_lead() -> float:
+	return AS_ROLL + AS_UNCURL
+
 func assist_total() -> float:
-	var s := 0.0
+	var s := assist_lead()
 	for v in _as_ms(): s += v
 	return s
+
+## what to draw for an assist: [anim, frame, x]
+func assist_pose(a: Dictionary) -> Array:
+	var t: float = a["t"]
+	if t < AS_ROLL:
+		var u := 1.0 - pow(1.0 - t / AS_ROLL, 2.2)                       # rolls in, slowing down
+		return ["dash", 1 + int(t / 70.0) % 6, lerpf(a["x0"], a["x"], u)]
+	if t < AS_ROLL + AS_UNCURL:
+		return ["dash", 7 if t < AS_ROLL + AS_UNCURL * 0.5 else 8, a["x"]]
+	return ["headshot", _as_frame(t - assist_lead()), a["x"]]
 
 func _as_frame(t: float) -> int:
 	var acc := 0.0
@@ -289,25 +362,46 @@ func _as_frame(t: float) -> int:
 func assist(tg) -> void:
 	var P = _P()
 	if tg == null or not is_instance_valid(tg) or not tg.alive(): tg = P.target(900.0)
-	var side := 1
+	var side: int = P.dir
 	var x: float = P.position.x + P.dir * 160.0
 	var y: float = P.position.y
+	var view: Rect2 = arena.view_rect().grow(-70.0)
 	if tg != null:
-		# from behind the foe (the far side from the one in control), facing its back
+		# a spot in plain view, clear of the foe and the one in control: past the foe if that is on screen, else on our side
 		var away := -1 if tg.position.x < P.position.x else 1
-		x = tg.position.x + away * 80.0
-		side = -away
+		x = tg.position.x + away * 190.0
+		if x < view.position.x or x > view.end.x or absf(x - P.position.x) < 90.0:
+			x = tg.position.x - away * 190.0
+			if absf(x - P.position.x) < 90.0: x = P.position.x - away * 110.0
+		side = 1 if tg.position.x >= x else -1
 		var fly: bool = tg.get("M") != null and tg.M.has("fly")
 		y = _floor(x) if fly else tg.position.y
-	assists.append({"x": clampf(x, 30.0, arena.world_w - 30.0), "y": y, "dir": side, "tg": tg, "t": 0.0, "fired": false})
-	arena.sfx("dash", 0.6)
-	arena.dust(Vector2(x, y), 0, false)
+	x = clampf(x, 30.0, arena.world_w - 30.0)
+	var x0 := clampf(x - side * 340.0, 20.0, arena.world_w - 20.0)                   # rolls in from out there
+	assists.append({"x0": x0, "x": x, "y": y, "dir": side, "tg": tg, "t": 0.0, "fired": false, "dust": 0.0})
+	arena.sfx("dash", 0.7)
 
 func _step_assists(dt: float) -> void:
 	var tot := assist_total()
 	for a in assists:
 		a["t"] += dt
-		if not a["fired"] and _as_frame(a["t"]) >= AS_FIRE:
+		if a["t"] < AS_ROLL:
+			a["dust"] += dt
+			if a["dust"] > 110.0:
+				a["dust"] = 0.0
+				arena.dust(Vector2(assist_pose(a)[2], a["y"]), -a["dir"], false)
+				arena.sfx("foot", 0.35)
+			continue
+		if not a.get("planted", false):
+			a["planted"] = true                                   # the uncurl: feet down, a skid
+			arena.dust(Vector2(a["x"], a["y"]), -a["dir"], true)
+			arena.sfx("skid", 0.6)
+		var ht: float = a["t"] - assist_lead()
+		if ht < 0.0: continue
+		if not a.get("aimed", false) and _as_frame(ht) >= 3:
+			a["aimed"] = true                                   # the aim settles: a click of the hammer
+			arena.sfx("ui_move", 0.8, {"st": -9.0})
+		if not a["fired"] and _as_frame(ht) >= AS_FIRE:
 			a["fired"] = true
 			_headshot(a)
 	assists = assists.filter(func(a): return a["t"] < tot)
@@ -320,16 +414,28 @@ func _headshot(a: Dictionary) -> void:
 	if tg == null or not is_instance_valid(tg) or not tg.alive():
 		return
 	var hp: Vector2 = Vector2(tg.position.x, tg.position.y - 70.0)
+	# weight (owner 2026-11-04): a long freeze, a hard knock, the screen kicks, the recoil throws dust at his feet
+	arena.post_wave(hp, 1.3, 620.0, 0.35)
+	arena.post_ca(0.02)
+	arena.dust(Vector2(a["x"], a["y"]), -a["dir"], true)
+	arena.sfx("slam", 0.8)
 	arena.hit_by = "kenin"
-	tg.hit(HEAD_DMG, a["dir"] * 6.0, _mul())
+	tg.hit(HEAD_DMG * (1.0 + nv("kAssistDmg")), a["dir"] * 12.0, _mul())
 	arena.hit_by = ""
-	add_marks(tg, MARK_QTE)
+	add_marks(tg, MARK_QTE + int(nv("kQteMark")))
+	if nv("kQteVuln") > 0.0:
+		# 약점 표시: it takes more damage for 8 s (mob.gd reads the meta)
+		tg.set_meta("kvuln_t", Time.get_ticks_msec() + VULN_MS)
+		tg.set_meta("kvuln", 1.0 + nv("kQteVuln"))
+		arena.text(Vector2(tg.position.x, tg.position.y - 150.0), "약점 노출", Color("#ff8a6a"))
+	if nv("kQteBomb") > 0.0 and _bomb_on(tg) == null:
+		bomb_fx.append({"x": tg.position.x, "y": tg.position.y - 50.0, "vx": 0.0, "vy": 0.0, "m": tg, "ox": randf_range(-10.0, 10.0), "oy": -60.0, "on_floor": false, "t": 0.0, "fuse": FUSE * nm("kFuse"), "done": false})
 	arena.spark_ring(hp, 10)
 	arena.sfx("heavy", 0.9)
-	arena.hitstop = maxf(arena.hitstop, 130.0)        # QA: the headshot holds a beat so it reads
-	arena.flash = maxf(arena.flash, 0.18)
-	arena.shake(5, a["dir"])
-	arena.text(hp + Vector2(0, -40.0), "HEADSHOT!", Color("#e8ffb0"))
+	arena.hitstop = maxf(arena.hitstop, 200.0)        # the headshot holds a long beat so it lands heavy
+	arena.flash = maxf(arena.flash, 0.28)
+	arena.shake(10, a["dir"])
+	arena.big_word("HEADSHOT!", Color("#e8ffb0"), 800.0, Vector2.ZERO, hp + Vector2(0, -70.0))
 	var b = _bomb_on(tg)
 	if b != null: _explode(b, BOMB_HEAD, true)
 
@@ -351,6 +457,25 @@ func add_marks(m, n: int, cap := MARK_MAX) -> void:
 		pts.append({"ox": ox, "oy": oy, "t": -i * 45.0})        # stamped one after another, 45 ms apart
 		arena.sfx("ui_ok", 0.45, {"st": minf(14.0, 2.0 * k), "delay_ms": i * 45.0})
 
+## 시한 표식: a stamp older than `ms` pops on its own (one small blast, the stamp gone)
+func _mark_fuses(ms: float) -> void:
+	for k in marks.keys():
+		var e = marks[k]["m"]
+		if e == null or not is_instance_valid(e) or not e.alive(): continue
+		var pts: Array = marks[k]["pts"]
+		for q in pts.duplicate():
+			if q["t"] < ms: continue
+			pts.erase(q)
+			var c := Vector2(e.position.x + q["ox"], e.position.y + q["oy"])
+			arena.hit_by = "kenin"
+			e.hit(MARK_DMG, 0.0, _mul())
+			arena.hit_by = ""
+			booms.append({"x": c.x, "y": c.y, "t": 0.0, "life": 280.0, "big": false, "r": 42.0})
+			arena.spark(c, 5)
+			arena.sfx("hit2", 0.6, {"st": 3.0})
+			if not is_instance_valid(e) or not e.alive(): break
+		if pts.is_empty(): marks.erase(k)
+
 func marked_count() -> int:
 	var n := 0
 	for k in marks: n += (marks[k]["pts"] as Array).size()
@@ -370,12 +495,13 @@ func chain_detonate(o: Vector2) -> int:
 	marks.clear()
 	items.sort_custom(func(x, y): return x["d"] < y["d"])
 	var at := 60.0
-	var gap := CHAIN_GAP0
+	var fast := nv("kChainSplash") > 0.0
+	var gap := CHAIN_GAP0 * (0.75 if fast else 1.0)
 	for i in items.size():
 		items[i]["at"] = at
 		items[i]["i"] = i
 		at += gap
-		gap = maxf(CHAIN_GAP_MIN, gap * CHAIN_ACC)
+		gap = maxf(CHAIN_GAP_MIN * (0.8 if fast else 1.0), gap * CHAIN_ACC)
 	chain = items
 	chain_t = 0.0
 	chain_n = 0
@@ -404,6 +530,9 @@ func _step_chain(dt: float) -> void:
 				var c := Vector2(e.position.x + it["ox"], e.position.y + it["oy"])
 				arena.hit_by = "kenin"
 				e.hit(MARK_DMG, 0.0, _mul())
+				if nv("kChainSplash") > 0.0:
+					for o in arena.foes():                                  # 연쇄 반응: the pop spills onto foes nearby
+						if o != e and Vector2(o.position.x, o.position.y - 50.0).distance_to(c) < 90.0: o.hit(MARK_DMG * 0.5, 0.0, _mul())
 				arena.hit_by = ""
 				booms.append({"x": c.x, "y": c.y, "t": 0.0, "life": 300.0, "big": false, "r": 46.0})
 				arena.spark(c, 6)
@@ -475,6 +604,42 @@ const MARK_COL := [Color("#9cc14a"), Color("#c9d64a"), Color("#f1c35a"), Color("
 
 func draw(g: CanvasItem) -> void:
 	var t := float(Time.get_ticks_msec())
+	# the covering shot's aim (frames 3-4): a dotted line to the head, a crosshair closing in on it
+	for a in assists:
+		var ht: float = a["t"] - assist_lead()
+		if a["fired"] or ht < 0.0 or _as_frame(ht) < 3: continue
+		var tg = a["tg"]
+		if tg == null or not is_instance_valid(tg) or not tg.alive(): continue
+		var mz := Vector2(a["x"] + a["dir"] * 30.0 * CH.SCALE["kenin"], a["y"] - 50.0 * CH.SCALE["kenin"])
+		var hd := Vector2(tg.position.x, tg.position.y - 70.0)
+		var acc := 0.0
+		for i in 3: acc += _as_ms()[i]
+		var k := clampf((ht - acc) / (_as_ms()[3] + _as_ms()[4]), 0.0, 1.0)
+		var n := int(mz.distance_to(hd) / 10.0)
+		for i in n:
+			if i % 2 == 0: g.draw_line(mz.lerp(hd, float(i) / n), mz.lerp(hd, float(i + 1) / n), Color(1, 0.3, 0.2, 0.35 + 0.4 * k), 2.0)
+		var cr := lerpf(26.0, 9.0, k)
+		var cp := PFX.PX.new(g, hd.x, hd.y)
+		cp.circle(0, 0, cr / PFX.S, Color(1, 0.3, 0.2, 0.6 + 0.4 * k))
+		cp.line(-cr / PFX.S - 3, 0, -cr / PFX.S + 2, 0, Color.WHITE)
+		cp.line(cr / PFX.S - 2, 0, cr / PFX.S + 3, 0, Color.WHITE)
+		cp.line(0, -cr / PFX.S - 3, 0, -cr / PFX.S + 2, Color.WHITE)
+		cp.line(0, cr / PFX.S - 2, 0, cr / PFX.S + 3, Color.WHITE)
+	# 약점 표시: a red cracked-shield mark over the foe while it lasts (blinks in its last second)
+	for e in arena.foes():
+		if not e.has_meta("kvuln_t"): continue
+		var left := float(e.get_meta("kvuln_t")) - t
+		if left <= 0.0 or (left < 1000.0 and int(t / 120.0) % 2 == 0): continue
+		var fly: bool = e.get("M") != null and e.M.has("fly")
+		var p := PFX.PX.new(g, e.position.x + 22.0, e.position.y - (60.0 if fly else 132.0))
+		var rc := Color("#ff5a3a")
+		p.rect(-3, -3, 7, 6, rc)
+		p.rect(-2, 3, 5, 1, rc)
+		p.rect(-1, 4, 3, 1, rc)
+		p.px(0, -2, Color.WHITE)
+		p.px(1, -1, Color.WHITE)
+		p.px(0, 0, Color.WHITE)
+		p.px(1, 1, Color.WHITE)
 	for s in shots:
 		var p := PFX.PX.new(g, s["x"], s["y"])
 		var dl := Vector2(s["vx"], s["vy"]).normalized() * -5.0

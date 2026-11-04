@@ -351,8 +351,8 @@ func _k_target():
 
 func _k_reload(P, S: float, n: int) -> void:
 	var K = arena.kenin
-	K.ammo = K.AMMO
-	K.bombs = K.BOMBS
+	K.ammo = K.amax()
+	K.bombs = K.bmax()
 	K.reload_t = 0.0
 	pose("bomb", 1)
 	arena.big_word("재장전!" if n == 0 else "재장전!!", Color("#e8ffb0"), 520.0, Vector2.ZERO, P.position + Vector2(0, -170.0 * S))

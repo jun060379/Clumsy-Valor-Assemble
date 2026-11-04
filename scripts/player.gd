@@ -344,7 +344,9 @@ func kenin_shoot() -> void:
 			var aim: Vector2 = (tg.position + Vector2(0, -55.0) - mz).normalized()
 			var ang := clampf(atan2(aim.y, absf(aim.x)), -0.3, 0.3)
 			d = Vector2(dir * cos(ang), sin(ang))
-	if not arena.kenin.fire(mz, d, ka["dmg"]):
+	var kd: float = ka["dmg"]
+	if ka.get("heavy", false) or (anim == "air_combo" and f == 8): kd *= 1.0 + arena.kenin.nv("kHeavyShot")    # 헤드샷 연습
+	if not arena.kenin.fire(mz, d, kd):
 		# empty: no shot; on the ground he stops and looks at the pistol
 		if on: set_anim("kdry")
 		return
@@ -1762,7 +1764,7 @@ func bench_assist(c: String, tg) -> void:
 	if c == "kenin": arena.kenin.assist(tg if tg != null else qte_target())
 	qte_end()
 	swap_cd = 0.0
-	party_lock = LOCK_ASSIST
+	party_lock = maxf(LOCK_ASSIST, arena.kenin.assist_total() + 250.0) if c == "kenin" else LOCK_ASSIST
 	qte_gap = QTE_GAP
 	_rev("tag")
 	arena.flash = maxf(arena.flash, 0.12)
@@ -1845,13 +1847,14 @@ func _draw() -> void:
 		var ofs := Vector2(o["x"] - o["dir"] * 140.0 * k, o["y"]) - position
 		var fr := mini(int(o["t"] / 150.0), 3)
 		draw_frame(o["c"], o["anim"], fr, ofs, -o["dir"] if not o["dead"] else o["dir"], Color(1, 1, 1, 1.0 - k), "", null, NAN, 0, "out" + str(o["c"]))
-	# Kenin's covering shot from the bench (kenin.gd assists): fades in, fires, fades out
+	# Kenin's covering shot from the bench (kenin.gd assists): rolls in, uncurls, aims, fires, fades out
 	if arena.kenin != null:
 		var tot: float = arena.kenin.assist_total()
 		for a in arena.kenin.assists:
 			var at: float = a["t"]
-			var al := minf(1.0, minf(at / 70.0, (tot - at) / 120.0))
-			draw_frame("kenin", "headshot", arena.kenin._as_frame(at), Vector2(a["x"], a["y"]) - position, a["dir"], Color(1, 1, 1, al), "", null, NAN, 0, "assist", -1.0, al >= 1.0)
+			var al := minf(1.0, minf(at / 120.0, (tot - at) / 160.0))
+			var ps: Array = arena.kenin.assist_pose(a)
+			draw_frame("kenin", ps[0], ps[1], Vector2(ps[2], a["y"]) - position, a["dir"], Color(1, 1, 1, al), "", null, NAN, 0, "assist", -1.0, al >= 1.0)
 	# afterimages (ghostFx): the frame tinted with PAL[CHAR].ghost, smooth (never pixelated), 0.35 at birth
 	var gt: Array = CH.GHOST[who]
 	for g in ghosts:

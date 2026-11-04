@@ -244,7 +244,7 @@ func skill_cd() -> float:
 	var P = arena.player
 	if P.who == "luce": return clampf(maxf(0.0, P.heal_cd) / 9000.0, 0.0, 1.0)
 	if P.who == "aida": return clampf(maxf(0.0, P.tp_cd) / 3000.0, 0.0, 1.0)
-	if P.who == "kenin" and arena.kenin.bombs <= 0: return clampf(1.0 - arena.kenin.bomb_t / arena.kenin.BOMB_FIELD, 0.0, 1.0)
+	if P.who == "kenin" and arena.kenin.bombs <= 0: return clampf(1.0 - arena.kenin.bomb_t / arena.kenin.bomb_need(true), 0.0, 1.0)
 	return 0.0
 
 ## interUI: what the attack button says when it will interact ('' = attack)

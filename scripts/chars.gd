@@ -90,7 +90,7 @@ const A_KENIN := {
 	"double_jump": [15, [45, 45, 45, 45, 45, 45, 50, 60, 70]], "hurt": [16, [70, 110, 110, 110]], "death": [17, [150, 170, 170, 400]],
 	"bomb": [18, [60, 60, 60, 70, 70, 60, 60, 90, 110]],                     # 점착 폭탄: the bomb leaves the hand on frame 6
 	"detonate": [19, [1000000000, 1000000000, 1000000000, 1000000000, 1000000000, 1000000000, 1000000000, 1000000000, 1000000000]],   # ult 연쇄 기폭 (posed)
-	"headshot": [20, [75, 75, 90, 105, 150, 90, 120, 135, 150]],                 # QTE 원호 (drawn by kenin.gd, never played by the player)
+	"headshot": [20, [90, 90, 110, 170, 300, 120, 170, 200, 230]],     # owner 2026-11-04: weighty and long — a held aim (3-4), the shot (5), a slow recoil                 # QTE 원호 (drawn by kenin.gd, never played by the player)
 	"tag_out": [21, [150, 150, 150, 170, 170]], "teeter": [22, [150, 140, 150, 190, 150, 140]],
 	"dash": [23, [40, 45, 45, 45, 45, 45, 45, 70, 90]],                     # the roll: tuck, five spins, uncurl
 }

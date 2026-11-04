@@ -141,6 +141,7 @@ func hit(dmg: float, kb: float, mul := 1.0) -> void:
 		return
 	var R = arena.get("runes")
 	if R != null: mul *= R.out_mul(self)
+	if has_meta("kvuln_t") and Time.get_ticks_msec() < int(get_meta("kvuln_t")): mul *= float(get_meta("kvuln", 1.0))    # 케닌 약점 표시
 	var d: float = arena.elem_hit(position + Vector2(0, -95 if not M.has("fly") else -40), dmg * 10.0 * mul, M["defEl"])   # elements + 기력
 	hp -= d
 	if R != null: hp -= R.after_hit(self)

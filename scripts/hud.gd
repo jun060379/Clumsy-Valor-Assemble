@@ -418,8 +418,8 @@ func _draw_portrait_top(ci: CanvasItem, vs: Vector2) -> void:
 	if P.who == "kenin":
 		# 케닌: rounds and bombs left; an empty pistol counts down to its reload
 		var K = arena.kenin
-		var ks := ("재장전 %.1fs" % (maxf(0.0, K.RELOAD_FIELD - K.reload_t) / 1000.0)) if K.dry() else ("탄 %d/%d" % [K.ammo, K.AMMO])
-		ks += ("  폭탄 %d/%d" % [K.bombs, K.BOMBS]) if K.bombs > 0 else ("  폭탄 %.0fs" % ceilf(maxf(0.0, K.BOMB_FIELD - K.bomb_t) / 1000.0))
+		var ks := ("재장전 %.1fs" % (maxf(0.0, K.reload_need() - K.reload_t) / 1000.0)) if K.dry() else ("탄 %d/%d" % [K.ammo, K.amax()])
+		ks += ("  폭탄 %d/%d" % [K.bombs, K.bmax()]) if K.bombs > 0 else ("  폭탄 %.0fs" % ceilf(maxf(0.0, K.bomb_need(true) - K.bomb_t) / 1000.0))
 		ci.draw_string(UI.noto(), Vector2(nw + 8.0, -4.0), ks, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1, 1, 1, (0.6 if K.dry() else 1.0) * a))
 	elif P.who != "estelle":
 		var cdv: float = P.heal_cd if P.who == "luce" else P.tp_cd

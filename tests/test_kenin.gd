@@ -71,7 +71,7 @@ func _initialize() -> void:
 	K.fire(P.position + Vector2(40, -48), Vector2(1, 0), 1.0)
 	ok(K.ammo == K.AMMO - 1, "a shot spends a round (%d left)" % K.ammo)
 	ok(await until(func(): return g.hp < hp0, 3000.0), "the ball flies and hits (%.1f -> %.1f)" % [hp0, g.hp])
-	for i in K.AMMO: K.fire(P.position + Vector2(40, -48), Vector2(1, 0), 1.0)
+	for i in K.amax(): K.fire(P.position + Vector2(40, -48), Vector2(1, 0), 1.0)
 	ok(K.ammo == 0 and K.dry(), "the cylinder runs dry")
 	await until(func(): return K.shots.is_empty(), 3000.0)
 	var hp1: float = g.hp
@@ -182,6 +182,37 @@ func _initialize() -> void:
 	ok(K.ammo == K.AMMO or K.ammo >= 0, "reloaded on the way")
 	ok(K.live_bombs() == 0 and K.marked_count() == 0, "every bomb and mark went off")
 	ok(g.hp < hp4 - 5.0, "big damage (%.1f)" % (hp4 - g.hp))
+
+	print("memory nodes")
+	var MM = arena.runes.memory
+	MM.T("kenin")["on"] = ["A1", "A6", "B1", "B4", "C4", "C6"]     # 탄띠 · 비상 탄창 · 주머니 · 접촉 신관 · 시한 표식 · 약점 표시
+	MM._fx_cache.clear()
+	ok(K.amax() == K.AMMO + 2 and K.bmax() == K.BOMBS + 1, "장탄 +2, 폭탄 +1 (%d, %d)" % [K.amax(), K.bmax()])
+	K.ammo = 1
+	K.spare_t = 0.0
+	K.fire(P.position + Vector2(40, -48), Vector2(1, 0), 1.0)
+	ok(K.ammo == K.amax() and K.spare_t > 0.0, "비상 탄창: running dry reloads at once (%d)" % K.ammo)
+	K.ammo = 1
+	K.fire(P.position + Vector2(40, -48), Vector2(1, 0), 1.0)
+	ok(K.ammo == 0, "and not again until its cooldown")
+	await until(func(): return K.shots.is_empty(), 2000.0)
+	var g2 = gob(P.position.x + 200.0 * P.dir)
+	await frames(3)
+	K.bombs = K.bmax()
+	K.throw_bomb(Vector2(g2.position.x - 120.0 * P.dir, g2.position.y - 88.0), P.dir)
+	var t_th := Time.get_ticks_msec()
+	ok(await until(func(): return K.live_bombs() == 0, 1500.0), "접촉 신관: the bomb blows as it sticks (%d ms)" % (Time.get_ticks_msec() - t_th))
+	K.marks.clear()
+	K.add_marks(g2, 2)
+	for q in K.marks[g2.get_instance_id()]["pts"]: q["t"] = 4990.0
+	var hp6: float = g2.hp
+	ok(await until(func(): return K.marked_count() == 0, 1500.0) and g2.hp < hp6, "시한 표식: stamps pop on their own")
+	K.assist(g2)
+	await until(func(): return K.assists.is_empty(), 3000.0)
+	ok(g2.has_meta("kvuln_t") and int(g2.get_meta("kvuln_t")) > Time.get_ticks_msec(), "약점 표시: the covering shot leaves the foe exposed")
+	MM.T("kenin")["on"] = []
+	MM._fx_cache.clear()
+	K.ammo = K.amax()
 
 	print("bench reload")
 	K.ammo = 0
