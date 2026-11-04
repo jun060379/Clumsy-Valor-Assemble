@@ -16,10 +16,10 @@ extends RefCounted
 
 const CH := preload("res://scripts/chars.gd")
 const PFX := preload("res://scripts/pfx.gd")
+const UI := preload("res://scripts/ui_kit.gd")
 
 const AMMO := 18                # owner 2026-11-04: ×3, every trigger pull is a 3-round burst (타다당)
 const BURST := 3
-const BURST_GAP := 55.0         # ms between the rounds of a burst
 const BOMBS := 3
 const RELOAD_FIELD := 15000.0      # owner 2026-11-04: long on purpose
 const RELOAD_BENCH := 1000.0       # the bench refills faster (6 s for the cylinder)
@@ -193,35 +193,28 @@ func step(dt: float) -> void:
 
 
 # ---------- the pistol ----------
-## one trigger pull from the muzzle (o) along d (a unit vector): a burst of BURST rounds, BURST_GAP apart, each a third of
-## the damage (the same total, busier); only the burst's first round stamps a mark. Fewer left = fewer rounds.
-## Empty = nothing comes out, the trigger clicks (returns false).
-func fire(o: Vector2, d: Vector2, dmg: float) -> bool:
+## one round from the muzzle (o) along d (a unit vector), a third of a pull's damage; player.gd replays the fire frame for
+## each round of the BURST (first = the burst's opening round: only it stamps a mark). Empty = nothing comes out, the
+## trigger clicks on the opening round (returns false; the burst stops).
+func fire(o: Vector2, d: Vector2, dmg: float, first := true) -> bool:
 	if ammo <= 0:
-		arena.sfx("ui_move", 0.7, {"st": -4.0})
-		arena.text(_P().position + Vector2(0, -150.0 * _P().CSCALE), "찰칵… 탄창 비었음", Color("#b9bfa8"))
+		if first:
+			arena.sfx("ui_move", 0.7, {"st": -4.0})
+			arena.text(_P().position + Vector2(0, -150.0 * _P().CSCALE), "찰칵… 탄창 비었음", Color("#b9bfa8"))
 		return false
-	var n := mini(BURST, ammo)
-	ammo -= n
-	for i in n:
-		# a little spread so the three don't stack into one line
-		var dd := d.rotated(randf_range(-0.05, 0.05))
-		shots.append({"x": o.x, "y": o.y, "vx": dd.x * SHOT_V, "vy": dd.y * SHOT_V, "dmg": dmg / BURST, "dry": false, "t": -i * BURST_GAP, "mul": _mul(), "mk": i == 0, "o": o, "dir": d})
-		# PLACEHOLDER sound: there is no gunshot in the packs yet (the stab, pitched up); each round its own crack
-		arena.sfx("thrust", 0.6, {"st": 5.0 + i * 0.7 + randf() * 0.5, "delay_ms": i * BURST_GAP})
-	arena.pfx.hit(o.x, o.y, int(signf(d.x)) if d.x != 0.0 else 1, 0.8)
+	ammo -= 1
+	var dd := d.rotated(randf_range(-0.05, 0.05))
+	shots.append({"x": o.x, "y": o.y, "vx": dd.x * SHOT_V, "vy": dd.y * SHOT_V, "dmg": dmg / BURST, "dry": false, "t": 0.0, "mul": _mul(), "mk": first})
+	# PLACEHOLDER sound: there is no gunshot in the packs yet (the stab, pitched up); each round its own crack
+	arena.sfx("thrust", 0.6, {"st": 5.0 + randf() * 1.2})
+	arena.pfx.hit(o.x, o.y, int(signf(d.x)) if d.x != 0.0 else 1, 0.7)
+	_shake(1.0, -int(signf(d.x)) if d.x != 0.0 else 1)
 	if ammo <= 0 and on_field(): _ran_dry()
 	return true
 
 func _step_shots(dt: float) -> void:
 	for s in shots:
-		var was: float = s["t"]
 		s["t"] += dt
-		if s["t"] < 0.0: continue                          # a burst's later round, not out yet
-		if was < 0.0 and s.has("o"):
-			# it leaves now: from the muzzle, a flash and a small kick
-			arena.pfx.hit(s["o"].x, s["o"].y, int(signf(s["dir"].x)) if s["dir"].x != 0.0 else 1, 0.6)
-			_shake(1.0, -int(signf(s["dir"].x)))
 		var x0: float = s["x"]
 		s["x"] += s["vx"] * dt
 		s["y"] += s["vy"] * dt
@@ -672,25 +665,40 @@ func draw(g: CanvasItem) -> void:
 		p.rect(-1, -5, 2, 1, Color("#6b6156"))
 		var blink: bool = b["fuse"] < 900.0 and int(b["fuse"] / 90.0) % 2 == 0 or b["fuse"] >= 900.0 and int(b["fuse"] / 220.0) % 2 == 0
 		p.px(1, -6, Color("#ff5a3a") if blink else Color("#ffd08a"))
-	# stamps: each pops in big (stamped), settles, then throbs — faster the more the foe wears; colour climbs with the count
+	# stamps (owner 2026-11-04: many hid the foe): one mark per foe, beside its head, with the count — it pops when a stamp
+	# lands, throbs faster and turns hotter the more it wears
 	for k in marks:
 		var e = marks[k]["m"]
 		if e == null or not is_instance_valid(e) or not e.alive(): continue
 		var pts: Array = marks[k]["pts"]
-		var cc: Color = MARK_COL[mini(MARK_COL.size() - 1, pts.size() - 1)]
-		var beat := maxf(110.0, 330.0 - pts.size() * 30.0)
+		var n := 0
+		var newest := 1.0e9
 		for q in pts:
 			if q["t"] < 0.0: continue
-			var pop := 1.0 + maxf(0.0, 1.0 - q["t"] / 120.0) * 0.9
-			var on_beat := int((t + q["ox"] * 13.0) / beat) % 2 == 0
-			var r := (2.0 + (0.6 if on_beat else 0.0)) * pop
-			var p := PFX.PX.new(g, e.position.x + q["ox"], e.position.y + q["oy"])
-			p.circle(0, 0, r, cc)
-			p.line(-r - 2, 0, -r + 1, 0, OLV_L)
-			p.line(r - 1, 0, r + 2, 0, OLV_L)
-			p.line(0, -r - 2, 0, -r + 1, OLV_L)
-			p.line(0, r - 1, 0, r + 2, OLV_L)
-			if q["t"] < 60.0: p.disc(0, 0, r * 0.6, Color.WHITE)
+			n += 1
+			newest = minf(newest, q["t"])
+		if n == 0: continue
+		var cc: Color = MARK_COL[mini(MARK_COL.size() - 1, n - 1)]
+		var beat := maxf(110.0, 330.0 - n * 30.0)
+		var pop := 1.0 + maxf(0.0, 1.0 - newest / 140.0) * 0.8
+		var r := (3.0 + (0.6 if int(t / beat) % 2 == 0 else 0.0)) * pop
+		var fly: bool = e.get("M") != null and e.M.has("fly")
+		var mp := Vector2(e.position.x - 26.0, e.position.y - (58.0 if fly else 126.0))
+		var p := PFX.PX.new(g, mp.x, mp.y)
+		p.disc(0, 0, r + 1.0, Color(0, 0, 0, 0.55))
+		p.circle(0, 0, r, cc)
+		p.line(-r - 2, 0, -r + 1, 0, OLV_L)
+		p.line(r - 1, 0, r + 2, 0, OLV_L)
+		p.line(0, -r - 2, 0, -r + 1, OLV_L)
+		p.line(0, r - 1, 0, r + 2, OLV_L)
+		if newest < 70.0: p.disc(0, 0, r * 0.6, Color.WHITE)
+		if n >= 2:
+			var fs := int(16.0 * (1.0 + (pop - 1.0) * 0.5))
+			var txt := "×%d" % n
+			var tp := mp + Vector2(r * PFX.S + 6.0, fs * 0.38)
+			for o in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1), Vector2(1, 1)]:
+				g.draw_string(UI.anton(true), tp + o * 1.5, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0, 0, 0, 0.85))
+			g.draw_string(UI.anton(true), tp, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, cc.lightened(0.25))
 	for bo in booms:
 		var kk: float = bo["t"] / bo["life"]
 		var rad: float = float(bo.get("r", BOMB_R * (1.15 if bo["big"] else 1.0))) / PFX.S

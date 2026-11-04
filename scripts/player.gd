@@ -40,6 +40,8 @@ var combo_win := 0.0
 var slide := 0.0
 var lunge := 0.0
 var hit_done := false
+var k_rep := 0                  # Kenin: rounds still to come in this burst (the fire frame replays for each, 따다닥)
+const K_REWIND := 38.0          # ms the frame before the shot shows on each replay
 var fx_done := false
 var charges := 2
 var recharge := 0.0
@@ -346,7 +348,10 @@ func kenin_shoot() -> void:
 			d = Vector2(dir * cos(ang), sin(ang))
 	var kd: float = ka["dmg"]
 	if ka.get("heavy", false) or (anim == "air_combo" and f == 8): kd *= 1.0 + arena.kenin.nv("kHeavyShot")    # 헤드샷 연습
-	if not arena.kenin.fire(mz, d, kd):
+	var first := k_rep <= 0
+	k_rep = (arena.kenin.BURST - 1) if first else k_rep - 1
+	if not arena.kenin.fire(mz, d, kd, first):
+		k_rep = 0
 		# empty: no shot; on the ground he stops and looks at the pistol
 		if on: set_anim("kdry")
 		return
@@ -1314,6 +1319,12 @@ func advance(dt: float, move: int) -> void:
 			break
 		ft -= dur()
 		f += 1
+		if who == "kenin" and k_rep > 0 and CH.KATK.has(anim) and CH.KATK[anim]["fire"].has(f - 1):
+			# the burst's next round: back to the frame before the shot, briefly, and fire again (one kick per round)
+			f = maxi(0, f - 2)
+			ft = maxf(0.0, dur() - K_REWIND)
+			hit_done = false
+			continue
 		if on and anim == "run" and f in SK.steps(who, "run"): arena.sfx("foot", 0.6)     # a foot lands: the surface's step
 		if f >= frames():
 			var n := anim

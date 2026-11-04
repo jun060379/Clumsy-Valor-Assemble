@@ -69,10 +69,17 @@ func _initialize() -> void:
 	await frames(5)
 	var hp0: float = g.hp
 	K.fire(P.position + Vector2(40, -48), Vector2(1, 0), 1.0)
-	ok(K.ammo == K.AMMO - K.BURST, "a trigger pull spends a 3-round burst (%d left)" % K.ammo)
-	await frames(2)
-	ok(K.shots.size() == K.BURST, "three rounds in the air, one after another")
+	ok(K.ammo == K.AMMO - 1, "a round spent (%d left)" % K.ammo)
 	ok(await until(func(): return g.hp < hp0, 3000.0), "the ball flies and hits (%.1f -> %.1f)" % [hp0, g.hp])
+	await until(func(): return K.shots.is_empty(), 2000.0)
+	K.ammo = K.amax()
+	var shots_seen := 0
+	P.set_anim("attack1", 1)
+	var t_b := Time.get_ticks_msec()
+	while P.anim == "attack1" and Time.get_ticks_msec() - t_b < 2000:
+		shots_seen = maxi(shots_seen, K.amax() - K.ammo)
+		await process_frame
+	ok(shots_seen == K.BURST, "one attack: a 3-round burst, the shot frame replayed for each (%d)" % shots_seen)
 	for i in K.amax(): K.fire(P.position + Vector2(40, -48), Vector2(1, 0), 1.0)
 	ok(K.ammo == 0 and K.dry(), "the cylinder runs dry")
 	await until(func(): return K.shots.is_empty(), 3000.0)
