@@ -106,6 +106,7 @@ var qte := {"t": 0.0, "cd": 0.0, "who": [], "hit": null, "low": false}
 ## keys rest until its motion has played (party_lock), and no new QTE is offered for QTE_GAP after one was answered
 var party_lock := 0.0
 var qte_gap := 0.0
+var qte_pend := {}          # a parry made during the gap (교대 패링): its QTE opens once the gap is over {"r", "t" ms left}
 const QTE_GAP := 1600.0
 const LOCK_TAG := 1050.0
 const LOCK_ASSIST := 1150.0
@@ -1583,6 +1584,7 @@ func take_hit(m, raw: float) -> String:
 		ghit = true
 		arena.text(position + Vector2(0, -120.0 * CSCALE), "-" + str(roundi(tk)), Color("#cfe3ff"))
 		qte_offer("hit", {"raw": raw * 0.5, "taken": tk, "victim": who})
+		qte_offer("parry")          # owner 2026-11-04: Estelle's guard counts as a parry for the QTEs
 		arena.ult_gain(5.0)
 		if hp <= 0.0: die()
 		return "guard"
@@ -1631,6 +1633,14 @@ func party_step(dt: float) -> void:
 	if swap_cd > 0.0: swap_cd -= dt
 	if party_lock > 0.0: party_lock -= dt
 	if qte_gap > 0.0: qte_gap -= dt
+	if not qte_pend.is_empty():
+		qte_pend["t"] = float(qte_pend["t"]) - dt
+		if qte_gap <= 0.0:
+			var r: String = qte_pend["r"]
+			qte_pend = {}
+			qte_offer(r)
+		elif float(qte_pend["t"]) <= 0.0:
+			qte_pend = {}
 	if qte["cd"] > 0.0: qte["cd"] -= dt
 	if qte["t"] > 0.0:
 		qte["t"] -= dt
@@ -1941,13 +1951,18 @@ func counter_swap(m, nx: String) -> void:
 	arena.sfx("slam", 0.8)
 	arena.text(Vector2(tag_to, position.y - 190.0 * CSCALE), "PARRY!", Color("#ffffff"))
 	arena.parry_word()
+	qte_offer("parry")          # 교대 패링 is a parry: the next member's QTE opens after the gap (교대 → 교대)
 
 func qte_offer(reason: String, data = null) -> void:
 	var cands: Array = CH.QTE_WHO.get(reason, []).filter(func(c): return party.has(c) and c != who and hpm[c] > 0.0)
-	if cands.is_empty() or qte_gap > 0.0:
+	if cands.is_empty():
+		return
+	if qte_gap > 0.0:
+		# 교대 → 교대: a parry in the gap (a swap that caught a glint) opens its QTE when the gap ends
+		if reason == "parry": qte_pend = {"r": "parry", "t": QTE_GAP + 1200.0}
 		return
 	if qte["t"] <= 0.0:
-		if qte["cd"] > 0.0 and reason != "hit":
+		if qte["cd"] > 0.0 and reason != "hit" and reason != "parry":     # a parry is earned: no cooldown
 			return
 		qte["who"] = []
 		qte["hit"] = null

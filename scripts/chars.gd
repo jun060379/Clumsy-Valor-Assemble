@@ -27,7 +27,7 @@ const GHOST := {"estelle": [Color8(255, 170, 220), 0.75], "aida": [Color8(255, 1
 const SKILL := {"estelle": "방패", "aida": "균열", "luce": "치유", "kenin": "점착 폭탄"}
 ## who can answer which moment (QTE): Estelle covers a hit ally, Aida a finisher/parry, Luce someone in danger or a parry,
 ## Kenin a finisher or a parry with covering fire (he answers from the bench: no swap, kenin.gd assist)
-const QTE_WHO := {"hit": ["estelle"], "low": ["luce"], "finisher": ["aida", "kenin"], "backstab": ["aida"], "parry": ["aida", "luce", "kenin"]}
+const QTE_WHO := {"hit": ["estelle"], "low": ["luce"], "finisher": ["aida", "kenin"], "backstab": ["aida"], "parry": ["estelle", "aida", "luce", "kenin"]}     # owner 2026-11-04: 패링 is everyone's basic QTE condition (교대 패링 counts; Estelle's guard counts)
 const QTE_LBL := {"estelle": "수호", "aida": "기습", "luce": "구원", "kenin": "원호"}
 ## members whose QTE is answered from the bench without swapping in
 const QTE_STAY := ["kenin"]

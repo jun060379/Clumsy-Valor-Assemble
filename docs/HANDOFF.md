@@ -218,6 +218,10 @@ main에 푸시하면 GitHub Actions가 웹·윈도우로 빌드해서 GitHub Pag
 - scripts/ui_rich.gd: 스킬 · 노드 설명 속 공용 상태(취약 · 경직 · 띄움 · 둔화 · 빙결 · 화상 · 출혈 · 보호막 · 강화 · 재생), 그로기, 고유 자원(표식 · 징표)을 이름으로 찾아(긴 것 먼저) 굵게 · 색 · 밑줄로 그림. 누르면 설명 카드(아무 데나 누르면 닫힘). 설명 수치는 status.gd에서 읽음. 마크업 불필요.
 - 연결: ui_char_mem.gd rich() / draw_tip() — 스킬 탭 설명, 기억 노드 카드. 새 용어는 RICH.gloss()에 추가. 캡처 tests/cap_keywords.gd.
 
+## 4-11. QTE: 패링이 모두의 기본 조건 (오너 2026-11-04)
+- chars.gd QTE_WHO["parry"] = 4명 전원. 교대 패링(번쩍이는 공격에 교대 = counter_swap)도 패링이라 qte_offer("parry") → 교대 직후 gap(1.6초) 동안은 qte_pend에 걸어뒀다가 gap이 끝나면 나머지 동료의 QTE가 열림(교대 → 교대 사슬). 패링 QTE는 QTE 쿨타임 무시.
+- 에스텔은 가드로 막아도 패링으로 판정(take_hit guard 분기에서 qte_offer("parry")) → QTE를 쉽게 여는 캐릭터. 스킬 설명 · QTE 조건 문구 갱신. 테스트 tests/test_qte_chain.gd.
+
 ## 5. 이번 세션에 끝낸 것 (모두 main, 푸시·배포 완료)
 
 - 타이틀 로고에 한글(동해독도체 B안), 붓 로고·그림 `d7601c9`
