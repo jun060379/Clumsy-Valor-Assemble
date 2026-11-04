@@ -418,6 +418,7 @@ func _draw_cpu() -> void:
 			"airb": alive = _airb(g, e)
 			"dive": alive = _dive(g, e)
 			"slam": alive = _slam(g, e)
+			"crown": alive = _crown(g, e)
 			"chg": alive = _charge(g, e)
 			"gate": alive = _gate(e)
 			"pil": alive = _pillar(g, e)
@@ -1043,6 +1044,53 @@ func _dive(g: CanvasItem, e: Dictionary) -> bool:
 const UP_SPIKES := [[-120.0, -30.0, 200.0, 0.6], [-80.0, -14.0, 240.0, 0.3], [-40.0, -6.0, 180.0, 0.1], [0.0, 0.0, 120.0, 0.0],
 	[36.0, 10.0, 170.0, 0.15], [76.0, 32.0, 220.0, 0.35], [116.0, 58.0, 250.0, 0.55]]
 
+## 처형's floor burst (owner 2026-11-04: one connected effect): a single jagged shape of the void torn up out of the
+## floor, its spikes on one ridge, short in the middle and long and leaning out at the edges; grows in a blink, holds,
+## then pales from the tips down
+func crown(x: float, y: float) -> void:
+	_push({"k": "crown", "x": x, "y": y})
+
+func _crown(g: CanvasItem, e: Dictionary) -> bool:
+	var F: float = e["t"] / FR
+	if F > 12.0: return false
+	var p := PX.new(g, e["x"], e["y"])
+	var R := Rng.new(e["seed"])
+	var fade := 1.0 if F < 6.0 else 1.0 - (F - 6.0) / 6.0
+	var pts: Array = []
+	var W: float = (absf(UP_SPIKES[0][0]) + 26.0) / S
+	pts.append(Vector2(-W, 0.0))
+	for sp in UP_SPIKES:
+		var gr := clampf((F - float(sp[3])) / 2.0, 0.0, 1.0)
+		gr = 1.0 - pow(1.0 - gr, 3.0)
+		var L: float = float(sp[2]) / S * gr * (0.35 + 0.65 * fade)
+		var ang := deg_to_rad(float(sp[1]))
+		var bx: float = float(sp[0]) / S
+		var vh := 4.0 + R.r() * 4.0
+		var tip := Vector2(bx + sin(ang) * L, -cos(ang) * L - vh)
+		var bl := Vector2(bx - 6.0, -vh * 0.6)
+		var br := Vector2(bx + 6.0, -vh * 0.6)
+		pts.append(bl)
+		for k in [0.4, 0.75]:            # a jagged edge up to the tip
+			pts.append(bl.lerp(tip, k) + Vector2((R.r() - 0.5) * 3.0, 0.0))
+		pts.append(tip)
+		for k in [0.25, 0.6]:
+			pts.append(tip.lerp(br, k) + Vector2((R.r() - 0.5) * 3.0, 0.0))
+		pts.append(br)
+	pts.append(Vector2(W, 0.0))
+	p.poly(pts, TVOID)
+	var rim: Color = TEARL[0] if F < 2.0 else (TEARL[1] if F < 5.0 else (TEARL[2] if F < 8.0 else TEARL[3]))
+	for i in pts.size() - 1:
+		var a: Vector2 = pts[i]
+		var b: Vector2 = pts[i + 1]
+		p.line(a.x, a.y, b.x, b.y, rim)
+	if F < 5.0:                          # the eye-light inside, along each spike's spine
+		for sp in UP_SPIKES:
+			var ang := deg_to_rad(float(sp[1]))
+			var L2: float = float(sp[2]) / S * clampf((F - float(sp[3])) / 2.0, 0.0, 1.0) * 0.6
+			var bx: float = float(sp[0]) / S
+			p.line(bx, -4.0, bx + sin(ang) * L2, -4.0 - cos(ang) * L2, TEARL[3])
+	return true
+
 func _slam(g: CanvasItem, e: Dictionary) -> bool:
 	var F: float = e["t"] / FR
 	var f := int(floorf(F))
@@ -1060,14 +1108,7 @@ func _slam(g: CanvasItem, e: Dictionary) -> bool:
 		# 처형 (owner 2026-11-04): the tears climb out of the floor, a V rising from the blow, not lying flat
 		var up: bool = e.get("up", false)
 		if up:
-			# 처형 (owner sketch 2026-11-04): spikes burst up out of the floor along a wide stretch, each from its own
-			# spot, leaning out more the farther from the blow; short in the middle, long and slanted at the edges
-			for i in UP_SPIKES.size():
-				var sp: Array = UP_SPIKES[i]
-				var kq := "tq%d" % (i + 1)
-				if not e.has(kq): e[kq] = {"seed": e["seed"] + 1.0 + i * 1.7}
-				var ang := deg_to_rad(float(sp[1]))
-				_tear_quad(e[kq], Vector2(e["x"] + float(sp[0]), e["y"] - 2.0), Vector2(sin(ang), -cos(ang)), float(sp[2]) / S, F - float(sp[3]), stp)
+			pass                 # 처형: the burst is one shape of its own (crown), only the shards here
 		else:
 			_tear_quad(e["tq1"], Vector2(e["x"] + 6.0, e["y"] - 3.0), Vector2(1, 0), 144.0 / S, F, stp)
 			_tear_quad(e["tq2"], Vector2(e["x"] - 6.0, e["y"] - 3.0), Vector2(-1, 0), 144.0 / S, F, stp)

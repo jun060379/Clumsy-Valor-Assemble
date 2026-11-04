@@ -2712,6 +2712,7 @@ func _aexec_step(dt: float) -> void:
 			tg.hit(_aexec_dmg() * 0.7, dir * 6.0, atk_mul())
 			arena.quiet_hit = false
 		arena.pfx.slam(position.x + dir * 20.0 * CSCALE, position.y, who, true)
+		arena.pfx.crown(position.x + dir * 20.0 * CSCALE, position.y)
 		arena.post_wave(position + Vector2(dir * 40.0, 0.0), 0.8, 420.0, 0.2)
 		arena.shake(12, dir)
 		arena.flash = maxf(arena.flash, 0.15)
