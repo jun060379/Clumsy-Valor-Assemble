@@ -143,7 +143,6 @@ func hit(dmg: float, kb: float, mul := 1.0) -> void:
 	var R = arena.get("runes")
 	if R != null: mul *= R.out_mul(self)
 	mul *= ST.dmg_mul(self)                    # 공용 상태: 취약, 그로기
-	if ST.no_kb(self): kb = 0.0                # 빙결: no knockback
 	var d: float = arena.elem_hit(position + Vector2(0, -95 if not M.has("fly") else -40), dmg * 10.0 * mul, M["defEl"], M.get("weak", []))   # elements (+ 신성 약점) + 기력
 	hp -= d
 	if R != null: hp -= R.after_hit(self)
@@ -266,7 +265,7 @@ func step(dt: float) -> void:
 		dead += dt
 		return
 
-	# 공용 상태: 경직 · 빙결 · 띄움 · 그로기 hold it (the hurt frame), no AI
+	# 공용 상태: 경직 · 띄움 · 그로기 hold it (the hurt frame), no AI
 	if ST.step(arena, self, dt):
 		hit_now = false
 		last_dmg = 0.0

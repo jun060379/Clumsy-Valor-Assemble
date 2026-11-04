@@ -820,6 +820,7 @@ func _process(delta: float) -> void:
 		if level != null: level.step(dt)
 	elif hitstop > 0.0:
 		hitstop -= dt
+		player.buffer_only()          # a press during the hold is kept (the combo / follow-up inputs)
 	else:
 		dlg.hold_keys()
 		player.step(dt)

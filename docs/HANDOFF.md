@@ -209,13 +209,13 @@ main에 푸시하면 GitHub Actions가 웹·윈도우로 빌드해서 GitHub Pag
 - 다운로드: Actions가 main 빌드마다 윈도우 zip을 Pages(/ClumsyValor-windows.zip)와 릴리스 latest-build에 올림 (README 링크).
 
 ## 4-9. 공용 상태 (오너 2026-11-04, 기획서 「전투 시스템: 파티 유형과 상태」)
-- scripts/status.gd: 적 6종 취약 · 경직 · 띄움 · 둔화(→빙결) · 화상 · 출혈, 아군 3종 보호막 · 강화 · 재생. 적 쪽은 적 객체의 meta "st", 아군 쪽은 player meta "ally" (교대해도 같은 player라 보호막 · 강화가 자연히 넘어감).
-- 규칙: 누적형(경직 · 둔화 · 화상) 게이지 100, 같은 캐릭터는 갱신 · 다른 캐릭터는 단계 상승(최대 3, 취약 제외), 경직 · 빙결 끝나면 2초 면역, 화상 번짐은 시간 연장 안 함, 출혈은 타격마다 추가 피해(0.1초 간격), 보스 · 정예는 경직 · 띄움 · 빙결 → 그로기 게이지(300, 3초, 받피 +30%), 보스 같은 상태 재발동마다 필요치 +50%. 상태끼리 상쇄 없음.
+- scripts/status.gd: 적 6종 취약 · 경직 · 띄움 · 둔화(빙결 없음) · 화상 · 출혈, 아군 3종 보호막 · 강화 · 재생. 적 쪽은 적 객체의 meta "st", 아군 쪽은 player meta "ally" (교대해도 같은 player라 보호막 · 강화가 자연히 넘어감).
+- 규칙: 누적형(경직 · 둔화 · 화상) 게이지 100, 같은 캐릭터는 갱신 · 다른 캐릭터는 단계 상승(최대 3, 취약 제외), 경직 끝나면 2초 면역, 화상 번짐은 시간 연장 안 함, 출혈은 타격마다 추가 피해(0.1초 간격), 보스 · 정예는 경직 · 띄움 → 그로기 게이지(300, 3초, 받피 +30%), 보스 같은 상태 재발동마다 필요치 +50%. 상태끼리 상쇄 없음.
 - 연결: mob/dummy/ghost hit → dmg_mul · on_hit, step → ST.step(잠금이면 AI 정지), 둔화 → 이동 속도 · 공격 후 react, 패링 창 +1프레임(player take_hit), QTE 태그 일격 → tag_mul(취약 ×1.5) + tag_react 강, 일반 교대 → tag_react 약. 케닌 QTE 취약이 공용 취약으로 이전(kvuln meta 삭제).
 - 아직 아무도 상태를 걸지 않음(케닌 취약만). 다음: 캐릭터별 배치. 아이콘은 임시 도형. 수치는 status.gd K (PLACEHOLDER, 밸런스 툴 미연결). 테스트 tests/test_status.gd, 캡처 tests/cap_status.gd.
 
 ## 4-10. 키워드 강조 (오너 2026-11-04)
-- scripts/ui_rich.gd: 스킬 · 노드 설명 속 공용 상태(취약 · 경직 · 띄움 · 둔화 · 빙결 · 화상 · 출혈 · 보호막 · 강화 · 재생), 그로기, 고유 자원(표식 · 징표)을 이름으로 찾아(긴 것 먼저) 굵게 · 색 · 밑줄로 그림. 누르면 설명 카드(아무 데나 누르면 닫힘). 설명 수치는 status.gd에서 읽음. 마크업 불필요.
+- scripts/ui_rich.gd: 스킬 · 노드 설명 속 공용 상태(취약 · 경직 · 띄움 · 둔화 · 화상 · 출혈 · 보호막 · 강화 · 재생), 그로기, 고유 자원(표식 · 징표)을 이름으로 찾아(긴 것 먼저) 굵게 · 색 · 밑줄로 그림. 누르면 설명 카드(아무 데나 누르면 닫힘). 설명 수치는 status.gd에서 읽음. 마크업 불필요.
 - 연결: ui_char_mem.gd rich() / draw_tip() — 스킬 탭 설명, 기억 노드 카드. 새 용어는 RICH.gloss()에 추가. 캡처 tests/cap_keywords.gd.
 
 ## 4-11. QTE: 패링이 모두의 기본 조건 (오너 2026-11-04)
@@ -227,6 +227,12 @@ main에 푸시하면 GitHub Actions가 웹·윈도우로 빌드해서 GitHub Pag
 - player.gd E_STG / estg(): 경직은 에스텔 기술에만(다른 캐릭터 0). 1 · 2타 8, 3타 20, 상하단 10, 공중 6/15, 낙하 15, 찌르기 20/40, 가드 15, 패링 60, 완벽 패링 100, QTE 50, 궁 100. 가드로 막은 피해 30% → 보호막. 스킬 문구 '방패 강타' → '패링 반격'.
 - 노드(memory_data NODES estelle): A 검(딜) · B 방패(경직) · C 의지(연계). 새 fx 키: outExposed(무방비), cspd, eBreak(KEY 경직 깨기 150%), stgK, stgImm, groggyK, pparryAoe(KEY), eTagK, eStay(용감한 희생 = QTE 원호 방어, stays()/_e_assist/_e_cover), eShieldK. 의족을 박고는 C KEY(6초).
 - 테스트 tests/test_estelle.gd, test_memory 갱신.
+
+## 4-13. 아이다 리뉴얼 + 빙결 삭제 + 체력 노드 % (오너 2026-11-04)
+- 아이다 = 빈틈 처형형: 무방비(경직 · 띄움 · 그로기) +20%(runes.out_mul), 3타가 잡몹 띄움(aida_launch, 보스는 그로기), 3타 뒤 추가 입력 = 추격 균열 베기(a_follow, 강화), 무방비 적 앞에서 모으기 = 즉시 최대 강화 균열 베기(aida_emp_target, 적 위 보라 문양), 강화 연출(흰 심 궤적 · 처형! · 긴 히트스톱), 교대 시 남은 균열(a_left, 1초 뒤 띄움), QTE 기습 조건 패링 + 무방비("exposed", status.gd가 걸 때 qte_offer), 궁 패스마다 띄움. 노드 재편(riftK · riftLaunch · riftChain · airK · aClone · aShadow). 그림자 분신 룬 → 노드.
+- 히트스톱 중 누른 키가 버려지던 문제: arena가 hitstop 동안 player.buffer_only()로 버퍼에 담음.
+- 빙결 삭제(둔화만). 체력 노드는 hpPct(레벨 체력의 %, runes.stats).
+- 미확인: 경직 적 앞에서 홀드 → 즉시 강화 균열 베기의 화면 녹화(테스트는 대상 선택까지만 확인).
 
 ## 5. 이번 세션에 끝낸 것 (모두 main, 푸시·배포 완료)
 

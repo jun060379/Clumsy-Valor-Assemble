@@ -107,6 +107,9 @@ var qte := {"t": 0.0, "cd": 0.0, "who": [], "hit": null, "low": false}
 var party_lock := 0.0
 var qte_gap := 0.0
 var tag_src := ""           # who opened the QTE the incoming member answered (등을 맡긴다)
+var a_follow := {}          # Aida: the follow-up window after a launch {"m", "t" ms, "k" damage bonus}
+var a_left := {}            # Aida's 남은 균열 (left where she swapped out) {"x", "y", "t" ms to the burst}
+var a_emp := false          # the rift strike in flight is the empowered one (무방비 target: instant, full, bigger)
 var e_guard_t := 0.0        # 용감한 희생: Estelle's covering guard (ms left) takes the next blow
 var e_assist := {}          # … and her figure beside the one in control {"t", "x", "y", "dir"}
 var qte_pend := {}          # a parry made during the gap (교대 패링): its QTE opens once the gap is over {"r", "t" ms left}
@@ -192,6 +195,11 @@ func busy_rift() -> bool:
 
 func want(k: String) -> bool:
 	return buf[k] > 0.0
+
+## during a hitstop the world (and this step) is held: a press made then is kept in the buffer instead of lost
+func buffer_only() -> void:
+	for k in buf:
+		if InputMap.has_action(k) and Input.is_action_just_pressed(k): buf[k] = BUF
 
 func take(k: String) -> void:
 	buf[k] = 0.0
@@ -518,6 +526,7 @@ func check_hits() -> void:
 		if in_arc(atk, ex, ey, 95.0, bx, by, bw, bh):
 			var brk: bool = who == "estelle" and anim == "cthrust" and cfull and _ev("eBreak") > 0.0 and (ST.has(e, "stagger") if not ST.big(e) else ST.groggy_on(e))
 			e.hit(atk["dmg"], dir * atk["kb"], atk_mul())
+			if who == "aida" and anim == "attack3" and e.alive(): aida_launch(e)
 			if who == "estelle":
 				if brk and e.alive():
 					# 압도적인 힘으로!: a full thrust into a staggered foe breaks it — the stagger ends in a heavy extra blow
@@ -536,7 +545,7 @@ func check_hits() -> void:
 		var heavy: bool = atk.get("heavy", false)
 		arena.sfx(hit_sound())
 		if heavy: _rev("heavy")
-		if who == "aida" and _rk(): arena.runes.clone_hits(atk)
+		if _rk() and (who == "aida" or _av("aShadow") > 0.0): arena.runes.clone_hits(atk)      # 남겨진 그림자: it fights on after a swap
 		arena.hitstop = atk.get("stop", 55)
 		arena.shake(atk.get("shake", 4), dir)
 		# 타격감: the weight of the blow (by its sound: hit1 / hit2 light, hit3, heavy) — the hitstop by weight, the
@@ -651,37 +660,69 @@ func rift_exit() -> void:
 		# both gates snap shut: whatever stood on the path she cut through is cut
 		var s = r_strike
 		r_strike = null
-		var dmg: float = lerpf(BAL.p("aida", "rift_min"), BAL.p("aida", "rift_max"), clampf(s["r"], 0.0, 1.0))
+		var emp: bool = s.get("emp", false)
+		var dmg: float = lerpf(BAL.p("aida", "rift_min"), BAL.p("aida", "rift_max"), clampf(s["r"], 0.0, 1.0)) * _am("riftK") * float(s.get("k", 1.0))
 		var lo: float = minf(s["x0"], position.x) - 20.0
 		var hi: float = maxf(s["x0"], position.x) + 20.0
 		var hit := false
+		var hit_exposed = null
 		for m in foes_alive():
-			if m.position.x < lo or m.position.x > hi or absf(m.position.y - position.y) > 100.0:
+			if m.position.x < lo or m.position.x > hi or absf(m.position.y - position.y) > 110.0:
 				continue
+			var was_exp: bool = ST.exposed(m)
 			m.hit(dmg, -dir * 8.0, atk_mul())
+			if _av("riftLaunch") > 0.0 and m.alive(): ST.add(arena, m, "air", -1.0, "aida")      # 무너진 땅
+			if was_exp and hit_exposed == null: hit_exposed = m
 			hit = true
 		if hit:
-			arena.streak_fx(s["x0"], position.x, position.y - 62.0 * CSCALE, dir, Color("#b37bff"))
+			arena.streak_fx(s["x0"], position.x, position.y - 62.0 * CSCALE, dir, Color("#f2e6ff") if emp else Color("#b37bff"))
+			if emp:
+				arena.streak_fx(s["x0"], position.x, position.y - 58.0 * CSCALE, dir, Color("#9a4dff"))
+				arena.flash = maxf(arena.flash, 0.3)
+				arena.sfx("heavy", 1.0)
+				arena.text(position + Vector2(0, -175.0 * CSCALE), "처형!", Color("#e9d2ff"))
 			qte_offer("finisher")
+			# 기습의 문 (KEY): a 무방비 foe struck → one more follow-up on another foe near, +40%
+			if hit_exposed != null and _av("riftChain") > 0.0 and float(s.get("k", 1.0)) <= 1.0:
+				var nx = null
+				var nd := 420.0
+				for m2 in foes_alive():
+					if m2 == hit_exposed: continue
+					var d2: float = absf(m2.position.x - position.x)
+					if d2 < nd:
+						nd = d2
+						nx = m2
+				if nx != null: a_follow = {"m": nx, "t": 800.0, "k": _av("riftChain")}
 		arena.sfx("aida_heavy", 1.0)
 		arena.shake(5.0 + s["r"] * 7.0, dir)
 		arena.post_wave(Vector2((s["x0"] + position.x) / 2.0, position.y - 60.0 * CSCALE), 0.8 + s["r"] * 0.6, 520.0, 0.2)
-		arena.hitstop = maxf(arena.hitstop, 80.0 + s["r"] * 60.0 if hit else 30.0)
+		arena.hitstop = maxf(arena.hitstop, (80.0 + s["r"] * 60.0) * (1.6 if emp else 1.0) if hit else 30.0)
+		if emp: arena.post_wave(position + Vector2(0, -60.0 * CSCALE), 1.6, 620.0, 0.32)
+		a_emp = false
 	set_anim("dig_out")
 	dig_air = not on
 
-func rift_strike(r: float) -> void:
+func rift_strike(r: float, tg = null, emp := false, bonus := 1.0) -> void:
 	var R := (200.0 + r * 220.0) * CSCALE
-	var best = null
+	var best = tg
 	var bdx := INF
-	for m in foes_alive():
-		var dx: float = (m.position.x - position.x) * dir
-		if dx > 10.0 and dx < R and absf(m.position.y - position.y) < 120.0 and dx < bdx:
-			bdx = dx
-			best = m
+	if best == null:
+		for m in foes_alive():
+			var dx: float = (m.position.x - position.x) * dir
+			if dx > 10.0 and dx < R and absf(m.position.y - position.y) < 120.0 and dx < bdx:
+				bdx = dx
+				best = m
+	else:
+		dir = 1 if best.position.x >= position.x else -1
+	a_emp = emp
+	if emp:
+		# 강화 균열 베기: the tear opens white-cored and wide, the hit holds longer (PLACEHOLDER art: the existing fx scaled)
+		arena.flash = maxf(arena.flash, 0.18)
+		arena.sfx("aida_open", 1.0)
+		add_ghost(260.0)
 	var to: float = best.position.x + dir * 95.0 * CSCALE if best != null else position.x + dir * (150.0 + r * 110.0) * CSCALE
 	blink_face = -dir if best != null else 0
-	r_strike = {"r": r, "x0": position.x}
+	r_strike = {"r": r, "x0": position.x, "emp": emp, "k": bonus}
 	r_follow = best != null
 	rift_enter(to, best.position.y if best != null and not is_fly(best) else NAN, false)
 	arena.sfx("thrust", 0.8 + r * 0.3)
@@ -730,6 +771,18 @@ func step(dt: float) -> void:
 		elif buf[k] > 0.0:
 			buf[k] -= dt
 	party_step(dt)
+	if not a_follow.is_empty():
+		a_follow["t"] = float(a_follow["t"]) - dt
+		var fm = a_follow["m"]
+		if float(a_follow["t"]) <= 0.0 or who != "aida" or not is_instance_valid(fm) or not fm.alive():
+			a_follow = {}
+		elif anim in ["attack3", "idle", "run", "stop", "attack1"] and want("attack") and ST.exposed(fm):
+			# 추격 균열 베기: one more press after the launch → out of the rift behind the lifted foe, empowered
+			pressed["attack"] = false
+			take("attack")
+			var k: float = a_follow["k"]
+			a_follow = {}
+			rift_strike(1.0, fm, true, k)
 
 	tap_t += dt
 	for d in [-1, 1]:
@@ -858,7 +911,7 @@ func step(dt: float) -> void:
 				dig_air = true
 				tp_cd = 3000.0 * _cdk()
 				_rev("skill")
-				if _rk() and arena.runes.has("clone"): arena.runes.clone_start()
+				if _rk() and (arena.runes.has("clone") or _av("aClone") > 0.0): arena.runes.clone_start()
 	elif a in ["dash", "airdash", "backstep"]:
 		if a == "dash" and who == "kenin":
 			# the roll: tuck, five spins at full tilt, uncurl (frames 7-8); a wall stops it dead (bounce below)
@@ -1528,6 +1581,9 @@ func advance(dt: float, move: int) -> void:
 			charge_t = 110.0
 			cfull = false
 			break
+		if anim == "attack1" and f == 2 and keys["attack"] and on and who == "aida" and aida_emp_target() != null:
+			rift_strike(1.0, aida_emp_target(), true)          # 무방비 ahead: no gathering, the empowered strike at once
+			break
 		if anim == "attack1" and f == 2 and keys["attack"] and on and who != "kenin":
 			set_anim({"estelle": "charge", "aida": "acharge", "luce": "lgather"}[who], 1)
 			charge_t = 110.0
@@ -1659,6 +1715,21 @@ func die() -> void:
 # ---------- party: switching, QTE tag-in, counter swap ----------
 func party_step(dt: float) -> void:
 	ST.ally_step(self, dt)
+	if not a_left.is_empty():
+		a_left["t"] = float(a_left["t"]) - dt
+		if float(a_left["t"]) <= 0.0:
+			var at := Vector2(a_left["x"], a_left["y"])
+			a_left = {}
+			arena.hit_by = "aida"
+			var ak: float = CH.STATS["aida"]["atk"] * (arena.runes.atk_k("aida") if _rk() else 1.0)
+			for e in foes_alive():
+				if absf(e.position.x - at.x) < 150.0 and absf(e.position.y - at.y) < 120.0:
+					e.hit(1.0, 0.0, ak)
+					ST.add(arena, e, "air", -1.0, "aida")
+			arena.hit_by = ""
+			arena.post_wave(at + Vector2(0, -40.0), 1.0, 480.0, 0.25)
+			arena.sfx("aida_close", 0.9)
+			arena.dust(at, 0, true)
 	if e_guard_t > 0.0: e_guard_t -= dt
 	if not e_assist.is_empty():
 		e_assist["t"] = float(e_assist["t"]) + dt
@@ -1805,6 +1876,9 @@ func swap(tag: bool, to = null) -> void:
 	hpm[old] = maxf(0.0, hp)
 	var was_dead := anim == "death"
 	outs.append({"c": old, "anim": "death" if was_dead else "tag_out", "x": position.x, "y": position.y, "dir": dir, "t": 0.0, "dead": was_dead})
+	if old == "aida" and not was_dead:
+		a_left = {"x": position.x, "y": position.y, "t": 1000.0}       # 남은 균열: bursts in 1 s, lifting whoever stands there
+		a_follow = {}
 	if not was_dead:
 		arena.dust(position, -dir, false)
 		arena.sfx("dash", 0.55)
@@ -2058,6 +2132,23 @@ func _draw() -> void:
 		var ofs := Vector2(o["x"] - o["dir"] * 140.0 * k, o["y"]) - position
 		var fr := mini(int(o["t"] / 150.0), 3)
 		draw_frame(o["c"], o["anim"], fr, ofs, -o["dir"] if not o["dead"] else o["dir"], Color(1, 1, 1, 1.0 - k), "", null, NAN, 0, "out" + str(o["c"]))
+	# Aida: the 무방비 foe ahead wears her sigil (the next strike goes out empowered); her 남은 균열 pulses where she left
+	if who == "aida" and anim != "death":
+		var et = aida_emp_target()
+		if et != null:
+			var pc: Vector2 = et.position - position + Vector2(0, -150.0)
+			var pu := 0.6 + 0.4 * sin(t / 90.0)
+			var dm := PackedVector2Array([pc + Vector2(0, -11), pc + Vector2(8, 0), pc + Vector2(0, 11), pc + Vector2(-8, 0)])
+			draw_colored_polygon(dm, Color(0.69, 0.42, 1.0, 0.85 * pu))
+			draw_polyline(dm + PackedVector2Array([dm[0]]), Color(0.95, 0.9, 1.0, pu), 1.5)
+			draw_circle(Vector2(dir * 30.0 * CSCALE, -40.0 * CSCALE), 5.0 * pu, Color(0.8, 0.6, 1.0, 0.7))
+	if not a_left.is_empty():
+		var lp: Vector2 = Vector2(a_left["x"], a_left["y"]) - position
+		var k := 1.0 - float(a_left["t"]) / 1000.0
+		draw_set_transform(lp + Vector2(0, -4.0), 0.0, Vector2(1.0, 0.3))
+		draw_circle(Vector2.ZERO, 26.0 + 30.0 * k, Color(0.48, 0.2, 0.86, 0.35 + 0.4 * k))
+		draw_circle(Vector2.ZERO, 12.0 + 16.0 * k, Color(0.95, 0.88, 1.0, 0.5 * k))
+		draw_set_transform(Vector2.ZERO)
 	# 용감한 희생: Estelle's shield up in front of the one in control while her covering guard lasts
 	if not e_assist.is_empty():
 		var et: float = e_assist["t"]
@@ -2381,6 +2472,32 @@ func _mk(key: String) -> float:
 ## Estelle's memory node value (her tree, whoever is in control)
 func _ev(key: String) -> float:
 	return arena.runes.memory.val("estelle", key) if _rk() else 0.0
+
+## Aida's memory node value / product (her tree)
+func _av(key: String) -> float:
+	return arena.runes.memory.val("aida", key) if _rk() else 0.0
+
+func _am(key: String) -> float:
+	return arena.runes.memory.mul("aida", key) if _rk() else 1.0
+
+## Aida renewal (owner 2026-11-04): 빈틈 처형형. The nearest 무방비 foe ahead within the rift strike's full reach —
+## against it the strike needs no gathering and goes out empowered (instant, full power, the bigger effect)
+func aida_emp_target():
+	var R := 420.0 * CSCALE
+	var best = null
+	var bdx := INF
+	for m in foes_alive():
+		var dx: float = (m.position.x - position.x) * dir
+		if dx > -10.0 and dx < R and absf(m.position.y - position.y) < 160.0 and dx < bdx and ST.exposed(m):
+			bdx = dx
+			best = m
+	return best
+
+## 3타 lifts small foes (보스 · 정예: groggy instead); 높이 차기 (airK) lifts higher
+func aida_launch(e) -> void:
+	ST.add(arena, e, "air", -1.0, "aida")
+	if _av("airK") > 0.0 and ST.has(e, "air"): ST.of(e)["air"]["vy"] = float(ST.of(e)["air"]["vy"]) * (1.0 + _av("airK"))
+	if a_follow.is_empty() or not is_instance_valid(a_follow["m"]): a_follow = {"m": e, "t": 600.0, "k": 1.0}
 
 ## Estelle renewal (owner 2026-11-04): her blows build 경직 (only hers: 경직 is a status members apply, not a universal
 ## stagger). 방패 nodes: 단단한 테두리 (stgK) more gauge, 뒤흔들기 (stgImm) shorter immunity, 무너뜨리기 (groggyK) more

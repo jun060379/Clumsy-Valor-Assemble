@@ -93,6 +93,7 @@ const MEMC := Color("#8ff0e0")
 
 # ---------- bestiary data (ENEMY / BEST_INFO / OBSNOTE, MOBDEF descriptions) ----------
 const EL := preload("res://scripts/elements.gd")
+const EL_ST := preload("res://scripts/status.gd")
 const ELN := {"phys": "물리", "fire": "화염", "ice": "냉기", "elec": "전기", "earth": "대지", "water": "수류", "wind": "바람", "holy": "신성", "dark": "어둠", "plant": "초목"}
 const EFF := {"fire": {"ice": 1.5, "plant": 1.5, "fire": 0.5, "water": 0.5, "earth": 0.5}, "ice": {"plant": 1.5, "wind": 1.5, "earth": 1.5, "fire": 0.5, "ice": 0.5, "water": 0.5},
 	"elec": {"water": 1.5, "wind": 1.5, "earth": 0.5, "elec": 0.5, "plant": 0.5}, "earth": {"fire": 1.5, "elec": 1.5, "wind": 0.5, "plant": 0.5},
@@ -349,7 +350,9 @@ func gear_tot(c: String) -> Dictionary:
 		if k != "heavy": T[k] = round1(T[k])
 	if memory != null:
 		var M: Dictionary = memory.stat_add(c)          # stat nodes (최대 체력, 회복량) count like gear
-		for k in M: T[k] = round1(T.get(k, 0.0) + M[k])
+		for k in M:
+			if k == "hpPct": continue          # (a % of the level's HP: stats() applies it)
+			T[k] = round1(T.get(k, 0.0) + M[k])
 	_tot[c] = T
 	return T
 
@@ -361,7 +364,8 @@ func lvm(c: String) -> float:
 func stats(c: String) -> Dictionary:
 	var T := gear_tot(c)
 	var B: Dictionary = CH.STATS[c]
-	var hp: float = roundf(B["hp"] * lvm(c)) + T["hp"]
+	var hpp: float = float(memory.stat_add(c).get("hpPct", 0.0)) / 100.0 if memory != null else 0.0      # max HP % nodes (scale with the level)
+	var hp: float = roundf(B["hp"] * lvm(c) * (1.0 + hpp)) + T["hp"]
 	return {"hp": hp, "base_hp": B["hp"], "atk": B["atk"] * lvm(c) * (1.0 + T["atk"] / 100.0), "base_atk": B["atk"], "def": T["def"], "crit": T["crit"],
 		"ms": BASE_MS[c] * (1.0 + T["ms"] / 100.0 - 0.02 * T["heavy"]), "base_ms": BASE_MS[c], "as": B.get("as", 1.0), "heal": T["heal"], "ult": T["ult"]}
 
@@ -705,6 +709,8 @@ func out_mul(e) -> float:
 	if rbn("oath") > 0: m *= 1.0 + 0.25 * RV("oath")
 	if rbn("giantB") > 0: m *= 1.0 + 0.2 * RV("giant")
 	if rbn("tagbell") > 0: m *= 1.0 + 0.15 * RV("tagbell")
+	# Aida renewal: +20% on a 무방비 foe (경직 · 띄움 · 그로기)
+	if c == "aida" and e != null and EL_ST.exposed(e): m *= 1.2
 	# 등 뒤의 그림자: Aida striking a foe that faces away
 	if c == "aida" and has("backshadow", c) and e != null and e.get("dir") != null and int(e.dir) == int(P.dir):
 		m *= 1.0 + 0.2 * RV("backshadow", c)
@@ -858,7 +864,7 @@ func _step_shields(dt: float) -> void:
 ## 그림자 분신: stays where she left and repeats her melee hits at half power
 func clone_start() -> void:
 	var P = arena.player
-	clone = {"t": 3000.0, "x": P.position.x, "y": P.position.y, "dir": P.dir}
+	clone = {"t": 3000.0 + (1000.0 if memory != null and memory.val("aida", "aShadow") > 0.0 else 0.0), "x": P.position.x, "y": P.position.y, "dir": P.dir}
 
 func clone_hits(atk) -> void:
 	if clone["t"] <= 0.0 or atk == null: return

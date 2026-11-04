@@ -135,7 +135,7 @@ func step(dt: float) -> void:
 		queue_redraw()
 		return
 	if daze > 0.0: daze -= dt
-	if ST.step(arena, self, dt): daze = maxf(daze, 60.0)       # 경직 · 빙결 · 그로기 hold her too
+	if ST.step(arena, self, dt): daze = maxf(daze, 60.0)       # 경직 · 띄움 · 그로기 hold her too
 	if hurt_t > 0.0:
 		hurt_t -= dt
 		position.x += kb * dt * 0.3

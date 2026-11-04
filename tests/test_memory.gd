@@ -78,7 +78,7 @@ func _initialize() -> void:
 	P.anim = "idle"
 	check(M.clear_nodes("estelle") and M.pts_left("estelle") == 3, "초기화 gives the points back")
 
-	# 빈틈 (renewal): +15% on a 무방비 foe (경직 · 빙결 · 띄움 · 그로기)
+	# 빈틈 (renewal): +15% on a 무방비 foe (경직 · 띄움 · 그로기)
 	M.take("estelle", "A2")
 	check(near(M.out_mul("estelle", e), 1.0), "빈틈: nothing on a foe standing")
 	e.set_meta("st", {"stagger": {"t": 1000.0}})
@@ -88,7 +88,7 @@ func _initialize() -> void:
 	M.clear_nodes("estelle")
 	var h0: float = R.max_hp("estelle")
 	M.take("estelle", "B2")
-	check(near(R.max_hp("estelle"), h0 + 10.0), "버티는 몸 +10 max HP")
+	check(near(R.max_hp("estelle"), roundf(R.CH.STATS["estelle"]["hp"] * M.lvm("estelle") * 1.1) + R.gear_tot("estelle")["hp"]), "버티는 몸 +10% max HP (%s → %s)" % [h0, R.max_hp("estelle")])
 	# 둥근 방패 (guard −15%) and 받아내기 (parry → 기력 +5; renewal: in 의지)
 	M.take("estelle", "B0")
 	M.take("estelle", "C2")
@@ -137,13 +137,13 @@ func _initialize() -> void:
 	# multipliers: QTE time, swap cooldown, ult gain, cooldowns, dash recharge
 	M.tree["aida"]["lv"] = 12
 	M.clear_nodes("aida")
-	for id in ["C0", "C1", "C2", "B0", "B1", "B4"]: M.take("aida", id)
+	for id in ["C0", "C1", "B0", "B1", "X1"]: M.take("aida", id)      # (renewal: 망자의 귀띔 is the 그림자 + 균열 cross node)
 	check(near(M.mul("aida", "qteT"), 1.2) and near(M.mul("aida", "cd"), 0.85) and near(M.mul("aida", "rch"), 0.75), "Aida: QTE ×1.2, rift cd ×0.85, dash charge ×0.75")
 	M.clear_nodes("estelle")
 	for id in ["C0", "C1", "C2", "C3", "A0", "A1", "X2"]: M.take("estelle", id)      # (어설픈 욕지거리 is the 검 + 의지 cross node now)
 	P.qte["t"] = 0.0
 	P.qte["cd"] = 0.0
-	P.qte_offer("finisher")
+	P.qte_offer("parry")
 	check(near(P.qte["t"], P.QTE_T * 1.25), "믿고 기다리기: QTE ×1.25 (%s)" % P.qte["t"])
 	P.qte_end()
 	arena.ult.v["estelle"] = 0.0

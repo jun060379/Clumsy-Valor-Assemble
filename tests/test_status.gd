@@ -1,7 +1,7 @@
 extends SceneTree
 ## 공용 상태 (status.gd): 취약 multiplies damage, a gauge fills and triggers, the same member refreshes and another
 ## raises the stage, 경직 holds the foe then leaves it immune, 둔화 slows its feet but not its swing and widens the
-## parry, 빙결 on a second fill, 화상 ticks and spreads without extending, 출혈 hits back on every blow (0.1 s apart),
+## parry (no freeze), 화상 ticks and spreads without extending, 출혈 hits back on every blow (0.1 s apart),
 ## 띄움 lifts and lands, a boss takes the locks as groggy, the swap reactions, 보호막 · 강화 · 재생:
 ## godot --headless --path . -s tests/test_status.gd
 
@@ -90,15 +90,13 @@ func _initialize() -> void:
 	ST.add(arena, d, "stagger", 100.0)
 	ok(not ST.has(d, "stagger"), "a fill while immune does nothing")
 
-	print("둔화 · 빙결")
+	print("둔화")
 	var e = gob(x0 + 900.0)
 	ST.add(arena, e, "slow", 100.0, "luce")
 	ok(ST.has(e, "slow") and ST.speed_mul(e) < 1.0 and ST.recovery(e) > 0.0, "둔화: slower feet, a longer rest")
 	ok(ST.parry_extra(e) == 1 and ST.parry_extra(a) == 0, "the parry window widens against it only")
 	ST.add(arena, e, "slow", 100.0, "luce")
-	ok(float(ST.of(e)["slow"]["fz"]) > 0.0 and ST.no_kb(e), "filled again → 빙결 (no knockback)")
-	ST.tag_react(arena, e, true)
-	ok(float(ST.of(e)["slow"]["fz"]) <= 0.0, "a tag-in shatters it")
+	ok(ST.has(e, "slow") and not ST.exposed(e) and int(ST.of(e)["slow"]["stage"]) == 1, "filled again by the same member: still 둔화 (no freeze), refreshed")
 
 	print("출혈")
 	var f = gob(x0 + 1100.0)

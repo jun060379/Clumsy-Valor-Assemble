@@ -8,11 +8,11 @@ extends RefCounted
 ##   stagger 경직 (gauge)  — 1.5 s defenceless, then ~2 s immune
 ##   air 띄움 (instant)    — up in the air, hits keep it up to a limit (fliers: a short stagger instead)
 ##   slow 둔화 (gauge)     — moves slower and rests longer after an attack; the attack's timing never changes, the
-##                           parry window widens; filled again while slowed → 빙결 (1 s frozen, no knockback)
+##                           parry window widens (no freeze: owner 2026-11-04, 둔화 only)
 ##   burn 화상 (gauge)     — damage over time + spreads to a foe nearby (never extends one already burning)
 ##   bleed 출혈 (instant)  — extra damage on every hit taken (at most every 0.1 s), 8 s or 15 hits
 ## Stages: the same member again only refreshes; another member's same status raises its stage (max 3 = the party).
-## Bosses and elites: 경직 · 띄움 · 빙결 go into a groggy gauge (full → 3 s down, more damage taken); every trigger
+## Bosses and elites: 경직 · 띄움 go into a groggy gauge (full → 3 s down, more damage taken); every trigger
 ## of a gauge status raises its next need by 50%.
 ## Different statuses all coexist; none cancels another.
 ##
@@ -26,7 +26,7 @@ const K := {
 	"vuln": {"name": "취약", "col": Color("#ff5a3a"), "t": 8000.0, "mul": 0.20},
 	"stagger": {"name": "경직", "col": Color("#ffe14d"), "t": 1500.0, "imm": 2000.0},
 	"air": {"name": "띄움", "col": Color("#bfe9ff"), "vy": -0.75, "g": 0.0032, "hits": 6, "bump": -0.28},
-	"slow": {"name": "둔화", "col": Color("#8fdcff"), "t": 5000.0, "ms": [0.7, 0.6, 0.5], "rec": 380.0, "freeze": 1000.0, "imm": 2000.0},
+	"slow": {"name": "둔화", "col": Color("#8fdcff"), "t": 5000.0, "ms": [0.7, 0.6, 0.5], "rec": 380.0},
 	"burn": {"name": "화상", "col": Color("#ff7a45"), "t": 6000.0, "tick": 500.0, "dps": 0.15, "spread": 1500.0, "radius": 170.0},
 	"bleed": {"name": "출혈", "col": Color("#e0304a"), "t": 8000.0, "n": 15, "per": 0.12, "gap": 100.0},
 }
@@ -34,7 +34,7 @@ const ORDER := ["vuln", "stagger", "air", "slow", "burn", "bleed"]
 const STAGE_K := [1.0, 1.5, 2.0]          # stage 1 · 2 · 3
 const GAUGE := 100.0
 const TOL := 0.5                          # boss / elite: each trigger raises the next need by 50%
-const GROGGY := {"need": 300.0, "t": 3000.0, "mul": 0.30, "air": 60.0, "freeze": 80.0}
+const GROGGY := {"need": 300.0, "t": 3000.0, "mul": 0.30, "air": 60.0}
 const SHIELD_CAP := 0.30
 const SHOW := 3                           # icons over a foe; more → "+n"
 
@@ -49,7 +49,6 @@ static func has(e, k: String) -> bool:
 	if not e.has_meta("st"): return false
 	var d = e.get_meta("st").get(k)
 	if d == null: return false
-	if k == "slow": return float(d.get("t", 0.0)) > 0.0 or float(d.get("fz", 0.0)) > 0.0
 	return float(d.get("t", 0.0)) > 0.0
 
 static func big(e) -> bool:
@@ -102,6 +101,7 @@ static func add(arena, e, k: String, amt := -1.0, src := "") -> void:
 				d["hits"] = 0
 			d["t"] = 1.0
 			d["vy"] = K.air.vy
+			_exposed_cue(arena)
 		"bleed":
 			_stage(d, src)
 			d["t"] = K.bleed.t
@@ -117,16 +117,8 @@ static func _trigger(arena, e, k: String, d: Dictionary, src: String) -> void:
 			if float(d.get("imm", 0.0)) > 0.0 or float(d.get("t", 0.0)) > 0.0: return
 			d["t"] = K.stagger.t
 			_lock(e)
+			_exposed_cue(arena)
 		"slow":
-			if float(d.get("t", 0.0)) > 0.0 and src_in(d, src):
-				# filled again while slowed: 빙결 (the bosses take it as groggy)
-				if big(e): groggy(arena, e, GROGGY.freeze)
-				elif float(d.get("imm", 0.0)) <= 0.0 and float(d.get("fz", 0.0)) <= 0.0:
-					d["fz"] = K.slow.freeze
-					_lock(e)
-					arena.text(e.position + Vector2(0, -150), "빙결", K.slow.col)
-				d["t"] = K.slow.t
-				return
 			_stage(d, src)
 			d["t"] = K.slow.t
 		"burn":
@@ -152,6 +144,11 @@ static func _stage(d: Dictionary, src: String) -> void:
 static func stage_k(d: Dictionary) -> float:
 	return STAGE_K[clampi(int(d.get("stage", 1)) - 1, 0, 2)]
 
+## a foe just went 무방비: Aida's QTE (기습) may open
+static func _exposed_cue(arena) -> void:
+	var P = arena.get("player")
+	if P != null and P.has_method("qte_offer"): P.qte_offer("exposed")
+
 ## a lock stops a swing mid-way (the foe was hit out of it)
 static func _lock(e) -> void:
 	if e.get("st") == "atk":
@@ -169,6 +166,7 @@ static func groggy(arena, e, amt: float) -> void:
 		d["g"] = 0.0
 		d["t"] = GROGGY.t
 		_lock(e)
+		_exposed_cue(arena)
 		arena.text(e.position + Vector2(0, -210), "그로기!", Color("#ffd34d"))
 		arena.shake(10, 1)
 		arena.sfx("heavy", 0.9)
@@ -180,7 +178,7 @@ static func _cue(arena, e, k: String) -> void:
 	var st := int(d.get("stage", 1))
 	arena.text(e.position + Vector2(0, -170), K[k].name + ("" if st <= 1 else " %d단계" % st), K[k].col)
 
-## tick; true while the foe is locked (경직 · 빙결 · 띄움 · 그로기): no AI that frame
+## tick; true while the foe is locked (경직 · 띄움 · 그로기): no AI that frame
 static func step(arena, e, dt: float) -> bool:
 	if not e.has_meta("st"): return false
 	var S: Dictionary = e.get_meta("st")
@@ -197,10 +195,6 @@ static func step(arena, e, dt: float) -> bool:
 					lock = true
 					if d["t"] <= 0.0: d["imm"] = K.stagger.imm * float(d.get("immk", 1.0))
 			"slow":
-				if float(d.get("fz", 0.0)) > 0.0:
-					d["fz"] = float(d["fz"]) - dt
-					lock = true
-					if d["fz"] <= 0.0: d["imm"] = K.slow.imm
 				if float(d.get("t", 0.0)) > 0.0: d["t"] = float(d["t"]) - dt
 			"air":
 				if float(d.get("t", 0.0)) > 0.0:
@@ -258,12 +252,11 @@ static func deal(arena, e, v: float, col: Color) -> void:
 		e.hp -= n
 	_in = false
 
-## 무방비: held by 경직 · 빙결 · 띄움 · 그로기
+## 무방비: held by 경직 · 띄움 · 그로기
 static func exposed(e) -> bool:
 	if e == null or not e.has_meta("st"): return false
 	var S: Dictionary = e.get_meta("st")
 	if has(e, "stagger") or has(e, "air"): return true
-	if S.has("slow") and float(S["slow"].get("fz", 0.0)) > 0.0: return true
 	return S.has("groggy") and float(S["groggy"].get("t", 0.0)) > 0.0
 
 static func groggy_on(e) -> bool:
@@ -297,11 +290,9 @@ static func on_hit(arena, e) -> void:
 		a["hits"] = int(a.get("hits", 0)) + 1
 		if int(a["hits"]) <= int(K.air.hits): a["vy"] = minf(float(a["vy"]), K.air.bump)
 
-## knockback is off while frozen
-static func no_kb(e) -> bool:
-	if not e.has_meta("st"): return false
-	var d = e.get_meta("st").get("slow")
-	return d != null and float(d.get("fz", 0.0)) > 0.0
+## (no freeze any more: knockback always applies)
+static func no_kb(_e) -> bool:
+	return false
 
 ## 둔화: movement speed and the rest after a swing (the swing's own timing never changes)
 static func speed_mul(e) -> float:
@@ -329,14 +320,6 @@ static func tag_react(arena, e, strong: bool) -> void:
 	var any := false
 	if has(e, "stagger"):
 		S["stagger"]["t"] = float(S["stagger"]["t"]) + 800.0 * w
-		any = true
-	if S.has("slow") and float(S["slow"].get("fz", 0.0)) > 0.0:
-		var d: Dictionary = S["slow"]
-		deal(arena, e, atk_of(arena, String(arena.player.who)) * 0.8 * stage_k(d) * w, K.slow.col)
-		d["fz"] = 0.0
-		d["imm"] = K.slow.imm
-		if strong: d["t"] = 0.0
-		arena.text(e.position + Vector2(0, -190), "얼음 깨기!", K.slow.col)
 		any = true
 	if has(e, "burn"):
 		var b: Dictionary = S["burn"]

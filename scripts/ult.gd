@@ -12,6 +12,7 @@ extends Node2D
 
 const CH := preload("res://scripts/chars.gd")
 const BAL := preload("res://scripts/balance.gd")
+const ST_ := preload("res://scripts/status.gd")
 const ULTMAX := {"estelle": 390.0, "aida": 300.0, "luce": 240.0, "kenin": 270.0}       # kenin: PLACEHOLDER
 const INFO := {
 	"estelle": {"name": "수호의 맹세", "sub": "ESTELLE BELLACITA", "col": Color8(255, 110, 190), "col2": Color8(255, 220, 240)},
@@ -279,6 +280,7 @@ func _step_aida(_dt: float, P, S: float) -> void:
 				var a0: float = [-0.96, 0.96, PI / 2.0, 0.0][randi() % 4] + (randf() - 0.5) * 0.25
 				fx.append({"k": "tear", "x": e.position.x, "y": _ey(e), "ang": a0, "len": (150.0 + randf() * 50.0) * S, "t": 0.0, "life": 420.0})
 				hit(e, BAL.p("aida", "ult_pass"))
+				ST_.add(arena, e, "air", -1.0, "aida")      # Aida renewal: each pass lifts (bosses: groggy)
 				if j < 4: arena.hitstop = 30.0
 				arena.shake(4.0 + j * 0.4, d)
 				arena.sfx("hit%d" % (j % 3 + 1), 0.8)       # the rifts' hits climb F / A / C as they come faster
