@@ -53,10 +53,16 @@ func _initialize() -> void:
 	await tap(4)
 	for i in 30:
 		await frames(1)
-		if P.r_strike != null: break
+		if not P.a_exec.is_empty(): break
+	await frames(13)
+	await shot("aida_x_rise")
+	await frames(9)
+	await shot("aida_x_hang")
+	await frames(14)
+	await shot("aida_x_slam")
 	for i in 40:
 		await frames(1)
-		if P.r_strike == null: break
+		if P.a_exec.is_empty(): break
 	await frames(2)
 	await shot("aida_follow")
 	await frames(60)

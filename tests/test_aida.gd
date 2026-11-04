@@ -57,11 +57,12 @@ func _initialize() -> void:
 	var got := false
 	for i in 6:
 		await process_frame
-		if P.r_strike != null and P.r_strike["emp"]: got = true
+		if not P.a_exec.is_empty(): got = true
 	Input.action_release("attack")
-	ok(got, "one more press → the empowered rift strike")
-	await until(func(): return P.r_strike == null)
-	ok(P.r_strike == null, "it landed")
+	ok(got, "one more press → 처형 (the empowered strike's own motion)")
+	var h0: float = a.hp
+	await until(func(): return P.a_exec.is_empty())
+	ok(P.a_exec.is_empty() and a.hp < h0 and P.on, "it rose, slammed and landed (hp %.0f → %.0f)" % [h0, a.hp])
 
 	print("a boss is not lifted (groggy instead)")
 	var bs = gob(P.position.x + 500.0, "boss")

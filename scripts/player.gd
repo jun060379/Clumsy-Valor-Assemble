@@ -111,6 +111,7 @@ var l_bless_t := 0.0        # Luce's 빛의 가호 (ms left): the one in control
 var l_bolt_cd := 0.0
 var a_follow := {}          # Aida: the follow-up window after a launch {"m", "t" ms, "k" damage bonus}
 var a_left := {}            # Aida's 남은 균열 (left where she swapped out) {"x", "y", "t" ms to the burst}
+var a_exec := {}            # Aida's 처형 (the empowered strike's own motion) {"tg", "t", "k", "x", "g0", "top", "hit1", "hit2"}
 var a_emp := false          # the rift strike in flight is the empowered one (무방비 target: instant, full, bigger)
 var e_guard_t := 0.0        # 용감한 희생: Estelle's covering guard (ms left) takes the next blow
 var e_assist := {}          # … and her figure beside the one in control {"t", "x", "y", "dir"}
@@ -795,7 +796,10 @@ func step(dt: float) -> void:
 			take("attack")
 			var k: float = a_follow["k"]
 			a_follow = {}
-			rift_strike(1.0, fm, true, k)
+			aida_exec(fm, k)
+	if not a_exec.is_empty():
+		_aexec_step(dt)
+		return
 
 	tap_t += dt
 	for d in [-1, 1]:
@@ -1596,7 +1600,7 @@ func advance(dt: float, move: int) -> void:
 			cfull = false
 			break
 		if anim == "attack1" and f == 2 and keys["attack"] and on and who == "aida" and aida_emp_target() != null:
-			rift_strike(1.0, aida_emp_target(), true)          # 무방비 ahead: no gathering, the empowered strike at once
+			aida_exec(aida_emp_target(), 1.0)          # 무방비 ahead: no gathering, the 처형 at once
 			break
 		if anim == "attack1" and f == 2 and keys["attack"] and on and who != "kenin":
 			set_anim({"estelle": "charge", "aida": "acharge", "luce": "lgather"}[who], 1)
@@ -2548,6 +2552,123 @@ func aida_emp_target():
 			bdx = dx
 			best = m
 	return best
+
+## 처형 (owner 2026-11-04: the empowered strike gets its own motion, not the plain strike with effects): she sinks
+## into a rift, tears out of the ground under the foe with a rising swing (30%), hangs at the top, and drives it
+## into the floor with the shovel (70%). Built from her existing frames (dig_in · attack_high · dive) until a
+## dedicated sprite exists. Timings in ms: sink 0-150, rise 150-350, hang 350-470, slam 470-720.
+const AX_SINK := 150.0
+const AX_RISE := 350.0
+const AX_HANG := 470.0
+const AX_END := 720.0
+
+func aida_exec(tg, k := 1.0) -> void:
+	if tg == null or not is_instance_valid(tg) or not tg.alive(): return
+	var g0: float = position.y
+	if ST.has(tg, "air"): g0 = float(ST.of(tg)["air"]["y0"])
+	elif not is_fly(tg): g0 = tg.position.y
+	a_exec = {"tg": tg, "t": 0.0, "k": k, "x": tg.position.x, "g0": g0, "top": maxf(110.0 * CSCALE, g0 - tg.position.y + 70.0 * CSCALE), "hit1": false, "hit2": false, "exp": ST.exposed(tg)}
+	dir = 1 if tg.position.x >= position.x else -1
+	a_follow = {}
+	vx = 0.0
+	vy = 0.0
+	inv = maxf(inv, AX_END + 200.0)
+	set_anim("dig_in", 0)
+	var gd = arena.pfx.gate(position.x, position.y, 120.0 * CSCALE, 1.4, 0.9)
+	gd["rel"] = true
+	a_exec["mark"] = arena.pfx.gate(tg.position.x if not is_fly(tg) else tg.position.x, g0, 60.0 * CSCALE, 2.0, 1.6)     # her sigil flickers under the foe
+	arena.sfx("aida_open", 1.0)
+	arena.post_ca(0.02)
+
+func _aexec_dmg() -> float:
+	return BAL.p("aida", "rift_max") * _am("riftK") * float(a_exec["k"])
+
+func _aexec_step(dt: float) -> void:
+	var tg = a_exec["tg"]
+	var live: bool = tg != null and is_instance_valid(tg) and tg.alive()
+	var t0: float = a_exec["t"]
+	a_exec["t"] = t0 + dt
+	var tt: float = a_exec["t"]
+	var g0: float = a_exec["g0"]
+	if live: a_exec["x"] = tg.position.x
+	if tt < AX_SINK:
+		set_anim("dig_in", mini(3, int(tt / (AX_SINK / 4.0))))
+		return
+	if t0 < AX_SINK:
+		# out of the ground under the foe: the floor tears open
+		if a_exec.get("mark") != null: a_exec["mark"]["rel"] = true
+		position.x = float(a_exec["x"]) - dir * 18.0 * CSCALE
+		position.y = g0
+		on = false
+		var up = arena.pfx.gate(position.x + dir * 18.0 * CSCALE, g0, 240.0 * CSCALE, 1.9, 1.5)
+		up["rel"] = true
+		arena.sfx("aida_close", 1.0)
+		arena.dust(position, 0, true)
+		arena.shake(6, dir)
+	if tt < AX_RISE:
+		var u := (tt - AX_SINK) / (AX_RISE - AX_SINK)
+		var e := 1.0 - pow(1.0 - u, 3.0)
+		position.y = g0 - float(a_exec["top"]) * e
+		set_anim("attack_high", mini(3, int(u * 4.0)))
+		if live and ST.has(tg, "air"): ST.of(tg)["air"]["vy"] = minf(float(ST.of(tg)["air"]["vy"]), -0.55)      # carried up with her
+		if not a_exec["hit1"] and u > 0.35 and live:
+			a_exec["hit1"] = true
+			tg.hit(_aexec_dmg() * 0.3, 0.0, atk_mul())
+			arena.slash_fx(Vector2(position.x + dir * 30.0 * CSCALE, position.y - 70.0 * CSCALE), 110.0 * CSCALE, deg_to_rad(120.0), deg_to_rad(-60.0), dir, Color("#e9d2ff"), 1.5)
+			arena.spark(tg.position + Vector2(0, -50), 14)
+			arena.sfx("aida_hit", 1.0)
+			arena.hitstop = maxf(arena.hitstop, 40.0)
+		if int(tt / 40.0) != int(t0 / 40.0): add_ghost(220.0)
+		return
+	if tt < AX_HANG:
+		if t0 < AX_RISE:
+			arena.hitstop = maxf(arena.hitstop, 90.0)
+			add_ghost(320.0)
+			arena.post_wave(position + Vector2(0, -60.0 * CSCALE), 0.9, 420.0, 0.22)
+		position.y = g0 - float(a_exec["top"])
+		set_anim("attack_high", 4)
+		if live and ST.has(tg, "air"): ST.of(tg)["air"]["vy"] = 0.0      # it hangs with her
+		return
+	if tt < AX_END:
+		var u2 := (tt - AX_HANG) / (AX_END - AX_HANG)
+		position.y = g0 - float(a_exec["top"]) * (1.0 - u2 * u2)
+		set_anim("dive", mini(5, int(u2 * 5.0)))
+		if live and ST.has(tg, "air"): ST.of(tg)["air"]["vy"] = 1.6      # driven down
+		if int(tt / 35.0) != int(t0 / 35.0): add_ghost(200.0)
+		return
+	# the slam lands
+	position.y = g0
+	on = true
+	if live and not a_exec["hit2"]:
+		a_exec["hit2"] = true
+		tg.hit(_aexec_dmg() * 0.7, dir * 6.0, atk_mul())
+	arena.pfx.slam(position.x, position.y, who)
+	arena.post_wave(position + Vector2(dir * 20.0, -20.0), 1.6, 620.0, 0.32)
+	arena.shake(12, dir)
+	arena.flash = maxf(arena.flash, 0.3)
+	arena.hitstop = maxf(arena.hitstop, 130.0)
+	arena.sfx("heavy", 1.0)
+	arena.sfx("slam", 0.8)
+	arena.dust(position, dir, true)
+	arena.text(position + Vector2(0, -175.0 * CSCALE), "처형!", Color("#e9d2ff"))
+	qte_offer("finisher")
+	_rev("heavy")
+	var was_exp: bool = a_exec["exp"]
+	var k0: float = a_exec["k"]
+	a_exec = {}
+	set_anim("idle")
+	inv = maxf(inv, 250.0)
+	# 기습의 문 (KEY): one more 처형 on another foe near
+	if was_exp and _av("riftChain") > 0.0 and k0 <= 1.0:
+		var nx = null
+		var nd := 420.0
+		for m2 in foes_alive():
+			if live and m2 == tg: continue
+			var d2: float = absf(m2.position.x - position.x)
+			if d2 < nd:
+				nd = d2
+				nx = m2
+		if nx != null: a_follow = {"m": nx, "t": 800.0, "k": _av("riftChain")}
 
 ## 3타 lifts small foes (보스 · 정예: groggy instead); 높이 차기 (airK) lifts higher
 func aida_launch(e) -> void:
