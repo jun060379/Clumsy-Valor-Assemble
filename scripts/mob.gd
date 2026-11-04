@@ -149,6 +149,7 @@ func hit(dmg: float, kb: float, mul := 1.0) -> void:
 	last_dmg = d
 	hit_now = true
 	if hp > 0.0: ST.on_hit(arena, self)        # 출혈's extra damage, 띄움 kept up
+	if hp > 0.0 and not ST._in and arena.hit_by == "": arena.player.bless_proc(self)      # 빛의 가호: Luce's bolt follows
 	flash = 120.0
 	kx = kb * 0.6
 	var hd := signf(position.x - arena.player.position.x)

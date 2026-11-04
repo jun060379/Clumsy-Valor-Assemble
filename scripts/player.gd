@@ -107,6 +107,8 @@ var qte := {"t": 0.0, "cd": 0.0, "who": [], "hit": null, "low": false}
 var party_lock := 0.0
 var qte_gap := 0.0
 var tag_src := ""           # who opened the QTE the incoming member answered (등을 맡긴다)
+var l_bless_t := 0.0        # Luce's 빛의 가호 (ms left): the one in control's hits draw her bolts from the bench
+var l_bolt_cd := 0.0
 var a_follow := {}          # Aida: the follow-up window after a launch {"m", "t" ms, "k" damage bonus}
 var a_left := {}            # Aida's 남은 균열 (left where she swapped out) {"x", "y", "t" ms to the burst}
 var a_emp := false          # the rift strike in flight is the empowered one (무방비 target: instant, full, bigger)
@@ -973,14 +975,15 @@ func step(dt: float) -> void:
 			fx_done = true
 			_rev("skill")
 			_rev("heal")
-			var hv := float(roundi(30.0 * _lvh("luce")))    # 30 × level × 회복량
+			var hv := float(roundi(15.0 * _lvh("luce")))    # renewal: 15 × level × 회복량 (the rest comes from 빛의 가호)
+			bless_start()
 			hp = minf(MAX_HP, hp + hv)
 			var al := 0
 			for c in party:
 				if c != who and hpm[c] > 0.0 and hpm[c] < _mhp(c):
 					hpm[c] = minf(_mhp(c), hpm[c] + hv)
 					al += 1
-			heal_cd = 9000.0 * _cdk()
+			heal_cd = 14000.0 * _cdk()
 			arena.sfx("ui_ok", 0.9)
 			arena.flash = 0.1
 			arena.pfx.heal_burst(position.x, position.y, CSCALE)
@@ -1715,6 +1718,8 @@ func die() -> void:
 # ---------- party: switching, QTE tag-in, counter swap ----------
 func party_step(dt: float) -> void:
 	ST.ally_step(self, dt)
+	if l_bless_t > 0.0: l_bless_t -= dt
+	if l_bolt_cd > 0.0: l_bolt_cd -= dt
 	if not a_left.is_empty():
 		a_left["t"] = float(a_left["t"]) - dt
 		if float(a_left["t"]) <= 0.0:
@@ -1876,6 +1881,10 @@ func swap(tag: bool, to = null) -> void:
 	hpm[old] = maxf(0.0, hp)
 	var was_dead := anim == "death"
 	outs.append({"c": old, "anim": "death" if was_dead else "tag_out", "x": position.x, "y": position.y, "dir": dir, "t": 0.0, "dead": was_dead})
+	if old == "luce" and not was_dead:
+		# Luce renewal: leaving, she hands the one coming in 강화 (축복 nodes: stronger, longer, 기력)
+		ST.ally_add(self, "buff", L_BUFF + _lv("buffK"), L_BUFF_MS + _lv("buffMs"))
+		if _lv("buffUlt") > 0.0 and arena.get("ult") != null: arena.ult.v[nx] = minf(arena.ult.ULTMAX[nx], arena.ult.v[nx] + _lv("buffUlt"))
 	if old == "aida" and not was_dead:
 		a_left = {"x": position.x, "y": position.y, "t": 1000.0}       # 남은 균열: bursts in 1 s, lifting whoever stands there
 		a_follow = {}
@@ -1907,6 +1916,9 @@ func swap(tag: bool, to = null) -> void:
 			hp = maxf(1.0, hp - take_dmg)
 			last_hp = hp
 			arena.text(position + Vector2(0, -175.0 * CSCALE), "수호! " + CH.NAME[old] + " 피해 대신 받음", Color("#ffe39a"))
+		if nx == "luce":
+			ST.ally_add(self, "shield", _mhp(old) * 0.2)          # 구원: a shield for the one leaving (it stays with the party)
+			bless_start()
 		if nx == "luce" and q_low:
 			hpm[old] = minf(_mhp(old), hpm[old] + 30.0)
 			arena.text(position + Vector2(0, -175.0 * CSCALE), "구원! " + CH.NAME[old] + " +30", Color("#fff1b0"))
@@ -2479,6 +2491,40 @@ func _av(key: String) -> float:
 
 func _am(key: String) -> float:
 	return arena.runes.memory.mul("aida", key) if _rk() else 1.0
+
+## Luce's memory node value / product (her tree)
+func _lv(key: String) -> float:
+	return arena.runes.memory.val("luce", key) if _rk() else 0.0
+
+func _lm(key: String) -> float:
+	return arena.runes.memory.mul("luce", key) if _rk() else 1.0
+
+## Luce renewal (owner 2026-11-04, 필드 밖 딜포터): her prayer lays 빛의 가호 on the party for 12 s; while it lasts a
+## hit by the one in control draws a holy bolt from her on the bench (60% of her attack, at most every 0.5 s) and
+## heals the party a little. Numbers PLACEHOLDER.
+const L_BLESS := 12000.0
+const L_BOLT_GAP := 500.0
+const L_BUFF := 0.15
+const L_BUFF_MS := 8000.0
+
+func bless_start() -> void:
+	l_bless_t = L_BLESS + _lv("blessT")
+	arena.text(position + Vector2(0, -175.0 * CSCALE), "빛의 가호", Color("#fff1b0"))
+
+func bless_proc(e) -> void:
+	if l_bless_t <= 0.0 or l_bolt_cd > 0.0 or who == "luce" or not party.has("luce") or hpm.get("luce", 0.0) <= 0.0: return
+	if e == null or not is_instance_valid(e) or not e.alive(): return
+	l_bolt_cd = L_BOLT_GAP * _lm("boltGap")
+	var lk: float = CH.STATS["luce"]["atk"] * (arena.runes.atk_k("luce") if _rk() else 1.0)
+	var dmg: float = BAL.p("luce", "bless_bolt") * _lm("boltK")
+	var n := 2 if _lv("bolt2") > 0.0 else 1
+	for i in n:
+		arena.bolt_as(position + Vector2(-dir * (20.0 + i * 24.0), -150.0 * CSCALE - i * 14.0), e, "luce", dmg, lk)
+	if _lv("boltSlow") > 0.0: ST.add(arena, e, "slow", _lv("boltSlow"), "luce")      # 빛의 사슬
+	var hv := 1.5 * _lvh("luce") * _lm("boltHeal")
+	if hp > 0.0: hp = minf(MAX_HP, hp + hv)
+	for c in party:
+		if c != who and hpm[c] > 0.0: hpm[c] = minf(_mhp(c), hpm[c] + hv)
 
 ## Aida renewal (owner 2026-11-04): 빈틈 처형형. The nearest 무방비 foe ahead within the rift strike's full reach —
 ## against it the strike needs no gathering and goes out empowered (instant, full power, the bigger effect)

@@ -31,6 +31,7 @@ const C := {
 		"attack_high": 190,                                       # 위 공격 번개
 		"air1": 95, "air2": 95, "air3": 105, "dive": 190, "dive_slam": 190,
 		"lfinisher_min": 200, "lfinisher_max": 400,               # 차징 [심판의 번개]: 모은 만큼 200 → 400
+		"bless_bolt": 60,                                         # 빛의 가호: 동료 공격에 따라붙는 빛탄 (필드 밖, 0.5초에 한 번)
 		"tag": 170,
 		"ult": 900,                                               # 궁극기 [루체 펀치] 일직선
 	},

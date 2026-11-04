@@ -98,6 +98,7 @@ func hit(dmg: float, _kb: float, mul := 1.0) -> void:
 	var d: float = arena.elem_hit(p, dmg * 10.0 * mul, M["defEl"])
 	hp -= d
 	if hp > 0.0: ST.on_hit(arena, self)
+	if hp > 0.0 and not ST._in and arena.hit_by == "": arena.player.bless_proc(self)      # 빛의 가호: Luce's bolt follows
 	if R != null: hp -= R.after_hit(self)
 	arena.damage_text(p, roundi(d), dmg > 1.0, Color("#cfe8ff"))
 	var hd := signf(position.x - P.position.x)

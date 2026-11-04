@@ -118,7 +118,7 @@ func _initialize() -> void:
 	# 성소 on Luce, shared by the party
 	M.tree["luce"]["lv"] = 12
 	M.clear_nodes("luce")
-	for id in ["A0", "A1", "A2", "A3", "A4", "A5"]: M.take("luce", id)
+	for id in ["C0", "C1", "C2", "C3", "C4", "C6"]: M.take("luce", id)      # (renewal: 성소 is the 기도 KEY)
 	P.party = ["estelle", "aida", "luce"]
 	check(near(M.sanc_v(), 12000.0), "성소 covers Estelle while Luce is in the party")
 	P.inv = 0.0
