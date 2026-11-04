@@ -1,7 +1,5 @@
 """Bake the rune icons: 16 carved stones (a Sprite Flow 4x4 sheet, glyphs glowing white-cyan) x 7 grades.
-Each grade recolours the glyph's glow and puts the stone on a frame whose shape climbs with the grade:
-common none (grey glyph) / uncommon bronze ring / rare silver square / elite hexagon / epic 8-point star /
-legend 12-point gold sun / unique double ring with points. Writes assets/ui/runes/r<NN>_<grade>.png (128 px).
+Each grade recolours the glyph's glow (common grey, then the grade colours); no frame. Writes assets/ui/runes/r<NN>_<grade>.png (128 px).
 usage: python3 -I tools/runes/bake_runes.py SHEET.png
 """
 import sys, os, math
@@ -81,11 +79,12 @@ def frame(grade):
         d.ellipse((c - 178, c - 178, c + 178, c + 178), fill="#1c1820")
     return f
 
-frames = {g: frame(g) for g in GRADES}
+# no frames (owner 2026-11-04: "틀 빼라") — the grade shows in the glyph's colour alone; frame() kept for reference
+frames = {g: Image.new("RGBA", (S, S), (0, 0, 0, 0)) for g in GRADES}
 for i, st in enumerate(stones()):
     for g in GRADES:
         cv = frames[g].copy()
-        inner = 352 if g != "common" else 440
+        inner = 440
         k = inner / max(st.size)
         s2 = recolour(st, g).resize((int(st.width * k), int(st.height * k)), Image.LANCZOS)
         cv.alpha_composite(s2, ((S - s2.width) // 2, (S - s2.height) // 2))

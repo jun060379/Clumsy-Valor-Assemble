@@ -46,8 +46,8 @@ static func tex(it, slot := "") -> Texture2D:
 	return load(p)
 
 # ---------- runes ----------
-## rune icons: 16 carved stones (glyphs), each baked in every grade (assets/ui/runes/r<NN>_<grade>.png: the glyph's glow in
-## the grade colour, a frame whose shape climbs with the grade — tools/runes/bake_runes.py). A rune names its stone here;
+## rune icons: 16 carved stones (glyphs), each baked in every grade (assets/ui/runes/r<NN>_<grade>.png: the glyph glows in
+## the grade colour, no frame — tools/runes/bake_runes.py). A rune names its stone here;
 ## its grade comes from runes.gd RUNE.
 const RUNE_DIR := "res://assets/ui/runes/"
 const GLYPHS := ["step", "swords", "hammer", "thorn", "fang", "lantern", "mountain", "shield", "wind", "bolt", "hands", "eye", "heart", "flame", "bell", "sun"]
