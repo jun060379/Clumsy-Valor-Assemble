@@ -2560,7 +2560,7 @@ func aida_emp_target():
 ## catches the shovel, flips forward and drives it into the floor (70%). Sprite Flow motion in rows 30-33 (ax_*);
 ## the height is in the frames, so she stays on her ground line and the foe is carried with her head (AX_TOP).
 const AX_SEQ := ["ax_sink", "ax_rise", "ax_spin", "ax_slam"]
-const AX_TOP := {"ax_sink": [188, 81, 36, 29], "ax_rise": [107, 201, 235, 239, 240, 238], "ax_spin": [242, 222, 223, 246, 238, 187, 183, 250, 247], "ax_slam": [242, 241, 150, 142, 116, 122, 175, 188]}
+const AX_TOP := {"ax_sink": [162, 70, 31, 25], "ax_rise": [92, 173, 202, 205, 206, 204], "ax_spin": [208, 191, 192, 212, 205, 161, 158, 215, 212], "ax_slam": [209, 208, 129, 122, 100, 105, 151, 162]}
 const AX_HIT1 := ["ax_rise", 2]
 const AX_HIT2 := ["ax_slam", 3]
 
@@ -2576,6 +2576,7 @@ func aida_exec(tg, k := 1.0) -> void:
 	vy = 0.0
 	inv = maxf(inv, 1700.0)
 	set_anim("ax_sink", 0)
+	z_index = 2          # in front of the foe she carries
 	var gd = arena.pfx.gate(position.x, position.y, 120.0 * CSCALE, 1.4, 0.9)
 	gd["rel"] = true
 	a_exec["mark"] = arena.pfx.gate(tg.position.x if not is_fly(tg) else tg.position.x, g0, 60.0 * CSCALE, 2.0, 1.6)     # her sigil flickers under the foe
@@ -2625,12 +2626,12 @@ func _aexec_step(dt: float) -> void:
 	# the foe rides with her head while she is up (rise · spin), pinned in the air
 	if live and cur[0] in ["ax_rise", "ax_spin"] and (cur[0] != "ax_rise" or cur[1] >= 2):
 		var top: float = float(AX_TOP[cur[0]][cur[1]])
-		tg.position.x = position.x + dir * 24.0 * CSCALE
+		tg.position.x = position.x + dir * 62.0 * CSCALE        # ahead of her, not on top of her
 		if not is_fly(tg):
 			tg.position.y = g0 - maxf(0.0, top - 70.0) * 0.5 * CSCALE
 			if ST.has(tg, "air"): ST.of(tg)["air"]["vy"] = 0.0
 	if live and cur[0] == "ax_slam" and cur[1] <= 2 and ST.has(tg, "air"): ST.of(tg)["air"]["vy"] = 1.8      # driven down
-	if (prev.is_empty() or prev != cur) and cur[0] in ["ax_rise", "ax_spin"]: add_ghost(200.0)
+	if cur[0] == "ax_spin" and cur[1] == 3 and (prev.is_empty() or prev[1] != 3): add_ghost(160.0)      # one trail at the flip, not every frame
 	# hits
 	if not a_exec["hit1"] and cur[0] == AX_HIT1[0] and cur[1] >= AX_HIT1[1] and live:
 		a_exec["hit1"] = true
@@ -2646,9 +2647,9 @@ func _aexec_step(dt: float) -> void:
 		a_exec["hit2"] = true
 		if live: tg.hit(_aexec_dmg() * 0.7, dir * 6.0, atk_mul())
 		arena.pfx.slam(position.x + dir * 30.0 * CSCALE, position.y, who)
-		arena.post_wave(position + Vector2(dir * 30.0, -20.0), 1.6, 620.0, 0.32)
+		arena.post_wave(position + Vector2(dir * 40.0, 0.0), 0.8, 420.0, 0.2)        # light: she must stay readable
 		arena.shake(12, dir)
-		arena.flash = maxf(arena.flash, 0.3)
+		arena.flash = maxf(arena.flash, 0.15)
 		arena.hitstop = maxf(arena.hitstop, 130.0)
 		arena.sfx("heavy", 1.0)
 		arena.sfx("slam", 0.8)
@@ -2662,6 +2663,7 @@ func _aexec_end(tg, live: bool) -> void:
 	var k0: float = a_exec["k"]
 	a_exec = {}
 	set_anim("idle")
+	z_index = 0
 	inv = maxf(inv, 250.0)
 	# 기습의 문 (KEY): one more 처형 on another foe near
 	if was_exp and _av("riftChain") > 0.0 and k0 <= 1.0:

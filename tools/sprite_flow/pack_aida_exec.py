@@ -15,7 +15,25 @@ SRC_FEET = (480, 768)          # frame 1: feet centre, ground line (alpha > 60)
 SRC_H = 768 - 192              # frame 1: standing height
 IDLE_H = 343 - 155             # aida_0 row 0: standing height in the cell
 CELL_FEET = (203, 340)         # aida_0 row 0: feet centre in the cell
-K = IDLE_H / SRC_H
+K = IDLE_H / SRC_H * 0.86     # 0.86: the generated body has a bigger head; matched by head size, not height
+
+# Sprite Flow drew her hair near black; the sheet's hair is green. Dark, grey (unsaturated, not warm) pixels between the
+# outline and the blouse shading move onto the idle pose's hair ramp by brightness.
+HAIR = [(37, 64, 38), (57, 105, 56), (75, 112, 67), (83, 120, 68), (110, 150, 92)]
+def hair_green(im):
+    px = im.load()
+    for y in range(im.height):
+        for x in range(im.width):
+            r, g, b, a = px[x, y]
+            if a < 40: continue
+            mx, mn = max(r, g, b), min(r, g, b)
+            if mx < 30 or mx > 125 or mx - mn > 34 or r - b > 18: continue
+            t = min(1.0, max(0.0, (mx - 30) / 95.0)) * (len(HAIR) - 1)
+            i = min(int(t), len(HAIR) - 2)
+            u = t - i
+            c = [int(HAIR[i][k] * (1 - u) + HAIR[i + 1][k] * u) for k in range(3)]
+            px[x, y] = (c[0], c[1], c[2], a)
+    return im
 
 def alpha_clean(im):
     r, g, b, a = im.split()
@@ -37,7 +55,7 @@ for row, sel in ROWS.items():
     for col, fn in enumerate(sel):
         im = tone(alpha_clean(Image.open(D + "%02d.png" % fn).convert("RGBA")))
         w, h = int(im.width * K), int(im.height * K)
-        sm = im.resize((w, h), Image.LANCZOS)
+        sm = hair_green(im.resize((w, h), Image.LANCZOS))
         ox = CELL_FEET[0] - int(SRC_FEET[0] * K)
         oy = CELL_FEET[1] - int(SRC_FEET[1] * K)
         cell = Image.new("RGBA", (CW, CH), (0, 0, 0, 0))
