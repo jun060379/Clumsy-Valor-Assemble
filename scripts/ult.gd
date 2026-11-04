@@ -11,6 +11,7 @@ extends Node2D
 ## detonation, the punch) plays ult.wav on the music's grid and ducks the track (arena.sfx "ult").
 
 const CH := preload("res://scripts/chars.gd")
+const BAL := preload("res://scripts/balance.gd")
 const ULTMAX := {"estelle": 390.0, "aida": 300.0, "luce": 240.0, "kenin": 270.0}       # kenin: PLACEHOLDER
 const INFO := {
 	"estelle": {"name": "수호의 맹세", "sub": "ESTELLE BELLACITA", "col": Color8(255, 110, 190), "col2": Color8(255, 220, 240)},
@@ -193,10 +194,11 @@ func pose(an: String, f: int) -> void:
 	P.fx_done = true
 	P.vx = 0.0
 
+## dmg: balance.gd's final multiplier (BAL.p) — the old ×DMG is folded into the table
 func hit(e, dmg: float) -> void:
 	if e == null or not is_instance_valid(e) or not e.alive(): return
 	var P = arena.player
-	e.hit(dmg * DMG, P.dir * 5.0, P.atk_mul())
+	e.hit(dmg, P.dir * 5.0, P.atk_mul())
 	arena.spark(e.position + Vector2(0, -50), 14)
 
 ## ultStep (the world ran this frame with the keys held; she is posed on top)
@@ -214,7 +216,7 @@ func step(dt: float) -> void:
 			fx.append({"k": "oath", "x": P.position.x, "y": P.position.y, "s": S * 0.9, "t": 0.0, "life": 1000.0})
 			fx.append({"k": "rose", "t": 0.0, "life": 99999.0, "end": -1.0, "n": 30})
 			for e in _foes():
-				if absf(e.position.x - P.position.x) < 260.0 and absf(e.position.y - P.position.y) < 160.0: hit(e, 2.0)
+				if absf(e.position.x - P.position.x) < 260.0 and absf(e.position.y - P.position.y) < 160.0: hit(e, BAL.p("estelle", "ult"))
 			arena.sfx("ult", 1.0)              # the impact (snapped to the grid, the music ducks 6 dB)
 			arena.sfx("parry", 1.0)
 			arena.flash = 0.3
@@ -274,7 +276,7 @@ func _step_aida(_dt: float, P, S: float) -> void:
 			if live:
 				var a0: float = [-0.96, 0.96, PI / 2.0, 0.0][randi() % 4] + (randf() - 0.5) * 0.25
 				fx.append({"k": "tear", "x": e.position.x, "y": _ey(e), "ang": a0, "len": (150.0 + randf() * 50.0) * S, "t": 0.0, "life": 420.0})
-				hit(e, 1.0)
+				hit(e, BAL.p("aida", "ult_pass"))
 				if j < 4: arena.hitstop = 30.0
 				arena.shake(4.0 + j * 0.4, d)
 				arena.sfx("hit%d" % (j % 3 + 1), 0.8)       # the rifts' hits climb F / A / C as they come faster
@@ -306,7 +308,7 @@ func _step_aida(_dt: float, P, S: float) -> void:
 				var by: float = (_ey(e) + 5.0) if live else p["y"]
 				fx.append({"k": "burst", "x": bx, "y": by, "r": 130.0 if live else 60.0, "t": 0.0, "life": 520.0})
 				if live: arena.post_wave(Vector2(bx, e.position.y - 50.0), 1.0, 560.0, 0.2)
-				if live: hit(e, 2.0)
+				if live: hit(e, BAL.p("aida", "ult_burst"))
 			arena.sfx("ult", 1.0)              # the impact
 			arena.sfx("slam", 1.0)
 			arena.shake(15, P.dir)
@@ -425,7 +427,7 @@ func _step_kenin(_dt: float, P, S: float) -> void:
 			if u >= bl * (0.28 + 0.3 * k) and once(key + "s%d" % k):
 				var hp := aim + Vector2(randf_range(-10.0, 10.0), randf_range(-16.0, 16.0))
 				K.ult_shot(mz, hp, tg)
-				if tg != null: hit(tg, 0.4)
+				if tg != null: hit(tg, BAL.p("kenin", "ult_shot"))
 				K.ammo = maxi(0, K.ammo - 1)
 		if sp[5] and u >= bl * 0.8 and once(key + "b"):
 			K.ult_bomb(tg)
@@ -515,7 +517,7 @@ func _step_luce(dt: float, P, S: float) -> void:
 			fx.append({"k": "burst", "x": fx0, "y": fy0, "r": 160.0, "t": 0.0, "life": 520.0})
 			for e in _foes():
 				var ey: float = e.position.y - 50.0
-				if (e.position.x - P.position.x) * D > -30.0 and absf(ey - fy0) < 170.0: hit(e, 4.0)
+				if (e.position.x - P.position.x) * D > -30.0 and absf(ey - fy0) < 170.0: hit(e, BAL.p("luce", "ult"))
 			for i in 14:
 				fx.append({"k": "twinkle", "x": fx0 + D * randf() * 500.0, "y": fy0 + (randf() - 0.5) * 120.0, "vy": -0.02 - randf() * 0.05, "t": 0.0, "life": 500.0 + randf() * 500.0})
 			arena.sfx("ult", 1.0)              # the impact

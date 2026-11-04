@@ -6,6 +6,7 @@ extends Node2D
 
 const CH = preload("res://scripts/chars.gd")
 const SK := preload("res://scripts/skins.gd")
+const BAL := preload("res://scripts/balance.gd")
 
 const GRAV := 0.0021
 const JUMPV := 0.74
@@ -189,15 +190,17 @@ func take(k: String) -> void:
 	buf[k] = 0.0
 
 func cur_atk():
-	if anim == "air_combo":
-		return CH.ATK["air1"] if f < 3 else (CH.ATK["air2"] if f < 6 else CH.ATK["air3"])
+	var key := anim
+	if anim == "air_combo": key = "air1" if f < 3 else ("air2" if f < 6 else "air3")
+	var base = CH.ATK.get(key)
+	if base == null: return null
+	var a: Dictionary = base.duplicate()
 	if anim == "cthrust":
-		# the charged thrust (charge / gcharge release): 3 damage and kb 16 when fully charged, else 2 and 10
-		var ct: Dictionary = CH.ATK["cthrust"].duplicate()
-		ct["dmg"] = 3 if cfull else 2
-		ct["kb"] = 16 if cfull else 10
-		return ct
-	return CH.ATK.get(anim)
+		# the charged thrust (charge / gcharge release): full charge hits harder and knocks back further
+		a["kb"] = 16 if cfull else 10
+		key = "cthrust" if cfull else "cthrust_part"
+	a["dmg"] = BAL.p(who, key, float(a["dmg"]))          # balance.gd: % of 공격력
+	return a
 
 func move_axis() -> int:
 	return (1 if keys["right"] else 0) - (1 if keys["left"] else 0)
@@ -346,7 +349,7 @@ func kenin_shoot() -> void:
 			var aim: Vector2 = (tg.position + Vector2(0, -55.0) - mz).normalized()
 			var ang := clampf(atan2(aim.y, absf(aim.x)), -0.3, 0.3)
 			d = Vector2(dir * cos(ang), sin(ang))
-	var kd: float = ka["dmg"]
+	var kd: float = BAL.p("kenin", anim, float(ka["dmg"]))
 	var heavy: bool = ka.get("heavy", false) or (anim == "air_combo" and f == 8)
 	if heavy: kd *= 1.0 + arena.kenin.nv("kHeavyShot")    # 헤드샷 연습
 	var first := k_rep <= 0
@@ -384,12 +387,12 @@ func luce_gesture(atk) -> void:
 		dir = int(signf(tg.position.x - position.x)) if tg.position.x != position.x else dir
 	var gy: float = (arena.ground_y if is_fly(tg) else tg.position.y) if tg != null else position.y
 	if anim == "attack3":
-		arena.pillar(tg.position.x if tg != null else position.x + dir * 95.0 * CSCALE, gy, 2.0, dir)
+		arena.pillar(tg.position.x if tg != null else position.x + dir * 95.0 * CSCALE, gy, BAL.p("luce", "attack3"), dir)
 		arena.sfx("heavy", 0.8)
 		arena.shake(5, dir)
 		arena.hitstop = 30.0
 	elif anim == "attack_high":
-		arena.lightning(tg.position.x if tg != null else position.x + dir * 80.0 * CSCALE, gy, 0.8, 2.0, dir)
+		arena.lightning(tg.position.x if tg != null else position.x + dir * 80.0 * CSCALE, gy, 0.8, BAL.p("luce", "attack_high"), dir)
 		arena.sfx("heavy", 0.7)
 		arena.shake(4, dir)
 		arena.hitstop = 25.0
@@ -561,7 +564,7 @@ func rift_exit() -> void:
 		# both gates snap shut: whatever stood on the path she cut through is cut
 		var s = r_strike
 		r_strike = null
-		var dmg: float = 2.0 + round(s["r"] * 2.0)
+		var dmg: float = lerpf(BAL.p("aida", "rift_min"), BAL.p("aida", "rift_max"), clampf(s["r"], 0.0, 1.0))
 		var lo: float = minf(s["x0"], position.x) - 20.0
 		var hi: float = maxf(s["x0"], position.x) + 20.0
 		var hit := false
@@ -850,7 +853,7 @@ func step(dt: float) -> void:
 				arena.hitstop = 50.0
 				for e in foes_alive():
 					if absf(e.position.x - position.x) < 110.0 and absf(e.position.y - position.y) < 40.0:
-						e.hit(2, dir * 6, atk_mul())
+						e.hit(BAL.p(who, "dive_slam"), dir * 6, atk_mul())
 		elif a == "air_combo":
 			vy = minf(vy + GRAV * dt * 0.35, 0.12)
 			vx = dir * 0.04
@@ -878,7 +881,7 @@ func step(dt: float) -> void:
 				var tg = target(520.0)
 				if tg != null: dir = int(signf(tg.position.x - position.x)) if tg.position.x != position.x else dir
 				var gy: float = (arena.ground_y if is_fly(tg) else tg.position.y) if tg != null else position.y
-				arena.lightning(tg.position.x if tg != null else position.x + dir * 95.0 * CSCALE, gy, 1.0 + cw_r * 1.2, 2.0 + round(cw_r * 2.0), dir)
+				arena.lightning(tg.position.x if tg != null else position.x + dir * 95.0 * CSCALE, gy, 1.0 + cw_r * 1.2, lerpf(BAL.p("luce", "lfinisher_min"), BAL.p("luce", "lfinisher_max"), clampf(cw_r, 0.0, 1.0)), dir)
 				arena.shake(6.0 + cw_r * 8.0, dir)
 				arena.hitstop = 40.0 + cw_r * 50.0
 				arena.flash = 0.25 + cw_r * 0.2
@@ -1461,7 +1464,7 @@ func take_hit(m, raw: float) -> String:
 		ft = 0.0
 		position.x += dir * 16.0
 		arena.parry_fx(self, m)
-		m.hit(2, dir * 8, atk_mul())
+		m.hit(BAL.p("estelle", "parry_bash"), dir * 8, atk_mul())
 		m.hurt_t = 950.0
 		m.set_a("hurt")
 		m.st = "hurt"
@@ -1766,7 +1769,7 @@ func tag_strike() -> void:
 	var M := tag_mul
 	tag_mul = 1.0
 	if R0 != null and is_instance_valid(R0) and R0.alive():
-		R0.hit(2.0 * M, dir * 8.0, atk_mul())
+		R0.hit(BAL.p(who, "tag") * M, dir * 8.0, atk_mul())
 		if R0.get("daze") != null: R0.daze = maxf(R0.daze, 500.0)     # the training ghost loses her for a moment
 	arena.hitstop = 120.0        # QA: the tag-in blow holds a beat
 	arena.shake(7, dir)
@@ -1775,7 +1778,7 @@ func tag_strike() -> void:
 	arena.dust(position, dir, true)
 	for d in foes_alive():
 		if d != R0 and (d.position.x - position.x) * dir > -30.0 and absf(d.position.x - position.x) < 200.0 and absf(d.position.y - position.y) < 60.0:
-			d.hit(2, dir * 8, atk_mul())
+			d.hit(BAL.p(who, "tag"), dir * 8, atk_mul())
 
 ## a QTE answered from the bench (Kenin): he appears, shoots and is gone; the one in control stays, and her swap is ready
 func bench_assist(c: String, tg) -> void:

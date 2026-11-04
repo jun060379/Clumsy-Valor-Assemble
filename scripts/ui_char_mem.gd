@@ -4,6 +4,7 @@ extends RefCounted
 ## the .xa art: st_*_skill, st_*_rec on 기억, st_*_mem (+ _c blink) on 기록 once Lv 12, the old standing art on 기록).
 ## Drawn into the ui_char page (p); its hit areas go through p.hit(). Keys: see key().
 
+const BAL := preload("res://scripts/balance.gd")
 const UI := preload("res://scripts/ui_kit.gd")
 const UIA := preload("res://scripts/ui_anim.gd")
 const MD := preload("res://scripts/memory_data.gd")
@@ -206,7 +207,8 @@ func _mem_key(k: int) -> bool:
 
 # ---------- actions ----------
 func _moves() -> Array:
-	return MD.MOVES[p.c].filter(func(m): return not (String(m[0]).begins_with("상단") or String(m[0]).begins_with("공중")))
+	var L: Array = MD.MOVES[p.c].filter(func(m): return not (String(m[0]).begins_with("상단") or String(m[0]).begins_with("공중")))
+	return L.map(func(m): return [m[0], BAL.fmt(String(m[1]))] + m.slice(2))      # coefficients from balance.gd
 
 func _pick_move(j: int) -> void:
 	si = j

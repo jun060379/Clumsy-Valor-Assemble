@@ -26,11 +26,21 @@ const RELOAD_BENCH := 1000.0       # the bench refills faster (6 s for the cylin
 const BOMB_BENCH := 10000.0
 const BOMB_FIELD := 25000.0        # owner 2026-11-04
 const FUSE := 2500.0
-const BOMB_DMG := 3.0
+# damage numbers live in balance.gd (BAL.p("kenin", …)); these read it
 const BOMB_R := 120.0
-const BOMB_HEAD := 1.5
-const HEAD_DMG := 4.0
-const MARK_DMG := 1.6           # one stamp popping
+const BAL := preload("res://scripts/balance.gd")
+var BOMB_DMG: float:
+	get: return BAL.p("kenin", "bomb")
+var BOMB_HEAD: float:
+	get: return BAL.p("kenin", "bomb_head")
+var HEAD_DMG: float:
+	get: return BAL.p("kenin", "headshot")
+## one stamp popping (the ult's own chain uses its smaller number)
+var MARK_DMG: float:
+	get: return BAL.p("kenin", "ult_mark") if _in_ult() else BAL.p("kenin", "mark")
+
+func _in_ult() -> bool:
+	return arena.ult != null and arena.ult.state == "act" and arena.ult.who == "kenin"
 const MARK_QTE := 3
 const MARK_MAX := 8
 const VULN_MS := 8000
@@ -329,7 +339,8 @@ func _explode(b: Dictionary, k: float, head: bool) -> void:
 		var ec: Vector2 = Vector2(e.position.x, e.position.y - 50.0)
 		if ec.distance_to(c) < R + 30.0:
 			var dd := signf(e.position.x - c.x) if e.position.x != c.x else 1.0
-			e.hit(BOMB_DMG * k * (1.0 + nv("kBombDmg")), dd * 9.0, _mul())
+			var bd: float = BAL.p("kenin", "ult_bomb") if b.get("ult", false) else BOMB_DMG * k
+			e.hit(bd * (1.0 + nv("kBombDmg")), dd * 9.0, _mul())
 			if not in_chain: add_marks(e, 1 + int(nv("kBombMark")))
 	arena.hit_by = ""
 	booms.append({"x": c.x, "y": c.y, "t": 0.0, "life": 420.0, "big": k > 1.0, "r": R})
@@ -541,7 +552,7 @@ func _step_chain(dt: float) -> void:
 		if it["kind"] == "bomb":
 			if not it["b"]["done"]:
 				in_chain = true
-				_explode(it["b"], 1.6, false)
+				_explode(it["b"], BAL.p("kenin", "chain_bomb"), false)
 				in_chain = false
 		else:
 			var e = it["m"]
@@ -597,7 +608,7 @@ func dud_blast(c: Vector2) -> void:
 	arena.hit_by = "kenin"
 	for e in arena.foes():
 		if Vector2(e.position.x, e.position.y - 50.0).distance_to(c) < 90.0:
-			e.hit(BOMB_DMG * 0.6, signf(e.position.x - c.x) * 6.0, _mul())
+			e.hit(BAL.p("kenin", "dud"), signf(e.position.x - c.x) * 6.0, _mul())
 	arena.hit_by = ""
 	booms.append({"x": c.x, "y": c.y, "t": 0.0, "life": 320.0, "big": false, "r": 70.0})
 	arena.sfx("slam", 0.6)
@@ -607,7 +618,7 @@ func dud_blast(c: Vector2) -> void:
 ## ult.gd: a bomb slapped straight onto the foe
 func ult_bomb(m) -> void:
 	if m == null or not is_instance_valid(m) or not m.alive(): return
-	bomb_fx.append({"x": m.position.x, "y": m.position.y - 50.0, "vx": 0.0, "vy": 0.0, "m": m, "ox": randf_range(-14.0, 14.0), "oy": randf_range(-80.0, -30.0), "on_floor": false, "t": 0.0, "fuse": 99999.0, "done": false})
+	bomb_fx.append({"x": m.position.x, "y": m.position.y - 50.0, "vx": 0.0, "vy": 0.0, "m": m, "ox": randf_range(-14.0, 14.0), "oy": randf_range(-80.0, -30.0), "on_floor": false, "t": 0.0, "fuse": 99999.0, "done": false, "ult": true})
 	arena.sfx("ui_move", 0.6, {"st": -7.0})
 
 func live_bombs() -> int:

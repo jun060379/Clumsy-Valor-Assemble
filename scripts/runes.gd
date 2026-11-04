@@ -15,6 +15,7 @@ extends Node
 ## after_hit(target), on_kill(target), tick(dt), has(rune), shield_throw(), clone_start(), clone_hits(atk), aura_start().
 ## For the ultimate (not ported here): ult_k() = gauge gain / cooldown multiplier from 고요한 기도.
 
+const BAL := preload("res://scripts/balance.gd")
 const CH := preload("res://scripts/chars.gd")
 const LOOT := preload("res://scripts/loot.gd")
 const MEMORY := preload("res://scripts/memory.gd")
@@ -848,7 +849,7 @@ func _step_shields(dt: float) -> void:
 			if f["hits"].has(e): continue
 			if absf(e.position.x - f["x"]) < 34.0 and e.position.y - 95.0 < f["y"] + 16.0 and e.position.y > f["y"] - 16.0:
 				f["hits"].append(e)
-				e.hit(2.0, f["dir"] * 5.0, P.atk_mul())
+				e.hit(BAL.p("estelle", "shieldthrow"), f["dir"] * 5.0, P.atk_mul())
 				arena.spark(Vector2(f["x"], f["y"]), 10)
 				arena.sfx("hit1", 0.7)
 	shields = shields.filter(func(f): return f["t"] < f["life"])
@@ -863,7 +864,7 @@ func clone_hits(atk) -> void:
 	var P = arena.player
 	for e in arena.foes():
 		if absf(e.position.x - clone["x"]) < 95.0 and absf(e.position.y - clone["y"]) < 70.0:
-			e.hit(atk["dmg"] * 0.5, clone["dir"] * atk["kb"], P.atk_mul())
+			e.hit(atk["dmg"] * BAL.p("aida", "clone"), clone["dir"] * atk["kb"], P.atk_mul())
 			arena.spark(e.position + Vector2(0, -50), 6)
 
 ## 축복 오라: 8 s of 2 HP a second for the party

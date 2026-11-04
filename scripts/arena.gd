@@ -3,6 +3,7 @@ extends Node2D
 ## and the ghost (ghost.gd), as in the prototype's arena.
 ## Owns the camera, hitstop, screen shake, sound, slow-motion (perfect dodge) and the hit effects.
 
+const BAL := preload("res://scripts/balance.gd")
 const PLAYER := preload("res://scripts/player.gd")
 const DUMMY := preload("res://scripts/dummy.gd")
 const TOUCH := preload("res://scripts/touch_controls.gd")
@@ -1321,7 +1322,7 @@ func charge_fx(_p: Vector2, _t: float, _col := Color.WHITE) -> void:
 ## a light bolt: rises up-and-back, holds a beat, then shoots and homes in on the target; `snd` is the hit it lands
 ## with (the combo's hit1 / hit2 / hit3, from player.gd hit_sound)
 func bolt(o: Vector2, tg, sz: float, hold: float, d: int, snd := "hit1") -> void:
-	var b := {"by": player.who, "k": "bolt", "x": o.x, "y": o.y, "vx": d * 0.001, "vy": 0.0, "tg": tg, "sz": sz, "hold": hold, "hits": [], "home": 0.011, "dmg": 1.0, "mul": player.atk_mul(), "d": d, "t": 0.0, "life": 1100.0 + hold, "tr": [], "hold0": hold, "trT": 0.0, "snd": snd}
+	var b := {"by": player.who, "k": "bolt", "x": o.x, "y": o.y, "vx": d * 0.001, "vy": 0.0, "tg": tg, "sz": sz, "hold": hold, "hits": [], "home": 0.011, "dmg": BAL.p("luce", "bolt"), "mul": player.atk_mul(), "d": d, "t": 0.0, "life": 1100.0 + hold, "tr": [], "hold0": hold, "trT": 0.0, "snd": snd}
 	if tg == null:
 		b["home"] = 0.0
 	luce_fx.append(b)
