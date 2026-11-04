@@ -106,6 +106,9 @@ var qte := {"t": 0.0, "cd": 0.0, "who": [], "hit": null, "low": false}
 ## keys rest until its motion has played (party_lock), and no new QTE is offered for QTE_GAP after one was answered
 var party_lock := 0.0
 var qte_gap := 0.0
+var tag_src := ""           # who opened the QTE the incoming member answered (등을 맡긴다)
+var e_guard_t := 0.0        # 용감한 희생: Estelle's covering guard (ms left) takes the next blow
+var e_assist := {}          # … and her figure beside the one in control {"t", "x", "y", "dir"}
 var qte_pend := {}          # a parry made during the gap (교대 패링): its QTE opens once the gap is over {"r", "t" ms left}
 const QTE_GAP := 1600.0
 const LOCK_TAG := 1050.0
@@ -513,7 +516,19 @@ func check_hits() -> void:
 		var ex: float = e.position.x
 		var ey: float = e.position.y
 		if in_arc(atk, ex, ey, 95.0, bx, by, bw, bh):
+			var brk: bool = who == "estelle" and anim == "cthrust" and cfull and _ev("eBreak") > 0.0 and (ST.has(e, "stagger") if not ST.big(e) else ST.groggy_on(e))
 			e.hit(atk["dmg"], dir * atk["kb"], atk_mul())
+			if who == "estelle":
+				if brk and e.alive():
+					# 압도적인 힘으로!: a full thrust into a staggered foe breaks it — the stagger ends in a heavy extra blow
+					e.hit(atk["dmg"] * _ev("eBreak"), dir * 6.0, atk_mul())
+					if ST.has(e, "stagger"):
+						ST.of(e)["stagger"]["t"] = 0.0
+						ST.of(e)["stagger"]["imm"] = ST.K.stagger.imm
+					arena.text(e.position + Vector2(0, -200), "브레이크!", Color("#ffd34d"))
+					arena.shake(10, dir)
+				else:
+					estg(e, _estg_of())
 			hit_any = true
 			if hp0 == Vector2.INF: hp0 = Vector2(ex, ey - 50.0)
 	if hit_any:
@@ -779,7 +794,7 @@ func step(dt: float) -> void:
 	elif a in ["charge", "acharge", "lgather", "gcharge", "kcharge"]:
 		if move != 0 and a != "lgather": dir = move
 		vx = 0.0
-		charge_t += dt
+		charge_t += dt * _mk("cspd")              # 다시 한 번: gathers faster
 		arena.charge_fx(position + Vector2(-dir * 2.0, -64.0 * CSCALE), charge_t, CH.COLOR[who])
 		if charge_t >= 650.0 and not cfull:
 			cfull = true
@@ -939,6 +954,7 @@ func step(dt: float) -> void:
 				for e in foes_alive():
 					if absf(e.position.x - position.x) < 110.0 and absf(e.position.y - position.y) < 40.0:
 						e.hit(BAL.p(who, "dive_slam"), dir * 6, atk_mul())
+						if who == "estelle": estg(e, E_STG["dive"])
 		elif a == "air_combo":
 			vy = minf(vy + GRAV * dt * 0.35, 0.12)
 			vx = dir * 0.04
@@ -1546,6 +1562,8 @@ func take_hit(m, raw: float) -> String:
 	var mg: String = arena.runes.memory.guard_hit(m, facing) if _rk() else ""   # 성소 / 의족을 박고 (memory nodes)
 	if mg == "miss": return "miss"
 	raw *= arena.taken_mul(m)                              # the mob's attack element against her own (hurtAmt)
+	if e_guard_t > 0.0 and who != "estelle":
+		return _e_cover(m)
 	var auto: bool = (who == "estelle" and arena.auto_parry() > 0.0) or mg == "gp"   # 수호의 맹세: every blow is parried
 	var pw := 1 + ST.parry_extra(m)                        # 둔화: a frame more to parry a slowed foe
 	if auto and not (anim == "parry" and f <= pw and facing):
@@ -1553,6 +1571,7 @@ func take_hit(m, raw: float) -> String:
 		set_anim("parry")
 		facing = true
 	if who == "estelle" and anim == "parry" and f <= pw and facing:
+		var pp: bool = m.get("flared") == true
 		if auto and mg != "gp": arena.ult.rose_burst(position + Vector2(dir * 34.0 * CSCALE, -62.0 * CSCALE))
 		bash_t = 420.0
 		f = 2
@@ -1560,6 +1579,12 @@ func take_hit(m, raw: float) -> String:
 		position.x += dir * 16.0
 		arena.parry_fx(self, m)
 		m.hit(BAL.p("estelle", "parry_bash"), dir * 8, atk_mul())
+		estg(m, E_STG["pparry"] if pp else E_STG["parry"])
+		if pp and _ev("pparryAoe") > 0.0:
+			# 방패 밀치기: a perfect parry shakes everyone near
+			for e2 in foes_alive():
+				if e2 != m and absf(e2.position.x - position.x) < 260.0 and absf(e2.position.y - position.y) < 160.0: estg(e2, _ev("pparryAoe"))
+			arena.post_wave(position + Vector2(0, -60.0), 1.0, 420.0, 0.3)
 		m.hurt_t = 950.0
 		m.set_a("hurt")
 		m.st = "hurt"
@@ -1571,8 +1596,12 @@ func take_hit(m, raw: float) -> String:
 		_rev("skill")
 		return "parry"
 	if who == "estelle" and (anim == "guard" or anim == "parry" or anim == "backstep") and facing:
-		var tk := ST.absorb(self, raw * 0.5 * 0.75 * _inm())      # 보호막 first
+		var tk0 := raw * 0.5 * 0.75 * _inm()
+		var tk := ST.absorb(self, tk0)      # 보호막 first
 		hp -= tk
+		# Estelle renewal: a block builds 경직, and 30% of what she took becomes a shield (handed on with a swap)
+		estg(m, E_STG["guard"])
+		ST.ally_add(self, "shield", tk0 * 0.3 * (1.0 + _ev("eShieldK")))
 		_rev("block")
 		arena.sfx("guard", 0.9)
 		arena.hitstop = 60.0
@@ -1629,7 +1658,11 @@ func die() -> void:
 
 # ---------- party: switching, QTE tag-in, counter swap ----------
 func party_step(dt: float) -> void:
-	ST.ally_step(self, dt)                      # 강화 · 재생 clocks (재생 heals the bench too)
+	ST.ally_step(self, dt)
+	if e_guard_t > 0.0: e_guard_t -= dt
+	if not e_assist.is_empty():
+		e_assist["t"] = float(e_assist["t"]) + dt
+		if float(e_assist["t"]) > maxf(_ev("eStay"), 700.0) + 250.0: e_assist = {}                      # 강화 · 재생 clocks (재생 heals the bench too)
 	if swap_cd > 0.0: swap_cd -= dt
 	if party_lock > 0.0: party_lock -= dt
 	if qte_gap > 0.0: qte_gap -= dt
@@ -1731,14 +1764,14 @@ func party_input(to = null) -> void:
 		var nx = to if to != null and to != who and hpm[to] > 0.0 else _qte_member()
 		if nx == null: nx = party_next()
 		if nx != null and nx != who:
-			if CH.QTE_STAY.has(nx): counter_assist(m, nx)
+			if stays(nx): counter_assist(m, nx)
 			else: counter_swap(m, nx)
 			return
 	if qte["t"] > 0.0:
 		# the swap key tags in whoever has the chance; a tapped portrait tags in only if that face has it
 		var c = (to if qte["who"].has(to) else null) if to != null else _qte_member()
 		if c != null:
-			if CH.QTE_STAY.has(c): bench_assist(c, null)
+			if stays(c): bench_assist(c, null)
 			else: swap(true, c)
 			return
 	swap(false, to)
@@ -1788,6 +1821,7 @@ func swap(tag: bool, to = null) -> void:
 		tag = false
 	var q_hit = qte["hit"]
 	var q_low: bool = qte["low"]
+	tag_src = String(qte.get("src", "")) if tag else ""
 	if tag:
 		qte_end()
 		swap_cd = 900.0 * _mk("swap")
@@ -1883,9 +1917,11 @@ func tag_strike() -> void:
 	tag_mul = 1.0
 	if R0 != null and is_instance_valid(R0) and R0.alive():
 		var tm := ST.tag_mul(R0)                 # 취약: the tag-in blow lands as a sure crit
+		if tag_src == "estelle" and who != "estelle": tm *= 1.0 + _ev("eTagK")      # 등을 맡긴다
 		if tm > 1.0: arena.text(R0.position + Vector2(0, -200), "치명!", Color("#ff8a5a"))
 		R0.hit(BAL.p(who, "tag") * M * tm, dir * 8.0, atk_mul())
 		ST.tag_react(arena, R0, true)            # QTE tag-in: the statuses on it react, full strength
+		if who == "estelle": estg(R0, E_STG["tag"])
 		if R0.get("daze") != null: R0.daze = maxf(R0.daze, 500.0)     # the training ghost loses her for a moment
 	arena.hitstop = 120.0        # QA: the tag-in blow holds a beat
 	arena.shake(7, dir)
@@ -1899,13 +1935,45 @@ func tag_strike() -> void:
 ## a QTE answered from the bench (Kenin): he appears, shoots and is gone; the one in control stays, and her swap is ready
 func bench_assist(c: String, tg) -> void:
 	if c == "kenin": arena.kenin.assist(tg if tg != null else qte_target())
+	if c == "estelle": _e_assist(tg if tg != null else qte_target(), qte["hit"])
 	qte_end()
 	swap_cd = 0.0
 	party_lock = maxf(LOCK_ASSIST, arena.kenin.assist_total() + 250.0) if c == "kenin" else LOCK_ASSIST
 	qte_gap = QTE_GAP
 	_rev("tag")
 	arena.flash = maxf(arena.flash, 0.12)
-	arena.text(position + Vector2(0, -150.0 * CSCALE), "원호!  " + CH.NAME[c], CH.COLOR[c].lightened(0.4))
+	arena.text(position + Vector2(0, -150.0 * CSCALE), ("원호 방어!  " if c == "estelle" else "원호!  ") + CH.NAME[c], CH.COLOR[c].lightened(0.4))
+
+## members whose QTE is answered from the bench without a swap: Kenin always, Estelle with 용감한 희생
+func stays(c: String) -> bool:
+	return CH.QTE_STAY.has(c) or (c == "estelle" and _ev("eStay") > 0.0)
+
+## 용감한 희생: Estelle leaps in front of the one in control — what they just took comes back as a shield, a parry
+## counter and 경직 on the foe ahead, then for 2 s she takes the next blow meant for them (that block is a parry too)
+func _e_assist(tg, q_hit) -> void:
+	var sh: float = float(q_hit["taken"]) if q_hit != null else MAX_HP * 0.15
+	ST.ally_add(self, "shield", sh)
+	e_guard_t = _ev("eStay")
+	e_assist = {"t": 0.0, "x": position.x + dir * 46.0 * CSCALE, "y": position.y, "dir": dir}
+	if tg != null and is_instance_valid(tg) and tg.alive():
+		arena.hit_by = "estelle"
+		tg.hit(BAL.p("estelle", "parry_bash"), dir * 8.0, CH.STATS["estelle"]["atk"] * (arena.runes.atk_k("estelle") if _rk() else 1.0))
+		arena.hit_by = ""
+		estg(tg, E_STG["assist"])
+	arena.sfx("parry", 0.9)
+	arena.sfx("guard", 0.7)
+	arena.spark(position + Vector2(dir * 50.0 * CSCALE, -60.0 * CSCALE), 10)
+
+## the covering guard takes the blow: no damage, a parry counter, 경직, and a parry for the QTEs
+func _e_cover(m) -> String:
+	e_guard_t = 0.0
+	arena.parry_fx(self, m)
+	m.hit(BAL.p("estelle", "parry_bash"), dir * 8, CH.STATS["estelle"]["atk"] * (arena.runes.atk_k("estelle") if _rk() else 1.0))
+	estg(m, E_STG["parry"])
+	arena.text(position + Vector2(0, -150.0 * CSCALE), "막았다!", Color("#ffd3ea"))
+	inv = maxf(inv, 450.0)
+	qte_offer("parry")
+	return "parry"
 
 func qte_target():
 	return target(1100.0)
@@ -1969,6 +2037,7 @@ func qte_offer(reason: String, data = null) -> void:
 		qte["low"] = false
 	for c in cands:
 		if not qte["who"].has(c): qte["who"].append(c)
+	qte["src"] = who
 	if reason == "hit": qte["hit"] = data
 	if reason == "low": qte["low"] = true
 	qte["t"] = QTE_T * _mk("qteT")
@@ -1989,6 +2058,11 @@ func _draw() -> void:
 		var ofs := Vector2(o["x"] - o["dir"] * 140.0 * k, o["y"]) - position
 		var fr := mini(int(o["t"] / 150.0), 3)
 		draw_frame(o["c"], o["anim"], fr, ofs, -o["dir"] if not o["dead"] else o["dir"], Color(1, 1, 1, 1.0 - k), "", null, NAN, 0, "out" + str(o["c"]))
+	# 용감한 희생: Estelle's shield up in front of the one in control while her covering guard lasts
+	if not e_assist.is_empty():
+		var et: float = e_assist["t"]
+		var ea := minf(1.0, minf(et / 120.0, (maxf(_ev("eStay"), 700.0) + 250.0 - et) / 250.0))
+		draw_frame("estelle", "guard", 1, Vector2(e_assist["x"], e_assist["y"]) - position, e_assist["dir"], Color(1, 1, 1, ea), "", null, NAN, 0, "eassist")
 	# Kenin's covering shot from the bench (kenin.gd assists): rolls in, uncurls, aims, fires, fades out
 	if arena.kenin != null:
 		var tot: float = arena.kenin.assist_total()
@@ -2303,6 +2377,30 @@ func _inm() -> float:
 ## memory nodes: a multiplier of the member in control (rch, swap, qteT), the level multiplier, max HP of any member
 func _mk(key: String) -> float:
 	return arena.runes.memory.mul(who, key) if _rk() else 1.0
+
+## Estelle's memory node value (her tree, whoever is in control)
+func _ev(key: String) -> float:
+	return arena.runes.memory.val("estelle", key) if _rk() else 0.0
+
+## Estelle renewal (owner 2026-11-04): her blows build 경직 (only hers: 경직 is a status members apply, not a universal
+## stagger). 방패 nodes: 단단한 테두리 (stgK) more gauge, 뒤흔들기 (stgImm) shorter immunity, 무너뜨리기 (groggyK) more
+## groggy on bosses / elites. Numbers PLACEHOLDER.
+const E_STG := {"attack1": 8.0, "attack2": 8.0, "attack3": 20.0, "attack_high": 10.0, "kneel_attack": 10.0, "dive": 15.0,
+	"cthrust": 40.0, "cthrust_part": 20.0, "guard": 15.0, "parry": 60.0, "pparry": 100.0, "tag": 50.0, "ult": 100.0, "assist": 50.0}
+
+func estg(e, base: float) -> void:
+	if e == null or not is_instance_valid(e) or not e.alive() or base <= 0.0: return
+	var amt := base * (1.0 + _ev("stgK"))
+	if ST.big(e): amt *= 1.0 + _ev("groggyK")
+	ST.add(arena, e, "stagger", amt, "estelle")
+	if _ev("stgImm") > 0.0 and e.has_meta("st") and ST.of(e).has("stagger"): ST.of(e)["stagger"]["immk"] = 1.0 - _ev("stgImm")
+
+## the gauge an Estelle blow builds, by its animation
+func _estg_of() -> float:
+	match anim:
+		"air_combo": return 15.0 if f >= 6 else 6.0
+		"cthrust": return E_STG["cthrust"] if cfull else E_STG["cthrust_part"]
+	return float(E_STG.get(anim, 0.0))
 
 func _lvm(c: String) -> float:
 	return arena.runes.lvm(c) if _rk() else 1.0

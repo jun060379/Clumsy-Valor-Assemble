@@ -78,22 +78,20 @@ func _initialize() -> void:
 	P.anim = "idle"
 	check(M.clear_nodes("estelle") and M.pts_left("estelle") == 3, "초기화 gives the points back")
 
-	# timed buffs: 먼저 닿는 손 (dash → +12% for 2 s)
-	M.take("estelle", "A0")
-	M.take("estelle", "A1")
+	# 빈틈 (renewal): +15% on a 무방비 foe (경직 · 빙결 · 띄움 · 그로기)
 	M.take("estelle", "A2")
-	R.ev("dash")
-	check(near(M.out_mul("estelle", null), 1.12), "dash buff +12%")
-	R.tick(2100.0)
-	check(near(M.out_mul("estelle", null), 1.0), "wears off after 2 s")
+	check(near(M.out_mul("estelle", e), 1.0), "빈틈: nothing on a foe standing")
+	e.set_meta("st", {"stagger": {"t": 1000.0}})
+	check(near(M.out_mul("estelle", e), 1.15), "빈틈: ×1.15 on a staggered foe")
+	e.remove_meta("st")
 	# 버티는 몸 (+10 HP) is a stat node
 	M.clear_nodes("estelle")
 	var h0: float = R.max_hp("estelle")
 	M.take("estelle", "B2")
 	check(near(R.max_hp("estelle"), h0 + 10.0), "버티는 몸 +10 max HP")
-	# 둥근 방패 (guard −15%) and 받아내기 (parry → 기력 +5)
+	# 둥근 방패 (guard −15%) and 받아내기 (parry → 기력 +5; renewal: in 의지)
 	M.take("estelle", "B0")
-	M.take("estelle", "B1")
+	M.take("estelle", "C2")
 	var i0: float = R.in_mul()
 	P.anim = "guard"
 	check(near(R.in_mul(), i0 * 0.85), "guard: taken ×0.85")
@@ -102,10 +100,10 @@ func _initialize() -> void:
 	R.ev("parry")
 	check(near(arena.ult.v["estelle"], 5.0), "parry → 기력 +5 (%s)" % arena.ult.v["estelle"])
 
-	# 의족을 박고: guard → auto parry, two charges, 8 s each
+	# 의족을 박고 (renewal: 의지 KEY): guard → auto parry, two charges, 6 s each
 	M.tree["estelle"]["lv"] = 12
 	M.clear_nodes("estelle")
-	for id in ["B0", "B1", "B2", "B3", "B4", "B6"]: check(M.take("estelle", id), "take " + id)
+	for id in ["C0", "C1", "C2", "C3", "C4", "C6"]: check(M.take("estelle", id), "take " + id)
 	R.changed()
 	R.tick(16.0)
 	check(int(M.gp["estelle"]["n"]) == 2 and R.rbn("n_gp") == 2, "자동 패링 ×2 tag")
@@ -113,8 +111,8 @@ func _initialize() -> void:
 	var mob = arena.mobs[0] if arena.mobs.size() > 0 else e
 	check(M.guard_hit(mob, true) == "gp" and int(M.gp["estelle"]["n"]) == 1, "guard hit spends a charge")
 	check(M.guard_hit(mob, false) == "", "not facing: no auto parry")
-	R.tick(8000.0)
-	check(int(M.gp["estelle"]["n"]) == 2, "a charge comes back in 8 s")
+	R.tick(6000.0)
+	check(int(M.gp["estelle"]["n"]) == 2, "a charge comes back in 6 s")
 	P.anim = "idle"
 
 	# 성소 on Luce, shared by the party
@@ -142,7 +140,7 @@ func _initialize() -> void:
 	for id in ["C0", "C1", "C2", "B0", "B1", "B4"]: M.take("aida", id)
 	check(near(M.mul("aida", "qteT"), 1.2) and near(M.mul("aida", "cd"), 0.85) and near(M.mul("aida", "rch"), 0.75), "Aida: QTE ×1.2, rift cd ×0.85, dash charge ×0.75")
 	M.clear_nodes("estelle")
-	for id in ["C0", "C1", "C2", "C3"]: M.take("estelle", id)
+	for id in ["C0", "C1", "C2", "C3", "A0", "A1", "X2"]: M.take("estelle", id)      # (어설픈 욕지거리 is the 검 + 의지 cross node now)
 	P.qte["t"] = 0.0
 	P.qte["cd"] = 0.0
 	P.qte_offer("finisher")

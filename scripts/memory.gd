@@ -1,4 +1,5 @@
 extends Node
+const ST := preload("res://scripts/status.gd")
 ## Character levels and the memory tree (prototype CHARACTER SCREEN v2 "memory path v3": TR / TREE / LVM / LVB / nodeNeed /
 ## treeValid / ptsLeft / BRKN / lvPreview / nodeOut / nodeIn / nodeEv / nMul, the runeTick / playerHit wraps, 성소 and 의족을 박고,
 ## memDecay). Lives on the runes node as `arena.runes.memory` (runes.gd creates it and calls its combat hooks).
@@ -281,6 +282,7 @@ func out_mul(c: String, e) -> float:
 		if f.has("outN") and nor: m *= 1.0 + f["outN"]
 		if f.has("outH") and hv: m *= 1.0 + f["outH"]
 		if f.has("outLow") and me and low_hp(): m *= 1.0 + f["outLow"]
+		if f.has("outExposed") and e != null and ST.exposed(e): m *= 1.0 + f["outExposed"]      # 무방비 (경직 · 빙결 · 띄움 · 그로기)
 		if f.has("outExec") and e != null and e.get("max_hp") != null and e.max_hp > 0.0 and e.hp > 0.0 and e.hp / e.max_hp <= 0.3: m *= 1.0 + f["outExec"]
 		if f.has("outDark") and e != null and e.has_meta("dark_t") and Time.get_ticks_msec() < int(e.get_meta("dark_t")): m *= 1.0 + f["outDark"]
 		if f.has("outBack") and me and e != null and e.get("dir") != null and signf(e.position.x - P.position.x) == signf(e.dir): m *= 1.0 + f["outBack"]

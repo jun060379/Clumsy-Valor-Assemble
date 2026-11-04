@@ -195,7 +195,7 @@ static func step(arena, e, dt: float) -> bool:
 				if float(d.get("t", 0.0)) > 0.0:
 					d["t"] = float(d["t"]) - dt
 					lock = true
-					if d["t"] <= 0.0: d["imm"] = K.stagger.imm
+					if d["t"] <= 0.0: d["imm"] = K.stagger.imm * float(d.get("immk", 1.0))
 			"slow":
 				if float(d.get("fz", 0.0)) > 0.0:
 					d["fz"] = float(d["fz"]) - dt
@@ -257,6 +257,19 @@ static func deal(arena, e, v: float, col: Color) -> void:
 	else:
 		e.hp -= n
 	_in = false
+
+## 무방비: held by 경직 · 빙결 · 띄움 · 그로기
+static func exposed(e) -> bool:
+	if e == null or not e.has_meta("st"): return false
+	var S: Dictionary = e.get_meta("st")
+	if has(e, "stagger") or has(e, "air"): return true
+	if S.has("slow") and float(S["slow"].get("fz", 0.0)) > 0.0: return true
+	return S.has("groggy") and float(S["groggy"].get("t", 0.0)) > 0.0
+
+static func groggy_on(e) -> bool:
+	if e == null or not e.has_meta("st"): return false
+	var g = e.get_meta("st").get("groggy")
+	return g != null and float(g.get("t", 0.0)) > 0.0
 
 ## the foe's damage taken multiplier: 취약 + 그로기
 static func dmg_mul(e) -> float:

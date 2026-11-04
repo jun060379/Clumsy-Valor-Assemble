@@ -216,7 +216,9 @@ func step(dt: float) -> void:
 			fx.append({"k": "oath", "x": P.position.x, "y": P.position.y, "s": S * 0.9, "t": 0.0, "life": 1000.0})
 			fx.append({"k": "rose", "t": 0.0, "life": 99999.0, "end": -1.0, "n": 30})
 			for e in _foes():
-				if absf(e.position.x - P.position.x) < 260.0 and absf(e.position.y - P.position.y) < 160.0: hit(e, BAL.p("estelle", "ult"))
+				if absf(e.position.x - P.position.x) < 260.0 and absf(e.position.y - P.position.y) < 160.0:
+					hit(e, BAL.p("estelle", "ult"))
+					P.estg(e, P.E_STG["ult"])          # Estelle renewal: the vow staggers everyone near
 			arena.sfx("ult", 1.0)              # the impact (snapped to the grid, the music ducks 6 dB)
 			arena.sfx("parry", 1.0)
 			arena.flash = 0.3

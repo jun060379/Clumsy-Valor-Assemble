@@ -222,6 +222,12 @@ main에 푸시하면 GitHub Actions가 웹·윈도우로 빌드해서 GitHub Pag
 - chars.gd QTE_WHO["parry"] = 4명 전원. 교대 패링(번쩍이는 공격에 교대 = counter_swap)도 패링이라 qte_offer("parry") → 교대 직후 gap(1.6초) 동안은 qte_pend에 걸어뒀다가 gap이 끝나면 나머지 동료의 QTE가 열림(교대 → 교대 사슬). 패링 QTE는 QTE 쿨타임 무시.
 - 에스텔은 가드로 막아도 패링으로 판정(take_hit guard 분기에서 qte_offer("parry")) → QTE를 쉽게 여는 캐릭터. 스킬 설명 · QTE 조건 문구 갱신. 테스트 tests/test_qte_chain.gd.
 
+## 4-12. 에스텔 리뉴얼 (오너 2026-11-04)
+- 정체성: 주 = 행동 연계형 범용(가드도 패링 → QTE), 부 = 경직 디버퍼, 역할 탱커, 교대 기여 = 보호막 승계.
+- player.gd E_STG / estg(): 경직은 에스텔 기술에만(다른 캐릭터 0). 1 · 2타 8, 3타 20, 상하단 10, 공중 6/15, 낙하 15, 찌르기 20/40, 가드 15, 패링 60, 완벽 패링 100, QTE 50, 궁 100. 가드로 막은 피해 30% → 보호막. 스킬 문구 '방패 강타' → '패링 반격'.
+- 노드(memory_data NODES estelle): A 검(딜) · B 방패(경직) · C 의지(연계). 새 fx 키: outExposed(무방비), cspd, eBreak(KEY 경직 깨기 150%), stgK, stgImm, groggyK, pparryAoe(KEY), eTagK, eStay(용감한 희생 = QTE 원호 방어, stays()/_e_assist/_e_cover), eShieldK. 의족을 박고는 C KEY(6초).
+- 테스트 tests/test_estelle.gd, test_memory 갱신.
+
 ## 5. 이번 세션에 끝낸 것 (모두 main, 푸시·배포 완료)
 
 - 타이틀 로고에 한글(동해독도체 B안), 붓 로고·그림 `d7601c9`
