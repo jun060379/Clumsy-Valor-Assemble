@@ -1,7 +1,7 @@
 extends SceneTree
 ## 공용 상태 (status.gd): 취약 multiplies damage, a gauge fills and triggers, the same member refreshes and another
 ## raises the stage, 경직 holds the foe then leaves it immune, 둔화 slows its feet but not its swing and widens the
-## parry (no freeze), 화상 ticks and spreads without extending, 출혈 hits back on every blow (0.1 s apart),
+## parry (no freeze), 연소 ticks and spreads without extending, 출혈 hits back on every blow (0.1 s apart),
 ## 띄움 lifts and lands, a boss takes the locks as groggy, the swap reactions, 보호막 · 강화 · 재생:
 ## godot --headless --path . -s tests/test_status.gd
 
@@ -53,9 +53,9 @@ func _initialize() -> void:
 	print("gauges and stages")
 	var b = gob(x0 + 400.0)
 	ST.add(arena, b, "burn", 60.0, "estelle")
-	ok(not ST.has(b, "burn") and is_equal_approx(float(ST.of(b)["burn"]["g"]), 60.0), "화상 gauge 60/100: not yet")
+	ok(not ST.has(b, "burn") and is_equal_approx(float(ST.of(b)["burn"]["g"]), 60.0), "연소 gauge 60/100: not yet")
 	ST.add(arena, b, "burn", 50.0, "estelle")
-	ok(ST.has(b, "burn") and int(ST.of(b)["burn"]["stage"]) == 1, "gauge full → 화상 stage 1")
+	ok(ST.has(b, "burn") and int(ST.of(b)["burn"]["stage"]) == 1, "gauge full → 연소 stage 1")
 	ST.add(arena, b, "burn", 100.0, "estelle")
 	ok(int(ST.of(b)["burn"]["stage"]) == 1, "the same member again: refresh only")
 	ST.add(arena, b, "burn", 100.0, "aida")
@@ -64,7 +64,7 @@ func _initialize() -> void:
 	ST.add(arena, b, "burn", 100.0, "kenin")
 	ok(int(ST.of(b)["burn"]["stage"]) == 3, "capped at 3")
 
-	print("화상 ticks and spreads")
+	print("연소 ticks and spreads")
 	var hp0: float = b.hp
 	ST.step(arena, b, 520.0)
 	ok(b.hp < hp0, "a tick burns (%.0f → %.0f)" % [hp0, b.hp])

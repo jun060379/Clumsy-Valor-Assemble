@@ -9,7 +9,7 @@ extends RefCounted
 ##   air 띄움 (instant)    — up in the air, hits keep it up to a limit (fliers: a short stagger instead)
 ##   slow 둔화 (gauge)     — moves slower and rests longer after an attack; the attack's timing never changes, the
 ##                           parry window widens (no freeze: owner 2026-11-04, 둔화 only)
-##   burn 화상 (gauge)     — damage over time + spreads to a foe nearby (never extends one already burning)
+##   burn 연소 (gauge)     — damage over time + spreads to a foe nearby (never extends one already burning)
 ##   bleed 출혈 (instant)  — extra damage on every hit taken (at most every 0.1 s), 8 s or 15 hits
 ## Stages: the same member again only refreshes; another member's same status raises its stage (max 3 = the party).
 ## Bosses and elites: 경직 · 띄움 go into a groggy gauge (full → 3 s down, more damage taken); every trigger
@@ -27,7 +27,7 @@ const K := {
 	"stagger": {"name": "경직", "col": Color("#ffe14d"), "t": 1500.0, "imm": 2000.0},
 	"air": {"name": "띄움", "col": Color("#bfe9ff"), "vy": -0.75, "g": 0.0032, "hits": 6, "bump": -0.28},
 	"slow": {"name": "둔화", "col": Color("#8fdcff"), "t": 5000.0, "ms": [0.7, 0.6, 0.5], "rec": 380.0},
-	"burn": {"name": "화상", "col": Color("#ff7a45"), "t": 6000.0, "tick": 500.0, "dps": 0.15, "spread": 1500.0, "radius": 170.0},
+	"burn": {"name": "연소", "col": Color("#ff7a45"), "t": 6000.0, "tick": 500.0, "dps": 0.15, "spread": 1500.0, "radius": 170.0},
 	"bleed": {"name": "출혈", "col": Color("#e0304a"), "t": 8000.0, "n": 15, "per": 0.12, "gap": 100.0},
 }
 const ORDER := ["vuln", "stagger", "air", "slow", "burn", "bleed"]
@@ -224,7 +224,7 @@ static func step(arena, e, dt: float) -> bool:
 					lock = true
 	return lock
 
-## 화상 spreads to the nearest foe not burning; it carries the time left, never more
+## 연소 spreads to the nearest foe not burning; it carries the time left, never more
 static func _spread(arena, e, d: Dictionary) -> void:
 	var best = null
 	var bd: float = K.burn.radius
@@ -237,7 +237,7 @@ static func _spread(arena, e, d: Dictionary) -> void:
 	if best == null: return
 	var S := of(best)
 	S["burn"] = {"t": float(d["t"]), "stage": int(d.get("stage", 1)), "src": Array(d.get("src", [])).duplicate(), "a": float(d["a"]), "acc": 0.0, "sp": 0.0}
-	arena.text(best.position + Vector2(0, -170), "화상 번짐", K.burn.col)
+	arena.text(best.position + Vector2(0, -170), "연소 번짐", K.burn.col)
 
 ## a status's own damage (no knockback, no element, no hit reaction); a foe it finishes dies the usual way
 static func deal(arena, e, v: float, col: Color) -> void:
@@ -367,7 +367,7 @@ static func body_tint(e) -> Color:
 	if has(e, "stagger") or groggy_on(e): c *= Color(1.15, 1.1, 0.75) if int(t * 8.0) % 2 == 0 else Color.WHITE
 	return c
 
-## over the body: 화상 flames rising, 출혈 drops falling, 취약 a red rim blinking (its own canvas; feet at 0, top at -h)
+## over the body: 연소 flames rising, 출혈 drops falling, 취약 a red rim blinking (its own canvas; feet at 0, top at -h)
 static func draw_body(ci: CanvasItem, e, h: float) -> void:
 	if not e.has_meta("st"): return
 	var t := Time.get_ticks_msec() / 1000.0
