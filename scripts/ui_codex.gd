@@ -5,6 +5,7 @@ extends "res://scripts/ui_page.gd"
 ## ✕ closes it: the entry page turns back, the cover shuts, and the book is tossed away.
 ## Each page face is drawn into its own SubViewport; turning leaves are those textures projected with CSS-like perspective.
 
+const ICON := preload("res://scripts/item_icons.gd")
 const COVER := preload("res://assets/codex/cdx_cover.webp")
 const EMBLEM := preload("res://assets/codex/cdx_emblem.webp")
 const ENDPAPER := preload("res://assets/codex/cdx_endpaper.webp")
@@ -746,7 +747,13 @@ func _face_left(ci: Control, sz: Vector2, i: int, n: String) -> void:
 		ci.draw_string(SERIF, Vector2(x, y), Rd["n"] if s else "???", HORIZONTAL_ALIGNMENT_LEFT, w, int(em * 1.75), INK)
 		var sig_c := Vector2(sz.x / 2.0, (y + sz.y - em * 4.0) / 2.0 + em * 0.6)
 		var sr := minf(w * 0.39, (sz.y - em * 4.0 - y) * 0.5) * 0.98
-		if s: _sigil(ci, sig_c, sr, Rd["n"], RN.gcol(Rd["g"]))
+		if s:
+			_sigil(ci, sig_c, sr, Rd["n"], RN.gcol(Rd["g"]))
+			var rip := ICON.rune_file(k, String(Rd["g"]))
+			if ResourceLoader.exists(rip):
+				# the rune stone itself at the heart of the drawn sigil
+				var rs := sr * 0.62
+				ci.draw_texture_rect(load(rip), Rect2(sig_c - Vector2(rs, rs) / 2.0, Vector2(rs, rs)), false)
 		else:
 			for q in 24:
 				if q % 2 == 0: ci.draw_arc(sig_c, sr * 0.62, q * TAU / 24.0, (q + 1) * TAU / 24.0, 4, INK3, 2.0)

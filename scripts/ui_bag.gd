@@ -197,6 +197,14 @@ func ocol(o: Dictionary) -> Color:
 		"rune", "erune": return RN.gcol(RN.RUNE[o["v"]]["g"])
 	return RN.gcol(o["v"]["g"])
 
+## a row's picture: a gear piece's icon, a rune's stone (in its grade); "" = none (the grade gem stays)
+func _icon_path(o: Dictionary) -> String:
+	var p := ""
+	match o["kind"]:
+		"gear": p = ICON.file_of(o["v"], String(o.get("s", "")))
+		"rune", "erune": p = ICON.rune_file(String(o["v"]), String(RN.RUNE[o["v"]]["g"]))
+	return p if p != "" and ResourceLoader.exists(p) else ""
+
 func oname(o: Dictionary) -> String:
 	match o["kind"]:
 		"sh": return "실링"
@@ -237,23 +245,7 @@ func _spot(vs: Vector2, o: Dictionary, col: Color) -> void:
 	var sp := Rect2(vs.x - vs.x * 0.02 - vs.x * 0.44, vs.y * 0.1, vs.x * 0.44, vs.y * 0.86)
 	var anc := Vector2(sp.position.x + sp.size.x * 0.5, sp.position.y + sp.size.y * 0.26)
 	var kp := UI.bk(clampf(pop_t / 450.0, 0.0, 1.0))
-	# .disc: 62 % wide; w_spin swaps its translate(-50%,-50%) for rotate(360deg) = a drift with no turn (14 s)
-	var D := sp.size.x * 0.62
-	var dr := fmod(t, 14000.0) / 14000.0
-	var drift := Vector2(D / 2.0, D / 2.0) * dr
-	var sc := lerpf(0.2, 1.0, kp)
-	var rot := deg_to_rad(-90.0) * (1.0 - kp)
-	var dc := anc + drift * kp
-	var R0 := D / 2.0 * sc
-	draw_circle(dc, R0 + 12.0 * sc, g)
-	draw_circle(dc, R0 + 8.0 * sc, Color.BLACK)
-	var n := 23
-	for i in n:
-		var a0 := -PI / 2.0 + rot + i * deg_to_rad(16.0)
-		var a1 := a0 + deg_to_rad(8.0)
-		var pts := PackedVector2Array([dc])
-		for k in 5: pts.append(dc + Vector2.from_angle(lerpf(a0, a1, k / 4.0)) * R0)
-		draw_colored_polygon(pts, g)
+	# (the round toothed disc that stood behind the piece is gone — owner 2026-11-04)
 	# .big: 26 % wide, rotate 45°, white 6 px border, 10 px shadow; w_bob 2.6 s (-50 % → -58 %); w_popd from ×2.4, clear
 	var B := sp.size.x * 0.26
 	var bt := fmod(t, 2600.0) / 2600.0
@@ -264,8 +256,8 @@ func _spot(vs: Vector2, o: Dictionary, col: Color) -> void:
 	var bm := Transform2D(PI / 4.0, Vector2(bsc, bsc), 0.0, bc)
 	var sq := func(r: float, sh := Vector2.ZERO) -> PackedVector2Array:
 		return PackedVector2Array([bm * (Vector2(-r, -r) + sh), bm * (Vector2(r, -r) + sh), bm * (Vector2(r, r) + sh), bm * (Vector2(-r, r) + sh)])
-	var ip := ICON.file_of(o["v"], String(o.get("s", ""))) if o["kind"] == "gear" else ""
-	var has_ic := ip != "" and ResourceLoader.exists(ip)
+	var ip := _icon_path(o)
+	var has_ic := ip != ""
 	if not has_ic:
 		draw_colored_polygon(sq.call(B / 2.0, Vector2(10, 10)), Color(0, 0, 0, ba))
 		draw_colored_polygon(sq.call(B / 2.0), Color(1, 1, 1, ba))
@@ -616,9 +608,8 @@ func _draw_rows() -> void:
 			var gc := ocol(o)
 			var gm := m * Transform2D(PI / 4.0, Vector2(21, h / 2.0))
 			var gic: Texture2D = null
-			if o["kind"] == "gear":
-				var ip := ICON.file_of(o["v"], String(o.get("s", "")))
-				if ip != "" and ResourceLoader.exists(ip): gic = tx(ip)
+			var ip := _icon_path(o)
+			if ip != "": gic = tx(ip)
 			if gic != null:
 				# the piece's own icon in place of the grade gem: a grade glow behind, a bob when picked
 				var bob := sin(t / 380.0) * 1.5 if on else 0.0

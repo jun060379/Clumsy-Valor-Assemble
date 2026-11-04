@@ -42,5 +42,15 @@ func _initialize() -> void:
 	M.open_page("bag")
 	await frames(90)
 	await shot("bag")
+	var bg = M.ext["bag"]
+	bg._cat("rune")
+	await frames(80)
+	await shot("bag_rune")
+	M.close_page()
+	await frames(40)
+	for k in RN.RUNE: R.seen_r[k] = 1
+	M.open_codex("rune", "oath")
+	await frames(120)
+	await shot("codex_rune")
 	print("CAP done")
 	quit()

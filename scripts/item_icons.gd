@@ -44,3 +44,21 @@ static func tex(it, slot := "") -> Texture2D:
 	var p := file_of(it, slot)
 	if p == "" or not ResourceLoader.exists(p): return null
 	return load(p)
+
+# ---------- runes ----------
+## rune icons: 16 carved stones (glyphs), each baked in every grade (assets/ui/runes/r<NN>_<grade>.png: the glyph's glow in
+## the grade colour, a frame whose shape climbs with the grade — tools/runes/bake_runes.py). A rune names its stone here;
+## its grade comes from runes.gd RUNE.
+const RUNE_DIR := "res://assets/ui/runes/"
+const GLYPHS := ["step", "swords", "hammer", "thorn", "fang", "lantern", "mountain", "shield", "wind", "bolt", "hands", "eye", "heart", "flame", "bell", "sun"]
+const RUNE_GLYPH := {
+	"firmstep": "step", "oath": "swords", "temper": "hammer", "thorn": "thorn", "fang": "fang", "lamp": "lantern",
+	"giant": "mountain", "wall": "shield", "stone": "mountain", "breeze": "wind", "backshadow": "fang", "surge": "bolt",
+	"prayer": "hands", "wise": "eye", "firstaid": "heart", "ember": "flame", "tagbell": "bell",
+	"shieldthrow": "shield", "clone": "eye", "aura": "sun",
+}
+
+static func rune_file(key: String, grade: String) -> String:
+	var gi: int = GLYPHS.find(String(RUNE_GLYPH.get(key, "")))
+	if gi < 0: gi = absi(hash(key)) % GLYPHS.size()
+	return RUNE_DIR + "r%02d_%s.png" % [gi, grade]

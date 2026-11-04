@@ -12,6 +12,7 @@ extends "res://scripts/ui_page.gd"
 ##   ENGRAVED / FUSED / SALVAGED in letters over two bands, sunk at 850 ms.
 ## Opened from the hub (back = sweep to the hub) or from Bran's choices (back = his choices again).
 
+const ICON := preload("res://scripts/item_icons.gd")
 const ACTS := [["up", "강화", "ENHANCE"], ["eng", "각인", "ENGRAVE"], ["fuse", "합성", "FUSE"], ["dis", "분해", "SALVAGE"]]
 const FBG := {"up": Color("#2b0f15"), "eng": Color("#1d1240"), "fuse": Color("#08283a"), "dis": Color("#202329")}
 const GL := {"up": Color(1.0, 0.47, 0.157, 0.55), "eng": Color(0.588, 0.314, 1.0, 0.6), "fuse": Color(0.157, 0.784, 1.0, 0.5), "dis": Color(1.0, 0.275, 0.196, 0.42)}
@@ -1131,7 +1132,7 @@ func _rlist_rows() -> Array:
 	if p == "eng":
 		for r in R().eng_list(c, slot):
 			var Rd: Dictionary = RN.RUNE[r]
-			out.append({"n": Rd["n"], "g": Rd["g"], "c": "×%d" % int(R().runebag[r]), "e": Rd["d"]})
+			out.append({"n": Rd["n"], "g": Rd["g"], "c": "×%d" % int(R().runebag[r]), "e": Rd["d"], "rk": r})
 	elif p == "fuse":
 		for x in R().fuse_groups():
 			var up := RN.up_grade(x["g"])
@@ -1172,7 +1173,12 @@ func _rlist(vs: Vector2, col: Color, rows: Array, sel: int) -> void:
 		draw_colored_polygon(pts, Color(Color.BLACK.lerp(Color.WHITE, white), a))
 		for q in Geometry2D.intersect_polygons(pts, poly(Rect2(0, 0, 5, h), SQ, m)): draw_colored_polygon(q, Color(gc, a))
 		draw_set_transform_matrix(m)
-		gem(self, Vector2(5 + 10 + 11, 8 + 9), 7.0, Color(gc, a))
+		var rip: String = ICON.rune_file(String(o["rk"]), String(o["g"])) if o.has("rk") else ""
+		if rip != "" and ResourceLoader.exists(rip):
+			draw_texture_rect(UI.glow(), Rect2(Vector2(26, 17) - Vector2(20, 20), Vector2(40, 40)), false, Color(gc.lightened(0.3), 0.6 * a))
+			draw_texture_rect(tx(rip), Rect2(Vector2(26, 17) - Vector2(15, 15), Vector2(30, 30)), false, Color(1, 1, 1, a))
+		else:
+			gem(self, Vector2(5 + 10 + 11, 8 + 9), 7.0, Color(gc, a))
 		var fc := Color(Color.WHITE.lerp(Color.BLACK, white), a)
 		var nx := 42.0 + txt(self, bf, 42, 6, o["n"], 15, fc, 17.25)
 		txt(self, bf, nx + 6.0, 9, RN.gname(o["g"]), 10, Color(gc, a), 11.5)
