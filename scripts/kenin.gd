@@ -326,7 +326,7 @@ func _headshot(a: Dictionary) -> void:
 	add_marks(tg, MARK_QTE)
 	arena.spark_ring(hp, 10)
 	arena.sfx("heavy", 0.9)
-	arena.hitstop = maxf(arena.hitstop, 70.0)
+	arena.hitstop = maxf(arena.hitstop, 130.0)        # QA: the headshot holds a beat so it reads
 	arena.flash = maxf(arena.flash, 0.18)
 	arena.shake(5, a["dir"])
 	arena.text(hp + Vector2(0, -40.0), "HEADSHOT!", Color("#e8ffb0"))

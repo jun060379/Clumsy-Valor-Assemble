@@ -124,11 +124,18 @@ func _initialize() -> void:
 	await until(func(): return P.who == "estelle" and P.anim != "swap_in")
 	P.swap_cd = 1500.0
 	P.qte["cd"] = 0.0
+	P.party_lock = 0.0
+	P.qte_gap = 0.0
 	P.qte_offer("finisher")
 	ok(P.qte["who"].has("kenin"), "a finisher calls him")
 	P.party_input()
 	ok(P.who == "estelle", "no swap: Estelle stays in control")
 	ok(P.swap_cd == 0.0, "her swap cooldown is reset")
+	ok(P.party_lock > 0.0, "the party keys rest while his shot plays")
+	P.party_input()
+	ok(P.who == "estelle", "a second press right away does nothing")
+	P.qte_offer("finisher")
+	ok(P.qte["t"] <= 0.0, "no new QTE straight after one was answered")
 	ok(K.assists.size() == 1, "he appears at the foe's side")
 	K.marks.clear()
 	var hp3: float = g.hp

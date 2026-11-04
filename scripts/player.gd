@@ -96,6 +96,14 @@ var swap_cd := 0.0
 var swap_to := 0.0
 var outs: Array = []         # members leaving the field: {c,x,y,dir,t,dead}
 var qte := {"t": 0.0, "cd": 0.0, "who": [], "hit": null, "low": false}
+## QA 2026-11-04 (mashed QTEs chained Aida > Kenin > Estelle > Aida in a blink): after a tag or a bench assist the party
+## keys rest until its motion has played (party_lock), and no new QTE is offered for QTE_GAP after one was answered
+var party_lock := 0.0
+var qte_gap := 0.0
+const QTE_GAP := 1600.0
+const LOCK_TAG := 1050.0
+const LOCK_ASSIST := 1150.0
+const LOCK_SWAP := 450.0
 var tag_to := 0.0
 var tag_ref = null
 var tag_hit := false
@@ -1503,6 +1511,8 @@ func die() -> void:
 # ---------- party: switching, QTE tag-in, counter swap ----------
 func party_step(dt: float) -> void:
 	if swap_cd > 0.0: swap_cd -= dt
+	if party_lock > 0.0: party_lock -= dt
+	if qte_gap > 0.0: qte_gap -= dt
 	if qte["cd"] > 0.0: qte["cd"] -= dt
 	if qte["t"] > 0.0:
 		qte["t"] -= dt
@@ -1577,7 +1587,7 @@ func party_next():
 
 ## the swap key / a portrait tap: during a QTE it becomes a tag-in strike; on a glinting attack it is a counter swap
 func party_input(to = null) -> void:
-	if anim in ["tag_in", "swap_in"]:
+	if anim in ["tag_in", "swap_in"] or party_lock > 0.0:
 		return
 	if (arena.ult != null and arena.ult.state != "") or arena.fade_dir == 1:
 		return      # partyInput: not during an ultimate or a door's fade-out
@@ -1624,6 +1634,8 @@ func swap(tag: bool, to = null) -> void:
 	if not tag and swap_cd > 0.0:
 		return
 	var old := who
+	party_lock = LOCK_TAG if tag else LOCK_SWAP
+	if tag: qte_gap = QTE_GAP
 	hpm[old] = maxf(0.0, hp)
 	var was_dead := anim == "death"
 	outs.append({"c": old, "anim": "death" if was_dead else "tag_out", "x": position.x, "y": position.y, "dir": dir, "t": 0.0, "dead": was_dead})
@@ -1736,7 +1748,7 @@ func tag_strike() -> void:
 	if R0 != null and is_instance_valid(R0) and R0.alive():
 		R0.hit(2.0 * M, dir * 8.0, atk_mul())
 		if R0.get("daze") != null: R0.daze = maxf(R0.daze, 500.0)     # the training ghost loses her for a moment
-	arena.hitstop = 80.0
+	arena.hitstop = 120.0        # QA: the tag-in blow holds a beat
 	arena.shake(7, dir)
 	arena.post_wave(position + Vector2(dir * 60.0, -50.0), 1.1, 460.0, 0.22)
 	arena.streak_fx(position.x - dir * 30.0, position.x + dir * 170.0, position.y - 50.0 * CSCALE, dir, CH.COLOR[who])
@@ -1750,6 +1762,8 @@ func bench_assist(c: String, tg) -> void:
 	if c == "kenin": arena.kenin.assist(tg if tg != null else qte_target())
 	qte_end()
 	swap_cd = 0.0
+	party_lock = LOCK_ASSIST
+	qte_gap = QTE_GAP
 	_rev("tag")
 	arena.flash = maxf(arena.flash, 0.12)
 	arena.text(position + Vector2(0, -150.0 * CSCALE), "원호!  " + CH.NAME[c], CH.COLOR[c].lightened(0.4))
@@ -1801,7 +1815,7 @@ func counter_swap(m, nx: String) -> void:
 
 func qte_offer(reason: String, data = null) -> void:
 	var cands: Array = CH.QTE_WHO.get(reason, []).filter(func(c): return party.has(c) and c != who and hpm[c] > 0.0)
-	if cands.is_empty():
+	if cands.is_empty() or qte_gap > 0.0:
 		return
 	if qte["t"] <= 0.0:
 		if qte["cd"] > 0.0 and reason != "hit":
