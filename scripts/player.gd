@@ -2596,8 +2596,9 @@ func aida_exec(tg, k := 1.0) -> void:
 	arena.sfx("aida_open", 1.0)
 	arena.post_ca(0.02)
 
-func _aexec_dmg() -> float:
-	return BAL.p("aida", "rift_max") * _am("riftK") * float(a_exec["k"])
+## 처형 is paid for (owner 2026-11-04): it needs its condition and takes about a second, so it hits that hard
+func _aexec_dmg(key: String) -> float:
+	return BAL.p("aida", key) * _am("riftK") * float(a_exec["k"])
 
 ## the frame of the 처형 sequence at time tt: [anim, frame] or [] once over
 func _ax_at(tt: float) -> Array:
@@ -2682,7 +2683,7 @@ func _aexec_step(dt: float) -> void:
 		a_exec["hit1"] = true
 		if live:
 			arena.quiet_hit = true
-			tg.hit(_aexec_dmg() * 0.3, 0.0, atk_mul())
+			tg.hit(_aexec_dmg("exec_up"), 0.0, atk_mul())
 			arena.quiet_hit = false
 			if not is_fly(tg):
 				# popped up a little, held there; she must clear its head: fly that much higher
@@ -2714,7 +2715,7 @@ func _aexec_step(dt: float) -> void:
 				tg.position.y = float(ST.of(tg)["air"].get("y0", g0))
 				ST.of(tg)["air"]["t"] = 0.0
 			arena.quiet_hit = true
-			tg.hit(_aexec_dmg() * 0.7, dir * 6.0, atk_mul())
+			tg.hit(_aexec_dmg("exec_slam"), dir * 6.0, atk_mul())
 			arena.quiet_hit = false
 		arena.pfx.slam(position.x + dir * 20.0 * CSCALE, position.y, who, true)
 		arena.post_wave(position + Vector2(dir * 40.0, 0.0), 0.8, 420.0, 0.2)
