@@ -1331,8 +1331,8 @@ func bolt(o: Vector2, tg, sz: float, hold: float, d: int, snd := "hit1", aim := 
 	luce_fx.append(b)
 
 ## a bolt of someone not in control (Luce's 빛의 가호 from the bench): her element, her attack
-func bolt_as(o: Vector2, tg, by: String, dmg: float, mul: float) -> void:
-	luce_fx.append({"aim": Vector2.INF, "by": by, "k": "bolt", "x": o.x, "y": o.y, "vx": 0.0, "vy": -0.001, "tg": tg, "sz": 0.85, "hold": 90.0, "hits": [], "home": 0.014, "dmg": dmg, "mul": mul, "d": 1, "t": 0.0, "life": 1300.0, "tr": [], "hold0": 90.0, "trT": 0.0, "snd": "hit1"})
+func bolt_as(o: Vector2, tg, by: String, dmg: float, mul: float, hold := 90.0) -> void:
+	luce_fx.append({"aim": Vector2.INF, "by": by, "k": "bolt", "x": o.x, "y": o.y, "vx": 0.0, "vy": -0.001, "tg": tg, "sz": 0.85, "hold": hold, "hits": [], "home": 0.014, "dmg": dmg, "mul": mul, "d": 1, "t": 0.0, "life": 1300.0 + hold, "tr": [], "hold0": hold, "trT": 0.0, "snd": "hit1"})
 
 func pillar(x: float, y: float, dmg: float, d: int) -> void:
 	luce_fx.append({"by": player.who, "k": "pillar", "x": x, "y": y, "dmg": dmg, "d": d, "hits": [], "mul": player.atk_mul(), "t": 0.0, "life": 420.0})

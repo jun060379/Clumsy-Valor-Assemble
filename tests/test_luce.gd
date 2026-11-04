@@ -39,9 +39,9 @@ func _initialize() -> void:
 	ok(arena.luce_fx.size() == n0, "no blessing: no bolt")
 	P.bless_start()
 	m.hit(0.5, 0.0)
-	ok(arena.luce_fx.size() == n0 + 1 and String(arena.luce_fx.back()["by"]) == "luce", "a hit draws Luce's bolt from the bench")
+	ok(arena.luce_fx.size() == n0 + 3 and String(arena.luce_fx.back()["by"]) == "luce", "a hit draws a volley of 3 bolts from Luce on the bench")
 	m.hit(0.5, 0.0)
-	ok(arena.luce_fx.size() == n0 + 1, "within 0.5 s: no second bolt")
+	ok(arena.luce_fx.size() == n0 + 3, "within 0.5 s: no second volley")
 	P.hpm["aida"] = 50.0
 	P.l_bolt_cd = 0.0
 	m.hit(0.5, 0.0)

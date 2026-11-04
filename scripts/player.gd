@@ -2527,6 +2527,7 @@ func _lm(key: String) -> float:
 ## heals the party a little. Numbers PLACEHOLDER.
 const L_BLESS := 12000.0
 const L_BOLT_GAP := 500.0
+const L_VOLLEY := 3
 const L_BUFF := 0.15
 const L_BUFF_MS := 8000.0
 
@@ -2539,10 +2540,14 @@ func bless_proc(e) -> void:
 	if e == null or not is_instance_valid(e) or not e.alive(): return
 	l_bolt_cd = L_BOLT_GAP * _lm("boltGap")
 	var lk: float = CH.STATS["luce"]["atk"] * (arena.runes.atk_k("luce") if _rk() else 1.0)
-	var dmg: float = BAL.p("luce", "bless_bolt") * _lm("boltK")
-	var n := 2 if _lv("bolt2") > 0.0 else 1
+	# 와바박 (owner 2026-11-04): a volley, not one bolt: 3 in quick succession (강림: 5), fanned out behind her spot.
+	# bless_bolt is the volley's total before the volley bonus (x1.25), split across the bolts. PLACEHOLDER
+	var n := L_VOLLEY + (2 if _lv("bolt2") > 0.0 else 0)
+	var dmg: float = BAL.p("luce", "bless_bolt") * _lm("boltK") * 1.25 / float(L_VOLLEY)
 	for i in n:
-		arena.bolt_as(position + Vector2(-dir * (20.0 + i * 24.0), -150.0 * CSCALE - i * 14.0), e, "luce", dmg, lk)
+		var a := -0.9 + 1.8 * float(i) / maxf(1.0, n - 1.0)
+		var o := position + Vector2(-dir * (26.0 + cos(a) * 30.0), -150.0 * CSCALE + sin(a) * 40.0)
+		arena.bolt_as(o, e, "luce", dmg, lk, 50.0 + i * 55.0)
 	if _lv("boltSlow") > 0.0: ST.add(arena, e, "slow", _lv("boltSlow"), "luce")      # 빛의 사슬
 	var hv := luce_heal("bless_heal") * _lm("boltHeal")
 	if hp > 0.0: hp = minf(MAX_HP, hp + hv)
