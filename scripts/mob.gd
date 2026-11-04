@@ -56,6 +56,7 @@ var ft := 0.0
 var cd := 0.0
 var flash := 0.0
 var kx := 0.0
+var tilt := 0.0               # 교대 패링: knocked back on its heels (rad, springs back; drawn with the body)
 var sq := 0.0                 # 타격감: squash-and-stretch ms left (x 1.18 / y 0.86 easing back over SQ_MS)
 const SQ_MS := 70.0
 var dead := 0.0
@@ -186,6 +187,9 @@ func hit(dmg: float, kb: float, mul := 1.0) -> void:
 ## the squash's clock runs on real time (arena steps it through a hitstop too) and its scale about the feet
 func fx_step(dt: float) -> void:
 	if sq > 0.0: sq = maxf(0.0, sq - dt)
+	if tilt != 0.0:
+		tilt -= tilt * minf(1.0, dt / 140.0)
+		if absf(tilt) < 0.004: tilt = 0.0
 
 func squash() -> Vector2:
 	if sq <= 0.0: return Vector2.ONE
@@ -477,7 +481,7 @@ func _draw() -> void:
 	draw_set_transform(Vector2(0, floor_dy - 1.0), 0.0, Vector2(1.0, 0.25))
 	draw_circle(Vector2.ZERO, 16.0 * s / 3.0, Color(0, 0, 0, 0.28 * alpha))
 	var sqs := squash()
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2(dir * sqs.x, sqs.y))
+	draw_set_transform(Vector2.ZERO, tilt, Vector2(dir * sqs.x, sqs.y))
 	var tint: Color = M.get("tint", Color(1.15, 0.8, 1.25) if elite else Color.WHITE)
 	var stt: Color = ST.body_tint(self) if not is_dead() else Color.WHITE      # 공용 상태 on the body
 	draw_texture_rect_region(tex(A[0]), Rect2(-75.0 * s, -100.0 * s, 150.0 * s, 150.0 * s), Rect2(fr * 150, 0, 150, 150), Color(tint.r * stt.r, tint.g * stt.g, tint.b * stt.b, alpha))
@@ -539,6 +543,6 @@ func _draw_rim() -> void:
 	var A: Array = M["anims"].get(anim, M["anims"]["idle"])
 	var fr := mini(f, A[1] - 1)
 	var sqs := squash()
-	rim_n.draw_set_transform(Vector2.ZERO, 0.0, Vector2(dir * sqs.x, sqs.y))
+	rim_n.draw_set_transform(Vector2.ZERO, tilt, Vector2(dir * sqs.x, sqs.y))
 	rim_n.draw_texture_rect_region(tex(A[0]), Rect2(-75.0 * s, -100.0 * s, 150.0 * s, 150.0 * s), Rect2(fr * 150, 0, 150, 150))
 	rim_n.draw_set_transform(Vector2.ZERO)

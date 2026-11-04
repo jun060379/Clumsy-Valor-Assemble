@@ -111,6 +111,7 @@ var l_bless_t := 0.0        # Luce's 빛의 가호 (ms left): the one in control
 var l_bolt_cd := 0.0
 var a_follow := {}          # Aida: the follow-up window after a launch {"m", "t" ms, "k" damage bonus}
 var a_left := {}            # Aida's 남은 균열 (left where she swapped out) {"x", "y", "t" ms to the burst}
+var cp := {}                 # 교대 패링 in progress {"m", "t", "to", "hit", "fu"}: in → clash → recoil → the follow-up window
 var a_exec_cd := 0.0        # 처형's cooldown (ms): solo routes wait it out; a foe the party left 무방비 ignores it
 var a_exec := {}            # Aida's 처형 (the empowered strike's own motion) {"tg", "t", "k", "x", "g0", "top", "hit1", "hit2"}
 var a_emp := false          # the rift strike in flight is the empowered one (무방비 target: instant, full, bigger)
@@ -798,6 +799,12 @@ func step(dt: float) -> void:
 			var k: float = a_follow["k"]
 			a_follow = {}
 			aida_exec(fm, k)
+	if not cp.is_empty():
+		_cp_step(dt)
+		for g in ghosts: g["t"] += dt
+		ghosts = ghosts.filter(func(g): return g["t"] < g["life"])
+		queue_redraw()
+		return
 	if not a_exec.is_empty():
 		_aexec_step(dt)
 		for g in ghosts: g["t"] += dt
@@ -2106,7 +2113,17 @@ func counter_assist(m, c: String) -> void:
 	arena.text(Vector2(m.position.x, m.position.y - 190.0), "PARRY!", Color("#ffffff"))
 	arena.parry_word()
 
-## swapping on a glinting attack: cancel it and tag in on that mob (x2.5), PARRY
+## 교대 패링 (owner 2026-11-05, after 젠존제's defensive assist): two beats. The newcomer slides in trailing ghosts and
+## CATCHES the glinting blow in a guard pose (the clash: the longest freeze, the gold arcs, sparks, the negative frame,
+## the zoom punch); then both are thrown apart — the foe reels back on its heels (kx + tilt), she slides a step and
+## braces. A press of attack inside the window after it is the follow-up: her tag-in strike at x2.5. No press: she
+## just stands, the next member's QTE is open (교대 → 교대). Poses from existing art (CP_POSE); mobs get no new art.
+const CP_IN := 120.0          # ms: the slide in
+const CP_WIN := 1000.0        # ms: the follow-up window closes
+const CP_POSE := {            # [in, clash, brace] per member: [anim, frame]. Non-Estelle poses are PLACEHOLDER tag_in frames
+	"estelle": [["guard", 0], ["guard", 1], ["guard", 2]], "aida": [["tag_in", 0], ["tag_in", 1], ["tag_in", 1]],
+	"luce": [["tag_in", 0], ["tag_in", 1], ["tag_in", 1]], "kenin": [["tag_in", 0], ["tag_in", 1], ["tag_in", 1]]}
+
 func counter_swap(m, nx: String) -> void:
 	m.st = "hurt"
 	m.hurt_t = 1300.0
@@ -2114,24 +2131,119 @@ func counter_swap(m, nx: String) -> void:
 	m.flare_t = -1.0
 	m.atk_clock = 0.0
 	m.set_a("hurt")
-	m.cd = maxf(m.cd, 1600.0)
+	m.cd = maxf(m.cd, 1800.0)
 	arena.proj = arena.proj.filter(func(p): return p["m"] != m or absf(p["x"] - position.x) > 500.0)
 	qte["who"] = [nx]
 	qte["t"] = maxf(qte["t"], 1.0)
 	qte["hit"] = null
 	qte["low"] = false
 	swap(true, nx)
-	tag_in_at(m, position.x)
-	tag_mul = maxf(tag_mul, 2.5)
-	inv = maxf(inv, 900.0)
-	arena.hitstop = maxf(arena.hitstop, 190.0)
-	arena.flash = maxf(arena.flash, 0.5)
-	arena.shake(10, dir)
-	arena.sfx("parry", 1.0, {"st": 7.0})     # a glint caught: the perfect parry's fifth
-	arena.sfx("slam", 0.8)
-	arena.text(Vector2(tag_to, position.y - 190.0 * CSCALE), "PARRY!", Color("#ffffff"))
-	arena.parry_word()
-	qte_offer("parry")          # 교대 패링 is a parry: the next member's QTE opens after the gap (교대 → 교대)
+	# her own staging over swap()'s tag-in: she comes in from behind her old spot and stops at the foe's reach
+	var fly: bool = is_fly(m)
+	dir = 1 if m.position.x >= position.x else -1
+	var to := clampf(m.position.x - dir * 66.0 * CSCALE, 30.0, arena.world_w - 30.0)
+	position.x = clampf(to - dir * 190.0, 30.0, arena.world_w - 30.0)
+	if fly:
+		air_tag = true
+		air_y = minf(arena.ground_y - 60.0, m.position.y + 30.0)
+		position.y = air_y
+		on = false
+	else:
+		air_tag = false
+		position.y = m.position.y
+		on = true
+	vy = 0.0
+	vx = 0.0
+	tag_ref = m
+	tag_to = to
+	tag_hit = true
+	tag_timer = 0.0
+	tag_mul = 1.0
+	cam_focus = {"x": (to + m.position.x) / 2.0, "t": 1200.0}
+	m.kx = 0.0
+	cp = {"m": m, "t": 0.0, "to": to, "hit": false, "fu": false}
+	_cp_pose(0)
+	inv = maxf(inv, 1400.0)
+	party_lock = maxf(party_lock, CP_WIN + 150.0)
+	add_ghost(160.0)
+	arena.sfx("dash", 0.7)
+
+func _cp_pose(i: int) -> void:
+	var ps: Array = CP_POSE.get(who, CP_POSE["aida"])[i]
+	var an: String = ps[0]
+	if air_tag and who == "estelle": an = "air_guard"
+	if anim != an or f != int(ps[1]): set_anim(an, int(ps[1]))
+
+func _cp_step(dt: float) -> void:
+	var m = cp["m"]
+	var live: bool = m != null and is_instance_valid(m) and m.alive()
+	var t0: float = cp["t"]
+	cp["t"] = t0 + dt
+	var tt: float = cp["t"]
+	var to: float = cp["to"]
+	vx = 0.0
+	vy = 0.0
+	if air_tag:
+		position.y = air_y
+		on = false
+	# beat 1: in
+	if tt < CP_IN:
+		position.x += (to - position.x) * minf(1.0, dt / 40.0)
+		if int(tt / 30.0) != int(t0 / 30.0): add_ghost(140.0)
+		_cp_pose(0)
+		return
+	# the clash
+	if not cp["hit"]:
+		cp["hit"] = true
+		position.x = to
+		_cp_pose(1)
+		var cpt := Vector2(position.x + dir * 44.0 * CSCALE, position.y - 72.0 * CSCALE)
+		if live:
+			var fp: Vector2 = m.flare_pos()
+			if fp.is_finite(): cpt = Vector2((cpt.x + fp.x) / 2.0, (cpt.y + fp.y) / 2.0)
+			m.kx = dir * 2.6                         # thrown back on its heels
+			m.tilt = dir * 0.2
+			m.hurt_t = maxf(m.hurt_t, 1100.0)
+			if m.get("daze") != null: m.daze = maxf(m.daze, 600.0)
+			if who == "estelle": estg(m, E_STG["parry"])
+			elif ST.big(m): ST.add(arena, m, "stagger", 35.0, who)       # a boss: the groggy gauge takes the clash (PLACEHOLDER)
+		arena.hitstop = maxf(arena.hitstop, 230.0)
+		arena.flash = maxf(arena.flash, 0.5)
+		arena.shake(11, dir)
+		arena.impact("parry", cpt, dir)
+		arena.pfx.parry_at(cpt, dir)
+		arena.spark(cpt, 18)
+		arena.spark_ring(cpt, 8)
+		arena.post_wave(cpt, 1.8, 700.0, 0.35)
+		arena.post_ca(0.014)
+		arena.witch = maxf(arena.witch, 320.0)
+		arena.witch_max = maxf(arena.witch_max, 320.0)
+		arena.sfx("parry", 1.0, {"st": 7.0})
+		arena.sfx("slam", 0.8)
+		arena.text(Vector2(to, position.y - 190.0 * CSCALE), "PARRY!", Color("#ffffff"))
+		arena.parry_word()
+		qte_offer("parry")          # 교대 패링 is a parry: the next member's QTE opens after the gap (교대 → 교대)
+		return
+	# beat 2: thrown apart — she slides back a step and braces
+	var rt := tt - CP_IN
+	if rt < 160.0:
+		position.x -= dir * 14.0 * CSCALE * (dt / 160.0)
+		if int(rt / 60.0) != int((t0 - CP_IN) / 60.0): arena.dust(position, -dir, false)
+	_cp_pose(2 if rt > 120.0 else 1)
+	# the follow-up window: her tag-in strike, x2.5
+	if rt > 200.0 and want("attack") and live:
+		take("attack")
+		cp = {}
+		tag_mul = maxf(tag_mul, 2.5)
+		tag_in_at(m, position.x)
+		arena.text(position + Vector2(0, -175.0 * CSCALE), "추격!", Color("#ffe39a"))
+		return
+	if rt > CP_WIN - CP_IN or not live:
+		cp = {}
+		set_anim("idle")
+		if air_tag:
+			air_tag = false
+			on = false
 
 func qte_offer(reason: String, data = null) -> void:
 	var cands: Array = CH.QTE_WHO.get(reason, []).filter(func(c): return party.has(c) and c != who and hpm[c] > 0.0)

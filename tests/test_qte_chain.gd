@@ -42,13 +42,16 @@ func _initialize() -> void:
 	P.qte_end()
 	P.qte["cd"] = 3000.0
 	P.counter_swap(m, "aida")
-	ok(P.who == "aida", "the swap caught the glint: aida in")
+	ok(P.who == "aida" and not P.cp.is_empty(), "the swap caught the glint: aida sliding in")
+	ok(await until(func(): return P.cp.get("hit", false)), "the clash (beat 1 → 2)")
 	ok(not P.qte_pend.is_empty(), "its parry waits for the gap")
+	ok(m.kx * P.dir > 0.0 and m.tilt != 0.0, "the foe is thrown back on its heels")
+	ok(await until(func(): return P.cp.is_empty()), "no press: the window closes, she just stands")
 	ok(await until(func(): return P.qte["t"] > 0.0), "after the gap a QTE is up (cooldown ignored)")
 	ok(P.qte["who"].has("estelle") and P.qte["who"].has("luce") and not P.qte["who"].has("aida"), "for the others: %s" % str(P.qte["who"]))
 
 	print("Estelle's guard counts as a parry")
-	await until(func(): return P.party_lock <= 0.0 and P.anim != "tag_in" and P.anim != "swap_in")
+	await until(func(): return P.party_lock <= 0.0 and P.anim != "tag_in" and P.anim != "swap_in" and P.cp.is_empty())
 	P.qte_end()
 	P.qte_gap = 0.0
 	P.qte_pend = {}
