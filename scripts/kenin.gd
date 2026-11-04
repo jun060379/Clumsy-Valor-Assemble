@@ -218,12 +218,12 @@ func fire(o: Vector2, d: Vector2, dmg: float, first := true, big := false) -> bo
 	shots.append({"x": o.x, "y": o.y, "vx": dd.x * SHOT_V * (1.25 if big else 1.0), "vy": dd.y * SHOT_V * (1.25 if big else 1.0), "dmg": dmg / BURST, "dry": false, "t": 0.0, "mul": _mul(), "mk": first or big, "big": big})
 	# PLACEHOLDER sound: there is no gunshot in the packs yet (the stab, pitched up); each round its own crack, the big one a boom
 	if big:
-		arena.sfx("thrust", 0.9, {"st": 1.0})
-		arena.sfx("heavy", 0.7, {"st": 2.0})
+		arena.sfx("kshot_big", 1.0)          # ElevenLabs (Sprite Flow) hand-cannon boom
+		arena.sfx("kshot", 0.6)
 		arena.pfx.hit(o.x, o.y, int(signf(d.x)) if d.x != 0.0 else 1, 1.5)
 		arena.post_wave(o, 0.6, 360.0, 0.15)
 	else:
-		arena.sfx("thrust", 0.6, {"st": 5.0 + randf() * 1.2})
+		arena.sfx("kshot", 0.75)             # ElevenLabs (Sprite Flow) pistol crack, 3 takes round robin
 		arena.pfx.hit(o.x, o.y, int(signf(d.x)) if d.x != 0.0 else 1, 0.7)
 	_shake(1.0, -int(signf(d.x)) if d.x != 0.0 else 1)
 	if ammo <= 0 and on_field(): _ran_dry()
@@ -439,7 +439,7 @@ func _step_assists(dt: float) -> void:
 func _headshot(a: Dictionary) -> void:
 	var tg = a["tg"]
 	var mz := Vector2(a["x"] + a["dir"] * 30.0 * CH.SCALE["kenin"], a["y"] - 50.0 * CH.SCALE["kenin"])
-	arena.sfx("thrust", 1.0, {"st": 3.0})          # PLACEHOLDER gunshot
+	arena.sfx("kshot_big", 1.0)
 	arena.pfx.hit(mz.x, mz.y, a["dir"], 1.0)
 	if tg == null or not is_instance_valid(tg) or not tg.alive():
 		return
@@ -597,7 +597,7 @@ func ult_shot(o: Vector2, at: Vector2, m) -> void:
 	var v := (at - o).normalized() * SHOT_V * 1.6
 	var life := clampf(o.distance_to(at) / (SHOT_V * 1.6), 20.0, 200.0)
 	shots.append({"x": o.x, "y": o.y, "vx": v.x, "vy": v.y, "dmg": 0.0, "dry": false, "t": SHOT_LIFE - life, "mul": _mul(), "fake": true})
-	arena.sfx("thrust", 0.85, {"st": 5.0 + randf() * 2.0})
+	arena.sfx("kshot", 0.6, {"st": 1.0 + randf() * 2.0})
 	arena.pfx.hit(at.x, at.y, 1 if v.x >= 0.0 else -1, 0.9)
 	arena.spark(o, 3)
 	if m != null and is_instance_valid(m) and m.alive():

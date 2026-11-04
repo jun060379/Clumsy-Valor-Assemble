@@ -1619,7 +1619,7 @@ func die() -> void:
 	set_anim("death")
 	dead_t = 0.0
 	arena.sfx("jingle_death", 1.0)
-	arena.sfx("death", 0.9)
+	arena.sfx("down", 0.8)                  # the body hits the ground (owner 2026-11-04: no scream)
 	if arena.bgm != null and arena.bgm.grid() != null: arena.bgm.duck(6.0, 600.0)
 
 

@@ -927,10 +927,11 @@ func _process(delta: float) -> void:
 ## heavy, parry and the ult also duck the music (DUCK: dB, ms) while a dungeon track plays.
 const SNAP_MAX := 0.09
 const SNAP := {"hit1": true, "hit2": true, "hit3": true, "heavy": true, "thrust": true, "parry": true, "ult": true, "aida_hit": true, "aida_heavy": true}
-const JITTER := {"aida_hit": 0.5, "aida_heavy": 0.4, "hit1": 0.5, "hit2": 0.5, "hit3": 0.5, "heavy": 0.5, "thrust": 0.5, "hurt": 0.5}
+const JITTER := {"aida_hit": 0.5, "aida_heavy": 0.4, "hit1": 0.5, "hit2": 0.5, "hit3": 0.5, "heavy": 0.5, "thrust": 0.5, "hurt": 0.5, "kshot": 0.8}
 const FILES := {"thrust": "stab", "dash": "dodge", "ui_move": "menu_move", "ui_ok": "menu_ok", "ui_back": "menu_back", "step": "tick"}
 ## round robin: a base with n variants plays <base>_<k>, never the same k twice in a row (sfx_file)
 const VARIANTS := {"hit1": 4, "hit2": 4, "hit3": 4, "heavy": 4, "stab": 3, "parry": 2, "guard": 3, "hurt": 4, "swing": 4, "dodge": 2, "aida_open": 2, "aida_pass": 2, "aida_close": 2, "aida_hit": 4, "aida_heavy": 3, "skid": 2, "death": 2, "down": 3, "ult": 4, "ult_charge": 3,
+	"kshot": 3, "kshot_big": 2, "boss_fall": 2,
 	"step_grass": 8, "step_stone": 8, "step_wood": 8, "step_run": 8}
 ## footsteps ("foot"): the surface under the player picks the set — the hall's boards, the cave's stone, grass elsewhere
 const FOOT := {"hall": "step_wood", "dungeon": "step_stone"}
@@ -945,7 +946,7 @@ const LEVEL := {"hit1": 0.9, "hit2": 0.9, "hit3": 0.9, "heavy": 1.0, "parry": 1.
 	"pick_coin": 0.53, "pick_stone": 0.68, "pick_rune": 0.53,
 	"menu_move": 0.48, "menu_ok": 0.48, "menu_back": 0.54,
 	"jingle_lv": 0.93, "jingle_rank": 1.12, "jingle_quest": 1.17, "jingle_death": 0.86, "jingle_book": 0.80,
-	"impact_boss_in": 1.48, "impact_boss_down": 1.62,
+	"impact_boss_in": 1.48, "impact_boss_down": 1.62, "kshot": 1.0, "kshot_big": 1.0, "boss_fall": 1.3,
 	"jump": 0.06, "djump": 0.32, "land": 0.6, "ult_sub": 0.63}
 const DUCK := {"heavy": [4.0, 120.0], "parry": [4.0, 120.0], "ult": [6.0, 250.0]}
 const LAYERS := {}      # name -> [[file, vol]…] played with it, at the same moment (none now: the recordings stand alone)
