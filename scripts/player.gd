@@ -680,6 +680,14 @@ func rift_exit() -> void:
 			arena.streak_fx(s["x0"], position.x, position.y - 62.0 * CSCALE, dir, Color("#f2e6ff") if emp else Color("#b37bff"))
 			if emp:
 				arena.streak_fx(s["x0"], position.x, position.y - 58.0 * CSCALE, dir, Color("#9a4dff"))
+				# the 강화 균열 베기: a rift tears open in the ground under the foe and slashes up through it
+				var tg2 = s.get("tg")
+				var ex: float = tg2.position.x if tg2 != null and is_instance_valid(tg2) else position.x - dir * 95.0 * CSCALE
+				var erupt = arena.pfx.gate(ex, position.y, 230.0 * CSCALE, 1.8, 1.5)
+				erupt["rel"] = true
+				arena.slash_fx(Vector2(ex, position.y - 80.0 * CSCALE), 120.0 * CSCALE, deg_to_rad(110.0), deg_to_rad(-70.0), dir, Color("#e9d2ff"), 1.4)
+				arena.spark(Vector2(ex, position.y - 90.0 * CSCALE), 22)
+				arena.shake(9, dir)
 				arena.flash = maxf(arena.flash, 0.3)
 				arena.sfx("heavy", 1.0)
 				arena.text(position + Vector2(0, -175.0 * CSCALE), "처형!", Color("#e9d2ff"))
@@ -726,7 +734,10 @@ func rift_strike(r: float, tg = null, emp := false, bonus := 1.0) -> void:
 	blink_face = -dir if best != null else 0
 	r_strike = {"r": r, "x0": position.x, "emp": emp, "k": bonus}
 	r_follow = best != null
-	rift_enter(to, best.position.y if best != null and not is_fly(best) else NAN, false)
+	var ty = best.position.y if best != null and not is_fly(best) else NAN
+	if emp and best != null and ST.has(best, "air"): ty = float(ST.of(best)["air"]["y0"])      # owner: she stays on the ground, the rift rises to it
+	r_strike["tg"] = best
+	rift_enter(to, ty, false)
 	arena.sfx("thrust", 0.8 + r * 0.3)
 
 ## dash = blink behind an enemy within 260 px in the dash direction
@@ -1724,7 +1735,12 @@ func party_step(dt: float) -> void:
 		a_left["t"] = float(a_left["t"]) - dt
 		if float(a_left["t"]) <= 0.0:
 			var at := Vector2(a_left["x"], a_left["y"])
+			if a_left.get("g") != null: a_left["g"]["rel"] = true
 			a_left = {}
+			var up = arena.pfx.gate(at.x, at.y, 200.0 * CSCALE, 1.8, 1.3)      # the burst: a tall tear snaps open and shut
+			up["rel"] = true
+			arena.slash_fx(at + Vector2(0, -70.0 * CSCALE), 100.0 * CSCALE, deg_to_rad(100.0), deg_to_rad(-80.0), 1, Color("#d7b8ff"), 1.3)
+			arena.spark(at + Vector2(0, -60.0 * CSCALE), 16)
 			arena.hit_by = "aida"
 			var ak: float = CH.STATS["aida"]["atk"] * (arena.runes.atk_k("aida") if _rk() else 1.0)
 			for e in foes_alive():
@@ -1886,7 +1902,7 @@ func swap(tag: bool, to = null) -> void:
 		ST.ally_add(self, "buff", L_BUFF + _lv("buffK"), L_BUFF_MS + _lv("buffMs"))
 		if _lv("buffUlt") > 0.0 and arena.get("ult") != null: arena.ult.v[nx] = minf(arena.ult.ULTMAX[nx], arena.ult.v[nx] + _lv("buffUlt"))
 	if old == "aida" and not was_dead:
-		a_left = {"x": position.x, "y": position.y, "t": 1000.0}       # 남은 균열: bursts in 1 s, lifting whoever stands there
+		a_left = {"x": position.x, "y": position.y, "t": 1000.0, "g": arena.pfx.gate(position.x, position.y, 120.0 * CSCALE, 1.2, 0.8)}       # 남은 균열: her own rift gate, bursts in 1 s
 		a_follow = {}
 	if not was_dead:
 		arena.dust(position, -dir, false)
@@ -2155,13 +2171,6 @@ func _draw() -> void:
 			draw_colored_polygon(dm, Color(0.69, 0.42, 1.0, 0.85 * pu))
 			draw_polyline(dm + PackedVector2Array([dm[0]]), Color(0.95, 0.9, 1.0, pu), 1.5)
 			draw_circle(Vector2(dir * 30.0 * CSCALE, -40.0 * CSCALE), 5.0 * pu, Color(0.8, 0.6, 1.0, 0.7))
-	if not a_left.is_empty():
-		var lp: Vector2 = Vector2(a_left["x"], a_left["y"]) - position
-		var k := 1.0 - float(a_left["t"]) / 1000.0
-		draw_set_transform(lp + Vector2(0, -4.0), 0.0, Vector2(1.0, 0.3))
-		draw_circle(Vector2.ZERO, 26.0 + 30.0 * k, Color(0.48, 0.2, 0.86, 0.35 + 0.4 * k))
-		draw_circle(Vector2.ZERO, 12.0 + 16.0 * k, Color(0.95, 0.88, 1.0, 0.5 * k))
-		draw_set_transform(Vector2.ZERO)
 	# 용감한 희생: Estelle's shield up in front of the one in control while her covering guard lasts
 	if not e_assist.is_empty():
 		var et: float = e_assist["t"]

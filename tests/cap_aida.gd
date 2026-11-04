@@ -79,6 +79,18 @@ func _initialize() -> void:
 		if P.r_strike == null: break
 	await frames(2)
 	await shot("aida_emp")
-	await frames(60)
+	await frames(30)
+	# her 남은 균열 after a swap-out
+	P.swap_cd = 0.0
+	P.party_lock = 0.0
+	P.swap(false, "estelle")
+	await frames(20)
+	await shot("aida_left_gate")
+	for i in 60:
+		await frames(1)
+		if P.a_left.is_empty(): break
+	await frames(3)
+	await shot("aida_left_burst")
+	await frames(30)
 	print("CAP done")
 	quit()
