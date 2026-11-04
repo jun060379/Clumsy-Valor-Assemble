@@ -43,6 +43,7 @@ var MARK_DMG: float:
 func _in_ult() -> bool:
 	return arena.ult != null and arena.ult.state == "act" and arena.ult.who == "kenin"
 const MARK_QTE := 3
+const QTE_VULN := 0.25          # 원호 QTE: 취약 +25% (8 s). PLACEHOLDER
 const MARK_MAX := 8
 const VULN_MS := 8000
 const CHAIN_GAP0 := 110.0       # the chain: the first gap, then each gap ×CHAIN_ACC down to CHAIN_GAP_MIN
@@ -454,10 +455,14 @@ func _headshot(a: Dictionary) -> void:
 	tg.hit(HEAD_DMG * (1.0 + nv("kAssistDmg")), a["dir"] * 12.0, _mul())
 	arena.hit_by = ""
 	add_marks(tg, MARK_QTE + int(nv("kQteMark")))
-	if nv("kQteVuln") > 0.0:
-		# 약점 표시: it takes more damage for 8 s (mob.gd reads the meta)
-		ST.add(arena, tg, "vuln", nv("kQteVuln"), "kenin")       # 공용 상태 취약 (8 s)
-		arena.text(Vector2(tg.position.x, tg.position.y - 150.0), "약점 노출", Color("#ff8a6a"))
+	# 약점 노출 (owner 2026-11-04: the QTE's own effect now, not a node): 공용 취약 for 8 s. 약점 폭로 (KEY) spreads it
+	# to every foe near the target, stronger
+	var vk: float = QTE_VULN + nv("kQteVulnAll")
+	ST.add(arena, tg, "vuln", vk, "kenin")
+	if nv("kQteVulnAll") > 0.0:
+		for m in arena.player.foes_alive():
+			if m != tg and m.position.distance_to(tg.position) < 260.0: ST.add(arena, m, "vuln", vk, "kenin")
+	arena.text(Vector2(tg.position.x, tg.position.y - 150.0), "약점 노출", Color("#ff8a6a"))
 	if nv("kQteBomb") > 0.0 and _bomb_on(tg) == null:
 		bomb_fx.append({"x": tg.position.x, "y": tg.position.y - 50.0, "vx": 0.0, "vy": 0.0, "m": tg, "ox": randf_range(-10.0, 10.0), "oy": -60.0, "on_floor": false, "t": 0.0, "fuse": FUSE * nm("kFuse"), "done": false})
 	arena.spark_ring(hp, 10)
@@ -655,7 +660,7 @@ func draw(g: CanvasItem) -> void:
 		cp.line(cr / PFX.S - 2, 0, cr / PFX.S + 3, 0, Color.WHITE)
 		cp.line(0, -cr / PFX.S - 3, 0, -cr / PFX.S + 2, Color.WHITE)
 		cp.line(0, cr / PFX.S - 2, 0, cr / PFX.S + 3, Color.WHITE)
-	# (약점 표시 is the shared 취약 now: status.gd draws its icon over the foe)
+	# (원호 QTE's 취약 is the shared status: status.gd draws its icon over the foe)
 	for s in shots:
 		if s["t"] < 0.0: continue
 		var p := PFX.PX.new(g, s["x"], s["y"])

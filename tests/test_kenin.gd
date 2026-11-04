@@ -194,7 +194,7 @@ func _initialize() -> void:
 
 	print("memory nodes")
 	var MM = arena.runes.memory
-	MM.T("kenin")["on"] = ["A1", "A6", "B1", "B4", "C4", "C6"]     # 탄띠 · 비상 탄창 · 주머니 · 접촉 신관 · 시한 표식 · 약점 표시
+	MM.T("kenin")["on"] = ["A1", "A6", "B1", "B4", "C4", "C6"]     # 탄띠 · 비상 탄창 · 주머니 · 접촉 신관 · 시한 표식 · 약점 폭로
 	MM._fx_cache.clear()
 	ok(K.amax() == K.AMMO + 6 and K.bmax() == K.BOMBS + 1, "장탄 +6, 폭탄 +1 (%d, %d)" % [K.amax(), K.bmax()])
 	K.ammo = 1
@@ -218,7 +218,7 @@ func _initialize() -> void:
 	ok(await until(func(): return K.marked_count() == 0, 1500.0) and g2.hp < hp6, "시한 표식: stamps pop on their own")
 	K.assist(g2)
 	await until(func(): return K.assists.is_empty(), 3000.0)
-	ok(load("res://scripts/status.gd").has(g2, "vuln"), "약점 표시: the covering shot leaves the foe exposed (공용 취약)")
+	ok(load("res://scripts/status.gd").has(g2, "vuln"), "원호: the covering shot leaves the foe exposed (공용 취약, the QTE's own effect)")
 	MM.T("kenin")["on"] = []
 	MM._fx_cache.clear()
 	K.ammo = K.amax()
