@@ -235,7 +235,7 @@ main에 푸시하면 GitHub Actions가 웹·윈도우로 빌드해서 GitHub Pag
 - 미확인: 경직 적 앞에서 홀드 → 즉시 강화 균열 베기의 화면 녹화(테스트는 대상 선택까지만 확인).
 
 ## 4-14. 루체 리뉴얼 + 상태 표시 (오너 2026-11-04)
-- 루체 = 필드 밖 딜포터. 기도(힐 = 공격력의 170% × 회복량, 쿨 14초; 가호 빛탄 회복 17%, 구원 330% — balance.gd luce heal · bless_heal · save_heal, player.luce_heal()) → 빛의 가호 12초: 조작 중인 동료의 적중마다(hit_by "" 일 때 mob/dummy/ghost.hit → player.bless_proc) 대기 중인 루체가 빛탄(BAL luce.bless_bolt 60%, 신성, 0.5초 간격, arena.bolt_as) + 파티 회복 1.5×. 교대해 나갈 때 강화 +15% 8초. QTE 구원: 보호막 20% + 가호. 노드 키: boltK · boltGap · bolt2(KEY) · buffK · blessT · boltHeal · buffMs · buffUlt · boltSlow(빛의 사슬), 성소는 기도 KEY로 이동.
+- 루체 = 필드 밖 딜포터. 기도(힐 = 공격력의 300% × 회복량, 쿨 14초; 가호 빛탄 회복 17%, 구원 400% — balance.gd luce heal · bless_heal · save_heal, player.luce_heal()) → 빛의 가호 12초: 조작 중인 동료의 적중마다(hit_by "" 일 때 mob/dummy/ghost.hit → player.bless_proc) 대기 중인 루체가 빛탄(BAL luce.bless_bolt 60%, 신성, 0.5초 간격, arena.bolt_as) + 파티 회복 1.5×. 교대해 나갈 때 강화 +15% 8초. QTE 구원: 보호막 20% + 가호. 노드 키: boltK · boltGap · bolt2(KEY) · buffK · blessT · boltHeal · buffMs · buffUlt · boltSlow(빛의 사슬), 성소는 기도 KEY로 이동.
 - 상태 표시: 보스는 HUD 보스 바 아래(hud.gd _draw_boss_status: 그로기 게이지 + 상태 칩), 일반 몹은 몸 연출(status.gd body_tint · draw_body) + 체력바 옆 큰 아이콘(draw_bar_icons: 취약 · 둔화 · 화상 · 출혈).
 
 ## 4-15. 최종값 표시 · 무적 허수아비 (오너 2026-11-04)
