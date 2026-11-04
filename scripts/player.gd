@@ -111,6 +111,7 @@ var l_bless_t := 0.0        # Luce's 빛의 가호 (ms left): the one in control
 var l_bolt_cd := 0.0
 var a_follow := {}          # Aida: the follow-up window after a launch {"m", "t" ms, "k" damage bonus}
 var a_left := {}            # Aida's 남은 균열 (left where she swapped out) {"x", "y", "t" ms to the burst}
+var cp_quiet := false        # swap() called by 교대 패링: no "TAG!" caption, no tag-in flash (the clash is the moment)
 var cp := {}                 # 교대 패링 in progress {"m", "t", "to", "hit", "fu"}: in → clash → recoil → the follow-up window
 var a_exec_cd := 0.0        # 처형's cooldown (ms): solo routes wait it out; a foe the party left 무방비 ignores it
 var a_exec := {}            # Aida's 처형 (the empowered strike's own motion) {"tg", "t", "k", "x", "g0", "top", "hit1", "hit2"}
@@ -1966,7 +1967,7 @@ func swap(tag: bool, to = null) -> void:
 		arena.sfx("heavy", 0.9)
 		var tg = target(1600.0)
 		tag_in_at(tg, keep_x)
-		arena.text(position + Vector2(0, -150.0 * CSCALE), "TAG!  " + CH.NAME[nx], Color("#ffe39a"))
+		if not cp_quiet: arena.text(position + Vector2(0, -150.0 * CSCALE), "TAG!  " + CH.NAME[nx], Color("#ffe39a"))
 	else:
 		swap_cd = 2200.0 * _mk("swap")
 		if on:
@@ -2137,7 +2138,9 @@ func counter_swap(m, nx: String) -> void:
 	qte["t"] = maxf(qte["t"], 1.0)
 	qte["hit"] = null
 	qte["low"] = false
+	cp_quiet = true
 	swap(true, nx)
+	cp_quiet = false
 	# her own staging over swap()'s tag-in: she comes in from behind her old spot and stops at the foe's reach
 	var fly: bool = is_fly(m)
 	dir = 1 if m.position.x >= position.x else -1
@@ -2224,22 +2227,34 @@ func _cp_step(dt: float) -> void:
 		arena.parry_word()
 		qte_offer("parry")          # 교대 패링 is a parry: the next member's QTE opens after the gap (교대 → 교대)
 		return
-	# beat 2: thrown apart — she slides back a step and braces
+	# beat 2: thrown apart — one hard shove back (fast, easing out, feet skidding) and she braces where it leaves her
 	var rt := tt - CP_IN
-	if rt < 160.0:
-		position.x -= dir * 14.0 * CSCALE * (dt / 160.0)
-		if int(rt / 60.0) != int((t0 - CP_IN) / 60.0): arena.dust(position, -dir, false)
-	_cp_pose(2 if rt > 120.0 else 1)
+	var r0 := t0 - CP_IN
+	if rt < 90.0:
+		var k1 := 1.0 - pow(1.0 - clampf(rt / 90.0, 0.0, 1.0), 3.0)
+		var k0 := 1.0 - pow(1.0 - clampf(r0 / 90.0, 0.0, 1.0), 3.0)
+		position.x -= dir * 26.0 * CSCALE * (k1 - k0)
+		ax_rot = -dir * 0.14 * (1.0 - k1)                 # knocked back on her heels, straightening as she stops
+		if r0 <= 0.0:
+			arena.dust(position, -dir, true)
+			add_ghost(120.0)
+		elif int(rt / 30.0) != int(r0 / 30.0): arena.dust(position, -dir, false)
+	else: ax_rot = 0.0
+	_cp_pose(2 if rt > 60.0 else 1)
 	# the follow-up window: her tag-in strike, x2.5
 	if rt > 200.0 and want("attack") and live:
 		take("attack")
 		cp = {}
+		ax_rot = 0.0
 		tag_mul = maxf(tag_mul, 2.5)
+		var here := position.x
 		tag_in_at(m, position.x)
+		position.x = here                                   # the strike launches from where the shove left her, no re-entry
 		arena.text(position + Vector2(0, -175.0 * CSCALE), "추격!", Color("#ffe39a"))
 		return
 	if rt > CP_WIN - CP_IN or not live:
 		cp = {}
+		ax_rot = 0.0
 		set_anim("idle")
 		if air_tag:
 			air_tag = false
