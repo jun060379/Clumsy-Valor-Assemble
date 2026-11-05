@@ -1355,8 +1355,8 @@ func lightning(x: float, y: float, sz: float, dmg: float, d: int) -> void:
 	pfx.bolt(x, y, sz)
 
 ## the bolt's flight (PLACEHOLDER feel numbers): orb speed px/ms and time, the form flash, the spear's push and top speed
-const BOLT_ORB_V := 0.78
-const BOLT_ORB_MS := 230.0
+const BOLT_ORB_V := 0.9
+const BOLT_ORB_MS := 260.0
 const BOLT_FORM_MS := 100.0
 const BOLT_SPEAR_V0 := 0.6
 const BOLT_SPEAR_ACC := 0.016
@@ -1393,7 +1393,11 @@ func step_luce(dt: float) -> void:
 				var left: float = maxf(1.0, BOLT_ORB_MS - float(f["pt"]))
 				var dif := wrapf(dv.angle() - cur, -PI, PI)
 				cur += dif * minf(1.0, dt / left * 1.6)
-				var ov := BOLT_ORB_V * lerpf(1.0, 0.45, clampf((f["pt"] - BOLT_ORB_MS * 0.6) / (BOLT_ORB_MS * 0.4), 0.0, 1.0))     # it brakes into the turn
+				# it sets off from rest, picks up speed (ease-out), then brakes into the turn before it forms
+				var u: float = clampf(f["pt"] / BOLT_ORB_MS, 0.0, 1.0)
+				var up := 1.0 - pow(1.0 - clampf(u / 0.5, 0.0, 1.0), 2.0)
+				var dn := smoothstep(0.6, 1.0, u)
+				var ov := BOLT_ORB_V * lerpf(lerpf(0.15, 1.0, up), 0.4, dn)
 				f["vx"] = cos(cur) * ov
 				f["vy"] = sin(cur) * ov
 				if f["pt"] >= BOLT_ORB_MS:
