@@ -35,6 +35,7 @@ var asl_tex := {}
 var esl_tex := {}
 const ETHR := [preload("res://assets/fx/estelle_thrust_s.png"), preload("res://assets/fx/estelle_thrust_l.png")]
 const EDIVE := preload("res://assets/fx/estelle_dive.png")
+const HITS := [preload("res://assets/fx/hit/hit_1.png"), preload("res://assets/fx/hit/hit_2.png"), preload("res://assets/fx/hit/hit_3.png")]     # tools/pixelfx_fx/clumsy-hit.js, seeds 1-3
 func _asl(k: String) -> Array:
 	if not asl_tex.has(k):
 		asl_tex[k] = [load("res://assets/fx/aida_slash/aida_slash_%s.png" % k), load("res://assets/fx/aida_slash/aida_slash_%s_mask.png" % k)]
@@ -353,9 +354,10 @@ func dust(x: float, y: float, d: int, big: bool) -> void:
 func hit(x: float, y: float, d: int, sz := 1.0) -> void:
 	var n := 0
 	for e in L:
-		if e["k"] == "hit" and e["t"] < 80.0: n += 1
+		if e.get("hit", false) and e["t"] < 80.0: n += 1
 	if n >= 6: return
-	_push({"k": "hit", "x": x, "y": y, "d": d, "sz": sz, "seed": 1.0 + floorf(randf() * 1.0e6)})
+	# the baked hit (owner 2026-11-05): ink star + cut line, gold crescents, flares and chips; tagged "hit" for the cap above
+	_push({"k": "bk", "hit": true, "tex": HITS[randi() % 3], "x": x, "y": y, "d": d, "n": 16, "fw": 120.0, "fh": 90.0, "cols": 4, "px": 48.0, "py": 45.0, "sc": S * 0.85 * sz})
 
 func djump(P) -> void:
 	_push({"k": "djump", "C": _pal(P.who), "x": P.position.x, "y": P.position.y + 2.0})

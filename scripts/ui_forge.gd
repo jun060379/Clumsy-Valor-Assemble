@@ -912,9 +912,8 @@ func _icon(d, sl := "") -> Texture2D:
 	var ip: String = ICON.file_of(d, sl)
 	return tx(ip) if ip != "" and ResourceLoader.exists(ip) else null
 
-## the sprite with a grade glow behind, centred on c, sz across
+## the sprite alone, centred on c, sz across
 func _icon_at(tex: Texture2D, c0: Vector2, sz: float, g: Color, a: float) -> void:
-	draw_texture_rect(UI.glow(), Rect2(c0 - Vector2(sz, sz) * 0.68, Vector2(sz, sz) * 1.36), false, Color(g.lightened(0.3), 0.6 * a))
 	draw_texture_rect(tex, Rect2(c0 - Vector2(sz, sz) / 2.0, Vector2(sz, sz)), false, Color(1, 1, 1, a))
 
 ## a diamond piece (.wpn / .item): gradient, 5 px white rim, 8 px shadow, bobbing 8 px (2.4 s); with tex, the gear's sprite instead
@@ -940,7 +939,7 @@ func _piece(c0: Vector2, s: float, g0: Color, g1: Color, a: float, drop_ms := 1e
 	if tex != null:
 		var mt := Transform2D(deg_to_rad(rot - 45.0), Vector2(sc, sc), 0.0, c0 + Vector2(0, dy))
 		draw_set_transform_matrix(base * mt)
-		_icon_at(tex, Vector2.ZERO, s * 1.25, g1, aa)
+		_icon_at(tex, Vector2.ZERO, s * 1.9, g1, aa)
 		draw_set_transform_matrix(base)
 		return
 	var m := Transform2D(deg_to_rad(rot), Vector2(sc, sc), 0.0, c0 + Vector2(0, dy))
@@ -965,7 +964,7 @@ func _up(vs: Vector2, col: Color) -> void:
 	var ar := Rect2(ac - Vector2(aw, aw) / 2.0, Vector2(aw, aw))
 	var m := _itm(Transform2D.IDENTITY, ac, e)
 	draw_set_transform_matrix(m)
-	_qd(ar.grow(-aw * 0.06), col, since("kick_anvil"), e["a"])
+	if _icon(it, slot) == null: _qd(ar.grow(-aw * 0.06), col, since("kick_anvil"), e["a"])
 	var hr: bool = it != null and R().has_rune_item(it)
 	var g := Color("#9aa3b5")
 	if it != null: g = RN.gcol(RN.RUNE[it["rune"]]["g"] if hr else it["g"])
@@ -1266,7 +1265,7 @@ func _eng(vs: Vector2, col: Color) -> void:
 		var a1 := a0 + deg_to_rad(1.2)
 		draw_colored_polygon(PackedVector2Array([cc + Vector2.from_angle(a0) * W * 0.44, cc + Vector2.from_angle(a0) * W / 2.0, cc + Vector2.from_angle(a1) * W / 2.0, cc + Vector2.from_angle(a1) * W * 0.44]), Color(1, 1, 1, 0.6 * a))
 	var qr := Rect2(cc - Vector2(W, W) / 2.0, Vector2(W, W)).grow(-W * 0.17)
-	_qd(qr, col, since("kick_ecirc"), a)
+	if _icon(it, slot) == null: _qd(qr, col, since("kick_ecirc"), a)
 	draw_set_transform_matrix(m)
 	_piece(cc, W * 0.28, Color("#d8dce6"), Color("#7d8597") if it == null else RN.gcol(it["g"]), a, 1e9, _icon(it, slot), m)
 	var bf := UI.bhs()
