@@ -762,7 +762,9 @@ func try_interact() -> bool:
 
 # ---------- drawing ----------
 func _draw_bg() -> void:
-	var vs := get_viewport_rect().size
+	var bz: float = arena.base_zoom
+	bg_layer.scale = Vector2(bz, bz)          # the far layers on the same whole-px scale as the world
+	var vs := get_viewport_rect().size / bz
 	var c: Vector2 = arena.cam.get_screen_center_position()
 	var cam_x := c.x - vs.x / 2.0
 	var cam_y := c.y - vs.y / 2.0
@@ -770,17 +772,17 @@ func _draw_bg() -> void:
 	var sky: Texture2D = tex["bg_sky"]
 	var sh := G + 4.0 + 200.0
 	var sw := sky.get_width() * sh / sky.get_height()
-	var x := -fposmod(cam_x * 0.02, sw) - sw
+	var x := -fposmod(roundf(cam_x * 0.02), sw) - sw
 	while x < vs.x + sw:
-		bg_node.draw_texture_rect(sky, Rect2(x, -200.0 - cam_y * 0.08, sw, sh), false)
+		bg_node.draw_texture_rect(sky, Rect2(x, roundf(-200.0 - cam_y * 0.08), sw, sh), false)
 		x += sw
 	var mt: Texture2D = tex["bg_mountains"]
-	_layer(mt, 0.16, G - mt.get_height() * PXK - 40.0 - cam_y * 0.12, PXK, cam_x, vs)
+	_layer(hx.get("bg_mountains", mt), 0.16, G - mt.get_height() * PXK - 40.0 - cam_y * 0.12, 1.0 if hx.has("bg_mountains") else PXK, cam_x, vs)
 	var T := tod_now()
 	var dim: float = 1.0 - 0.75 * T["sun"]
 	bg_node.draw_rect(Rect2(Vector2.ZERO, vs), Color(0.07, 0.05, 0.16, 0.2 * dim))
 	var fo: Texture2D = tex["bg_forest"]
-	_layer(fo, 0.42, G + 2.0 - 242.0 * PXK - cam_y * 0.25, PXK, cam_x, vs)
+	_layer(hx.get("bg_forest", fo), 0.42, G + 2.0 - 242.0 * PXK - cam_y * 0.25, 1.0 if hx.has("bg_forest") else PXK, cam_x, vs)
 	bg_node.draw_rect(Rect2(0, G + 1.0 - cam_y * 0.25, vs.x, vs.y + 400.0), Color8(14, 74, 78))
 	# far haze: a vertical gradient, light above the forest, heavier toward the ground
 	var hy0 := G - 260.0 - cam_y * 0.25
@@ -801,8 +803,9 @@ func _draw_bg() -> void:
 func _layer(im: Texture2D, par: float, y: float, k: float, cam_x: float, vs: Vector2) -> void:
 	var w := im.get_width() * k
 	var h := im.get_height() * k
-	var off := fposmod(cam_x * par, w * 2.0)
+	var off := fposmod(roundf(cam_x * par), w * 2.0)
 	var x := -off
+	y = roundf(y)
 	var i := 0
 	while x < vs.x:
 		if i % 2 == 1:

@@ -404,7 +404,7 @@ func feel_reset() -> void:
 	hv_a = 0.0
 	hv_t = HV_MS
 	ds = 0.0
-	if arena.cam != null and arena.cam.zoom != Vector2.ONE: arena.cam.zoom = Vector2.ONE
+	if arena.cam != null: arena.cam.zoom = Vector2(arena.base_zoom, arena.base_zoom)
 
 ## the feel's clocks, real time (they run through a hitstop: the freeze is theirs to fill)
 func feel_step(dt: float) -> void:
@@ -431,7 +431,7 @@ func feel_step(dt: float) -> void:
 	var dying: bool = P != null and P.anim == "death" and P.hp <= 0.0
 	ds = minf(1.0, ds + dt / DS_MS) if dying else 0.0
 	var z := zoom_now()
-	if arena.cam != null: arena.cam.zoom = Vector2(z, z)
+	if arena.cam != null: arena.cam.zoom = Vector2(z, z) * arena.base_zoom
 
 func _bloom_step(run: bool) -> void:
 	if bsv.is_empty(): return

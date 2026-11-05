@@ -669,7 +669,9 @@ func _radial(ci: CanvasItem, c: Vector2, r: float, col: Color, a: float, clip :=
 	ci.draw_texture_rect_region(t, dst, src, Color(col, a))
 
 func _draw_bg() -> void:
-	var vs := get_viewport_rect().size
+	var bz: float = arena.base_zoom
+	bg_layer.scale = Vector2(bz, bz)          # the far layer on the same whole-px scale as the world
+	var vs := get_viewport_rect().size / bz
 	bg_node.draw_rect(Rect2(Vector2.ZERO, vs), Color8(26, 21, 38))
 	var im: Texture2D = tex["bg"]
 	var c: Vector2 = arena.cam.get_screen_center_position()
@@ -677,8 +679,8 @@ func _draw_bg() -> void:
 	var vy := clampf(-(c.y - H / 2.0) * 0.03, -10.0, 10.0)
 	var sc := maxf(1.0, vs.y / im.get_height())
 	var w := im.get_width() * sc
-	var y := (vs.y - im.get_height() * sc) / 2.0 + vy
-	var off := fposmod(left * 0.12, w)
+	var y := roundf((vs.y - im.get_height() * sc) / 2.0 + vy)
+	var off := fposmod(roundf(left * 0.12), w)
 	var x := -off
 	var i := 0
 	while x < vs.x:

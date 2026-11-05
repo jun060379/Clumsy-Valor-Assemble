@@ -49,6 +49,9 @@ var platforms: Array = []
 var player
 var dummies: Array = []
 var cam: Camera2D
+var cam_f := Vector2.ZERO        # the camera's smooth position; cam.position is it snapped to whole world px (owner
+                                 # 2026-11-06: 지직거림 — a fractional camera re-maps every texel to the screen each frame)
+var base_zoom := 1.0             # the world's camera zoom so one world px is a whole number of screen px (fit_view)
 var cam_override = null       # Vector2: the title drives the camera (title.gd's framings); null = the player's camera
 var title_mode := false       # the title is up over the live town: the town's life runs, the player stands aside (as a townsperson)
 var title_park := Vector2.ZERO   # where the player stood before the title parked her off-world
@@ -207,8 +210,10 @@ func _ready() -> void:
 	cam.limit_top = -100000
 	cam.limit_bottom = 100000
 	add_child(cam)
-	cam.position = player.position
+	cam_f = player.position
+	cam.position = cam_f.round()
 	cam.make_current()
+	cam.zoom = Vector2(base_zoom, base_zoom)
 	var ui := CanvasLayer.new()
 	add_child(ui)
 	flash_rect = ColorRect.new()
@@ -363,8 +368,9 @@ func _title_step(dt: float) -> void:
 	if level != null: level.step(dt)
 	elif train != null: train.step(dt)
 	if cam_override is Vector2:
-		var vw := get_viewport_rect().size.x
-		cam.position = Vector2(clampf(cam_override.x, vw / 2.0, maxf(vw / 2.0, world_w - vw / 2.0)), cam_override.y)
+		var vw := wsize().x
+		cam_f = Vector2(clampf(cam_override.x, vw / 2.0, maxf(vw / 2.0, world_w - vw / 2.0)), cam_override.y)
+		cam.position = cam_f.round()
 		cam.offset = Vector2.ZERO
 	shadow_node.queue_redraw()
 
@@ -563,7 +569,7 @@ func foes() -> Array:
 	return out
 
 func view_rect() -> Rect2:
-	var vs := get_viewport_rect().size
+	var vs := get_viewport_rect().size / cam.zoom
 	var c := cam.get_screen_center_position()
 	return Rect2(c - vs / 2.0, vs)
 
@@ -572,13 +578,14 @@ func snap_camera() -> void:
 	cam.limit_right = int(world_w)
 	cam.limit_top = -100000            # the vertical framing is the prototype's camY rule below, not a hard limit
 	cam.limit_bottom = 100000
-	var vw := get_viewport_rect().size.x
-	cam.position = Vector2(clampf(player.position.x, vw / 2.0, maxf(vw / 2.0, world_w - vw / 2.0)), cam_y_target(true))
+	var vw := wsize().x
+	cam_f = Vector2(clampf(player.position.x, vw / 2.0, maxf(vw / 2.0, world_w - vw / 2.0)), cam_y_target(true))
+	cam.position = cam_f.round()
 	cam.reset_smoothing()
 	if post != null: post.feel_reset()     # 타격감: no punch, zoom, kick or desaturation carries into a new scene
 
 func cam_x_target() -> float:
-	var vw := get_viewport_rect().size.x
+	var vw := wsize().x
 	var x: float = player.cam_focus["x"] if player.cam_focus["t"] > 0.0 else player.position.x + player.dir * 70.0
 	return clampf(x, vw / 2.0, maxf(vw / 2.0, world_w - vw / 2.0))
 
@@ -633,7 +640,7 @@ func cam_y_top(snap := false) -> float:
 	return 0.0
 
 func cam_y_target(snap := false) -> float:
-	return cam_y_top(snap) + get_viewport_rect().size.y / 2.0
+	return cam_y_top(snap) + get_viewport_rect().size.y / 2.0      # the centre where the 500-tall view had it
 
 ## black out, run cb, come back
 func fade_then(cb: Callable) -> void:
@@ -764,7 +771,7 @@ func platform_under(p: Vector2):
 ## past that, so the cap is raised to 2.8 = the narrowest dungeon room (1400 px) and the phone fills edge to edge.
 const ASPECT_MAX := 2.8
 static func view_w(win: Vector2) -> int:
-	return roundi(H * clampf(win.x / maxf(1.0, win.y), 1.6, ASPECT_MAX))
+	return roundi(H * clampf(win.x / maxf(1.0, win.y), 1.6, ASPECT_MAX) / 2.0) * 2    # even: the centre stays on the grid
 
 func fit_view() -> void:
 	var r := get_tree().root
@@ -772,6 +779,16 @@ func fit_view() -> void:
 	if win.x < 1.0 or win.y < 1.0: return
 	r.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_KEEP
 	r.content_scale_size = Vector2i(view_w(win), int(H))
+	# owner 2026-11-06 (지직거림, 정수 배율): the UI keeps its 500-tall canvas; the world's camera zooms so a world px is
+	# exactly k screen px (k = the nearest whole scale) — if that changes the view by at most 12%, else it stays as it was
+	var s := win.y / H
+	var k := maxf(1.0, roundf(s))
+	base_zoom = k / s if absf(k / s - 1.0) <= 0.12 else 1.0
+	if cam != null: cam.zoom = Vector2(base_zoom, base_zoom)
+
+## the world's view size in world px (the UI canvas over the camera's base zoom)
+func wsize() -> Vector2:
+	return get_viewport_rect().size / base_zoom
 
 ## the browser's fullscreen switch resizes the canvas in steps and a size_changed can arrive before the last one: the
 ## view is re-fitted whenever the window's shape no longer matches it (polled every frame — one compare), so the
@@ -888,13 +905,15 @@ func _process(delta: float) -> void:
 	flash_rect.color.a = flash
 	# camera: follow the feet horizontally, fixed height (the room is one screen tall)
 	# camera: a lead of 70 px in the facing direction; CAMF (a tag-in's focus) whips over at 16/45 instead of 16/90
-	var vw := get_viewport_rect().size.x
+	var vw := wsize().x
 	var camf: bool = player.cam_focus["t"] > 0.0
 	var target := Vector2(cam_x_target(), cam_y_target())
-	cam.position.x = clampf(lerpf(cam.position.x, target.x, minf(1.0, (16.0 / 45.0 if camf else 16.0 / 90.0) * (dt / 16.0))), vw / 2.0, maxf(vw / 2.0, world_w - vw / 2.0))
-	cam.position.y = lerpf(cam.position.y, target.y, minf(1.0, dt / 140.0))
-	cam.offset = Vector2(randf_range(-1, 1) * shake_amt * 0.6 + shake_dir * shake_amt * 0.3, randf_range(-1, 1) * shake_amt * 0.4)
-	if post != null and screen_fx: cam.offset += post.kick_off()      # 타격감: the camera kick, easing back
+	cam_f.x = clampf(lerpf(cam_f.x, target.x, minf(1.0, (16.0 / 45.0 if camf else 16.0 / 90.0) * (dt / 16.0))), vw / 2.0, maxf(vw / 2.0, world_w - vw / 2.0))
+	cam_f.y = lerpf(cam_f.y, target.y, minf(1.0, dt / 140.0))
+	cam.position = cam_f.round()
+	var co := Vector2(randf_range(-1, 1) * shake_amt * 0.6 + shake_dir * shake_amt * 0.3, randf_range(-1, 1) * shake_amt * 0.4)
+	if post != null and screen_fx: co += post.kick_off()      # 타격감: the camera kick, easing back
+	cam.offset = co.round()
 	queue_redraw()
 	fx_layer.queue_redraw()
 	shadow_node.queue_redraw()
