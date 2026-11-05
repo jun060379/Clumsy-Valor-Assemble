@@ -2506,6 +2506,9 @@ func _cp_pose(i: int) -> void:
 	if anim != an or f != int(ps[1]): set_anim(an, int(ps[1]))
 
 func _cp_step(dt: float) -> void:
+	if cp.has("fu2"):
+		_cp_fu(dt)
+		return
 	var m = cp["m"]
 	var live: bool = m != null and is_instance_valid(m) and m.alive()
 	var t0: float = cp["t"]
@@ -2617,15 +2620,56 @@ func _cp_dash(dt: float) -> void:
 	if int(cp["dash"] / 30.0) != int(d0 / 30.0): add_ghost(140.0)
 	if anim != "dash": set_anim("dash", 2)
 	if absf(dto - position.x) > 10.0 and cp["dash"] < CP_DASH: return
-	cp = {}
 	if m == null or not is_instance_valid(m) or not m.alive():
+		cp = {}
 		set_anim("idle")
 		return
+	if who == "estelle":
+		# owner 2026-11-06: not the thrust — the dash ends in a big rising cut that throws the foe up
+		cp = {"m": m, "fu2": 0.0}
+		set_anim("attack2", 1)
+		return
+	cp = {}
 	tag_mul = maxf(tag_mul, 2.5)
 	tag_in_at(m, position.x)
 	position.x = tag_to                                  # already there: the strike, no slide
 	if anim == "tag_in": set_anim("tag_in", 2)          # the dash was the wind-up: straight into the blow
 	arena.text(position + Vector2(0, -175.0 * CSCALE), "추격!", Color("#ffe39a"))
+
+## Estelle's chase blow: the rising cut (attack2 frames posed by hand) at the tag-in's x2.5, the foe launched
+const CP_FU := [40.0, 110.0, 260.0, 380.0]       # ms: wind-up · the cut (hit) · follow-through · back to her stance
+func _cp_fu(dt: float) -> void:
+	var m = cp["m"]
+	var t0: float = cp["fu2"]
+	cp["fu2"] = t0 + dt
+	var tt: float = cp["fu2"]
+	vx = 0.0
+	if tt < CP_FU[0]:
+		if anim != "attack2" or f != 1: set_anim("attack2", 1)
+		return
+	if t0 < CP_FU[0]:
+		set_anim("attack2", 2)
+		add_ghost(140.0, -dir * 14.0 * CSCALE)
+		arena.slash_fx(position + Vector2(dir * 30.0 * CSCALE, -70.0 * CSCALE), 120.0 * CSCALE, 60.0, -110.0, dir, CH.COLOR[who], 1.0)
+		arena.pfx.dust(position.x + dir * 18.0 * CSCALE, position.y, dir, true)
+		if m != null and is_instance_valid(m) and m.alive():
+			tag_ref = m
+			tag_mul = maxf(tag_mul, 2.5)
+			tag_strike()
+			if not ST.big(m): ST.add(arena, m, "air", -1.0, who)        # thrown up into the air
+			arena.text(position + Vector2(0, -175.0 * CSCALE), "추격!", Color("#ffe39a"))
+		arena.hitstop = maxf(arena.hitstop, 140.0)
+		arena.shake(9, dir)
+		return
+	if tt < CP_FU[1]: return
+	if tt < CP_FU[2]:
+		if f != 3: set_anim("attack2", 3)
+		return
+	if tt < CP_FU[3]:
+		if f != 4: set_anim("attack2", 4)
+		return
+	cp = {}
+	set_anim("idle")
 
 func qte_offer(reason: String, data = null) -> void:
 	var cands: Array = CH.QTE_WHO.get(reason, []).filter(func(c): return party.has(c) and c != who and hpm[c] > 0.0)
