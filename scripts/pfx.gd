@@ -17,6 +17,15 @@ const S := 2.0
 const FR := 40.0
 ## Aida's 처형 slam, baked from pixelfx (tools/pixelfx_fx/rewind-slam.js): 56 frames of 440x176 at 30 fps, pivot (220, 140)
 const AIDA_SLAM := preload("res://assets/fx/aida_rewind_slam.png")
+## Aida's swing tears, baked from pixelfx (tools/pixelfx_fx/aida-tear-slash.js) per attack arc: 37 frames of 232x232 at
+## 50 fps, pivot at the arc's centre; each has a mask sheet for the afterimage, a window onto the game in negative
+const SH_NEG := preload("res://shaders/pfx_negmask.gdshader")
+const ASL := {"-100,30": "a1", "205,-12": "a2", "10,-190": "ah", "170,10": "ka", "60,-110": "air2", "-120,70": "air3"}
+var asl_tex := {}
+func _asl(k: String) -> Array:
+	if not asl_tex.has(k):
+		asl_tex[k] = [load("res://assets/fx/aida_slash/aida_slash_%s.png" % k), load("res://assets/fx/aida_slash/aida_slash_%s_mask.png" % k)]
+	return asl_tex[k]
 const SH_SLASH := preload("res://shaders/pfx_slash.gdshader")
 const SH_AIDA := preload("res://shaders/pfx_aida_swing.gdshader")
 const SH_TEAR := preload("res://shaders/pfx_tear.gdshader")
@@ -298,6 +307,11 @@ func _pal(ch: String) -> Array:
 
 ## pfxSlash: the swing crescent (Aida: the layered dimension tears) — r already includes the 1.12 of arcFx
 func slash(c: Vector2, r: float, a0: float, a1: float, d: int, ch: String, sy := 1.0) -> void:
+	var ak := "%d,%d" % [int(roundf(a0)), int(roundf(a1))]
+	if ch == "aida" and ASL.has(ak):
+		var T := _asl(ASL[ak])
+		_push({"k": "asl", "tex": T[0], "mask": T[1], "x": c.x, "y": c.y, "d": d})
+		return
 	_push({"k": "slash", "ch": ch, "x": c.x, "y": c.y, "d": d, "r": r, "a0": a0, "a1": a1, "sy": sy, "seed": randf() * 9.0})
 
 func thrust(x0: float, x1: float, y: float, ch: String) -> void:
@@ -428,6 +442,7 @@ func _draw_cpu() -> void:
 			"dive": alive = _dive(g, e)
 			"slam": alive = _slam(g, e)
 			"sheet": alive = _sheet(g, e)
+			"asl": alive = _asl_draw(g, e)
 			"chg": alive = _charge(g, e)
 			"gate": alive = _gate(e)
 			"pil": alive = _pillar(g, e)
@@ -1059,6 +1074,31 @@ func _sheet(g: CanvasItem, e: Dictionary) -> bool:
 	var c := i % int(e["cols"])
 	var r := i / int(e["cols"])
 	g.draw_texture_rect_region(e["tex"], Rect2(e["x"] - float(e["px"]) * sc, e["y"] - float(e["py"]) * sc, fw * sc, fh * sc), Rect2(c * fw, r * fh, fw, fh))
+	return true
+
+## Aida's baked swing tear: the colour frame flipped to her facing, and the afterimage's negative window as a quad
+func _asl_draw(g: CanvasItem, e: Dictionary) -> bool:
+	var i := int(e["t"] / 1000.0 * 50.0)
+	if i >= 37:
+		return false
+	var fw := 232.0
+	var c := i % 7
+	var r := i / 7
+	var w: float = fw * S
+	var d: float = float(e["d"])
+	var at := Rect2(e["x"] - 116.0 * S * d, e["y"] - 116.0 * S, w * d, w)
+	g.draw_texture_rect_region(e["tex"], at, Rect2(c * fw, r * fw, fw, fw))
+	var mt: Texture2D = e["mask"]
+	var lr := Rect2(-116.0 * S, -116.0 * S, w, w)
+	var q := _quad(e, SH_NEG, Vector2(e["x"], e["y"]), lr)
+	var m: ShaderMaterial = q.material
+	if not e.has("set"):
+		e["set"] = true
+		m.set_shader_parameter("mask", mt)
+		m.set_shader_parameter("rect", Vector4(lr.position.x, lr.position.y, lr.size.x, lr.size.y))
+		m.set_shader_parameter("flip", d)
+	var ts := mt.get_size()
+	m.set_shader_parameter("region", Vector4(c * fw / ts.x, r * fw / ts.y, fw / ts.x, fw / ts.y))
 	return true
 
 func _slam(g: CanvasItem, e: Dictionary) -> bool:
