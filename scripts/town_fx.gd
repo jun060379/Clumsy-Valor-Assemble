@@ -69,31 +69,6 @@ void fragment() {
 	COLOR = vec4(add, 1.0);
 }
 """
-const SUNP_SH := """
-shader_type canvas_item;
-render_mode blend_add, unshaded;
-uniform sampler2D ck : filter_linear, repeat_enable;
-uniform vec2 org;
-uniform vec2 csize = vec2(1800.0, 840.0);
-uniform float alpha = 0.0;
-uniform vec3 col = vec3(1.0, 0.86, 0.6);
-varying vec2 wp;
-void vertex() { wp = (MODEL_MATRIX * vec4(VERTEX, 0.0, 1.0)).xy; }
-const float BY[16] = float[](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
-void fragment() {
-	if (texture(TEXTURE, UV).a < 0.5) discard;
-	// sun breaking through the clouds: the dense parts of a shifted copy of the cloud cookie, on the 1-px grid, in two
-	// hard steps with a 4x4 Bayer dither between them (no smooth gradient)
-	vec2 p = floor(wp);
-	vec2 u = (p - org) / csize;
-	float c = (u.y < 0.0 || u.y > 1.0) ? 0.0 : texture(ck, vec2(fract(u.x), u.y)).r;
-	float v = smoothstep(0.42, 0.8, c) * 2.0;
-	ivec2 b = ivec2(mod(p, 4.0));
-	float lv = floor(v + (BY[b.x + b.y * 4] + 0.5) / 16.0) * 0.5;
-	if (lv <= 0.0) discard;
-	COLOR = vec4(col * lv * alpha, 1.0);
-}
-"""
 const RIM_K := 1.5                # rim strength (PLACEHOLDER)
 
 static var _discs: Array = []
@@ -116,8 +91,6 @@ var bits: Array = []              # grass bits and road dust wisps: {k, x, y, vx
 var grass_f := -1
 var prev_g := 0.0
 var rays_k := 0.0
-var sunp: Node2D
-var sunp_mat: ShaderMaterial
 
 
 func _init(tn) -> void:
@@ -150,17 +123,6 @@ func _init(tn) -> void:
 	glow.z_as_relative = false
 	glow.draw.connect(_draw_glow)
 	town.add_child(glow)
-	sunp = Node2D.new()
-	sunp_mat = ShaderMaterial.new()
-	var sh3 := Shader.new()
-	sh3.code = SUNP_SH
-	sunp_mat.shader = sh3
-	sunp_mat.set_shader_parameter("ck", town.shade.COOKIE)
-	sunp.material = sunp_mat
-	sunp.z_index = 10
-	sunp.z_as_relative = false
-	sunp.draw.connect(_draw_sunp)
-	town.add_child(sunp)
 
 
 ## a soft round puff on the pixel grid: a solid core, a lighter ring, a dithered rim (radius 1..24, white)
@@ -293,11 +255,6 @@ func _step_light(dt: float) -> void:
 	# canopy rays: only in clear sun
 	var sun: float = arena.tod_now()["sun"]
 	rays_k = clampf((sun - 0.35) / 0.3, 0.0, 1.0) if arena.weather == "clear" else 0.0
-	# sun patches drift with the clouds (shade.gd's clock and speed), half a cookie away from the shadows
-	var ct: float = Time.get_ticks_msec() / 1000.0 if town.shade.clock < 0.0 else town.shade.clock
-	sunp_mat.set_shader_parameter("org", Vector2(fmod(ct * 18.0 + 900.0, 1800.0), town.G - 460.0))
-	sunp_mat.set_shader_parameter("alpha", 0.32 * clampf((sun - 0.3) / 0.4, 0.0, 1.0) * (1.0 if arena.weather == "clear" else 0.4))
-	sunp.queue_redraw()
 	glow.queue_redraw()
 
 ## a placed tree's box in the world (deco_back, its 1.35x size)
@@ -572,27 +529,3 @@ func draw_tent(ci: CanvasItem, b: Array) -> void:
 		r += 2
 	if flip: ci.draw_set_transform(Vector2.ZERO)
 
-
-## the sun patches fall where the cloud shadows do: the ground under the surface line and every standing thing
-func _draw_sunp() -> void:
-	var sh = town.shade
-	if sh.sun <= 0.05: return
-	var vr: Rect2 = arena.view_rect()
-	var vx0 := vr.position.x - 40.0
-	var vx1 := vr.end.x + 40.0
-	var x := floorf(vx0 / 24.0) * 24.0
-	var top := PackedVector2Array()
-	var bot := PackedVector2Array()
-	while x <= vx1 + 24.0:
-		var t: float = town.surf_top(x)
-		top.append(Vector2(x, t))
-		bot.append(Vector2(x, maxf(t, town.cloud_bottom(x))))
-		x += 24.0
-	for i in top.size() - 1:
-		if bot[i].y - top[i].y < 0.5 and bot[i + 1].y - top[i + 1].y < 0.5: continue
-		sunp.draw_colored_polygon(PackedVector2Array([top[i], top[i + 1], bot[i + 1], bot[i]]), Color.WHITE)
-	for o in town.shade_occluders() + town.shade_props():
-		var bx: Rect2 = sh.box(o)
-		if bx.end.x < vx0 or bx.position.x > vx1: continue
-		if o[2] > town.cloud_bottom(bx.get_center().x) + 1.0: continue
-		sh._sil(sunp, o, bx.position, bx.size.y, Color.WHITE)

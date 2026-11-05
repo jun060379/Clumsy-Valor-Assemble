@@ -20,6 +20,7 @@ const BAND := 58.0
 const SURFR := 6.0
 const PXK := 1.78
 const CAMPFIRE := preload("res://assets/fx/town/campfire.png")
+const RIVER := preload("res://assets/fx/town/river.png")
 const LIFE := preload("res://scripts/town_life.gd")
 const TFX := preload("res://scripts/town_fx.gd")
 const TF := preload("res://scripts/townsfolk.gd")
@@ -871,11 +872,12 @@ func _draw() -> void:
 	# 2. lower level: floor + valley, river
 	_shear(t_solid, RX1, RIV0, func(_x): return LOWF)
 	_shear(t_solid, RIV1, TOWN_W + PK, func(_x): return LOWF)
-	draw_rect(Rect2(RIV0, LOWF + 18.0, RIV1 - RIV0, 700.0), Color("#3f6f9e"))
-	x = RIV0
-	while x < RIV1:
-		draw_rect(Rect2(x, LOWF + 18.0 + (PK if sin(tt * 2.0 + x * 0.05) > 0.6 else 0.0), PK, PK), Color("#5f93c4"))
-		x += PK
+	# the river: pixelfx water/town-river (tools/pixelfx_fx/town-river.js), 60 frames 240x96 at 15 fps, exactly the
+	# river's width; deeper down its darkest step; the bridge deck's shadow lies on the water just under it
+	var rfi := int(tt * 15.0) % 60
+	draw_texture_rect_region(RIVER, Rect2(RIV0, LOWF + 18.0, 240.0, 96.0), Rect2((rfi % 5) * 240, (rfi / 5) * 96, 240, 96))
+	draw_rect(Rect2(RIV0, LOWF + 114.0, RIV1 - RIV0, 700.0), Color("#16304a"))
+	draw_rect(Rect2(RIV0, LOWF + 18.0, RIV1 - RIV0, 5.0), Color(0.05, 0.1, 0.18, 0.35))
 	# 3. lower plaza: light strings, fountain
 	var L: Texture2D = tex["q_lights"]
 	for s in light_strings:
