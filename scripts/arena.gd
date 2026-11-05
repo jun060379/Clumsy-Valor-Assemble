@@ -1355,11 +1355,12 @@ func lightning(x: float, y: float, sz: float, dmg: float, d: int) -> void:
 	pfx.bolt(x, y, sz)
 
 ## the bolt's flight (PLACEHOLDER feel numbers): orb speed px/ms and time, the form flash, the spear's push and top speed
-const BOLT_ORB_V := 0.5
-const BOLT_ORB_MS := 300.0
+const BOLT_ORB_V := 0.78
+const BOLT_ORB_MS := 230.0
 const BOLT_FORM_MS := 100.0
-const BOLT_SPEAR_ACC := 0.006
-const BOLT_SPEAR_MAX := 2.2
+const BOLT_SPEAR_V0 := 0.6
+const BOLT_SPEAR_ACC := 0.016
+const BOLT_SPEAR_MAX := 3.0
 func step_luce(dt: float) -> void:
 	for f in luce_fx:
 		hit_by = String(f.get("by", ""))
@@ -1392,21 +1393,25 @@ func step_luce(dt: float) -> void:
 				var left: float = maxf(1.0, BOLT_ORB_MS - float(f["pt"]))
 				var dif := wrapf(dv.angle() - cur, -PI, PI)
 				cur += dif * minf(1.0, dt / left * 1.6)
-				f["vx"] = cos(cur) * BOLT_ORB_V
-				f["vy"] = sin(cur) * BOLT_ORB_V
+				var ov := BOLT_ORB_V * lerpf(1.0, 0.45, clampf((f["pt"] - BOLT_ORB_MS * 0.6) / (BOLT_ORB_MS * 0.4), 0.0, 1.0))     # it brakes into the turn
+				f["vx"] = cos(cur) * ov
+				f["vy"] = sin(cur) * ov
 				if f["pt"] >= BOLT_ORB_MS:
 					f["ph"] = "form"
 					f["pt"] = 0.0
 					f["ang"] = dv.angle()
-					f["vx"] = dv.x * 0.08
-					f["vy"] = dv.y * 0.08
+					f["vx"] = -dv.x * 0.1          # it draws back a hair as it takes shape (the windup)
+					f["vy"] = -dv.y * 0.1
 			elif ph == "form":
+				f["vx"] *= 0.9
+				f["vy"] *= 0.9
 				if f["pt"] >= BOLT_FORM_MS:
 					f["ph"] = "spear"
 					f["pt"] = 0.0
 					f["ang"] = dv.angle()
-					f["vx"] = dv.x * 0.35
-					f["vy"] = dv.y * 0.35
+					f["vx"] = dv.x * BOLT_SPEAR_V0
+					f["vy"] = dv.y * BOLT_SPEAR_V0
+					pfx.spear_fx("launch", Vector2(f["x"], f["y"]), f["ang"], f["sz"])
 					sfx("thrust", 0.5)
 			else:
 				# straight, speeding up (no more homing)
@@ -1426,7 +1431,12 @@ func step_luce(dt: float) -> void:
 				if f["hits"].has(m): continue
 				if absf(m.position.x - f["x"]) < R + 20.0 and m.position.y - 95.0 < f["y"] + R and m.position.y > f["y"] - R:
 					f["hits"].append(m)
+					quiet_hit = true          # its own impact instead of the generic hit
 					m.hit(f["dmg"], signf(f["vx"]) * 4.0, f["mul"])
+					quiet_hit = false
+					pfx.spear_fx("hit", Vector2(f["x"], f["y"]) + Vector2.from_angle(f.get("ang", 0.0)) * 20.0 * f["sz"], f.get("ang", 0.0), f["sz"])
+					hitstop = maxf(hitstop, 40.0)
+					shake(3, int(signf(f["vx"])) if f["vx"] != 0.0 else 1)
 					sfx(f.get("snd", "hit1"), 0.6)
 					f["t"] = f["life"] + 1.0
 					break
@@ -1475,7 +1485,8 @@ func _draw_bolt(f: Dictionary) -> void:
 	var tex: Texture2D = L_FORM if ph == "form" else L_SPEAR
 	var n := 6 if ph == "form" else 16
 	var fi2 := mini(n - 1, int(f["pt"] / 20.0)) if ph == "form" else int(f["pt"] / 20.0) % 16
-	g.draw_set_transform(pos, f["ang"], Vector2(sc, sc))
+	var stretch := 1.0 + 0.22 * clampf((Vector2(f["vx"], f["vy"]).length() - BOLT_SPEAR_V0) / (BOLT_SPEAR_MAX - BOLT_SPEAR_V0), 0.0, 1.0) if ph == "spear" else 1.0
+	g.draw_set_transform(pos, f["ang"], Vector2(sc * stretch, sc / sqrt(stretch)))
 	g.draw_texture_rect_region(tex, Rect2(-84, -16, 132, 32), Rect2((fi2 % 2) * 132, (fi2 / 2) * 32, 132, 32))
 	g.draw_set_transform_matrix(Transform2D.IDENTITY)
 

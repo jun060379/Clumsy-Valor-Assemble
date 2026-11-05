@@ -41,7 +41,7 @@ func _initialize() -> void:
 	P.position.x += 520.0          # away from the door (the attack key would open it)
 	P.dir = 1
 	await frames(20)
-	var a = gob(P.position.x + 330.0)
+	var a = gob(P.position.x + 230.0)
 	await frames(10)
 	for sw in 2:
 		Input.action_press("attack")

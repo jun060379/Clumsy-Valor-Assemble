@@ -359,6 +359,15 @@ func hit(x: float, y: float, d: int, sz := 1.0) -> void:
 	# the baked hit (owner 2026-11-05): ink star + cut line, gold crescents, flares and chips; tagged "hit" for the cap above
 	_push({"k": "bk", "hit": true, "tex": HITS[randi() % 3], "x": x, "y": y, "d": d, "n": 16, "fw": 120.0, "fh": 90.0, "cols": 4, "px": 48.0, "py": 45.0, "sc": S * 0.85 * sz})
 
+const L_SHIT := preload("res://assets/fx/luce/luce-spear-hit.png")
+const L_SLAUNCH := preload("res://assets/fx/luce/luce-spear-launch.png")
+## Luce's spear kicking off / striking home, baked (tools/pixelfx_fx/luce-spear-launch.js, luce-spear-hit.js), turned to the flight
+func spear_fx(kind: String, at: Vector2, ang: float, sz: float) -> void:
+	if kind == "hit":
+		_push({"k": "bk", "tex": L_SHIT, "x": at.x, "y": at.y, "d": 1.0, "ang": ang, "n": 18, "fw": 120.0, "fh": 96.0, "cols": 4, "px": 44.0, "py": 48.0, "sc": S * sz})
+	else:
+		_push({"k": "bk", "tex": L_SLAUNCH, "x": at.x, "y": at.y, "d": 1.0, "ang": ang, "n": 10, "fw": 96.0, "fh": 48.0, "cols": 3, "px": 64.0, "py": 24.0, "sc": S * sz})
+
 func djump(P) -> void:
 	_push({"k": "djump", "C": _pal(P.who), "x": P.position.x, "y": P.position.y + 2.0})
 
@@ -1158,6 +1167,11 @@ func _bk(g: CanvasItem, e: Dictionary) -> bool:
 	var sc: float = e["sc"]
 	var cols: int = e["cols"]
 	var src := Rect2((i % cols) * fw, (i / cols) * fh, fw, fh)
+	if e.has("ang"):                    # turned to a heading
+		g.draw_set_transform(Vector2(e["x"], e["y"]), e["ang"], Vector2(sc, sc))
+		g.draw_texture_rect_region(e["tex"], Rect2(-float(e["px"]), -float(e["py"]), fw, fh), src)
+		g.draw_set_transform_matrix(Transform2D.IDENTITY)
+		return true
 	if float(e["d"]) < 0.0:
 		g.draw_set_transform(Vector2(e["x"], e["y"]), 0.0, Vector2(-1.0, 1.0))
 		g.draw_texture_rect_region(e["tex"], Rect2(-float(e["px"]) * sc, -float(e["py"]) * sc, fw * sc, fh * sc), src)
