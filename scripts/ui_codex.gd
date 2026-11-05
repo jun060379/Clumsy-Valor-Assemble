@@ -210,6 +210,11 @@ func _wheel(d: int, _p: Vector2) -> void:
 		ix_scroll = maxf(0.0, ix_scroll + d * em * 2.0)
 		vps["pr"].get_child(0).queue_redraw()
 
+func _drag(rel: Vector2, _p: Vector2) -> void:
+	if cur < 0 and not busy:
+		ix_scroll = maxf(0.0, ix_scroll - rel.y)
+		vps["pr"].get_child(0).queue_redraw()
+
 func back() -> void:
 	close_book()
 

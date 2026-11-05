@@ -121,6 +121,14 @@ func _wheel(d: int, _p: Vector2) -> void:
 	var j := clampi(sel + d, 0, list().size() - 1)
 	if j != sel: _pick(j)
 
+## a sideways drag walks the outfit strip, one per 70 px
+var _drag_acc := 0.0
+func _drag(rel: Vector2, p: Vector2) -> void:
+	_drag_acc -= rel.x
+	while absf(_drag_acc) >= 70.0:
+		_wheel(1 if _drag_acc > 0.0 else -1, p)
+		_drag_acc -= 70.0 * signf(_drag_acc)
+
 func back() -> void:
 	arena.sfx("ui_back", 0.5)
 	menu.ui_root.sweep.run(func(): menu.close_page(), UI.col(c))

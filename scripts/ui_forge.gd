@@ -68,6 +68,7 @@ var fr_show := false
 var sel_t := 9999.0            # rows: the last pick (margin transition)
 var prev_sel := -1
 var list_off := 0.0
+var list_end := 0.0      # content bottom (unscrolled) of the list drawn last frame
 var hb: Array = []
 var lift: ColorRect             # the strike's FGE filter: brightness(2.6) contrast(1.2) → none, 380 ms ease-out
 
@@ -229,8 +230,15 @@ func _key(k: int) -> void:
 			"fuse": do_fuse()
 			"dis": do_dis()
 
+func _list_max() -> float:
+	return maxf(0.0, list_end - (get_viewport_rect().size.y - 70.0))
+
 func _wheel(d: int, _pos: Vector2) -> void:
-	list_off = maxf(0.0, list_off + d * 40.0)
+	list_off = clampf(list_off + d * 40.0, 0.0, _list_max())
+
+## a finger / held mouse drags the rune rows and the dismantle grid
+func _drag(rel: Vector2, _pos: Vector2) -> void:
+	list_off = clampf(list_off - rel.y, 0.0, _list_max())
 
 func _pi() -> int:
 	for i in 4:
@@ -289,6 +297,7 @@ func go_station(np: String) -> void:
 		p = np
 		it_off = 3
 		list_off = 0.0
+		list_end = 0.0
 		_pane_init(np)
 		rc_off = 3
 		mark("snap")
@@ -1153,6 +1162,7 @@ func _rlist(vs: Vector2, col: Color, rows: Array, sel: int) -> void:
 		draw_set_transform_matrix(m)
 		txt(self, f, 14, 10, s, 12, Color(0.667, 0.667, 0.667, e["a"]), 18.0)
 		draw_set_transform(Vector2.ZERO)
+		list_end = 0.0
 		return
 	for i in rows.size():
 		var o: Dictionary = rows[i]
@@ -1192,6 +1202,7 @@ func _rlist(vs: Vector2, col: Color, rows: Array, sel: int) -> void:
 			_row_pick(i2)
 			sfx("ui_move", 0.5)])
 		y += h + 6.0
+	list_end = y + list_off
 
 func _rc_gem(vs: Vector2, i: int) -> Vector2:
 	var y := 86.0 - list_off
@@ -1475,6 +1486,7 @@ func _dis(vs: Vector2, col: Color) -> void:
 		txt(self, bf, 0, 30, s, 18, Color(0.667, 0.667, 0.667, e["a"]), 22.0)
 		if bag.is_empty(): txt(self, bf, 0, 52, "던전에서 얻은 장비가 여기 쌓입니다.", 15, Color(0.667, 0.667, 0.667, e["a"]), 18.0)
 		draw_set_transform(Vector2.ZERO)
+	list_end = 146.0 + ceili(V.size() / 3.0) * 112.0
 	for k in V.size():
 		var bi: int = V[k]
 		if gone.has(bi): continue

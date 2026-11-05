@@ -112,6 +112,9 @@ func _key(k: int) -> void:
 func _wheel(d: int, _p: Vector2) -> void:
 	scroll = clampf(scroll + d * 44.0, 0.0, maxf(0.0, _list_h() - rows_ctl.size.y))
 
+func _drag(rel: Vector2, _p: Vector2) -> void:
+	scroll = clampf(scroll - rel.y, 0.0, maxf(0.0, _list_h() - rows_ctl.size.y))
+
 func _pick(i: int) -> void:
 	if i == sel or i < 0 or i >= L.size(): return
 	prev_sel = sel

@@ -718,9 +718,16 @@ func _emo(ab: Rect2) -> void:
 static func _xr(xf: Transform2D, r: Rect2) -> PackedVector2Array:
 	return PackedVector2Array([xf * r.position, xf * Vector2(r.end.x, r.position.y), xf * r.end, xf * Vector2(r.position.x, r.end.y)])
 
+var _drag_acc := 0.0
 func _drag(rel: Vector2, _p: Vector2) -> void:
 	if tab == "attr":
 		stat_scroll = clampf(stat_scroll - rel.y, 0.0, stat_max)
+		return
+	# 기록 rows step one line per 30 px dragged
+	_drag_acc -= rel.y
+	while absf(_drag_acc) >= 30.0:
+		mx.wheel(1 if _drag_acc > 0.0 else -1)
+		_drag_acc -= 30.0 * signf(_drag_acc)
 
 func _wheel(d: int, _p: Vector2) -> void:
 	if tab == "attr":
