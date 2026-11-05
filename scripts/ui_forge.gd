@@ -62,6 +62,8 @@ var hold := {}                 # shown values frozen until the strike lands: "rs
 var bran_hit := false          # the hammer pose is up
 var bran_back_t := -1.0
 var picking := false
+var pick_off := 0.0       # the gear pick's scroll
+var pick_end := 0.0
 var pick_closing := false
 var fr_got := ""               # 합성: the result label (…/[name])
 var fr_show := false
@@ -234,10 +236,16 @@ func _list_max() -> float:
 	return maxf(0.0, list_end - (get_viewport_rect().size.y - 70.0))
 
 func _wheel(d: int, _pos: Vector2) -> void:
+	if picking:
+		pick_off = clampf(pick_off + d * 40.0, 0.0, maxf(0.0, pick_end - get_viewport_rect().size.y + 20.0))
+		return
 	list_off = clampf(list_off + d * 40.0, 0.0, _list_max())
 
 ## a finger / held mouse drags the rune rows and the dismantle grid
 func _drag(rel: Vector2, _pos: Vector2) -> void:
+	if picking:
+		pick_off = clampf(pick_off - rel.y, 0.0, maxf(0.0, pick_end - get_viewport_rect().size.y + 20.0))
+		return
 	list_off = clampf(list_off - rel.y, 0.0, _list_max())
 
 func _pi() -> int:
@@ -534,6 +542,7 @@ func picking_open() -> void:
 	var it = cur()
 	gs = "rune" if p == "up" else ("rune" if it != null and R().has_rune_item(it) else "plain")
 	picking = true
+	pick_off = 0.0
 	pick_closing = false
 	mark("pick")
 	sfx("ui_ok", 0.5)
@@ -897,8 +906,19 @@ func _sil(tex: Texture2D, m: Transform2D, size: Vector2, a: float, bri := 1.0) -
 	draw_texture_rect(tex, Rect2(Vector2.ZERO, size), false, Color(bri, bri, bri, a))
 	draw_set_transform(Vector2.ZERO)
 
-## a diamond piece (.wpn / .item): gradient, 5 px white rim, 8 px shadow, bobbing 8 px (2.4 s)
-func _piece(c0: Vector2, s: float, g0: Color, g1: Color, a: float, drop_ms := 1e9) -> void:
+## the gear piece's sprite (as the bag shows it); null = none (the diamond / gem stays)
+func _icon(d, sl := "") -> Texture2D:
+	if d == null: return null
+	var ip: String = ICON.file_of(d, sl)
+	return tx(ip) if ip != "" and ResourceLoader.exists(ip) else null
+
+## the sprite with a grade glow behind, centred on c, sz across
+func _icon_at(tex: Texture2D, c0: Vector2, sz: float, g: Color, a: float) -> void:
+	draw_texture_rect(UI.glow(), Rect2(c0 - Vector2(sz, sz) * 0.68, Vector2(sz, sz) * 1.36), false, Color(g.lightened(0.3), 0.6 * a))
+	draw_texture_rect(tex, Rect2(c0 - Vector2(sz, sz) / 2.0, Vector2(sz, sz)), false, Color(1, 1, 1, a))
+
+## a diamond piece (.wpn / .item): gradient, 5 px white rim, 8 px shadow, bobbing 8 px (2.4 s); with tex, the gear's sprite instead
+func _piece(c0: Vector2, s: float, g0: Color, g1: Color, a: float, drop_ms := 1e9, tex: Texture2D = null, base := Transform2D.IDENTITY) -> void:
 	var u := fmod(t / 2400.0, 1.0)
 	var bob := -8.0 * (AE.ez("ease-in-out", u * 2.0) if u < 0.5 else 1.0 - AE.ez("ease-in-out", (u - 0.5) * 2.0))
 	var rot := 45.0
@@ -917,6 +937,12 @@ func _piece(c0: Vector2, s: float, g0: Color, g1: Color, a: float, drop_ms := 1e
 			var q := (kk - 0.7) / 0.3
 			dy = lerpf(6.0, 0.0, q)
 			sc = lerpf(1.1, 1.0, q)
+	if tex != null:
+		var mt := Transform2D(deg_to_rad(rot - 45.0), Vector2(sc, sc), 0.0, c0 + Vector2(0, dy))
+		draw_set_transform_matrix(base * mt)
+		_icon_at(tex, Vector2.ZERO, s * 1.25, g1, aa)
+		draw_set_transform_matrix(base)
+		return
 	var m := Transform2D(deg_to_rad(rot), Vector2(sc, sc), 0.0, c0 + Vector2(0, dy))
 	var hs := s / 2.0
 	var sq := func(r: float, o := Vector2.ZERO) -> PackedVector2Array:
@@ -944,7 +970,7 @@ func _up(vs: Vector2, col: Color) -> void:
 	var g := Color("#9aa3b5")
 	if it != null: g = RN.gcol(RN.RUNE[it["rune"]]["g"] if hr else it["g"])
 	draw_set_transform_matrix(m)
-	_piece(ac, aw * 0.4, Color.WHITE, g, e["a"], since("drop"))
+	_piece(ac, aw * 0.4, Color.WHITE, g, e["a"], since("drop"), _icon(it, slot), m)
 	var st := int(hold.get("rs", int(it.get("rs", 1)) if it != null else 1))
 	var lv := ("★%d" % st) if hr else ("—" if it != null else "")
 	var f := UI.anton(true)
@@ -1242,7 +1268,7 @@ func _eng(vs: Vector2, col: Color) -> void:
 	var qr := Rect2(cc - Vector2(W, W) / 2.0, Vector2(W, W)).grow(-W * 0.17)
 	_qd(qr, col, since("kick_ecirc"), a)
 	draw_set_transform_matrix(m)
-	_piece(cc, W * 0.28, Color("#d8dce6"), Color("#7d8597"), a)
+	_piece(cc, W * 0.28, Color("#d8dce6"), Color("#7d8597") if it == null else RN.gcol(it["g"]), a, 1e9, _icon(it, slot), m)
 	var bf := UI.bhs()
 	var nm: String = ("%s Lv %d" % [it["n"], int(it.get("lv", 0))]) if it != null else "장비 없음"
 	var nw := tw(bf, nm, 15) + 24.0
@@ -1492,7 +1518,7 @@ func _dis(vs: Vector2, col: Color) -> void:
 		if gone.has(bi): continue
 		var d: Dictionary = bag[bi]
 		var r := _dt_rect(vs, k)
-		if r.position.y > vs.y: continue
+		if r.position.y > vs.y or r.position.y < 128.0: continue
 		var sel := dis.has(bi)
 		var e := _it(k)
 		var dk := since("dsel%d" % bi)
@@ -1549,7 +1575,9 @@ func _tile(m: Transform2D, size: Vector2, d: Dictionary, sel: bool, col: Color, 
 			s += 12.0 / 0.707
 	for q in Geometry2D.intersect_polygons(shape, poly(Rect2(0, 0, size.x, 5), SQ, m)): draw_poly.call(q, Color(g, a))
 	draw_set_transform_matrix(m)
-	gem(self, Vector2(10 + 4 + 12, 10 + 4 + 12 + 3), 11.0, Color(g, a))
+	var dic := _icon(d)
+	if dic != null: _icon_at(dic, Vector2(10 + 4 + 12, 10 + 4 + 12 + 3), 34.0, g, a)
+	else: gem(self, Vector2(10 + 4 + 12, 10 + 4 + 12 + 3), 11.0, Color(g, a))
 	var hr: bool = R().has_rune_item(d)
 	var u := ("★%d" % int(d.get("rs", 1))) if hr else (("Lv %d" % int(d["lv"])) if int(d.get("lv", 0)) > 0 else "")
 	if u != "": txt(self, UI.anton(true), size.x - 8.0 - tw(UI.anton(true), u, 20), 8, u, 20, Color(1, 1, 1, a), 20.0)
@@ -1646,7 +1674,7 @@ func _pick(vs: Vector2, col: Color) -> void:
 			sfx("ui_move", 0.5)])
 		x += w + 6.0
 	var V := L.filter(func(q): return (gs == "rune") == R().has_rune_item(q[2]))
-	var y := 109.0
+	var y := 109.0 - pick_off
 	var rw := (W - 18.0) * 0.88
 	if V.is_empty():
 		var s: String = "룬을 박은 장비가 없습니다." if gs == "rune" else "모든 장비에 룬이 박혀 있습니다."
@@ -1661,7 +1689,9 @@ func _pick(vs: Vector2, col: Color) -> void:
 		var e := UI.bez(0.2, 1.4, 0.4, 1.0, clampf((rt - mini(i, 8) * 35.0) / 380.0, 0.0, 1.0))
 		var ea := clampf((rt - mini(i, 8) * 35.0) / 380.0, 0.0, 1.0)
 		var h := 44.0
-		if y + h > vs.y: break
+		if y > vs.y or y + h < 100.0:
+			y += h + 4.0
+			continue
 		var rx := lx + 18.0 + (16.0 if on else 0.0) - 60.0 * (1.0 - e)
 		var w := rw - (16.0 if on else 0.0)
 		var gcl := RN.gcol(RN.RUNE[it["rune"]]["g"] if hr else it["g"])
@@ -1670,7 +1700,9 @@ func _pick(vs: Vector2, col: Color) -> void:
 		draw_colored_polygon(pts, Color(1, 1, 1, ea) if on else Color(0.078, 0.078, 0.078, ea))
 		for q2 in Geometry2D.intersect_polygons(pts, poly(Rect2(0, 0, 5, h), SQ, m)): draw_colored_polygon(q2, Color(gcl, ea))
 		draw_set_transform_matrix(m)
-		gem(self, Vector2(5 + 10 + 11, 4 + 10), 7.0, Color(RN.gcol(it["g"]), ea))
+		var pic := _icon(it, q[1])
+		if pic != null: _icon_at(pic, Vector2(26, 22), 32.0, RN.gcol(it["g"]), ea)
+		else: gem(self, Vector2(5 + 10 + 11, 4 + 10), 7.0, Color(RN.gcol(it["g"]), ea))
 		var fc := Color(0, 0, 0, ea) if on else Color(1, 1, 1, ea)
 		var nx := 42.0 + txt(self, bf, 42, 4, it["n"], 15, fc, 17.25)
 		txt(self, bf, nx + 6.0, 7, RN.gname(it["g"]), 10, Color(RN.gcol(it["g"]), ea), 11.5)
@@ -1693,6 +1725,7 @@ func _pick(vs: Vector2, col: Color) -> void:
 				jolt()
 				say("[%s]이요? 좋지요. 올려 보지요." % R().gear[c][slot]["n"]))])
 		y += h + 4.0
+	pick_end = y + pick_off
 
 func pick_row(i: int) -> void:
 	# script hook: tap row i of the gear pick
