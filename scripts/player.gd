@@ -862,7 +862,7 @@ func step(dt: float) -> void:
 	# variable jump height (owner 2026-11-05): letting go of jump early doesn't snap the rise off any more, it brakes it
 	# (heavier gravity while rising), so a tap still gets about half the height; only the first jump (the double jump
 	# always goes all the way), and an attack pressed right after takes over with the height it has (no cut in the gap)
-	jump_cut = not keys["jump"] and not on and vy < 0.0 and anim in ["jump", "runjump"]
+	jump_cut = not keys["jump"] and not on and vy < 0.0 and anim in ["jump", "runjump"] and not mantled
 
 	var move := move_axis()
 	var a := anim
@@ -1353,6 +1353,24 @@ func neutral_dodge() -> bool:
 	dash_cd = 200.0
 	return true
 
+## auto-vault (Dead Cells-like, owner 2026-11-05): in the air, pushing into a rock's side with her feet no more than
+## MANTLE px under its top, she hops up over the lip (once per jump) (PLACEHOLDER reach)
+const MANTLE := 52.0
+const LEDGE_ASSIST := 28.0
+var mantled := false
+func _mantle(top: float, side: int) -> void:
+	if on or mantled or move_axis() != side or attacking() or a_busy_for_mantle(): return
+	var dy := position.y - top
+	if dy <= 0.0 or dy > MANTLE: return
+	mantled = true
+	vy = -sqrt(2.0 * GRAV * (dy + 14.0))
+	vx = side * 0.12
+	set_anim("jump", 3)
+	arena.sfx("jump", 0.5)
+
+func a_busy_for_mantle() -> bool:
+	return anim in ["hurt", "death", "dive", "guard", "parry", "tp_in", "dig_out", "dig_in", "mark", "amark"]
+
 ## what is under her feet as an x-span, or null
 func support_span(x: float, y: float) -> Variant:
 	if arena.level != null and arena.level.has_method("land"):
@@ -1414,8 +1432,10 @@ func physics(dt: float, a: String) -> void:
 				position.y = so.top
 			elif prev_x <= so.x - 12.0:
 				position.x = so.x - 12.0
+				_mantle(so.top, 1)
 			elif prev_x >= so.x + so.w + 12.0:
 				position.x = so.x + so.w + 12.0
+				_mantle(so.top, -1)
 			elif not (vy > 0.0 and position.y - so.top <= 40.0):
 				position.x = so.x - 12.0 if prev_x < so.x + so.w / 2.0 else so.x + so.w + 12.0
 			else:
@@ -1493,10 +1513,21 @@ func physics(dt: float, a: String) -> void:
 				if prev_y <= pl.y + 1.0 and position.y >= pl.y and position.x > pl.x - 2.0 and position.x < pl.x + pl.w + 2.0:
 					position.y = pl.y
 					landed = true
+	# ledge assist (Dead Cells-like, owner 2026-11-05): a jump that tops out with her feet just under a ledge's lip
+	# pulls her up onto it (not while holding down, not while dropping through)
+	if not landed and not on and vy > -0.12 and drop_t <= 0.0 and not keys["down"] and a != "dive":
+		for pl in arena.platforms:
+			if position.y > pl.y and position.y - pl.y <= LEDGE_ASSIST and position.x > pl.x + 4.0 and position.x < pl.x + pl.w - 4.0:
+				position.y = pl.y
+				vy = 0.0
+				landed = true
+				arena.dust(position, 0, false)
+				break
 	if landed and not on:
 		on = true
 		vy = 0.0
 		air = 0
+		mantled = false
 		if a in ["jump", "runjump", "double_jump"]:
 			land_anim()
 			if not land_cued: land_sfx()

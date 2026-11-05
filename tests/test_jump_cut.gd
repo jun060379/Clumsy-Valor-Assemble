@@ -69,5 +69,24 @@ func _initialize() -> void:
 	Input.action_release("right")
 	await frames(2)
 	ok(P.anim == "double_jump", "the double jump is still there after an air attack (%s)" % P.anim)
+	# auto-vault: a short hop into the rock in the start room still gets her on top
+	await frames(40)
+	var so = null
+	for q in arena.solids: so = q
+	if so != null:
+		P.position = Vector2(so.x - 40.0, arena.ground_y)
+		P.vx = 0.0
+		await frames(20)
+		Input.action_press("right")
+		await frames(4)
+		Input.action_press("jump")
+		await frames(2)
+		Input.action_release("jump")
+		await frames(30)
+		Input.action_release("right")
+		for i in 200:
+			if P.on: break
+			await process_frame
+		ok(absf(P.position.y - so.top) < 2.0, "a short hop into a rock vaults up on top (y %.0f top %.0f)" % [P.position.y, so.top])
 	print("DONE fails=%d" % fails)
 	quit(1 if fails > 0 else 0)
