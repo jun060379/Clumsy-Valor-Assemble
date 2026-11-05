@@ -288,6 +288,11 @@ func throw_bomb(o: Vector2, d: int, tx := NAN) -> void:
 	bomb_fx.append({"x": o.x, "y": o.y, "vx": d * v, "vy": -0.3, "m": null, "ox": 0.0, "oy": 0.0, "on_floor": false, "t": 0.0, "fuse": FUSE * nm("kFuse"), "done": false})
 	arena.sfx("swing", 0.5)
 
+## the glue catching, baked (tools/pixelfx_fx/kenin-stick.js): 16 frames of 56x48, pivot 28,24
+const K_STICK := preload("res://assets/fx/kenin/kenin-stick.png")
+func _stick_fx(x: float, y: float) -> void:
+	arena.pfx._push({"k": "bk", "tex": K_STICK, "x": x, "y": y, "d": 1.0, "n": 16, "fw": 56.0, "fh": 48.0, "cols": 4, "px": 28.0, "py": 24.0, "sc": PFX.S})
+
 func _bomb_on(m):
 	for b in bomb_fx:
 		if not b["done"] and b["m"] == m: return b
@@ -316,12 +321,14 @@ func _step_bombs(dt: float) -> void:
 					b["ox"] = clampf(b["x"] - e.position.x, -14.0, 14.0)
 					b["oy"] = clampf(b["y"] - e.position.y, -80.0, -30.0)
 					arena.sfx("ui_move", 0.6, {"st": -7.0})        # the squelch of the glue (PLACEHOLDER)
+					_stick_fx(b["x"], b["y"])
 					if nv("kInstant") > 0.0: b["fuse"] = 0.0        # 접촉 신관
 					break
 			var fy := _floor(b["x"])
 			if b["m"] == null and b["y"] >= fy:
-				b["y"] = fy - 6.0
+				b["y"] = fy - 10.0
 				b["on_floor"] = true
+				_stick_fx(b["x"], fy - 2.0)
 				b["vx"] = 0.0
 				b["vy"] = 0.0
 			b["x"] = clampf(b["x"], 20.0, arena.world_w - 20.0)
@@ -635,6 +642,8 @@ const OLV_L := Color("#e2f5b8")
 const BRASS := Color("#f1c35a")
 const SOOT := Color("#26231f")
 const K_BOOM := preload("res://assets/fx/kenin/kenin-boom.png")
+const K_BOMB := preload("res://assets/fx/kenin/kenin-bomb.png")
+const K_BOMB_HOT := preload("res://assets/fx/kenin/kenin-bomb-hot.png")
 const MARK_COL := [Color("#9cc14a"), Color("#c9d64a"), Color("#f1c35a"), Color("#f0963a"), Color("#ff5a3a")]
 
 func draw(g: CanvasItem) -> void:
@@ -677,13 +686,13 @@ func draw(g: CanvasItem) -> void:
 			p.line(dl.x, dl.y, 0, 0, BRASS)
 			p.px(0, 0, Color.WHITE)
 			p.px(dl.x * 0.5, dl.y * 0.5, OLV_L)
+	# the bombs, baked (tools/pixelfx_fx/kenin-bomb.js, owner 2026-11-05): a 20-frame loop of 40x40, pivot 20,24; the
+	# last 0.9 s the hot sheet (red lamp racing, twice the sparks)
 	for b in bomb_fx:
-		var p := PFX.PX.new(g, b["x"], b["y"])
-		p.disc(0, 0, 3.4, SOOT)
-		p.px(-1, -1, Color("#5b544a"))
-		p.rect(-1, -5, 2, 1, Color("#6b6156"))
-		var blink: bool = b["fuse"] < 900.0 and int(b["fuse"] / 90.0) % 2 == 0 or b["fuse"] >= 900.0 and int(b["fuse"] / 220.0) % 2 == 0
-		p.px(1, -6, Color("#ff5a3a") if blink else Color("#ffd08a"))
+		var hot: bool = b["fuse"] < 900.0
+		var bi := int((t + float(b["t"])) / 20.0) % 20
+		var bs: float = PFX.S
+		g.draw_texture_rect_region(K_BOMB_HOT if hot else K_BOMB, Rect2(b["x"] - 20.0 * bs, b["y"] - 24.0 * bs, 40.0 * bs, 40.0 * bs), Rect2((bi % 5) * 40, (bi / 5) * 40, 40, 40))
 	# stamps (owner 2026-11-04: many hid the foe): one mark per foe, beside its head, with the count — it pops when a stamp
 	# lands, throbs faster and turns hotter the more it wears
 	for k in marks:
