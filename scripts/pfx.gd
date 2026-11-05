@@ -603,10 +603,10 @@ func _draw_combat(g: CanvasItem) -> void:
 		if tg != null: reticle(g, tg.position.x, tg.position.y - 50.0, P.t)
 	if P != null: _halo(g, P)
 
-## 빛의 가호: the library halo (pixelfx holy/halo, gold, 60 frames of 56x80, pivot 28,70) over the one in control while
+## 빛의 가호: the library halo (tools/pixelfx_fx/luce-halo.js, the library halo less its head light and dust, gold, 60 frames of 56x80, pivot 28,70) over the one in control while
 ## it lasts; blinks over its last 3 s, flares when a bench bolt goes out (P.halo_glint)
 const L_HALO := preload("res://assets/fx/luce/luce-halo.png")
-const HALO_Y := 34.0         # lift above the sheet's own head height, x CSCALE, world px PLACEHOLDER
+const HALO_Y := 44.0         # lift above the sheet's own head height, x CSCALE, world px PLACEHOLDER
 func _halo(g: CanvasItem, P) -> void:
 	if P.l_bless_t <= 0.0 or P.anim == "death": return
 	if P.l_bless_t < 3000.0 and int(P.l_bless_t / 110.0) % 2 == 0: return

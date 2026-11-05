@@ -471,6 +471,8 @@ func _step_kenin(_dt: float, P, S: float) -> void:
 		if not K.chaining() and sh["chain_end"] < 0.0: sh["chain_end"] = t
 		if (sh["chain_end"] >= 0.0 and t - sh["chain_end"] > 450.0) or tf > 6000.0: end()
 
+const L_TICKS := 6           # the ult beam's hits (total stays BAL luce.ult) PLACEHOLDER
+const L_TICK_MS := 70.0
 func _step_luce(dt: float, P, S: float) -> void:
 	var D: int = P.dir
 	var hx: float = P.position.x + D * 18.0 * S
@@ -478,7 +480,7 @@ func _step_luce(dt: float, P, S: float) -> void:
 	var fx0: float = P.position.x + D * 52.0 * S
 	var fy0: float = P.position.y - 78.0 * S
 	if once("st"):
-		star = {"k": "star", "x": hx, "y": hy, "s": 0.0, "t": 0.0, "life": 99999.0, "spin": 0.0}
+		star = {"k": "lstar", "x": hx, "y": hy, "s": 0.0, "t": 0.0, "life": 99999.0, "spin": 0.0}
 		fx.append(star)
 	star["spin"] += dt * 0.006
 	if t < 520.0:
@@ -499,7 +501,7 @@ func _step_luce(dt: float, P, S: float) -> void:
 		star["y"] = hy + (fy0 - hy) * e
 		star["s"] = 1.0 - 0.35 * e
 		if u > 0.85 and once("grab"):
-			fx.append({"k": "burst", "x": star["x"], "y": star["y"], "r": 70.0, "t": 0.0, "life": 300.0})
+			fx.append({"k": "limp", "x": star["x"], "y": star["y"], "dir": D, "sc": 1.0, "t": 0.0, "life": 500.0})
 			arena.sfx("guard", 0.8)
 			arena.shake(4, D)
 	elif t < 920.0:
@@ -517,20 +519,29 @@ func _step_luce(dt: float, P, S: float) -> void:
 			arena.post_wave(Vector2(fx0, fy0), 1.8, 700.0, 0.55)
 			arena.post_ca(0.03)
 			var vs: Vector2 = get_viewport_rect().size
-			fx.append({"k": "beam", "x": fx0, "y": fy0, "dir": D, "len": maxf(700.0, vs.x), "w": 96.0, "t": 0.0, "life": 820.0})
-			fx.append({"k": "burst", "x": fx0, "y": fy0, "r": 160.0, "t": 0.0, "life": 520.0})
-			for e in _foes():
-				var ey: float = e.position.y - 50.0
-				if (e.position.x - P.position.x) * D > -30.0 and absf(ey - fy0) < 170.0: hit(e, BAL.p("luce", "ult"))
+			fx.append({"k": "lbeam", "x": fx0 - D * 6.0, "y": fy0, "dir": D, "len": maxf(960.0, vs.x), "t": 0.0, "life": 860.0})
+			fx.append({"k": "limp", "x": fx0, "y": fy0, "dir": D, "sc": 2.4, "t": 0.0, "life": 500.0})
 			for i in 14:
 				fx.append({"k": "twinkle", "x": fx0 + D * randf() * 500.0, "y": fy0 + (randf() - 0.5) * 120.0, "vy": -0.02 - randf() * 0.05, "t": 0.0, "life": 500.0 + randf() * 500.0})
 			arena.sfx("ult", 1.0)              # the impact
 			arena.sfx("slam", 1.0)
-			arena.sfx("heavy", 0.8)
 			arena.flash = 0.55
 			arena.shake(18, D)
-			arena.hitstop = 120.0
+			arena.hitstop = 140.0
 			arena.impact("ult", Vector2(fx0, fy0), D)   # 타격감
+		# the beam grinds through in L_TICKS hits (same total), the last one the hardest
+		var tk := int((t - 920.0) / L_TICK_MS)
+		if tk < L_TICKS and once("tick%d" % tk):
+			var last := tk == L_TICKS - 1
+			for e in _foes():
+				var ey: float = e.position.y - 50.0
+				if (e.position.x - P.position.x) * D > -30.0 and absf(ey - fy0) < 170.0: hit(e, BAL.p("luce", "ult") / float(L_TICKS))
+			if tk > 0: arena.shake(14 if last else 5, D)
+			if last:
+				arena.sfx("heavy", 0.9)
+				arena.hitstop = 90.0
+				arena.flash = 0.25
+			elif tk > 0: arena.sfx("hit", 0.35)
 		if t >= 1750.0:
 			star["life"] = star["t"]
 			end()
@@ -568,6 +579,7 @@ func _draw() -> void:
 		var k: float = f["t"] / f["life"]
 		match f["k"]:
 			"hollow": _hollow(f)
+			"lstar", "lbeam", "limp": _luce_fx(f)
 			"tear":
 				var u := k
 				var op := minf(1.0, u / 0.12) * (1.0 - maxf(0.0, (u - 0.5) / 0.5))
@@ -607,6 +619,33 @@ func _hollow(f: Dictionary) -> void:
 	var i := clampi(int(ts * 30.0), 0, 51)
 	var sc: float = 2.0 * f["r"] / 37.0
 	draw_texture_rect_region(HOLLOW, Rect2(roundf(f["x"]) - 68.0 * sc, roundf(f["y"]) - 68.0 * sc, 136.0 * sc, 136.0 * sc), Rect2((i % 8) * 136, (i / 8) * 136, 136, 136))
+
+## Luce's ult, baked (tools/pixelfx_fx/luce-ult-*.js, owner 2026-11-05), 50 fps, 2 world px per art px:
+## the star (24-frame loop, 128x128, centre), the punch impact (26 frames 240x200, pivot 90,100, faces right),
+## the beam (44 frames 480x128, pivot 8,64, stretched along to "len")
+const LU_STAR := preload("res://assets/fx/luce/luce-ult-star.png")
+const LU_IMP := preload("res://assets/fx/luce/luce-ult-impact.png")
+const LU_BEAM := preload("res://assets/fx/luce/luce-ult-beam.png")
+func _luce_fx(f: Dictionary) -> void:
+	var i := int(f["t"] / 20.0)
+	match f["k"]:
+		"lstar":
+			if f["s"] <= 0.0: return
+			var sc: float = 2.0 * f["s"]
+			var j := int(f["t"] / (12.0 if t > 760.0 else 20.0)) % 24       # it spins up once she has it in her fist
+			draw_texture_rect_region(LU_STAR, Rect2(f["x"] - 64.0 * sc, f["y"] - 64.0 * sc, 128.0 * sc, 128.0 * sc), Rect2((j % 5) * 128, (j / 5) * 128, 128, 128))
+		"limp":
+			if i >= 26: return
+			var sc2: float = f["sc"]
+			draw_set_transform(Vector2(f["x"], f["y"]), 0.0, Vector2(sc2 * f["dir"], sc2))
+			draw_texture_rect_region(LU_IMP, Rect2(-90, -100, 240, 200), Rect2((i % 5) * 240, (i / 5) * 200, 240, 200))
+			draw_set_transform_matrix(Transform2D.IDENTITY)
+		"lbeam":
+			if i >= 44: return
+			var sx: float = f["len"] / 470.0
+			draw_set_transform(Vector2(f["x"], f["y"]), 0.0, Vector2(sx * f["dir"], 2.0))
+			draw_texture_rect_region(LU_BEAM, Rect2(-8, -64, 480, 128), Rect2((i % 4) * 480, (i / 4) * 128, 480, 128))
+			draw_set_transform_matrix(Transform2D.IDENTITY)
 
 static func UI_bk(u: float) -> float:
 	var x := clampf(u, 0.0, 1.0)
