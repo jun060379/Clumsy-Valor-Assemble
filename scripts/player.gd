@@ -2318,6 +2318,17 @@ func tag_in_at(tg, keep_x: float) -> void:
 			position.y = arena.ground_y
 			on = true
 			vy = 0.0
+	# (owner 2026-11-05) Aida answering a QTE with her empowered strike's condition met (a 무방비 foe in reach): she
+	# comes straight in with 처형 instead of the tag-in blow
+	if who == "aida" and not air_tag:
+		var et = aida_emp_target()
+		if et != null:
+			position.x = tag_to
+			tag_hit = true
+			tag_timer = 0.0
+			ST.tag_react(arena, et, true)        # the QTE's status reactions still go off
+			aida_exec(et)
+			return
 	set_anim("air_combo" if air_tag else "tag_in")
 	tag_hit = false
 	tag_timer = 460.0            # never let a tag be eaten
