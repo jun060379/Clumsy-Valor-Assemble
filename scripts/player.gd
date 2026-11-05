@@ -866,6 +866,30 @@ func step(dt: float) -> void:
 
 	var move := move_axis()
 	var a := anim
+	if regrab_t > 0.0: regrab_t -= dt
+	if a == "climb":
+		# the ledge climb plays out in place (she already stands on the lip); a hit still interrupts it
+		vx = 0.0
+		vy = 0.0
+		advance(dt, 0)
+		queue_redraw()
+		return
+	if a == "hang":
+		# hanging by one hand, swaying: up / jump / toward the ledge climbs, down / away lets go
+		vx = 0.0
+		vy = 0.0
+		advance(dt, 0)
+		var mvh := move_axis()
+		if want("jump") or keys["up"] or (mvh == ledge_side and ft > 160.0 and f > 0):
+			take("jump")
+			_climb_start(ledge_at.y, ledge_at.x, ledge_side, 0)
+		elif keys["down"] or mvh == -ledge_side:
+			regrab_t = 300.0
+			position.x -= ledge_side * 6.0
+			vy = 0.05
+			set_anim("jump", 4)
+		queue_redraw()
+		return
 
 	# ---- state machine ----
 	if a == "hurt" and bounce_t > 0.0:
@@ -1358,10 +1382,93 @@ func neutral_dodge() -> bool:
 const MANTLE := 52.0
 const LEDGE_ASSIST := 46.0
 var mantled := false
-func _mantle(top: float, side: int) -> void:
+## ledge hang and climb (owner 2026-11-05, generated with 2dimg2motion, no weapons drawn): one strip of 14 frames of
+## 448x512 per costume — 0-5 the one-hand hang loop, 6-13 the two-arm climb. In every frame the ledge corner is the
+## canvas point (230, 300); per climb frame, how far her feet hang under the lip and her body's centre (canvas px)
+const LEDGE := {"estelle_base": preload("res://assets/chars/estelle_ledge.png")}
+const CLIMB_FEET := [184, 194, 146, 98, 71, 0, 0, 0]
+const CLIMB_CX := [190, 216, 210, 224, 230, 329, 306, 309]
+const HANG_FEET := 184.0
+const HANG_REACH := [36.0, 150.0]         # world px her feet may be under a lip for her to catch it (PLACEHOLDER)
+var ledge_at := Vector2.ZERO              # the corner she holds / climbs over (world)
+var ledge_side := 1
+var regrab_t := 0.0
+
+func has_ledge_art() -> bool:
+	return LEDGE.has(SK.worn(who))
+
+func _lk() -> float:
+	return 0.5 * CH.SCALE[who]
+
+## catch the lip and hang (the corner at lip_x, `top`; she faces it from `side`)
+func _hang_start(top: float, lip_x: float, side: int) -> bool:
+	if not has_ledge_art() or regrab_t > 0.0: return false
+	var k := _lk()
+	if top + HANG_FEET * k > arena.ground_y - 4.0: return false          # a low wall: no room to hang, she climbs it
+	ledge_at = Vector2(lip_x, top)
+	ledge_side = side
+	dir = side
+	position = Vector2(lip_x - side * (230.0 - 190.0) * k, top + HANG_FEET * k)
+	vx = 0.0
+	vy = 0.0
+	on = false
+	air = 0
+	set_anim("hang", 0)
+	arena.sfx("land", 0.3)
+	return true
+
+## climb up onto `top` (lip_x = the corner, or NAN in the middle of a ledge): from the hang, or straight from a jump that
+## came up a little short (it starts on the frame matching how far below she is); false without the art
+func _climb_start(top: float, lip_x: float, side: int, from := -1) -> bool:
+	if not has_ledge_art(): return false
+	var k := _lk()
+	var st := from
+	if st < 0:
+		var dyc: float = (position.y - top) / k
+		st = 4
+		for i in 5:
+			if CLIMB_FEET[i] <= dyc + 15.0:
+				st = i
+				break
+	var lx: float = lip_x if not is_nan(lip_x) else position.x - side * (CLIMB_CX[st] - 230.0) * k
+	ledge_at = Vector2(lx, top)
+	ledge_side = side
+	dir = side
+	position = Vector2(lx + side * (309.0 - 230.0) * k, top)      # where the climb leaves her standing
+	vx = 0.0
+	vy = 0.0
+	on = true
+	air = 0
+	mantled = false
+	set_anim("climb", st)
+	arena.sfx("jump", 0.4)
+	return true
+
+## the hang / climb frames, drawn about the corner (not about her feet); the hang sways a little about her hand
+func _draw_ledge(c: String, an: String, fr: int, at: Vector2, d: int, col: Color, ci: CanvasItem) -> bool:
+	var tex = LEDGE.get(SK.worn(c))
+	if tex == null: return false
+	var k: float = 0.5 * CH.SCALE[c]
+	var corner: Vector2 = at + (ledge_at - position)
+	var i := (fr % 6) if an == "hang" else 6 + mini(fr, 7)
+	var rot := 0.0
+	if an == "hang": rot = sin(t / 1000.0 * TAU / 1.6) * 0.06 * ledge_side
+	ci.draw_set_transform_matrix(Transform2D(0.0, Vector2(d, 1), 0.0, corner) * Transform2D(rot, Vector2(6.0 * k, 0)) * Transform2D(0.0, Vector2(-6.0 * k, 0)))
+	ci.draw_texture_rect_region(tex, Rect2(-230.0 * k, -300.0 * k, 448.0 * k, 512.0 * k), Rect2(i * 448, 0, 448, 512), col)
+	ci.draw_set_transform(Vector2.ZERO)
+	return true
+
+func _mantle(top: float, side: int, lip_x: float) -> void:
 	if on or mantled or move_axis() != side or attacking() or a_busy_for_mantle(): return
 	var dy := position.y - top
-	if dy <= 0.0 or dy > MANTLE: return
+	if dy <= 0.0: return
+	if has_ledge_art():
+		if dy <= HANG_REACH[0] and _climb_start(top, lip_x, side): return
+		if dy <= HANG_REACH[1] and vy > -0.25:
+			if _hang_start(top, lip_x, side): return
+			_climb_start(top, lip_x, side)
+		return
+	if dy > MANTLE: return
 	mantled = true
 	vy = -sqrt(2.0 * GRAV * (dy + 14.0))
 	vx = side * 0.12
@@ -1433,10 +1540,10 @@ func physics(dt: float, a: String) -> void:
 				position.y = so.top
 			elif prev_x <= so.x - 12.0:
 				position.x = so.x - 12.0
-				_mantle(so.top, 1)
+				_mantle(so.top, 1, so.x)
 			elif prev_x >= so.x + so.w + 12.0:
 				position.x = so.x + so.w + 12.0
-				_mantle(so.top, -1)
+				_mantle(so.top, -1, so.x + so.w)
 			elif not (vy > 0.0 and position.y - so.top <= 40.0):
 				position.x = so.x - 12.0 if prev_x < so.x + so.w / 2.0 else so.x + so.w + 12.0
 			else:
@@ -1517,6 +1624,18 @@ func physics(dt: float, a: String) -> void:
 	# ledge assist (Dead Cells-like, owner 2026-11-05): coming up under a ledge, if the jump would top out with her feet
 	# a little short of its lip, it gets a smooth lift that carries her just over it (once per jump; not holding down,
 	# not dropping through) — no snap
+	# catching a ledge's end from beside it (it has no side to push into): falling past its corner, pushing toward it
+	if not landed and not on and has_ledge_art() and regrab_t <= 0.0 and vy > -0.25 and drop_t <= 0.0 and not keys["down"] and not attacking() and not (a in ["dive", "hurt", "death"]):
+		var mvg := move_axis()
+		for pl in arena.platforms:
+			var dyg: float = position.y - pl.y
+			if dyg < HANG_REACH[0] or dyg > HANG_REACH[1]: continue
+			if mvg == 1 and position.x > pl.x - 30.0 and position.x < pl.x - 2.0:
+				if _hang_start(pl.y, pl.x, 1):
+					return
+			elif mvg == -1 and position.x > pl.x + pl.w + 2.0 and position.x < pl.x + pl.w + 30.0:
+				if _hang_start(pl.y, pl.x + pl.w, -1):
+					return
 	if not landed and not on and not mantled and drop_t <= 0.0 and not keys["down"] and not (a in ["dive", "hurt", "death"]):
 		for pl in arena.platforms:
 			var dy: float = position.y - pl.y
@@ -1524,6 +1643,9 @@ func physics(dt: float, a: String) -> void:
 			var reach: float = vy * vy / (2.0 * GRAV) if vy < 0.0 else 0.0
 			var short: float = dy - reach
 			if short > 0.0 and short <= LEDGE_ASSIST and (vy > -0.3 or dy < 60.0):
+				if not attacking() and _climb_start(pl.y, NAN, dir):
+					landed = true
+					break
 				mantled = true
 				vy = -sqrt(2.0 * GRAV * (dy + 12.0))
 				if not attacking() and anim in ["jump", "runjump"]:
@@ -1666,6 +1788,11 @@ func advance(dt: float, move: int) -> void:
 				set_anim("idle")
 			elif n == "dash":
 				set_anim("run" if move == dir else "idle")
+			elif n == "climb":
+				on = true
+				set_anim("idle")
+			elif n == "hang":
+				f = 0
 			elif n == "teeter":
 				set_anim("idle")
 			elif n == "teeterL":
@@ -2637,6 +2764,9 @@ func _rift_clean() -> void:
 ## `rim`: the body takes the directional rim of nearby lights
 func draw_frame(c: String, an: String, fr: int, at: Vector2, d: int, col: Color, variant := "", ci: CanvasItem = null, cx := NAN, keep := 0, sk := "", breath := -1.0, rim := false) -> void:
 	if ci == null: ci = self
+	if an == "climb" or an == "hang":
+		if not _draw_ledge(c, an, fr, at, d, col, ci): draw_frame(c, "double_jump", mini(fr, 5), at, d, col, variant, ci)
+		return
 	var rf: Array = SK.resolve(c, an, fr, variant)        # the worn costume's own animations first (skins.gd)
 	var row: int = rf[0]
 	var sheet: Texture2D = SK.sheet_row(c, row)            # its row, or the original art's row it doesn't draw yet
