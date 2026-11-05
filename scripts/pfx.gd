@@ -22,6 +22,9 @@ const AIDA_SLAM := preload("res://assets/fx/aida_rewind_slam.png")
 const SH_NEG := preload("res://shaders/pfx_negmask.gdshader")
 const AIDA_GATE := preload("res://assets/fx/aida_gate.png")
 const AIDA_GATE_M := preload("res://assets/fx/aida_gate_mask.png")
+## the dive landing, baked (tools/pixelfx_fx/aida-dive-land.js): 37 frames of 200x70 at 50 fps, pivot (100, 46)
+const AIDA_DIVE := preload("res://assets/fx/aida_dive.png")
+const AIDA_DIVE_M := preload("res://assets/fx/aida_dive_mask.png")
 const ASL := {"-100,30": "a1", "205,-12": "a2", "10,-190": "ah", "170,10": "ka", "60,-110": "air2", "-120,70": "air3"}
 var asl_tex := {}
 func _asl(k: String) -> Array:
@@ -344,6 +347,14 @@ func dive_start(P) -> void:
 	_push({"k": "dive", "ch": P.who, "C": _pal(P.who), "x": P.position.x, "y0": P.position.y - 80.0 * cs, "y1": P.position.y - 30.0 * cs})
 
 func slam(x: float, y: float, ch: String, up := false) -> void:
+	if ch == "aida" and not up:
+		_push({"k": "dland", "tex": AIDA_DIVE, "mask": AIDA_DIVE_M, "x": x, "y": y})
+		dust(x + 14.0, y, 1, true)
+		dust(x - 14.0, y, -1, true)
+		if arena != null:
+			arena.air_push(x, y - 20.0, 1.0, 300.0, 0.5)
+			arena.air_push(x, y - 20.0, -1.0, 300.0, 0.5)
+		return
 	_push({"k": "slam", "ch": ch, "C": _pal(ch), "x": x, "y": y, "up": up})
 	dust(x + 14.0, y, 1, true)
 	dust(x - 14.0, y, -1, true)
@@ -445,6 +456,7 @@ func _draw_cpu() -> void:
 			"slam": alive = _slam(g, e)
 			"sheet": alive = _sheet(g, e)
 			"asl": alive = _asl_draw(g, e)
+			"dland": alive = _dland(g, e)
 			"chg": alive = _charge(g, e)
 			"gate": alive = _gate_b(g, e)
 			"pil": alive = _pillar(g, e)
@@ -1100,6 +1112,13 @@ func _baked(g: CanvasItem, e: Dictionary, i: int, fw: float, fh: float, cols: in
 		m.set_shader_parameter("flip", d)
 	var ts := mt.get_size()
 	m.set_shader_parameter("region", Vector4(c * fw / ts.x, r * fh / ts.y, fw / ts.x, fh / ts.y))
+
+## Aida's dive landing, baked
+func _dland(g: CanvasItem, e: Dictionary) -> bool:
+	var i := int(e["t"] / 1000.0 * 50.0)
+	if i >= 37: return false
+	_baked(g, e, i, 200.0, 70.0, 4, 100.0, 46.0, S, 1.0)
+	return true
 
 ## Aida's baked swing tear, flipped to her facing
 func _asl_draw(g: CanvasItem, e: Dictionary) -> bool:
