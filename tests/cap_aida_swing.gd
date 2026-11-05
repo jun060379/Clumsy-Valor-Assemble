@@ -43,7 +43,7 @@ func _initialize() -> void:
 	await frames(20)
 	var a = gob(P.position.x + 140.0)
 	await frames(10)
-	for sw in 3:
+	for sw in 4:
 		Input.action_press("attack")
 		await frames(2)
 		Input.action_release("attack")

@@ -25,6 +25,8 @@ const AIDA_GATE_M := preload("res://assets/fx/aida_gate_mask.png")
 ## the dive landing, baked (tools/pixelfx_fx/aida-dive-land.js): 37 frames of 200x70 at 50 fps, pivot (100, 46)
 const AIDA_DIVE := preload("res://assets/fx/aida_dive.png")
 const AIDA_DIVE_M := preload("res://assets/fx/aida_dive_mask.png")
+## the thrust, baked (tools/pixelfx_fx/aida-thrust-tear.js) at two lengths, 98 and 163 art px: 37 frames of 200x72
+const AIDA_THR := [preload("res://assets/fx/aida_thrust_s.png"), preload("res://assets/fx/aida_thrust_s_mask.png"), preload("res://assets/fx/aida_thrust_l.png"), preload("res://assets/fx/aida_thrust_l_mask.png")]
 const ASL := {"-100,30": "a1", "205,-12": "a2", "10,-190": "ah", "170,10": "ka", "60,-110": "air2", "-120,70": "air3"}
 var asl_tex := {}
 func _asl(k: String) -> Array:
@@ -320,6 +322,12 @@ func slash(c: Vector2, r: float, a0: float, a1: float, d: int, ch: String, sy :=
 	_push({"k": "slash", "ch": ch, "x": c.x, "y": c.y, "d": d, "r": r, "a0": a0, "a1": a1, "sy": sy, "seed": randf() * 9.0})
 
 func thrust(x0: float, x1: float, y: float, ch: String) -> void:
+	if ch == "aida":
+		var dir := signf(x1 - x0) if x1 != x0 else 1.0
+		var Ll := maxf(90.0, absf(x1 - x0) * 1.6) / S + 13.0
+		var lg := Ll > 130.0
+		_push({"k": "athr", "tex": AIDA_THR[2 if lg else 0], "mask": AIDA_THR[3 if lg else 1], "x": x0 - dir * 13.0 * S, "y": y, "d": dir, "sc": S * Ll / (163.0 if lg else 98.0)})
+		return
 	_push({"k": "thrust", "ch": ch, "x": x0, "x1": x1, "y": y, "seed": randf() * 99.0})
 
 func dust(x: float, y: float, d: int, big: bool) -> void:
@@ -457,6 +465,7 @@ func _draw_cpu() -> void:
 			"sheet": alive = _sheet(g, e)
 			"asl": alive = _asl_draw(g, e)
 			"dland": alive = _dland(g, e)
+			"athr": alive = _athr(g, e)
 			"chg": alive = _charge(g, e)
 			"gate": alive = _gate_b(g, e)
 			"pil": alive = _pillar(g, e)
@@ -1112,6 +1121,13 @@ func _baked(g: CanvasItem, e: Dictionary, i: int, fw: float, fh: float, cols: in
 		m.set_shader_parameter("flip", d)
 	var ts := mt.get_size()
 	m.set_shader_parameter("region", Vector4(c * fw / ts.x, r * fh / ts.y, fw / ts.x, fh / ts.y))
+
+## Aida's thrust, baked, scaled to the jab's length
+func _athr(g: CanvasItem, e: Dictionary) -> bool:
+	var i := int(e["t"] / 1000.0 * 50.0)
+	if i >= 37: return false
+	_baked(g, e, i, 200.0, 72.0, 4, 10.0, 30.0, e["sc"], float(e["d"]))
+	return true
 
 ## Aida's dive landing, baked
 func _dland(g: CanvasItem, e: Dictionary) -> bool:
