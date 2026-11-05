@@ -381,8 +381,7 @@ func start_attack() -> void:
 			set_anim("dive")
 			vy = -0.15
 		else:
-			set_anim("air_combo", 0)
-			air = 1
+			set_anim("air_combo", 0)           # (Dead Cells-like, owner 2026-11-05: no longer spends the double jump)
 			vy = minf(vy, 0.05)
 		arena.sfx("swing")
 		return
@@ -1052,8 +1051,20 @@ func step(dt: float) -> void:
 						e.hit(BAL.p(who, "dive_slam"), dir * 6, atk_mul())
 						if who == "estelle": estg(e, E_STG["dive"])
 		elif a == "air_combo":
-			vy = minf(vy + GRAV * dt * 0.35, 0.12)
-			vx = dir * 0.04
+			# Dead Cells-like (owner 2026-11-05): the swing keeps the jump's rise and the run's momentum, steerable
+			# (facing stays put); only a fall is held up a little
+			if vy > 0.0: vy = minf(vy, 0.12)
+			var mv := move_axis()
+			if mv != 0: vx += (mv * RUN * 0.85 - vx) * minf(1.0, dt / 80.0)
+			else: vx *= pow(0.996, dt)
+			# the double jump cuts the swing once its strike is out
+			if want("jump") and air < 1 and f >= 2 and not air_tag:
+				take("jump")
+				air = 1
+				vy = -DJUMPV
+				set_anim("double_jump")
+				arena.sfx("djump")
+				arena.pfx.djump(self)
 			var air_ok := (f == 2 or f == 5) and ft > dur() * 0.55
 			if want("attack") and air_ok and combo_win > 0.0:
 				take("attack")
