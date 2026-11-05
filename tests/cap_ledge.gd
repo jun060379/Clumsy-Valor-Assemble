@@ -22,6 +22,8 @@ func _initialize() -> void:
 	await frames(60)
 	for m in arena.mobs: m.hp = 0.0
 	var P = arena.player
+	var ua := OS.get_cmdline_user_args()
+	if ua.size() > 1 and P.SK.cur != null: P.SK.cur.equipped["estelle"] = ua[1]      # e.g. estelle_misuk
 	var so = arena.solids[-1]
 	# falling beside a ledge's end: she catches the corner and hangs, sways, then climbs
 	var pl = arena.platforms[-1]

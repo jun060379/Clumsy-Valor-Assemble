@@ -1385,10 +1385,14 @@ var mantled := false
 ## ledge hang and climb (owner 2026-11-05, generated with 2dimg2motion, no weapons drawn): one strip of 14 frames of
 ## 448x512 per costume — 0-5 the one-hand hang loop, 6-13 the two-arm climb. In every frame the ledge corner is the
 ## canvas point (230, 300); per climb frame, how far her feet hang under the lip and her body's centre (canvas px)
-const LEDGE := {"estelle_base": preload("res://assets/chars/estelle_ledge.png")}
-const CLIMB_FEET := [184, 194, 146, 98, 71, 0, 0, 0]
-const CLIMB_CX := [190, 216, 210, 224, 230, 329, 306, 309]
-const HANG_FEET := 184.0
+## per costume: the strip, which strip frame each of the 8 climb steps shows (climb_02 cut: owner 2026-11-05, it jumps),
+## per step how far her feet hang under the lip and her body's centre, where the climb leaves her and the hang's feet / centre
+const LEDGE := {
+	"estelle_base": {"tex": preload("res://assets/chars/estelle_ledge.png"), "map": [6, 6, 8, 9, 10, 11, 12, 13],
+		"feet": [184, 184, 146, 98, 71, 0, 0, 0], "cx": [190, 190, 210, 224, 230, 329, 306, 309], "end": 309.0, "hang": [184.0, 190.0]},
+	"estelle_misuk": {"tex": preload("res://assets/chars/estelle_misuk_ledge.png"), "map": [6, 6, 7, 8, 9, 10, 11, 12],
+		"feet": [198, 198, 159, 125, 74, 0, 0, 0], "cx": [202, 202, 204, 217, 222, 336, 311, 322], "end": 322.0, "hang": [198.0, 202.0]},
+}
 const HANG_REACH := [36.0, 150.0]         # world px her feet may be under a lip for her to catch it (PLACEHOLDER)
 var ledge_at := Vector2.ZERO              # the corner she holds / climbs over (world)
 var ledge_side := 1
@@ -1400,15 +1404,19 @@ func has_ledge_art() -> bool:
 func _lk() -> float:
 	return 0.5 * CH.SCALE[who]
 
+func _ledge_meta() -> Dictionary:
+	return LEDGE.get(SK.worn(who), {})
+
 ## catch the lip and hang (the corner at lip_x, `top`; she faces it from `side`)
 func _hang_start(top: float, lip_x: float, side: int) -> bool:
 	if not has_ledge_art() or regrab_t > 0.0: return false
 	var k := _lk()
-	if top + HANG_FEET * k > arena.ground_y - 4.0: return false          # a low wall: no room to hang, she climbs it
+	var hm: Array = _ledge_meta()["hang"]
+	if top + hm[0] * k > arena.ground_y - 4.0: return false          # a low wall: no room to hang, she climbs it
 	ledge_at = Vector2(lip_x, top)
 	ledge_side = side
 	dir = side
-	position = Vector2(lip_x - side * (230.0 - 190.0) * k, top + HANG_FEET * k)
+	position = Vector2(lip_x - side * (230.0 - hm[1]) * k, top + hm[0] * k)
 	vx = 0.0
 	vy = 0.0
 	on = false
@@ -1422,19 +1430,20 @@ func _hang_start(top: float, lip_x: float, side: int) -> bool:
 func _climb_start(top: float, lip_x: float, side: int, from := -1) -> bool:
 	if not has_ledge_art(): return false
 	var k := _lk()
+	var M := _ledge_meta()
 	var st := from
 	if st < 0:
 		var dyc: float = (position.y - top) / k
 		st = 4
 		for i in 5:
-			if CLIMB_FEET[i] <= dyc + 15.0:
+			if M["feet"][i] <= dyc + 15.0:
 				st = i
 				break
-	var lx: float = lip_x if not is_nan(lip_x) else position.x - side * (CLIMB_CX[st] - 230.0) * k
+	var lx: float = lip_x if not is_nan(lip_x) else position.x - side * (float(M["cx"][st]) - 230.0) * k
 	ledge_at = Vector2(lx, top)
 	ledge_side = side
 	dir = side
-	position = Vector2(lx + side * (309.0 - 230.0) * k, top)      # where the climb leaves her standing
+	position = Vector2(lx + side * (float(M["end"]) - 230.0) * k, top)      # where the climb leaves her standing
 	vx = 0.0
 	vy = 0.0
 	on = true
@@ -1446,11 +1455,12 @@ func _climb_start(top: float, lip_x: float, side: int, from := -1) -> bool:
 
 ## the hang / climb frames, drawn about the corner (not about her feet); the hang sways a little about her hand
 func _draw_ledge(c: String, an: String, fr: int, at: Vector2, d: int, col: Color, ci: CanvasItem) -> bool:
-	var tex = LEDGE.get(SK.worn(c))
-	if tex == null: return false
+	var M: Dictionary = LEDGE.get(SK.worn(c), {})
+	if M.is_empty(): return false
+	var tex: Texture2D = M["tex"]
 	var k: float = 0.5 * CH.SCALE[c]
 	var corner: Vector2 = at + (ledge_at - position)
-	var i := (fr % 6) if an == "hang" else 6 + mini(fr, 7)
+	var i: int = (fr % 6) if an == "hang" else int(M["map"][mini(fr, 7)])
 	var rot := 0.0
 	if an == "hang": rot = sin(t / 1000.0 * TAU / 1.6) * 0.06 * ledge_side
 	ci.draw_set_transform_matrix(Transform2D(0.0, Vector2(d, 1), 0.0, corner) * Transform2D(rot, Vector2(6.0 * k, 0)) * Transform2D(0.0, Vector2(-6.0 * k, 0)))
