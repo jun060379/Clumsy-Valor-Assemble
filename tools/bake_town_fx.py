@@ -1,8 +1,8 @@
 """Bakes the town's ambient effect sheets from pixelfx renders and the town art (owner 2026-11-06).
-forge_fire.png: three phases of fire/town-campfire side by side, clipped to the forge's hearth arch (the art's own fire
+forge_fire.png: fire/town-furnace (tools/pixelfx_fx/town-furnace.js) clipped to the forge's hearth arch (the art's own fire
 pixels, largest blob), 90 frames 100x75, cols 10; drawn at the arch box (FORGE_BOX in town.gd).
 rim/<k>.png: each sprite's edge pixels (alpha 255, the second row 110) with the outward normal in RG.
-Usage: python3 tools/bake_town_fx.py CAMPFIRE_SHEET.png | python3 tools/bake_town_fx.py rim"""
+Usage: python3 tools/bake_town_fx.py FURNACE_SHEET.png | python3 tools/bake_town_fx.py rim"""
 import sys
 import numpy as np
 from PIL import Image
@@ -14,7 +14,7 @@ def frames(path, fw, fh, cols, n):
     im = Image.open(path).convert("RGBA")
     return [im.crop(((i % cols) * fw, (i // cols) * fh, (i % cols) * fw + fw, (i // cols) * fh + fh)) for i in range(n)]
 
-def forge(camp):
+def forge(furnace):
     a = np.array(Image.open("assets/town/hx/g_forge.png").convert("RGBA")).astype(int)
     x0, y0, x1, y1 = BOX
     c = a[y0:y1, x0:x1]
@@ -22,15 +22,11 @@ def forge(camp):
     lab, n = ndi.label(m)
     big = 1 + np.argmax(ndi.sum(m, lab, range(1, n + 1)))
     mask = ndi.binary_fill_holes(lab == big)
-    cf = frames(camp, 128, 128, 10, 90)
     W, H = x1 - x0, y1 - y0
-    base = 250 - y0                   # the hearth floor in the box
+    ff = frames(furnace, W, H, 9, 90)          # fire/town-furnace: 100x75, the hearth floor on its bottom row
     sheet = Image.new("RGBA", (W * 10, H * 9))
     for i in range(90):
-        f = Image.new("RGBA", (W, H))
-        for dx, ph in ((-20, 31), (20, 61), (0, 0)):
-            f.alpha_composite(cf[(i + ph) % 90], (W // 2 + dx - 64, base - 112))
-        arr = np.array(f)
+        arr = np.array(ff[i])
         arr[..., 3] = (arr[..., 3] * mask).astype(np.uint8)
         sheet.paste(Image.fromarray(arr), ((i % 10) * W, (i // 10) * H))
     sheet.save("assets/fx/town/forge_fire.png")

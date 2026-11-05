@@ -1,7 +1,7 @@
 extends RefCounted
 ## The town's ambient effects, each with a cause in the scene (owner 2026-11-06: "환경이나 그 외에 의한 근거가 있어야지"):
 ##  - fire: the forge's hearth burns (pixelfx flames clipped to its arch, tools/bake_town_fx.py)
-##  - smoke: the forge and the bathhouse chimneys smoke; the puffs swell, curl and lean with the wind (town_life.gust)
+##  - smoke: the forge and the bathhouse chimneys smoke (pixelfx fire/town-chimney-smoke sheet)
 ##  - heat: the air shimmers over the campfire, the hearth and the forge chimney (a screen-reading shader that shifts
 ##    whole world-px rows, so the shimmer stays on the pixel grid)
 ##  - light: buildings and props near a fire or a lamp catch its colour on the edges that face it (rim, like the
@@ -14,6 +14,8 @@ extends RefCounted
 ## Everything is drawn on the 1-px world grid (the characters' dot), positions from the placed sprites.
 
 const FORGE_FIRE := preload("res://assets/fx/town/forge_fire.png")
+const SMOKE := preload("res://assets/fx/town/chimney_smoke.png")
+const RAYS := preload("res://assets/fx/town/canopy_rays.png")      # pixelfx weather/town-canopy-rays: 72 frames 360x230, 12 fps, pivot 180,216, cols 7
 const FORGE_BOX := Vector2(80, 177)            # the hearth box in assets/town/hx/g_forge.png (bake_town_fx.py BOX)
 const FORGE_FW := 100
 const FORGE_FH := 75
@@ -67,6 +69,31 @@ void fragment() {
 	COLOR = vec4(add, 1.0);
 }
 """
+const SUNP_SH := """
+shader_type canvas_item;
+render_mode blend_add, unshaded;
+uniform sampler2D ck : filter_linear, repeat_enable;
+uniform vec2 org;
+uniform vec2 csize = vec2(1800.0, 840.0);
+uniform float alpha = 0.0;
+uniform vec3 col = vec3(1.0, 0.86, 0.6);
+varying vec2 wp;
+void vertex() { wp = (MODEL_MATRIX * vec4(VERTEX, 0.0, 1.0)).xy; }
+const float BY[16] = float[](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
+void fragment() {
+	if (texture(TEXTURE, UV).a < 0.5) discard;
+	// sun breaking through the clouds: the dense parts of a shifted copy of the cloud cookie, on the 1-px grid, in two
+	// hard steps with a 4x4 Bayer dither between them (no smooth gradient)
+	vec2 p = floor(wp);
+	vec2 u = (p - org) / csize;
+	float c = (u.y < 0.0 || u.y > 1.0) ? 0.0 : texture(ck, vec2(fract(u.x), u.y)).r;
+	float v = smoothstep(0.42, 0.8, c) * 2.0;
+	ivec2 b = ivec2(mod(p, 4.0));
+	float lv = floor(v + (BY[b.x + b.y * 4] + 0.5) / 16.0) * 0.5;
+	if (lv <= 0.0) discard;
+	COLOR = vec4(col * lv * alpha, 1.0);
+}
+"""
 const RIM_K := 1.5                # rim strength (PLACEHOLDER)
 
 static var _discs: Array = []
@@ -74,7 +101,6 @@ static var _white: Texture2D
 
 var town
 var arena
-var puffs: Array = []
 var emit_t := {}
 var haze: Node2D
 var haze_mat: ShaderMaterial
@@ -89,7 +115,9 @@ var wade_f := -1
 var bits: Array = []              # grass bits and road dust wisps: {k, x, y, vx, vy, t, life, c}
 var grass_f := -1
 var prev_g := 0.0
-var motes: Array = []
+var rays_k := 0.0
+var sunp: Node2D
+var sunp_mat: ShaderMaterial
 
 
 func _init(tn) -> void:
@@ -122,6 +150,17 @@ func _init(tn) -> void:
 	glow.z_as_relative = false
 	glow.draw.connect(_draw_glow)
 	town.add_child(glow)
+	sunp = Node2D.new()
+	sunp_mat = ShaderMaterial.new()
+	var sh3 := Shader.new()
+	sh3.code = SUNP_SH
+	sunp_mat.shader = sh3
+	sunp_mat.set_shader_parameter("ck", town.shade.COOKIE)
+	sunp.material = sunp_mat
+	sunp.z_index = 10
+	sunp.z_as_relative = false
+	sunp.draw.connect(_draw_sunp)
+	town.add_child(sunp)
 
 
 ## a soft round puff on the pixel grid: a solid core, a lighter ring, a dithered rim (radius 1..24, white)
@@ -168,24 +207,6 @@ func _every(id: String, ms: float, dt: float) -> int:
 
 
 func step(dt: float) -> void:
-	var vr: Rect2 = arena.view_rect().grow(300.0)
-	var g: float = town.life.gust
-	for c in [["g_forge", FORGE_CHIMNEY, true, 210.0], ["g_cottage", COTTAGE_CHIMNEY, false, 300.0]]:
-		var o = origin(c[0])
-		if o == null: continue
-		var p: Vector2 = o + c[1]
-		if not vr.has_point(p): continue
-		for i in _every(c[0], c[3], dt):
-			puffs.append({"x": p.x + randf_range(-3, 3), "y": p.y, "vx": randf_range(-0.003, 0.003), "vy": -0.022 - randf() * 0.01,
-				"r0": 2.0 + randf(), "r1": 11.0 + randf() * 6.0, "t": 0.0, "life": 2800.0 + randf() * 1400.0, "ph": randf() * 9.0, "dark": c[2]})
-	for f in puffs:
-		f["t"] += dt
-		var u: float = f["t"] / f["life"]
-		# the draught leans the plume over as it rises, more in a gust; a slow curl on top
-		f["vx"] += (0.000012 + g * 0.00002) * dt
-		f["x"] += (f["vx"] + sin(f["t"] / 520.0 + f["ph"]) * 0.006) * dt
-		f["y"] += f["vy"] * (1.0 - u * 0.5) * dt
-	puffs = puffs.filter(func(f): return f["t"] < f["life"])
 	_step_light(dt)
 	_step_water(dt)
 	_step_wind(dt)
@@ -201,14 +222,18 @@ func draw_world(ci: CanvasItem) -> void:
 	var fi := int(Time.get_ticks_msec() / 1000.0 * 30.0) % 90
 	ci.draw_texture_rect_region(FORGE_FIRE, Rect2(o + FORGE_BOX, Vector2(FORGE_FW, FORGE_FH)), Rect2((fi % 10) * FORGE_FW, (fi / 10) * FORGE_FH, FORGE_FW, FORGE_FH))
 
-## front layer: the smoke
+## front layer: the chimney smoke (pixelfx fire/town-chimney-smoke: 80 frames 96x150 at 20 fps, the mouth at 24,140),
+## each chimney on its own phase; grey at the forge, paler steam off the bathhouse
 func draw_front(ci: CanvasItem) -> void:
-	for f in puffs:
-		var u: float = f["t"] / f["life"]
-		var r := roundi(lerpf(f["r0"], f["r1"], sqrt(u)))
-		var a: float = minf(1.0, u / 0.08) * (1.0 - u) * (0.62 if f["dark"] else 0.55)
-		var c: Color = Color(0.5, 0.48, 0.5).lerp(Color(0.68, 0.66, 0.7), u) if f["dark"] else Color(0.9, 0.88, 0.86).lerp(Color(0.7, 0.7, 0.74), u)
-		ci.draw_texture(disc(r), Vector2(roundf(f["x"]) - r, roundf(f["y"]) - r), Color(c, a))
+	var t := Time.get_ticks_msec() / 1000.0
+	var vr: Rect2 = arena.view_rect().grow(160.0)
+	for c in [["g_forge", FORGE_CHIMNEY, 0, Color(0.85, 0.82, 0.85)], ["g_cottage", COTTAGE_CHIMNEY, 37, Color(1.55, 1.55, 1.6, 0.85)]]:
+		var o = origin(c[0])
+		if o == null: continue
+		var p: Vector2 = o + c[1]
+		if not vr.has_point(p): continue
+		var fi: int = (int(t * 20.0) + int(c[2])) % 80
+		ci.draw_texture_rect_region(SMOKE, Rect2(p - Vector2(24, 140), Vector2(96, 150)), Rect2((fi % 12) * 96, (fi / 12) * 150, 96, 150), c[3])
 
 ## the heat boxes (the haze shader shifts what is already drawn under them)
 func _draw_haze() -> void:
@@ -265,23 +290,14 @@ func _step_light(dt: float) -> void:
 				var a := t * (2.2 + i * 0.7) + ph
 				var r := 9.0 + 5.0 * sin(t * 1.3 + ph * 2.0)
 				moths.append(Vector2(l["x"] + cos(a) * r + sin(t * 7.0 + ph) * 2.0, l["y"] - 4.0 + sin(a * 1.7) * r * 0.55 + cos(t * 9.0 + ph) * 1.5))
-	# canopy shafts: dust motes drift down through them by day
+	# canopy rays: only in clear sun
 	var sun: float = arena.tod_now()["sun"]
-	if sun > 0.35 and arena.weather == "clear":
-		var tr = _tree_box("f_bigtree")
-		if tr != null and arena.view_rect().grow(200.0).intersects(tr):
-			while motes.size() < 26:
-				motes.append({"x": tr.position.x + randf() * tr.size.x, "y": tr.position.y + tr.size.y * (0.55 + randf() * 0.45), "ph": randf() * 9.0, "t": randf() * 4000.0})
-			for m in motes:
-				m["t"] += dt
-				m["x"] += sin(m["t"] / 700.0 + m["ph"]) * 0.004 * dt + town.life.gust * 0.01 * dt
-				m["y"] += 0.004 * dt
-				if m["t"] > 6000.0 or m["y"] > tr.end.y:
-					m["x"] = tr.position.x + randf() * tr.size.x
-					m["y"] = tr.position.y + tr.size.y * 0.55
-					m["t"] = 0.0
-	else:
-		motes.clear()
+	rays_k = clampf((sun - 0.35) / 0.3, 0.0, 1.0) if arena.weather == "clear" else 0.0
+	# sun patches drift with the clouds (shade.gd's clock and speed), half a cookie away from the shadows
+	var ct: float = Time.get_ticks_msec() / 1000.0 if town.shade.clock < 0.0 else town.shade.clock
+	sunp_mat.set_shader_parameter("org", Vector2(fmod(ct * 18.0 + 900.0, 1800.0), town.G - 460.0))
+	sunp_mat.set_shader_parameter("alpha", 0.32 * clampf((sun - 0.3) / 0.4, 0.0, 1.0) * (1.0 if arena.weather == "clear" else 0.4))
+	sunp.queue_redraw()
 	glow.queue_redraw()
 
 ## a placed tree's box in the world (deco_back, its 1.35x size)
@@ -344,33 +360,15 @@ func _draw_glow() -> void:
 		glow.draw_rect(Rect2(X, Y, 1, 1), Color(1.0, 0.86, 0.6, 0.9))
 		glow.draw_rect(Rect2(X - 1, Y - (1 if up else 0), 1, 1), Color(0.9, 0.75, 0.55, 0.55))
 		glow.draw_rect(Rect2(X + 1, Y - (1 if up else 0), 1, 1), Color(0.9, 0.75, 0.55, 0.55))
-	if motes.is_empty(): return
+	if rays_k <= 0.0: return
 	var tr = _tree_box("f_bigtree")
-	if tr == null: return
-	var sun: float = arena.tod_now()["sun"]
-	var sd: Vector2 = town.LIT.sun_dir(arena.tod_h)
-	var lean := clampf(sd.x, -1.2, 1.2)
-	# shafts falling from gaps in the canopy, widening as they fall, brightest just under the leaves and fading out
-	# before the ground; they lean with the sun and breathe slowly
-	var top: float = tr.position.y + tr.size.y * 0.42
-	var bot: float = tr.end.y - 6.0
-	var dx := lean * (bot - top) * 0.6
-	for j in 4:
-		var cx: float = tr.position.x + tr.size.x * (0.22 + j * 0.19) + sin(j * 7.3) * 14.0
-		var w0 := 4.0 + float(j % 2) * 3.0
-		var w1 := w0 * 3.2
-		var a := (0.16 + 0.07 * sin(t * 0.5 + j * 2.3)) * sun
-		var mid := top + (bot - top) * 0.25
-		var wm := lerpf(w0, w1, 0.25)
-		var cm := cx + dx * 0.25
-		var pts := PackedVector2Array([Vector2(cx - w0 / 2.0, top), Vector2(cx + w0 / 2.0, top), Vector2(cm + wm / 2.0, mid),
-			Vector2(cx + dx + w1 / 2.0, bot), Vector2(cx + dx - w1 / 2.0, bot), Vector2(cm - wm / 2.0, mid)])
-		var c0 := Color(1.0, 0.95, 0.78, 0.0)
-		var c1 := Color(1.0, 0.95, 0.78, a)
-		glow.draw_polygon(pts, PackedColorArray([c0, c0, c1, c0, c0, c1]))
-	for m in motes:
-		var k: float = 0.5 + 0.5 * sin(m["t"] / 300.0 + m["ph"])
-		glow.draw_rect(Rect2(roundf(m["x"]), roundf(m["y"]), 1, 1), Color(1.0, 0.97, 0.85, 0.9 * k * sun))
+	if tr == null or not arena.view_rect().grow(200.0).intersects(tr): return
+	# sun through the big tree's canopy: two copies of the pixelfx sheet across its width, on their own phases
+	var fi := int(t * 12.0) % 72
+	var gx: float = roundf(tr.get_center().x)
+	for j in 2:
+		var f2 := (fi + j * 29) % 72
+		glow.draw_texture_rect_region(RAYS, Rect2(gx - 180.0 + (j * 2 - 1) * 170.0, tr.end.y - 216.0, 360, 230), Rect2((f2 % 7) * 360, (f2 / 7) * 230, 360, 230), Color(1, 1, 1, rays_k))
 
 
 # ---------- water ----------
@@ -573,3 +571,28 @@ func draw_tent(ci: CanvasItem, b: Array) -> void:
 		ci.draw_texture_rect_region(im, Rect2(ox + o, y0 + r, w, rh), src)
 		r += 2
 	if flip: ci.draw_set_transform(Vector2.ZERO)
+
+
+## the sun patches fall where the cloud shadows do: the ground under the surface line and every standing thing
+func _draw_sunp() -> void:
+	var sh = town.shade
+	if sh.sun <= 0.05: return
+	var vr: Rect2 = arena.view_rect()
+	var vx0 := vr.position.x - 40.0
+	var vx1 := vr.end.x + 40.0
+	var x := floorf(vx0 / 24.0) * 24.0
+	var top := PackedVector2Array()
+	var bot := PackedVector2Array()
+	while x <= vx1 + 24.0:
+		var t: float = town.surf_top(x)
+		top.append(Vector2(x, t))
+		bot.append(Vector2(x, maxf(t, town.cloud_bottom(x))))
+		x += 24.0
+	for i in top.size() - 1:
+		if bot[i].y - top[i].y < 0.5 and bot[i + 1].y - top[i + 1].y < 0.5: continue
+		sunp.draw_colored_polygon(PackedVector2Array([top[i], top[i + 1], bot[i + 1], bot[i]]), Color.WHITE)
+	for o in town.shade_occluders() + town.shade_props():
+		var bx: Rect2 = sh.box(o)
+		if bx.end.x < vx0 or bx.position.x > vx1: continue
+		if o[2] > town.cloud_bottom(bx.get_center().x) + 1.0: continue
+		sh._sil(sunp, o, bx.position, bx.size.y, Color.WHITE)

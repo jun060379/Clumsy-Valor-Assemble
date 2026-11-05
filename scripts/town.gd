@@ -930,7 +930,8 @@ func _draw() -> void:
 	# and logs are the town art's), 90 frames at 30 fps, owner 2026-11-06
 	var fxx := 4350.0 + 27.0 * PK
 	var cfi := int(tt * 30.0) % 90
-	draw_texture_rect_region(CAMPFIRE, Rect2(roundf(fxx - 64.0), roundf(G - 7.0 - 112.0), 128, 128), Rect2((cfi % 10) * 128, (cfi / 10) * 128, 128, 128))
+	# the flames start at the top of the log teepee (g_ring's apex at 54,1; the ring sits at G - 55), as a log fire does
+	draw_texture_rect_region(CAMPFIRE, Rect2(roundf(fxx - 64.0), roundf(G - 47.0 - 112.0), 128, 128), Rect2((cfi % 10) * 128, (cfi / 10) * 128, 128, 128))
 	life.draw_cat(self)
 
 func _draw_front() -> void:
