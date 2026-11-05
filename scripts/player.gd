@@ -1973,7 +1973,7 @@ func take_hit(m, raw: float) -> String:
 		bash_t = 420.0
 		f = 2
 		ft = 0.0
-		position.x += dir * 16.0
+		position.x -= dir * 14.0          # owner 2026-11-06: the down cut knocks the blow away and the clash pushes her back
 		arena.parry_fx(self, m)
 		m.hit(BAL.p("estelle", "parry_bash"), dir * 8, atk_mul())
 		estg(m, E_STG["pparry"] if pp else E_STG["parry"])
