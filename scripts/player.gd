@@ -567,8 +567,7 @@ func check_hits() -> void:
 		# chromatic pulse, the zoom punch and the kick (the punch distortion is the mob's, in mob.hit); 화면 효과 off:
 		# the lines above stand as they are
 		arena.impact(hit_weight(), hp0, dir)
-		var ac: Array = atk.get("arc", [])
-		arena.slash_mark(hp0, (ac[3] + ac[4]) / 2.0 if ac.size() > 4 else 0.0, atk["dmg"])
+		# the old cross-cut + ring (slash_mark) is gone: the baked pfx hit on the target carries the impact (owner 2026-11-05)
 		if heavy:
 			arena.flash = 0.2
 		if anim in ["attack3", "cthrust", "attack_high"] or (anim == "air_combo" and f >= 6):

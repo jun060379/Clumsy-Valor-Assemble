@@ -1394,7 +1394,6 @@ func step_luce(dt: float) -> void:
 				if absf(m.position.x - f["x"]) < R + 20.0 and m.position.y - 95.0 < f["y"] + R and m.position.y > f["y"] - R:
 					f["hits"].append(m)
 					m.hit(f["dmg"], signf(f["vx"]) * 4.0, f["mul"])
-					spark(Vector2(f["x"], f["y"]), 8)
 					sfx(f.get("snd", "hit1"), 0.6)
 					f["t"] = f["life"] + 1.0
 					break
@@ -1407,7 +1406,6 @@ func step_luce(dt: float) -> void:
 				if absf(m.position.x - f["x"]) < R2 + 20.0 and m.position.y > f["y"] - 220.0 and m.position.y - 95.0 < f["y"] + 10.0:
 					f["hits"].append(m)
 					m.hit(f["dmg"], f["d"] * 6.0, f["mul"])
-					spark(m.position + Vector2(0, -50), 12)
 	hit_by = ""
 	luce_fx = luce_fx.filter(func(f): return f["t"] < f["life"])
 

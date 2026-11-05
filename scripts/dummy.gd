@@ -69,7 +69,6 @@ func hit(dmg: float, kb: float, mul := 1.0) -> void:
 	hp -= d
 	if hp > 0.0: ST.on_hit(arena, self)
 	if hp > 0.0 and not ST._in and arena.hit_by == "": arena.player.bless_proc(self)      # 빛의 가호: Luce's bolt follows
-	arena.spark(position + Vector2(-signf(kb) * 10.0, -60), 14 if dmg > 1 else 8)
 	if arena.get("pfx") != null and not arena.quiet_hit: arena.pfx.hit(position.x - signf(kb) * 10.0, position.y - 60.0, 1 if kb >= 0.0 else -1, 1.25 if dmg >= 2 else 1.0)
 	if R != null: hp -= R.after_hit(self)
 	arena.score += roundi(d / 10.0)
