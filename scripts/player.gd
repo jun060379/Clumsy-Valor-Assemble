@@ -196,6 +196,15 @@ func frames() -> int:
 func attacking() -> bool:
 	return anim.begins_with("attack") or anim in ["kneel_attack", "air_combo", "dive", "cthrust", "lfinisher"]
 
+## the strike of the current ground attack has gone out (its hit frame reached): the recovery may be cancelled
+func rec_cancel_ok() -> bool:
+	if not anim in ["attack1", "attack2", "attack3", "cthrust", "lfinisher", "kneel_attack"]:
+		return false
+	var ca = cur_atk()
+	if ca == null or not ca.has("hit"):
+		return f >= 3
+	return f > ca["hit"][0] or fx_done or hit_done
+
 func busy_rift() -> bool:
 	return anim in ["tp_in", "dig_out", "rturn", "mark", "amark", "dig_in"]
 
@@ -1093,6 +1102,20 @@ func step(dt: float) -> void:
 				else:
 					set_anim("parry")
 					ghit = false
+			# recovery cancel: once the strike is out, the rest of the swing can be cut into a skill or a jump
+			# (the windup stays committed; dash and swap already cut anywhere)
+			elif on and rec_cancel_ok():
+				if want("guard"):
+					take("guard")
+					use_skill(move)
+				elif want("jump"):
+					take("jump")
+					on = false
+					vy = -JUMPV
+					vx = dir * 0.1
+					set_anim("jump", 2)
+					arena.sfx("jump")
+					arena.dust(position, 0, false)
 		check_hits()
 	elif a == "guard" or a == "parry":
 		if bash_t > 0.0: vx = dir * 0.75 * minf(1.0, bash_t / 320.0)
