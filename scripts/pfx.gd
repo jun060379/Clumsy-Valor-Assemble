@@ -15,6 +15,8 @@ const CH := preload("res://scripts/chars.gd")
 const CH_PLAYER := preload("res://scripts/player.gd")
 const S := 2.0
 const FR := 40.0
+## Aida's 처형 slam, baked from pixelfx (tools/pixelfx_fx/rewind-slam.js): 56 frames of 440x176 at 30 fps, pivot (220, 140)
+const AIDA_SLAM := preload("res://assets/fx/aida_rewind_slam.png")
 const SH_SLASH := preload("res://shaders/pfx_slash.gdshader")
 const SH_AIDA := preload("res://shaders/pfx_aida_swing.gdshader")
 const SH_TEAR := preload("res://shaders/pfx_tear.gdshader")
@@ -333,6 +335,13 @@ func slam(x: float, y: float, ch: String, up := false) -> void:
 		arena.air_push(x, y - 20.0, 1.0, 300.0, 0.5)
 		arena.air_push(x, y - 20.0, -1.0, 300.0, 0.5)
 
+## the floor breaks under the slam, a dome of air thumps out, glowing chunks float and rewind into the floor
+func rewind_slam(x: float, y: float) -> void:
+	_push({"k": "sheet", "tex": AIDA_SLAM, "x": x, "y": y, "fw": 440, "fh": 176, "cols": 5, "n": 56, "fps": 30.0, "px": 220.0, "py": 140.0, "sc": S})
+	if arena != null:
+		arena.air_push(x, y - 20.0, 1.0, 300.0, 0.5)
+		arena.air_push(x, y - 20.0, -1.0, 300.0, 0.5)
+
 func charge(P) -> void:
 	for e in L:
 		if e["k"] == "chg" and not e.has("endT"): return
@@ -418,6 +427,7 @@ func _draw_cpu() -> void:
 			"airb": alive = _airb(g, e)
 			"dive": alive = _dive(g, e)
 			"slam": alive = _slam(g, e)
+			"sheet": alive = _sheet(g, e)
 			"chg": alive = _charge(g, e)
 			"gate": alive = _gate(e)
 			"pil": alive = _pillar(g, e)
@@ -1037,6 +1047,18 @@ func _dive(g: CanvasItem, e: Dictionary) -> bool:
 		var a := maxf(top, st)
 		var b := minf(Lp, st + ln)
 		if b > a: p.line(xo, a, xo, b, C[0] if fade < 0.3 else C[3])
+	return true
+
+## a baked sprite-sheet effect: frame by its own clock, drawn at the pixel scale from its pivot
+func _sheet(g: CanvasItem, e: Dictionary) -> bool:
+	var i := int(e["t"] / 1000.0 * float(e["fps"]))
+	if i >= int(e["n"]): return false
+	var fw: float = e["fw"]
+	var fh: float = e["fh"]
+	var sc: float = e["sc"]
+	var c := i % int(e["cols"])
+	var r := i / int(e["cols"])
+	g.draw_texture_rect_region(e["tex"], Rect2(e["x"] - float(e["px"]) * sc, e["y"] - float(e["py"]) * sc, fw * sc, fh * sc), Rect2(c * fw, r * fh, fw, fh))
 	return true
 
 func _slam(g: CanvasItem, e: Dictionary) -> bool:
