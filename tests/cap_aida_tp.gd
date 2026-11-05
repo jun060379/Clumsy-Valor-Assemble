@@ -42,7 +42,10 @@ func _initialize() -> void:
 	P.dir = 1
 	await frames(20)
 	Input.action_press("guard")
-	await frames(24)
+	await frames(16)
+	await shot("sig_a")
+	await frames(8)
+	await shot("sig_b")
 	Input.action_release("guard")
 	for k in 22:
 		await shot("tp_%02d" % k)

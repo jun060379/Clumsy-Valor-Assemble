@@ -1465,18 +1465,10 @@ static func _ellipse_pts(c: Vector2, rx: float, ry: float, n: int) -> PackedVect
 	return pts
 
 func _draw_sigil_add() -> void:
-	if not sigil_on(): return
-	var t: float = player.t / 1000.0
-	var k: float = fmod(player.t / 500.0, 1.0)
-	var g := mark_pos + Vector2(0, -30)
-	var ds := [[22.0, t * 2.2, Color8(201, 166, 255), 0.9, 2.0], [14.0, -t * 3.1 + 0.78, Color8(230, 210, 255), 0.9, 1.5], [30.0 + k * 10.0, t * 0.8, Color8(150, 90, 255), 0.5 - k * 0.5, 1.5]]
-	# shadowBlur 14 in rgba(140,80,255): soft wide passes under each stroke
-	for d in ds:
-		for gw in [[12.0, 0.04], [7.0, 0.07], [3.5, 0.11]]:
-			_dia(sigil_add, g, d[0], d[1], Color(Color8(140, 80, 255), gw[1] * d[3] / 0.9), d[4] + gw[0])
-	for d in ds:
-		_dia(sigil_add, g, d[0], d[1], Color(d[2], d[3]), d[4])
+	pass                                   # (the old additive diamonds: the baked sigil carries its own glow now)
 
+## the sigil, baked from pixelfx (tools/pixelfx_fx/aida-sigil.js): a 1 s loop, 30 frames of 80x80, pivot (40, 66)
+const SIGIL := preload("res://assets/fx/aida_sigil.png")
 func _draw_sigil_top() -> void:
 	if not sigil_on(): return
 	var P = player
@@ -1484,13 +1476,12 @@ func _draw_sigil_top() -> void:
 	# the 400 px reach, dashed 6 / 8
 	_dashed(sigil_top, _ellipse_pts(P.position, 400.0, 400.0, 180), 6.0, 8.0, Color(Color8(201, 166, 255), 0.25), 1.5)
 	# the thread from her chest to the sigil
-	sigil_top.draw_line(P.position + Vector2(0, -60.0 * P.CSCALE), mark_pos + Vector2(0, -30), Color(Color8(201, 166, 255), 0.35), 1.0, true)
-	# the dark eye and its pulsing pupil
-	var g := mark_pos + Vector2(0, -30)
-	sigil_top.draw_circle(g, 6.0, Color("#190f23"))
-	sigil_top.draw_circle(g, 2.2 + sin(t * 9.0) * 0.8, Color("#e6d2ff"))
-	# the landing mark on the floor, dashed 4 / 5 at 0.6
-	_dashed(sigil_top, _ellipse_pts(mark_pos, 26.0, 8.0, 48), 4.0, 5.0, Color(Color("#c9a6ff"), 0.6), 1.5)
+	sigil_top.draw_line(P.position + Vector2(0, -60.0 * P.CSCALE), mark_pos + Vector2(0, -48), Color(Color8(201, 166, 255), 0.35), 1.0, true)
+	# the sigil itself: the eye-tear in its diamond, the pulses, the landing ring
+	var i := int(fmod(t, 1.0) * 30.0) % 30
+	var c := i % 6
+	var r := i / 6
+	sigil_top.draw_texture_rect_region(SIGIL, Rect2(roundf(mark_pos.x / 2.0) * 2.0 - 80.0, roundf(mark_pos.y / 2.0) * 2.0 - 132.0, 160.0, 160.0), Rect2(c * 80, r * 80, 80, 80))
 
 func _draw_txt(e: Dictionary, k: float) -> void:
 	var ci := fx_layer
