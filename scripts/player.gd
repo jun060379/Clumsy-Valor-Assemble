@@ -2519,7 +2519,7 @@ func _cp_clash_fx(cpt: Vector2) -> void:
 		"estelle", "aida":
 			arena.slash_fx(Vector2(position.x + dir * 30.0 * CSCALE, position.y - 70.0 * CSCALE), 110.0 * CSCALE, -100.0, 30.0, dir, CH.COLOR[who], 1.0)
 		"luce":
-			arena.pfx._push({"k": "bk", "tex": L_SHIELD, "x": position.x + dir * 6.0, "y": position.y + 6.0, "d": 1.0, "n": 16, "fw": 88.0, "fh": 84.0, "cols": 9, "px": 44.0, "py": 68.0, "sc": arena.pfx.S * 1.5})
+			arena.pfx._push({"k": "bk", "tex": L_SHIELD, "x": position.x + dir * 6.0, "y": position.y + 6.0, "d": 1.0, "n": 22, "fw": 88.0, "fh": 84.0, "cols": 9, "px": 44.0, "py": 68.0, "sc": arena.pfx.S * 1.5})
 			arena.sfx("ui_ok", 0.8)
 		"kenin":
 			var mz := Vector2(position.x + dir * 30.0 * CSCALE, position.y - 50.0 * CSCALE)

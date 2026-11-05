@@ -44,9 +44,12 @@ func _initialize() -> void:
 	while not (m.st == "atk" and m.flared):
 		await frames(1)
 	for i in 60:
-		if i == 9: Input.action_press("guard")
+		if i == 9:
+			await frames(1)
+			Input.action_press("guard")
 		if i == 12: Input.action_release("guard")
 		await frames(1)
+		print(i, " ", P.anim, " ", P.f, " hp ", P.hp, " bash ", P.bash_t)
 		await shot("d%02d" % i)
 	print("CAP done")
 	quit()
