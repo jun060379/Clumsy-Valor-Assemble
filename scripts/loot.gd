@@ -1,8 +1,8 @@
 extends Node2D
 ## The boss treasure chest (prototype LOOT: lootUpdate / chestHit / chestBreak / lootGet / lootTownGate, with sortie.js's
 ## 피로도 gate): 1.25 s after the boss falls a chest drops from the sky next to the leader. The grade it ends at is rolled
-## when it lands (legendary 1% · unique 8% · epic 20% · rare 40% · common 31%, capped by the dungeon); every blow can
-## reveal the next grade (at least three blows per grade), 18 blows break it, and what it held flies out and homes in on her.
+## when it lands (legendary 1% · unique 8% · epic 20% · rare 40% · common 31%, capped by the dungeon); every blow
+## reveals the next grade until the rolled one, and the blow after that breaks it (owner 2026-11-05), and what it held flies out and homes in on her.
 ## The first blow spends 40 피로도; without enough it stays shut (hint) and the town door lets you leave anyway.
 ## Opening it after the boss has been cleared before pays adventurer EXP 60 (fame.gain_exp).
 
@@ -189,7 +189,7 @@ func hit_chest() -> void:
 	_vfx("hit", Vector2(C["x"] + (runes.rand() - 0.5) * 30.0, C["y"] - chest_dims(C["gi"]).y * 0.55), C["gi"], 7)
 	arena.shake(5, 1)
 	var left: int = C["goal"] - C["gi"]
-	if left > 0 and C["hits"] >= 2 and (runes.rand() < 0.5 or C["hp"] <= left * 2 + 1):
+	if left > 0:                    # every blow climbs one grade until the rolled one, the next breaks it
 		C["gi"] += 1
 		C["hits"] = 0
 		C["kT"] = 260.0
@@ -200,7 +200,8 @@ func hit_chest() -> void:
 		arena.text(Vector2(C["x"], C["y"] - 170.0), CGN[C["gi"]] + "!", CGC[C["gi"]])
 		_vfx("up", Vector2(C["x"], C["y"] - chest_dims(C["gi"]).y * 0.5), C["gi"], 0)
 		arena.sfx("ui_ok", 0.7 + C["gi"] * 0.08)
-	if C["hp"] <= 0: break_chest()
+	else:
+		break_chest()
 
 func break_chest() -> void:
 	var C = chest

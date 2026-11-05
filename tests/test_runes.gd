@@ -202,10 +202,14 @@ func _initialize() -> void:
 	check(R.town_gate(), "town door waits for the chest")
 	var rb0: int = R.rune_count()
 	var sh0: int = arena.shilling
+	var goal: int = L.chest["goal"]
+	check(L.chest["gi"] == mini(1, goal), "first blow: up a grade, or broken when the roll was common")
+	var blows := 1
 	for i in 30:
 		if L.chest["broken"]: break
 		L.hit_chest()
-	check(L.chest["broken"], "chest breaks")
+		blows += 1
+	check(L.chest["broken"] and blows == goal + 1 and L.grade == goal, "one blow per grade, the next breaks it (%d blows, goal %d)" % [blows, goal])
 	check(L.paid and F.value() == F.MAX - F.COST, "only the first blow costs")
 	for i in 300: L.step(16.0)
 	check(L.items.is_empty() and R.rune_count() > rb0 and arena.shilling > sh0, "loot collected: runes %d → %d" % [rb0, R.rune_count()])
