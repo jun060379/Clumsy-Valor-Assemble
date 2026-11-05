@@ -1,6 +1,6 @@
 extends RefCounted
 ## The town's ambient effects, each with a cause in the scene (owner 2026-11-06: "환경이나 그 외에 의한 근거가 있어야지"):
-##  - fire: the forge's hearth burns (pixelfx flames clipped to its arch, tools/bake_town_fx.py)
+##  - fire: the forge's furnace glows from inside and flares (painted per frame, tools/bake_town_fx.py furnace)
 ##  - smoke: the forge and the bathhouse chimneys smoke (pixelfx fire/town-chimney-smoke sheet)
 ##  - heat: the air shimmers over the campfire, the hearth and the forge chimney (a screen-reading shader that shifts
 ##    whole world-px rows, so the shimmer stays on the pixel grid)
@@ -13,7 +13,12 @@ extends RefCounted
 ##    cloth flap; feet: running through grass kicks bits of it up
 ## Everything is drawn on the 1-px world grid (the characters' dot), positions from the placed sprites.
 
-const FORGE_FIRE := preload("res://assets/fx/town/forge_fire.png")
+# the forge's furnace, painted per frame (tools/bake_town_fx.py furnace): 48 frames 150x112 at 12 fps, cols 8, laid
+# over the forge sprite at 60,150 — the mouth glowing from inside, the light spilling onto the arch's stones and outlines
+const FURNACE := preload("res://assets/fx/town/furnace.png")
+const FUR_SPILL := preload("res://assets/fx/town/furnace_spill.png")
+const FUR_AT := Vector2(60, 150)
+const FUR_SZ := Vector2(150, 112)
 const SMOKE := preload("res://assets/fx/town/chimney_smoke.png")
 # pixelfx weather/town-bigtree-rays, kept to the air under the big tree's canopy (tools/bake_town_fx.py rays): 48 frames
 # 690x150 at 8 fps, cols 6; its top-left 28 px in from the tree's left and 138 px above the tree's foot
@@ -95,6 +100,7 @@ var bits: Array = []              # grass bits and road dust wisps: {k, x, y, vx
 var grass_f := -1
 var prev_g := 0.0
 var rays_k := 0.0
+var emis: Node2D                  # emissive: drawn over the ambient darkness (the furnace)
 
 
 func _init(tn) -> void:
@@ -127,6 +133,11 @@ func _init(tn) -> void:
 	glow.z_as_relative = false
 	glow.draw.connect(_draw_glow)
 	town.add_child(glow)
+	emis = Node2D.new()
+	emis.z_index = 10
+	emis.z_as_relative = false
+	emis.draw.connect(func(): _draw_furnace(emis))
+	town.add_child(emis)
 
 
 ## a soft round puff on the pixel grid: a solid core, a lighter ring, a dithered rim (radius 1..24, white)
@@ -181,12 +192,20 @@ func step(dt: float) -> void:
 	haze.queue_redraw()
 
 
-## world layer, right after the buildings: the hearth fire
+## world layer, right after the buildings: the furnace light on the stones round its mouth (under the scene's light)
 func draw_world(ci: CanvasItem) -> void:
+	emis.queue_redraw()
 	var o = origin("g_forge")
 	if o == null: return
-	var fi := int(Time.get_ticks_msec() / 1000.0 * 30.0) % 90
-	ci.draw_texture_rect_region(FORGE_FIRE, Rect2(o + FORGE_BOX, Vector2(FORGE_FW, FORGE_FH)), Rect2((fi % 10) * FORGE_FW, (fi / 10) * FORGE_FH, FORGE_FW, FORGE_FH))
+	var fi := int(Time.get_ticks_msec() / 1000.0 * 12.0) % 48
+	ci.draw_texture_rect_region(FUR_SPILL, Rect2(o + FUR_AT, FUR_SZ), Rect2((fi % 8) * FUR_SZ.x, (fi / 8) * FUR_SZ.y, FUR_SZ.x, FUR_SZ.y))
+
+## the furnace glows on its own light, over the dusk (z 10, above lit.gd's ambient)
+func _draw_furnace(ci: CanvasItem) -> void:
+	var o = origin("g_forge")
+	if o == null: return
+	var fi := int(Time.get_ticks_msec() / 1000.0 * 12.0) % 48
+	ci.draw_texture_rect_region(FURNACE, Rect2(o + FUR_AT, FUR_SZ), Rect2((fi % 8) * FUR_SZ.x, (fi / 8) * FUR_SZ.y, FUR_SZ.x, FUR_SZ.y))
 
 ## front layer: the chimney smoke (pixelfx fire/town-chimney-smoke: 80 frames 96x150 at 20 fps, the mouth at 24,140),
 ## each chimney on its own phase; grey at the forge, paler steam off the bathhouse

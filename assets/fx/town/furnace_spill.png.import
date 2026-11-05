@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bs03ucr3ae0tw"
-path="res://.godot/imported/forge_fire.png-cd8f09d00f6c9404cf5a396d41edda25.ctex"
+uid="uid://bnlp6g3qaielp"
+path="res://.godot/imported/furnace_spill.png-fb280be75f170038b0bdc3c7dabf13e6.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/fx/town/forge_fire.png"
-dest_files=["res://.godot/imported/forge_fire.png-cd8f09d00f6c9404cf5a396d41edda25.ctex"]
+source_file="res://assets/fx/town/furnace_spill.png"
+dest_files=["res://.godot/imported/furnace_spill.png-fb280be75f170038b0bdc3c7dabf13e6.ctex"]
 
 [params]
 
