@@ -1082,7 +1082,12 @@ func _sheet(g: CanvasItem, e: Dictionary) -> bool:
 func _baked(g: CanvasItem, e: Dictionary, i: int, fw: float, fh: float, cols: int, px: float, py: float, sc: float, d: float) -> void:
 	var c := i % cols
 	var r := i / cols
-	g.draw_texture_rect_region(e["tex"], Rect2(e["x"] - px * sc * d, e["y"] - py * sc, fw * sc * d, fh * sc), Rect2(c * fw, r * fh, fw, fh))
+	if d < 0.0:                         # a negative-width rect does not mirror in place: flip with the transform instead
+		g.draw_set_transform(Vector2(e["x"], e["y"]), 0.0, Vector2(-1.0, 1.0))
+		g.draw_texture_rect_region(e["tex"], Rect2(-px * sc, -py * sc, fw * sc, fh * sc), Rect2(c * fw, r * fh, fw, fh))
+		g.draw_set_transform_matrix(Transform2D.IDENTITY)
+	else:
+		g.draw_texture_rect_region(e["tex"], Rect2(e["x"] - px * sc, e["y"] - py * sc, fw * sc, fh * sc), Rect2(c * fw, r * fh, fw, fh))
 	var mt: Texture2D = e["mask"]
 	var lr := Rect2(-px * sc, -py * sc, fw * sc, fh * sc)
 	if d < 0.0: lr.position.x = -(fw - px) * sc
