@@ -43,13 +43,13 @@ func _initialize() -> void:
 	await frames(20)
 	var a = gob(P.position.x + 230.0)
 	await frames(10)
-	for sw in 2:
-		Input.action_press("attack")
-		await frames(2)
-		Input.action_release("attack")
-		for k in 40:
-			await frames(1)
-			await shot("sw%d_%02d" % [sw, k])
-		await frames(4)
+	# the whole chain, pressed in rhythm: 1 · 2 · 3 (the pillar needs the goblin targeted)
+	var n := 0
+	for k in 160:
+		if k in [0, 30]: Input.action_press("attack")
+		if k in [2, 32]: Input.action_release("attack")
+		if k == 62: P.set_anim("attack3")          # the third blow straight away (the press timing in a capture is unreliable)
+		await frames(1)
+		await shot("c_%03d" % k)
 	P.hp = P.hpm["luce"] * 0.3 if P.get("hp") != null else 0.0
 	quit()

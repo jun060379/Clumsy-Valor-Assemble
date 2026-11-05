@@ -424,8 +424,10 @@ func charge(P) -> void:
 func gate(x: float, y: float, h: float, k := 1.0, w := 1.0) -> Dictionary:
 	return _push({"k": "gate", "x": x, "y": y, "h": h, "kk": k, "w": w, "seed": randf() * 99.0})
 
-func pillar(x: float, y: float, cs: float) -> void:
-	_push({"k": "pil", "x": x, "y": y, "H": jr(200.0 * cs / 1.25 / S), "kk": 1.2})
+## Luce's third blow, baked (tools/pixelfx_fx/luce-pillar.js, owner 2026-11-05): the pillar of judgement, 31 frames of 180x260
+const L_PILLAR := preload("res://assets/fx/luce/luce-pillar.png")
+func pillar(x: float, y: float, _cs: float) -> void:
+	_push({"k": "bk", "tex": L_PILLAR, "x": x, "y": y, "d": 1.0, "n": 31, "fw": 180.0, "fh": 260.0, "cols": 7, "px": 90.0, "py": 236.0, "sc": S})
 
 func bolt(x: float, y: float, sz: float) -> void:
 	var cy: float = arena.view_rect().position.y

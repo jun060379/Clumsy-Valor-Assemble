@@ -1148,7 +1148,11 @@ func step(dt: float) -> void:
 			elif a == "attack2" and chain_ok and want("attack"):
 				take("attack")
 				face_aim()
-				set_anim("attack3")
+				# Luce's pillar only with a foe targeted (owner 2026-11-05); otherwise her bolts just keep coming, 1 · 2 · 1 · 2
+				if who == "luce" and luce_spot(420.0, 80.0)["tg"] == null:
+					set_anim("attack1")
+				else:
+					set_anim("attack3")
 				arena.sfx("swing")
 				lunge_assist()
 			if f >= 3 and want("guard") and who == "estelle":
