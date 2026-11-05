@@ -51,4 +51,18 @@ func _initialize() -> void:
 	for i in 50:
 		await frames(4)
 		await shot("c%02d" % i)
+	for k in 3:
+		var g2 = arena.spawn("goblin", P.position.x + 140.0 + k * 110.0, 0.0)
+		g2.spawn_t = 0.0
+		g2.hp = 99999.0
+		g2.max_hp = 99999.0
+		g2.cd = 99999.0
+	await frames(10)
+	for e in arena.foes(): K.add_marks(e, 2)
+	await frames(10)
+	await shot("d_marks")
+	K.chain_detonate(o)
+	for i in 40:
+		await frames(2)
+		await shot("d%02d" % i)
 	quit()

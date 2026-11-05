@@ -651,6 +651,7 @@ func clear_room() -> void:
 		kenin.shots.clear()
 		kenin.bomb_fx.clear()
 		kenin.booms.clear()
+		kenin.fuses.clear()
 		kenin.marks.clear()
 		kenin.assists.clear()
 	fx.clear()

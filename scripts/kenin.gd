@@ -60,6 +60,7 @@ var reload_t := 0.0             # field: time since the cylinder ran dry; bench:
 var bomb_t := 0.0
 var shots: Array = []           # {x, y, vx, vy, dmg, dry, t, tr}
 var bomb_fx: Array = []         # {x, y, vx, vy, m (stuck foe or null), ox, oy, on_floor, t, fuse}
+var fuses: Array = []           # chain fuse sparks running pop to pop: {a, b, t, dur}
 var booms: Array = []           # {x, y, t, life, big}
 var marks := {}                 # instance id -> {m, pts: [{ox, oy, t}]} (stamp offsets from the foe's feet, age)
 var chain: Array = []           # the detonation queue: {at, kind: "mark" / "bomb", m, ox, oy, b, i}
@@ -81,6 +82,7 @@ func reset() -> void:
 	shots.clear()
 	bomb_fx.clear()
 	booms.clear()
+	fuses.clear()
 	marks.clear()
 	assists.clear()
 	chain.clear()
@@ -191,6 +193,8 @@ func step(dt: float) -> void:
 	_step_bombs(dt)
 	_step_assists(dt)
 	for b in booms: b["t"] += dt
+	for fz in fuses: fz["t"] += dt
+	fuses = fuses.filter(func(fz): return fz["t"] < fz["dur"] + 220.0)
 	booms = booms.filter(func(b): return b["t"] < b["life"])
 	for k in marks.keys():
 		var e = marks[k]["m"]
@@ -544,10 +548,22 @@ func chain_detonate(o: Vector2) -> int:
 		at += gap
 		gap = maxf(CHAIN_GAP_MIN * (0.8 if fast else 1.0), gap * CHAIN_ACC)
 	chain = items
+	if not items.is_empty(): _fuse(o, _chain_pos(items[0]), items[0]["at"])
 	chain_t = 0.0
 	chain_n = 0
 	chain_tot = items.size()
 	return items.size()
+
+## where a chain item sits right now (a mark rides its foe)
+func _chain_pos(it: Dictionary) -> Vector2:
+	if it["kind"] == "bomb": return Vector2(it["b"]["x"], it["b"]["y"])
+	var e = it["m"]
+	if e != null and is_instance_valid(e): return Vector2(e.position.x + it["ox"], e.position.y + it["oy"])
+	return _P().position
+
+## the burning fuse that runs from one pop to the next (owner 2026-11-05: 순서대로 터지는 연출)
+func _fuse(a: Vector2, b: Vector2, dur: float) -> void:
+	fuses.append({"a": a, "b": b, "t": 0.0, "dur": dur})
 
 func chaining() -> bool:
 	return not chain.is_empty()
@@ -581,6 +597,7 @@ func _step_chain(dt: float) -> void:
 				arena.sfx("slam", 0.25, {"st": st})
 				arena.hitstop = maxf(arena.hitstop, 28.0)          # 스톱 모션: every pop holds the world a beat
 				_shake(2.0 + minf(6.0, chain_n * 0.4), 1 if it["i"] % 2 == 0 else -1)
+		if not last: _fuse(_chain_pos(it), _chain_pos(chain[0]), maxf(30.0, float(chain[0]["at"]) - chain_t))
 		if last:
 			_chain_finale(it)
 
@@ -724,6 +741,28 @@ func draw(g: CanvasItem) -> void:
 			for o in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1), Vector2(1, 1)]:
 				g.draw_string(UI.anton(true), tp + o * 1.5, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0, 0, 0, 0.85))
 			g.draw_string(UI.anton(true), tp, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, cc.lightened(0.25))
+	# chain fuses: a spark racing along, a burnt trail behind it cooling brass -> olive -> gone
+	for fz in fuses:
+		var k: float = clampf(fz["t"] / fz["dur"], 0.0, 1.0)
+		var a: Vector2 = fz["a"]
+		var hd: Vector2 = a.lerp(fz["b"], k)
+		var fade: float = clampf(1.0 - (float(fz["t"]) - fz["dur"]) / 220.0, 0.0, 1.0)
+		var n := int(a.distance_to(hd) / 6.0)
+		for i in n:
+			var u := float(i) / maxf(1.0, n)
+			var age: float = (k - u * k) * fz["dur"] + maxf(0.0, fz["t"] - fz["dur"])
+			if age > 220.0: continue
+			var cc: Color = BRASS if age < 60.0 else (OLV if age < 140.0 else Color(OLV, 0.5))
+			var q := a.lerp(hd, u)
+			g.draw_rect(Rect2(q.x - 1.0, q.y - 1.0, 3.0, 3.0), Color(cc, cc.a * fade))
+		if k < 1.0:
+			g.draw_rect(Rect2(hd.x - 3.0, hd.y - 3.0, 6.0, 6.0), Color("#fff4cf"))
+			g.draw_rect(Rect2(hd.x - 5.0, hd.y - 1.0, 10.0, 2.0), Color("#ffd06a"))
+			g.draw_rect(Rect2(hd.x - 1.0, hd.y - 5.0, 2.0, 10.0), Color("#ffd06a"))
+			for i in 3:
+				var sa := randf() * TAU
+				var sr := 4.0 + randf() * 8.0
+				g.draw_rect(Rect2(hd.x + cos(sa) * sr, hd.y + sin(sa) * sr, 2.0, 2.0), Color("#f08a3a"))
 	# booms, baked (tools/pixelfx_fx/kenin-boom.js, owner 2026-11-05): 32 frames of 200x180, pivot 100,120, its clock
 	# stretched to the boom's life, sized to its radius (the sheet's fireball is about 26 art px across)
 	for bo in booms:
