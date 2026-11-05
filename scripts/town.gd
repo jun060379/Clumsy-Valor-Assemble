@@ -21,6 +21,7 @@ const SURFR := 6.0
 const PXK := 1.78
 const CAMPFIRE := preload("res://assets/fx/town/campfire.png")
 const LIFE := preload("res://scripts/town_life.gd")
+const TFX := preload("res://scripts/town_fx.gd")
 const TF := preload("res://scripts/townsfolk.gd")
 const BRAN := preload("res://scripts/bran.gd")
 const LIT := preload("res://scripts/lit.gd")
@@ -76,6 +77,7 @@ var front: Node2D
 var light_tex: GradientTexture2D
 var tfx: Array = []
 var emit_t := {}
+var fxa                       # the ambient effects with a cause (town_fx.gd)
 var life                      # wind, grass, props, birds, weather (town_life.gd)
 var folk                      # townsfolk (lives on the arena)
 var bran
@@ -137,6 +139,7 @@ func _ready() -> void:
 	front.draw.connect(_draw_front)
 	arena.add_child(front)
 	life = LIFE.new(self)
+	fxa = TFX.new(self)
 	bran = BRAN.new(self)
 	folk = TF.of(arena)
 	folk.town = self
@@ -687,6 +690,7 @@ func step(dt: float) -> void:
 		if near_door == null and absf(P.position.x - HDOOR) < 120.0 and absf(P.position.y - LOWF) < 30.0:
 			near_door = {"x": HDOOR, "y": LOWF - 20.0, "name": "파티 편성", "act": "party"}     # the fountain (nearFountain)
 	life.step(dt)
+	fxa.step(dt)
 	folk.step(dt)
 	bran.step(dt)
 	_horse_step(dt)
@@ -703,7 +707,6 @@ func step(dt: float) -> void:
 				"ph": randf() * 9.0, "c": Color("#6f8f44") if randf() < 0.5 else Color("#97ad58")})
 	# ambient: smoke, embers, fountain drops, leaves
 	var gx: float = life.gust * 0.03
-	_emit("forge", 130.0, dt, func(): tfx.append({"k": "smoke", "x": 7428.0, "y": LOWF - 208.0 * BS, "vx": 0.006 + gx, "vy": -0.03 - randf() * 0.012, "s": 11.0 * BS, "t": 0.0, "life": 2600.0, "dark": true}))
 	_emit("fnt", 60.0, dt, func(): tfx.append({"k": "drop", "x": HDOOR + randf_range(-8, 8), "y": LOWF - 100.0 * BS, "vx": randf_range(-0.025, 0.025), "vy": 0.02, "t": 0.0, "life": 1000.0, "floor": LOWF - 40.0 * BS}))
 	_emit("leaf", 420.0, dt, func(): tfx.append({"k": "leaf", "x": 8750.0 + randf() * 450.0, "y": LOWF - 340.0 + randf() * 120.0, "vx": 0.02, "vy": 0.025 + randf() * 0.02, "t": 0.0, "life": 6500.0, "ph": randf() * 9.0, "c": Color("#8f8a3a") if randf() < 0.5 else Color("#b8aa52")}))
 	_emit("leaf2", 1100.0, dt, func(): tfx.append({"k": "leaf", "x": randf() * 500.0, "y": G - 300.0, "vx": 0.02, "vy": 0.02 + randf() * 0.02, "t": 0.0, "life": 5000.0, "ph": randf() * 9.0, "c": Color("#9a9446")}))
@@ -898,6 +901,7 @@ func _draw() -> void:
 			_draw_wagon(b)
 			continue
 		_spr(b[0], b[1], b[2], b[3], b.size() > 7 and b[7])
+	fxa.draw_world(self)
 	_spr("g_hall", HXB, TTOP, 1.0)
 	var fp := HM(HX2 + 162.0 * PK, HTOP2 + 6.0 * PK)
 	_flag(fp.x, fp.y, 1.75 * BS)
@@ -959,6 +963,7 @@ func _draw_front() -> void:
 				front.draw_rect(Rect2(roundf(f["x"]), roundf(f["y"]), PK, PK), Color(0.75, 0.9, 1.0, 0.95))
 			"spark":
 				front.draw_rect(Rect2(roundf(f["x"] / PK) * PK, roundf(f["y"] / PK) * PK, PK, PK), Color(Color("#fde7a2") if k < 0.5 else Color("#ea7a26"), 1.0 - k))
+	fxa.draw_front(front)
 	life.draw_front(front)
 	if arena.eil.map == "town": arena.eil.draw_say(front, floor_at(arena.eil.x))
 	# door labels and the prompt

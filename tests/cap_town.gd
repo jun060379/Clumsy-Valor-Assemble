@@ -20,6 +20,21 @@ func _initialize() -> void:
 	if args.has("old"): arena.level.hx = {}
 	if args.has("nolit"): arena.level.lit.visible = false
 	var L = arena.level
+	for a in args:                       # at=X[,Y]: stand there and shoot every other frame for 2 s (h=HOUR sets the time)
+		if String(a).begins_with("h="): arena.tod_h = float(String(a).substr(2))
+		if String(a).begins_with("w="): arena.weather = String(a).substr(2)
+	for a in args:
+		if String(a).begins_with("at="):
+			var xy := String(a).substr(3).split(",")
+			arena.player.position = Vector2(float(xy[0]), L.floor_at(float(xy[0])) if xy.size() < 2 else float(xy[1]))
+			await frames(40)
+			for i in 60:
+				await RenderingServer.frame_post_draw
+				root.get_texture().get_image().save_png(out + "/a%02d.png" % i)
+				await frames(2)
+			print("CAP done")
+			quit()
+			return
 	if args.has("camp"):                 # the campfire, every other frame for 3 s
 		arena.player.position = Vector2(4250.0, L.G)
 		await frames(40)
