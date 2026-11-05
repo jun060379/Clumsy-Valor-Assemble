@@ -1479,18 +1479,16 @@ func _draw_bolt(f: Dictionary) -> void:
 	var ph: String = f.get("ph", "hold")
 	var pos := Vector2(f["x"], f["y"])
 	if ph == "hold" or ph == "orb":
-		if ph == "orb":
-			var tr: Array = f["tr"]
-			for i in tr.size():
-				var q: Vector2 = tr[i]
-				var r := (4.0 - i * 0.45) * sc * 0.5
-				if r < 1.0: break
-				g.draw_rect(Rect2((q - Vector2(r, r)).snapped(Vector2(PFX.S, PFX.S)), Vector2(r, r) * 2.0), Color("#ffecaa") if i < 2 else (Color("#ffc85a") if i < 5 else Color("#d89a3a")))
+		# the living orb (72x40, pivot 44,20) turned to its heading, its comet tail behind; stretched with its speed
 		var k := 1.0
 		if ph == "hold": k = clampf(1.0 - f["hold"] / maxf(1.0, f["hold0"]) + 0.3, 0.3, 1.0)
+		var vel := Vector2(f["vx"], f["vy"])
+		var hd: float = vel.angle() if ph == "orb" and vel.length() > 0.01 else -PI / 2.0
+		var st := 1.0 + 0.35 * clampf(vel.length() / BOLT_ORB_V, 0.0, 1.0) if ph == "orb" else 1.0
 		var fi := int(f["t"] / 20.0) % 16
-		var s2 := sc * k
-		g.draw_texture_rect_region(L_ORB, Rect2(pos - Vector2(20, 20) * s2, Vector2(40, 40) * s2), Rect2((fi % 4) * 40, (fi / 4) * 40, 40, 40))
+		g.draw_set_transform(pos, hd, Vector2(sc * k * st, sc * k / sqrt(st)))
+		g.draw_texture_rect_region(L_ORB, Rect2(-44, -20, 72, 40), Rect2((fi % 3) * 72, (fi / 3) * 40, 72, 40))
+		g.draw_set_transform_matrix(Transform2D.IDENTITY)
 		return
 	var tex: Texture2D = L_FORM if ph == "form" else L_SPEAR
 	var n := 6 if ph == "form" else 16
