@@ -20,6 +20,8 @@ const AIDA_SLAM := preload("res://assets/fx/aida_rewind_slam.png")
 ## Aida's swing tears, baked from pixelfx (tools/pixelfx_fx/aida-tear-slash.js) per attack arc: 37 frames of 232x232 at
 ## 50 fps, pivot at the arc's centre; each has a mask sheet for the afterimage, a window onto the game in negative
 const SH_NEG := preload("res://shaders/pfx_negmask.gdshader")
+const AIDA_GATE := preload("res://assets/fx/aida_gate.png")
+const AIDA_GATE_M := preload("res://assets/fx/aida_gate_mask.png")
 const ASL := {"-100,30": "a1", "205,-12": "a2", "10,-190": "ah", "170,10": "ka", "60,-110": "air2", "-120,70": "air3"}
 var asl_tex := {}
 func _asl(k: String) -> Array:
@@ -444,7 +446,7 @@ func _draw_cpu() -> void:
 			"sheet": alive = _sheet(g, e)
 			"asl": alive = _asl_draw(g, e)
 			"chg": alive = _charge(g, e)
-			"gate": alive = _gate(e)
+			"gate": alive = _gate_b(g, e)
 			"pil": alive = _pillar(g, e)
 			"bolt2": alive = _bolt(g, e)
 			"hcr": alive = _heal(g, e)
@@ -1076,29 +1078,29 @@ func _sheet(g: CanvasItem, e: Dictionary) -> bool:
 	g.draw_texture_rect_region(e["tex"], Rect2(e["x"] - float(e["px"]) * sc, e["y"] - float(e["py"]) * sc, fw * sc, fh * sc), Rect2(c * fw, r * fh, fw, fh))
 	return true
 
-## Aida's baked swing tear: the colour frame flipped to her facing, and the afterimage's negative window as a quad
-func _asl_draw(g: CanvasItem, e: Dictionary) -> bool:
-	var i := int(e["t"] / 1000.0 * 50.0)
-	if i >= 37:
-		return false
-	var fw := 232.0
-	var c := i % 7
-	var r := i / 7
-	var w: float = fw * S
-	var d: float = float(e["d"])
-	var at := Rect2(e["x"] - 116.0 * S * d, e["y"] - 116.0 * S, w * d, w)
-	g.draw_texture_rect_region(e["tex"], at, Rect2(c * fw, r * fw, fw, fw))
+## a baked colour frame (flipped by d) plus its mask frame as a negative window onto the game (pfx_negmask quad)
+func _baked(g: CanvasItem, e: Dictionary, i: int, fw: float, fh: float, cols: int, px: float, py: float, sc: float, d: float) -> void:
+	var c := i % cols
+	var r := i / cols
+	g.draw_texture_rect_region(e["tex"], Rect2(e["x"] - px * sc * d, e["y"] - py * sc, fw * sc * d, fh * sc), Rect2(c * fw, r * fh, fw, fh))
 	var mt: Texture2D = e["mask"]
-	var lr := Rect2(-116.0 * S, -116.0 * S, w, w)
+	var lr := Rect2(-px * sc, -py * sc, fw * sc, fh * sc)
+	if d < 0.0: lr.position.x = -(fw - px) * sc
 	var q := _quad(e, SH_NEG, Vector2(e["x"], e["y"]), lr)
 	var m: ShaderMaterial = q.material
-	if not e.has("set"):
-		e["set"] = true
+	if not e.has("set") or e["set"] != lr:
+		e["set"] = lr
 		m.set_shader_parameter("mask", mt)
 		m.set_shader_parameter("rect", Vector4(lr.position.x, lr.position.y, lr.size.x, lr.size.y))
 		m.set_shader_parameter("flip", d)
 	var ts := mt.get_size()
-	m.set_shader_parameter("region", Vector4(c * fw / ts.x, r * fw / ts.y, fw / ts.x, fw / ts.y))
+	m.set_shader_parameter("region", Vector4(c * fw / ts.x, r * fh / ts.y, fw / ts.x, fh / ts.y))
+
+## Aida's baked swing tear, flipped to her facing
+func _asl_draw(g: CanvasItem, e: Dictionary) -> bool:
+	var i := int(e["t"] / 1000.0 * 50.0)
+	if i >= 37: return false
+	_baked(g, e, i, 232.0, 232.0, 7, 116.0, 116.0, S, float(e["d"]))
 	return true
 
 func _slam(g: CanvasItem, e: Dictionary) -> bool:
@@ -1258,6 +1260,25 @@ func _charge(g: CanvasItem, e: Dictionary) -> bool:
 
 
 # ---------- AIDA's rift gate / ult cut / Hollow ----------
+## the gate, baked (tools/pixelfx_fx/aida-gate.js, 57 frames of 128x150 at 50 fps, pivot (64, 134), drawn 100 art px
+## tall): opening 0-0.12 s, a seamless stare 0.12-0.52 s looped until released, then the snap, cooling and the
+## negative afterimage from 0.52 s; scaled to the gate's height, its clock sped up by kk like the old one
+func _gate_b(g: CanvasItem, e: Dictionary) -> bool:
+	if e.get("rel", false) and not e.has("relT"): e["relT"] = e["t"]
+	var kk: float = e["kk"]
+	var ts: float
+	var t: float = e["t"] / 1000.0
+	if e.has("relT"): ts = 0.52 + (e["t"] - e["relT"]) / 1000.0 * kk
+	elif t * kk < 0.12: ts = t * kk
+	else: ts = 0.12 + fmod(t * kk - 0.12, 0.4)
+	var i := int(ts * 50.0)
+	if i >= 57 or e["t"] > 5000.0: return false
+	if not e.has("tex"):
+		e["tex"] = AIDA_GATE
+		e["mask"] = AIDA_GATE_M
+	_baked(g, e, i, 128.0, 150.0, 9, 64.0, 134.0, S * (e["h"] / S) / 100.0, 1.0)
+	return true
+
 func _gate(e: Dictionary) -> bool:
 	if e.get("rel", false) and not e.has("relT"): e["relT"] = e["t"]
 	var F: float = e["t"] / FR * e["kk"]
