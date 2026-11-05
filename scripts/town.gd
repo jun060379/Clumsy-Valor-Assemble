@@ -899,7 +899,8 @@ func _draw() -> void:
 		if b[0] == "g_wagon":
 			_draw_wagon(b)
 			continue
-		_spr(b[0], b[1], b[2], b[3], b.size() > 7 and b[7])
+		if b[0] == "g_tentR": fxa.draw_tent(self, b)
+		else: _spr(b[0], b[1], b[2], b[3], b.size() > 7 and b[7])
 	fxa.draw_world(self)
 	_spr("g_hall", HXB, TTOP, 1.0)
 	var fp := HM(HX2 + 162.0 * PK, HTOP2 + 6.0 * PK)
@@ -957,13 +958,14 @@ func _draw_front() -> void:
 			"ember":
 				front.draw_rect(Rect2(roundf(f["x"]), roundf(f["y"]), PK, PK), Color(1, 0.9, 0.64, 1.0 - k) if k < 0.5 else Color(0.92, 0.48, 0.15, 1.0 - k))
 			"leaf":
-				front.draw_rect(Rect2(roundf(f["x"]), roundf(f["y"]), PK * 2.0 if sin(f["t"] / 180.0 + f["ph"]) > 0.0 else PK, PK), Color(f["c"], minf(1.0, (1.0 - k) * 3.0)))
+				fxa.draw_leaf(front, f, minf(1.0, (1.0 - k) * 3.0))
 			"drop":
 				front.draw_rect(Rect2(roundf(f["x"]), roundf(f["y"]), PK, PK), Color(0.75, 0.9, 1.0, 0.95))
 			"spark":
 				front.draw_rect(Rect2(roundf(f["x"] / PK) * PK, roundf(f["y"] / PK) * PK, PK, PK), Color(Color("#fde7a2") if k < 0.5 else Color("#ea7a26"), 1.0 - k))
 	fxa.draw_front(front)
 	fxa.draw_water(front)
+	fxa.draw_bits(front)
 	life.draw_front(front)
 	if arena.eil.map == "town": arena.eil.draw_say(front, floor_at(arena.eil.x))
 	# door labels and the prompt

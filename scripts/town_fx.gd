@@ -9,6 +9,8 @@ extends RefCounted
 ##    shafts with dust turning in them
 ##  - water: wading the river throws a crown of drops and spreads rings; the fountain's stream runs (light sliding
 ##    down it) and churns where it lands; rain bursts on the roofs and the ground and rings the river
+##  - wind: leaves tumble (a turning sprite, not a square); a strong gust drags dust off the road and makes the tent
+##    cloth flap; feet: running through grass kicks bits of it up
 ## Everything is drawn on the 1-px world grid (the characters' dot), positions from the placed sprites.
 
 const FORGE_FIRE := preload("res://assets/fx/town/forge_fire.png")
@@ -84,6 +86,9 @@ var drops: Array = []             # water drops in flight: {x, y, vx, vy, t, lif
 var rings: Array = []             # rings on water: {x, y, t, life, r}
 var roofs: Array = []             # the climbable sprite tops (town.tpl "climb"), where rain lands
 var wade_f := -1
+var bits: Array = []              # grass bits and road dust wisps: {k, x, y, vx, vy, t, life, c}
+var grass_f := -1
+var prev_g := 0.0
 var motes: Array = []
 
 
@@ -183,6 +188,7 @@ func step(dt: float) -> void:
 	puffs = puffs.filter(func(f): return f["t"] < f["life"])
 	_step_light(dt)
 	_step_water(dt)
+	_step_wind(dt)
 	var vp: Viewport = arena.get_viewport()
 	haze_mat.set_shader_parameter("wpx", (vp.get_final_transform() * vp.get_canvas_transform()).x.length())
 	haze.queue_redraw()
@@ -465,3 +471,105 @@ func draw_water(ci: CanvasItem) -> void:
 			seen[p] = true
 			if sin(a) < -0.1 and k > 0.5: continue           # the far side fades first
 			ci.draw_rect(Rect2(p, Vector2.ONE), c)
+
+
+# ---------- wind and feet ----------
+const GRASS_C := [Color("#6f8f44"), Color("#97ad58"), Color("#bccd78")]
+const DUST_C := Color("#c9b48c")
+
+func _step_wind(dt: float) -> void:
+	var P = arena.player
+	var vr: Rect2 = arena.view_rect()
+	var g: float = town.life.gust
+	# running through grass: the blades you kick fly up and settle (not on the bridge, not in the river)
+	var in_water: bool = P.position.x > town.RIV0 - 40.0 and P.position.x < town.RIV1 + 40.0 and P.position.y > town.LOWF - 10.0
+	if P.on and P.anim == "run" and P.f != grass_f and P.f in P.SK.steps(P.who, "run") and not in_water:
+		for i in 3:
+			bits.append({"k": "grass", "x": P.position.x - P.dir * randf_range(2, 10), "y": P.position.y - 2.0, "vx": -P.dir * randf_range(0.01, 0.05), "vy": -randf_range(0.06, 0.12),
+				"t": 0.0, "life": 650.0, "c": GRASS_C[randi() % 3], "gy": P.position.y})
+	grass_f = P.f
+	# a strong gust drags dust off the ground: low wisps racing downwind
+	if g > 1.2 and prev_g <= 1.2 or (g > 1.3 and randf() < dt / 120.0):
+		for i in 3:
+			var x := vr.position.x - 20.0 + randf() * vr.size.x * 0.7
+			var gy: float = town.floor_at(x)
+			bits.append({"k": "wisp", "x": x, "y": gy - randf_range(1, 10), "vx": 0.18 + randf() * 0.12, "vy": -0.004, "t": 0.0, "life": 900.0 + randf() * 500.0, "c": DUST_C,
+				"len": 4 + randi() % 6, "gy": gy})
+	prev_g = g
+	for b in bits:
+		b["t"] += dt
+		b["x"] += b["vx"] * dt
+		b["y"] += b["vy"] * dt
+		if b["k"] == "grass":
+			b["vy"] += 0.0004 * dt
+			b["vx"] += (g * 0.00004) * dt
+			if b["y"] > b["gy"]: b["t"] = b["life"]
+		else:
+			b["y"] += sin(b["t"] / 140.0 + b["x"] * 0.05) * 0.01 * dt
+	bits = bits.filter(func(b): return b["t"] < b["life"])
+
+func draw_bits(ci: CanvasItem) -> void:
+	for b in bits:
+		var k: float = b["t"] / b["life"]
+		var X := roundf(b["x"])
+		var Y := roundf(b["y"])
+		if b["k"] == "grass":
+			var c: Color = b["c"]
+			ci.draw_rect(Rect2(X, Y, 1, 1), Color(c, 1.0 - k * 0.6))
+			if int(b["t"] / 70.0) % 2 == 0: ci.draw_rect(Rect2(X, Y - 1, 1, 1), Color(c.darkened(0.2), 1.0 - k * 0.6))
+		else:
+			var a := sin(k * PI) * 0.45
+			ci.draw_rect(Rect2(X - b["len"], Y, b["len"], 1), Color(b["c"], a))
+			ci.draw_rect(Rect2(X - b["len"] - 3, Y, 3, 1), Color(b["c"], a * 0.45))
+
+## a leaf tumbling: four turns of a small leaf (flat, tipped, edge-on, tipped the other way), a darker vein
+func draw_leaf(ci: CanvasItem, f: Dictionary, a: float) -> void:
+	var c: Color = f["c"]
+	var d := c.darkened(0.3)
+	var X := roundf(f["x"])
+	var Y := roundf(f["y"])
+	var fr := int(f["t"] / 110.0 + f["ph"] * 3.0) % 4
+	match fr:
+		0:
+			ci.draw_rect(Rect2(X - 1, Y, 3, 1), Color(c, a))
+			ci.draw_rect(Rect2(X, Y + 1, 1, 1), Color(d, a))
+		1:
+			ci.draw_rect(Rect2(X - 1, Y - 1, 1, 1), Color(c, a))
+			ci.draw_rect(Rect2(X, Y, 1, 1), Color(c, a))
+			ci.draw_rect(Rect2(X + 1, Y + 1, 1, 1), Color(d, a))
+		2:
+			ci.draw_rect(Rect2(X, Y - 1, 1, 2), Color(d, a))
+		3:
+			ci.draw_rect(Rect2(X + 1, Y - 1, 1, 1), Color(c, a))
+			ci.draw_rect(Rect2(X, Y, 1, 1), Color(c, a))
+			ci.draw_rect(Rect2(X - 1, Y + 1, 1, 1), Color(d, a))
+
+## a tent with its cloth flapping in the wind: 1-px rows of the middle shifted a pixel back and forth (the ridge and
+## the pegged hem stay put), more in a gust
+func draw_tent(ci: CanvasItem, b: Array) -> void:
+	var k: String = b[0]
+	var im: Texture2D = town.hx.get(k, town.tex[k])
+	var s: float = town.ks(k)
+	var w: float = im.get_width() * (1.0 if town.hx.has(k) else s)
+	var h: float = im.get_height() * (1.0 if town.hx.has(k) else s)
+	var x := roundf(b[1])
+	var y0: float = b[2] - h + b[3] * town.PK * s
+	var flip: bool = b.size() > 7 and b[7]
+	var vr: Rect2 = arena.view_rect().grow(40.0)
+	if x > vr.end.x or x + w < vr.position.x: return
+	var t := Time.get_ticks_msec() / 1000.0
+	var g: float = town.life.gust
+	var amp := 0.35 + minf(1.4, g) * 0.75
+	if flip: ci.draw_set_transform(Vector2(x + w, 0), 0.0, Vector2(-1, 1))
+	var ox := 0.0 if flip else x
+	var r := 0
+	var ih := int(h)
+	while r < ih:
+		var u := float(r) / h
+		var flap := sin(u * PI) * sin(u * PI)                 # still at the ridge and the hem, loose in the middle
+		var o := roundf(sin(t * 3.4 - u * 5.0 + x * 0.01) * amp * flap)
+		var rh := mini(2, ih - r)
+		var src := Rect2(0, r, w, rh) if town.hx.has(k) else Rect2(0, r / s, w / s, rh / s)
+		ci.draw_texture_rect_region(im, Rect2(ox + o, y0 + r, w, rh), src)
+		r += 2
+	if flip: ci.draw_set_transform(Vector2.ZERO)

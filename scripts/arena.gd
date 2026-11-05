@@ -3,6 +3,7 @@ extends Node2D
 ## and the ghost (ghost.gd), as in the prototype's arena.
 ## Owns the camera, hitstop, screen shake, sound, slow-motion (perfect dodge) and the hit effects.
 
+const TFX := preload("res://scripts/town_fx.gd")
 const BAL := preload("res://scripts/balance.gd")
 const PLAYER := preload("res://scripts/player.gd")
 const DUMMY := preload("res://scripts/dummy.gd")
@@ -1694,7 +1695,9 @@ func _draw_fx() -> void:
 		var k: float = e["t"] / e["life"]
 		match e["k"]:
 			"dust":
-				fx_layer.draw_circle(Vector2(e["x"], e["y"]), e["r"] * (1.0 + k), Color8(190, 176, 150, int(255 * 0.7 * (1.0 - k))))
+				# a soft puff on the 1-px grid (owner 2026-11-06: no smooth circles among the pixels)
+				var dr := roundi(e["r"] * (1.0 + k))
+				fx_layer.draw_texture(TFX.disc(dr), Vector2(roundf(e["x"]) - dr, roundf(e["y"]) - dr), Color8(190, 176, 150, int(255 * 0.7 * (1.0 - k))))
 			"ring":
 				# the impact ring lying on the floor: a white ellipse and an inner one in colour
 				var rr: float = e["r"] + k * 140.0
