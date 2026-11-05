@@ -78,6 +78,7 @@ var t_proj: Texture2D = preload("res://assets/mobs/eye_proj.png")
 var t_wave: Texture2D = preload("res://assets/mobs/skel_proj.png")
 var witch_rect: ColorRect
 var luce_fx: Array = []
+var luce_trails: Array = []      # the bolts' long thin light lines, lingering and erasing from the oldest end
 var mark_pos := Vector2.INF
 var solids: Array = []        # raised rock {x,w,top}
 var ceil_y := -1.0e9
@@ -645,6 +646,7 @@ func clear_room() -> void:
 	mobs.clear()
 	proj.clear()
 	luce_fx.clear()
+	luce_trails.clear()
 	if kenin != null:
 		kenin.shots.clear()
 		kenin.bomb_fx.clear()
@@ -1355,7 +1357,7 @@ func lightning(x: float, y: float, sz: float, dmg: float, d: int) -> void:
 	pfx.bolt(x, y, sz)
 
 ## the bolt's flight (PLACEHOLDER feel numbers): orb speed px/ms and time, the form flash, the spear's push and top speed
-const BOLT_ORB_V := 1.25
+const BOLT_ORB_V := 0.85
 const BOLT_ORB_MS := 320.0
 const BOLT_FORM_MS := 100.0
 const BOLT_SPEAR_V0 := 0.6
@@ -1379,11 +1381,13 @@ func step_luce(dt: float) -> void:
 				if f["hold"] <= 0.0:
 					# the orb sets off sideways of the line to the target (the first one arcs up, the second down)
 					var side := 1.0 if f["hold0"] < 200.0 else -1.0
-					var a0: float = dv.angle() - side * float(f["d"]) * 1.75
+					var a0: float = dv.angle() - side * float(f["d"]) * 2.4
 					f["vx"] = cos(a0) * BOLT_ORB_V
 					f["vy"] = sin(a0) * BOLT_ORB_V
 					f["ph"] = "orb"
 					f["pt"] = 0.0
+					# a near target gets a tighter loop, so the spear always has room to fly
+					f["ov"] = clampf((tp - Vector2(f["x"], f["y"])).length() / 520.0, 0.35, 1.0)
 					if not live: f["tg"] = null
 				continue
 			f["pt"] = f.get("pt", 0.0) + dt
@@ -1400,7 +1404,7 @@ func step_luce(dt: float) -> void:
 				if u < 0.2: ov = 0.12
 				elif u < 0.6: ov = lerpf(0.55, 1.0, pow((u - 0.2) / 0.4, 0.7))
 				else: ov = lerpf(1.0, 0.1, 1.0 - pow(1.0 - (u - 0.6) / 0.4, 2.0))
-				ov *= BOLT_ORB_V
+				ov *= BOLT_ORB_V * float(f.get("ov", 1.0))
 				if u >= 0.2 and not f.get("ej", false):
 					f["ej"] = true
 					pfx.spear_fx("eject", Vector2(f["x"], f["y"]), cur, f["sz"])
@@ -1431,6 +1435,10 @@ func step_luce(dt: float) -> void:
 				f["vy"] = hv.y
 			f["x"] += f["vx"] * dt
 			f["y"] += f["vy"] * dt
+			var pth: Array = f.get("path", [])
+			if pth.is_empty() or (pth[-1] - Vector2(f["x"], f["y"])).length() >= 3.0:
+				pth.append(Vector2(f["x"], f["y"]))
+				f["path"] = pth
 			f["trT"] += dt
 			if f["trT"] >= PFX.FR:
 				f["trT"] = 0.0
@@ -1460,15 +1468,58 @@ func step_luce(dt: float) -> void:
 					f["hits"].append(m)
 					m.hit(f["dmg"], f["d"] * 6.0, f["mul"])
 	hit_by = ""
+	for f in luce_fx:
+		if f["t"] >= f["life"] and f["k"] == "bolt" and f.get("path", []).size() > 1:
+			luce_trails.append({"cells": _trail_cells(f["path"]), "t": 0.0})
 	luce_fx = luce_fx.filter(func(f): return f["t"] < f["life"])
+	for tr in luce_trails: tr["t"] += dt
+	luce_trails = luce_trails.filter(func(tr): return tr["t"] < TRAIL_LIFE)
+
+## the trail (owner 2026-11-05, a Frieren battle-art line): a 2 px light line along the whole flight, lingering long
+## after, then erased from its oldest end while it dims (PLACEHOLDER timing)
+const TRAIL_LIFE := 1600.0
+const TRAIL_HOLD := 500.0
+func _trail_cells(path: Array) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	var last := Vector2(INF, INF)
+	for i in path.size() - 1:
+		var a: Vector2 = path[i]
+		var b: Vector2 = path[i + 1]
+		var n := maxi(1, int((b - a).length() / PFX.S))
+		for j in n:
+			var c := (a.lerp(b, float(j) / n) / PFX.S).floor() * PFX.S
+			if c != last:
+				out.append(c)
+				last = c
+	return out
+
+func _draw_trail(cells: PackedVector2Array, age: float) -> void:
+	var n := cells.size()
+	if n == 0: return
+	var cut := 0
+	var al := 1.0
+	if age > TRAIL_HOLD:
+		var q := (age - TRAIL_HOLD) / (TRAIL_LIFE - TRAIL_HOLD)
+		cut = int(n * q * q)                       # it erases from the oldest end, faster and faster
+		al = 1.0 - q * 0.6
+	var cs := [Color("#fff8dc"), Color("#ffecaa"), Color("#ffc85a"), Color("#d89a3a")]
+	for i in range(cut, n):
+		var u := float(n - 1 - i) / maxf(1.0, n - 1)        # 0 at the newest end
+		var ci := 0 if u < 0.1 else (1 if u < 0.35 else (2 if u < 0.75 else 3))
+		var c: Color = cs[mini(3, ci + (1 if age > TRAIL_HOLD * 1.6 else 0))]
+		fx_layer.draw_rect(Rect2(cells[i], Vector2(PFX.S, PFX.S)), Color(c, al))
 
 func _draw_luce() -> void:
+	for tr in luce_trails: _draw_trail(tr["cells"], tr["t"])
+	for f in luce_fx:
+		if f["k"] == "bolt" and f.get("path", []).size() > 1: _draw_trail(_trail_cells(f["path"]), 0.0)
 	for f in luce_fx:
 		if f["k"] == "bolt":
 			_draw_bolt(f)
 		# the pillar and the lightning are pfx.gd's (pfxPillar / pfxBolt)
 
 const L_ORB := preload("res://assets/fx/luce/luce-orb.png")
+const L_BORN := preload("res://assets/fx/luce/luce-orb-born.png")
 const L_FORM := preload("res://assets/fx/luce/luce-spear-form.png")
 const L_SPEAR := preload("res://assets/fx/luce/luce-spear.png")
 ## the bolt, baked (tools/pixelfx_fx/luce-orb.js, luce-spear-form.js, luce-spear.js): the orb popping in while it holds,
@@ -1478,10 +1529,16 @@ func _draw_bolt(f: Dictionary) -> void:
 	var sc: float = PFX.S * f["sz"]
 	var ph: String = f.get("ph", "hold")
 	var pos := Vector2(f["x"], f["y"])
+	if ph == "hold":
+		# the orb being born (56x56, pivot 28): motes spiral in, a ring closes, a cross flashes; the orb swells out of it
+		var u := clampf(1.0 - f["hold"] / maxf(1.0, f["hold0"]), 0.0, 1.0)
+		var bi := mini(12, int(u * 13.0))
+		g.draw_texture_rect_region(L_BORN, Rect2(pos - Vector2(28, 28) * sc, Vector2(56, 56) * sc), Rect2((bi % 4) * 56, (bi / 4) * 56, 56, 56))
+		if u < 0.72: return
 	if ph == "hold" or ph == "orb":
 		# the living orb (72x40, pivot 44,20) turned to its heading, its comet tail behind; stretched with its speed
 		var k := 1.0
-		if ph == "hold": k = clampf(1.0 - f["hold"] / maxf(1.0, f["hold0"]) + 0.3, 0.3, 1.0)
+		if ph == "hold": k = clampf((1.0 - f["hold"] / maxf(1.0, f["hold0"]) - 0.72) / 0.28, 0.05, 1.0)
 		var vel := Vector2(f["vx"], f["vy"])
 		var hd: float = vel.angle() if ph == "orb" and vel.length() > 0.01 else -PI / 2.0
 		var st := 1.0 + 0.35 * clampf(vel.length() / BOLT_ORB_V, 0.0, 1.0) if ph == "orb" else 1.0
