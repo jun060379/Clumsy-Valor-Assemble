@@ -102,5 +102,19 @@ func _initialize() -> void:
 			await process_frame
 			if P.on: break
 		ok(absf(P.position.y - pl.y) < 2.0, "a jump topping out under a ledge is lifted onto it (y %.0f lip %.0f)" % [P.position.y, pl.y])
+	# (owner video) climbing up near a ledge's end, facing off it: she must still end standing on the ledge
+	if pl != null:
+		await frames(20)
+		P.position = Vector2(pl.x + 14.0, pl.y + 60.0)
+		P.on = false
+		P.mantled = false
+		P.dir = -1
+		P.set_anim("jump", 3)
+		P.vy = -0.3
+		for i in 400:
+			await process_frame
+			if P.on and P.anim == "idle": break
+		await frames(30)
+		ok(P.on and absf(P.position.y - pl.y) < 2.0 and P.position.x >= pl.x, "a climb at a ledge's end leaves her on it (x %.0f, ledge %.0f..%.0f, y %.0f)" % [P.position.x, pl.x, pl.x + pl.w, P.position.y])
 	print("DONE fails=%d" % fails)
 	quit(1 if fails > 0 else 0)

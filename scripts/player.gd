@@ -1431,7 +1431,7 @@ func _hang_start(top: float, lip_x: float, side: int) -> bool:
 
 ## climb up onto `top` (lip_x = the corner, or NAN in the middle of a ledge): from the hang, or straight from a jump that
 ## came up a little short (it starts on the frame matching how far below she is); false without the art
-func _climb_start(top: float, lip_x: float, side: int, from := -1) -> bool:
+func _climb_start(top: float, lip_x: float, side: int, from := -1, span := Vector2(-1e9, 1e9)) -> bool:
 	if not has_ledge_art(): return false
 	var k := _lk()
 	var M := _ledge_meta()
@@ -1455,6 +1455,13 @@ func _climb_start(top: float, lip_x: float, side: int, from := -1) -> bool:
 	ledge_side = side
 	dir = side
 	position = Vector2(lx + side * (float(M["end"]) - 230.0) * k, top)      # where the climb leaves her standing
+	# (owner 2026-11-05 video: climbing up near a ledge's end left her standing past it, and she dropped off) keep the
+	# spot she ends on over the ledge, sliding the picture with it
+	var nx := clampf(position.x, span.x + 12.0, span.y - 12.0)
+	if nx != position.x:
+		ledge_at.x += nx - position.x
+		ledge_off -= Vector2(nx - position.x, 0.0)
+		position.x = nx
 	vx = 0.0
 	vy = 0.0
 	on = true
@@ -1667,7 +1674,7 @@ func physics(dt: float, a: String) -> void:
 			var reach: float = vy * vy / (2.0 * GRAV) if vy < 0.0 else 0.0
 			var short: float = dy - reach
 			if short > 0.0 and short <= LEDGE_ASSIST and (vy > -0.3 or dy < 60.0):
-				if not attacking() and _climb_start(pl.y, NAN, dir):
+				if not attacking() and _climb_start(pl.y, NAN, dir, -1, Vector2(pl.x, pl.x + pl.w)):
 					landed = true
 					break
 				mantled = true
