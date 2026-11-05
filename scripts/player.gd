@@ -1544,6 +1544,19 @@ func _mantle(top: float, side: int, lip_x: float) -> bool:
 	arena.dust(position, side, false)
 	return true
 
+## an air dash clipping a lip by a few px: set her on top, keep the dash going (no animation, just the nudge)
+const DASH_POP := 26.0         # PLACEHOLDER
+func _dash_pop(top: float, x: float) -> bool:
+	if on or anim != "airdash": return false
+	var dy := position.y - top
+	if dy <= 0.0 or dy > DASH_POP: return false
+	position = Vector2(x, top)
+	vy = 0.0
+	on = true
+	air = 0
+	arena.dust(position, dir, false)
+	return true
+
 func a_busy_for_mantle() -> bool:
 	return anim in ["hurt", "death", "dive", "guard", "parry", "tp_in", "dig_out", "dig_in", "mark", "amark"]
 
@@ -1587,7 +1600,7 @@ func physics(dt: float, a: String) -> void:
 		elif a == "airdash": g *= 0.35
 		elif a == "guard" or a == "parry": g *= 0.45
 		elif jump_cut: g *= JUMP_CUT_G
-		elif absf(vy) < 0.14 and not attacking(): g *= 0.55
+		elif absf(vy) < 0.14 and (not attacking() or a == "air_combo"): g *= 0.55     # the apex hang (an air attack at the top floats too: owner 2026-11-05)
 		elif vy > 0.0: g *= 1.55
 		vy = minf(FALLMAX, vy + g * dt)
 	if lunge > 0.0:
@@ -1608,9 +1621,11 @@ func physics(dt: float, a: String) -> void:
 				position.y = so.top
 			elif prev_x <= so.x - 12.0:
 				position.x = so.x - 12.0
+				if _dash_pop(so.top, so.x + 4.0): return
 				if _mantle(so.top, 1, so.x): return
 			elif prev_x >= so.x + so.w + 12.0:
 				position.x = so.x + so.w + 12.0
+				if _dash_pop(so.top, so.x + so.w - 4.0): return
 				if _mantle(so.top, -1, so.x + so.w): return
 			elif not (vy > 0.0 and position.y - so.top <= 40.0):
 				position.x = so.x - 12.0 if prev_x < so.x + so.w / 2.0 else so.x + so.w + 12.0
@@ -1664,6 +1679,12 @@ func physics(dt: float, a: String) -> void:
 				land_anim()
 				if not land_cued: land_sfx()
 				arena.dust(position, 0, false)
+			elif a == "air_combo" and (hit_done or fx_done or f >= 3):
+				# touching down after the strike is out: the swing's air recovery ends here, so a buffered ground move
+				# (attack, jump, skill) goes out at once (owner 2026-11-05)
+				set_anim("idle")
+				land_sfx()
+				arena.dust(position, 0, false)
 			land_cued = false
 		elif landed:
 			vy = 0.0
@@ -1692,6 +1713,12 @@ func physics(dt: float, a: String) -> void:
 	# ledge assist (Dead Cells-like, owner 2026-11-05): coming up under a ledge, if the jump would top out with her feet
 	# a little short of its lip, it gets a smooth lift that carries her just over it (once per jump; not holding down,
 	# not dropping through) — no snap
+	# dash popping (Celeste-like, owner 2026-11-05): an air dash that clips just under a ledge's top pops up onto it
+	if not landed and not on and a == "airdash" and vy > -0.2:
+		for pl in arena.platforms:
+			var dyp: float = position.y - pl.y
+			if dyp > 0.0 and dyp <= DASH_POP and position.x > pl.x + 2.0 and position.x < pl.x + pl.w - 2.0:
+				if _dash_pop(pl.y, position.x): return
 	# catching a ledge's end from beside it (it has no side to push into): falling past its corner, pushing toward it
 	if not landed and not on and has_ledge_art() and regrab_t <= 0.0 and vy > -0.25 and drop_t <= 0.0 and not attacking() and not (a in ["dive", "hurt", "death"]):    # (pushing toward it is the intent; a stick tilted down too still catches)
 		var mvg := move_axis()
@@ -1727,6 +1754,12 @@ func physics(dt: float, a: String) -> void:
 		if a in ["jump", "runjump", "double_jump"]:
 			land_anim()
 			if not land_cued: land_sfx()
+			arena.dust(position, 0, false)
+		elif a == "air_combo" and (hit_done or fx_done or f >= 3):
+			# touching down after the strike is out: the swing's air recovery ends here, so a buffered ground move
+			# (attack, jump, skill) goes out at once (owner 2026-11-05)
+			set_anim("idle")
+			land_sfx()
 			arena.dust(position, 0, false)
 		land_cued = false
 	elif landed:

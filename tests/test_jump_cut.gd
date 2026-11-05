@@ -134,5 +134,26 @@ func _initialize() -> void:
 		Input.action_release("down")
 		Input.action_release("left")
 		ok(seen_hang and absf(P.position.y - pl.y) < 2.0, "down+toward on the stick while hanging climbs (hang %s, y %.0f lip %.0f)" % [seen_hang, P.position.y, pl.y])
+	# dash pop: an air dash clipping just under a ledge's top pops her up onto it
+	if pl != null:
+		await frames(20)
+		P.position = Vector2(pl.x + 30.0, pl.y + 18.0)
+		P.on = false
+		P.vy = 0.0
+		P.dir = 1
+		P.set_anim("airdash")
+		await frames(3)
+		ok(P.on and absf(P.position.y - pl.y) < 1.0, "an air dash just under a ledge pops onto it (y %.0f lip %.0f)" % [P.position.y, pl.y])
+	# landing out of an air attack's recovery: a buffered ground attack goes out right away
+	await frames(30)
+	P.position = Vector2(1500.0, arena.ground_y - 6.0)
+	P.on = false
+	P.vy = 0.3
+	P.set_anim("air_combo", 3)
+	P.hit_done = true
+	for i in 60:
+		await process_frame
+		if P.on: break
+	ok(P.anim in ["idle", "run", "start"], "touching down after the air strike ends the swing (anim %s)" % P.anim)
 	print("DONE fails=%d" % fails)
 	quit(1 if fails > 0 else 0)
