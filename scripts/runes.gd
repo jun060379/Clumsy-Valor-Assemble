@@ -1057,7 +1057,7 @@ func _unhandled_input(ev_: InputEvent) -> void:
 	if ev_ is InputEventKey and ev_.pressed and not ev_.echo and ev_.keycode in [KEY_HOME, KEY_END, KEY_PAGEDOWN]:
 		if ev_.keycode == KEY_HOME:
 			test_fill()
-			arena.text(arena.player.position + Vector2(0, -170), "실링 +1000 · 기억석 +150 · 룬 · 장비 6개 · 피로도 가득", SHC)
+			arena.text(arena.player.position + Vector2(0, -170), "실링 +1000 · 기억석 +150 · 룬 · 장비 6개", SHC)
 			arena.sfx("ui_ok", 0.6)
 		elif ev_.keycode == KEY_END and arena.ui_root != null:
 			arena.ui_root.menu.open_page("codex_rune")

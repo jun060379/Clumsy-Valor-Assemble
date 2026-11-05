@@ -96,7 +96,7 @@ var fade_cb = null
 var train_platforms: Array = []
 # front end (step 4): settings, 피로도, title / menus
 var cfg                       # settings.gd: device, stick, key bindings (saved)
-var fatigue                   # fatigue.gd: 피로도 160, +1 / 6 min (nothing spends it yet)
+var fatigue                   # fatigue.gd: 피로도 (removed from play 2026-11-05: nothing reads it, the HUD chip is gone)
 var ambient := true           # 환경음 (ambience.gd)
 var music := true             # 배경음 (bgm.gd)
 var bgm                       # bgm.gd: the town music (town + guild hall), faded out elsewhere

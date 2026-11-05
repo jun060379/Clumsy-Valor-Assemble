@@ -350,8 +350,6 @@ func _draw_front() -> void:
 	if live:
 		_draw_portrait_top(ci, vs)
 		_draw_loc(ci, vs)
-		if lk == "town" or lk == "dungeon":
-			_draw_fatigue(ci, Vector2(10, 60))
 		_draw_party(ci, vs)
 		_draw_pips(ci, vs)
 	else:

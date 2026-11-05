@@ -498,7 +498,7 @@ func on_kill(m) -> void:
 		finc("boss")
 		var first := fc("boss") == 1
 		if first:
-			a_gain(150)      # repeat-clear EXP comes from opening the chest with fatigue
+			a_gain(150)      # repeat-clear EXP comes from opening the chest
 			log_add("감독관 해골 첫 토벌", "boss")
 		var alive := true
 		for ch in P.party:

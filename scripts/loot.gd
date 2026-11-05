@@ -1,9 +1,8 @@
 extends Node2D
 ## The boss treasure chest (prototype LOOT: lootUpdate / chestHit / chestBreak / lootGet / lootTownGate, with sortie.js's
-## 피로도 gate): 1.25 s after the boss falls a chest drops from the sky next to the leader. The grade it ends at is rolled
+## its old 피로도 gate, now gone): 1.25 s after the boss falls a chest drops from the sky next to the leader. The grade it ends at is rolled
 ## when it lands (legendary 1% · unique 8% · epic 20% · rare 40% · common 31%, capped by the dungeon); every blow
 ## reveals the next grade until the rolled one, and the blow after that breaks it (owner 2026-11-05), and what it held flies out and homes in on her.
-## The first blow spends 40 피로도; without enough it stays shut (hint) and the town door lets you leave anyway.
 ## Opening it after the boss has been cleared before pays adventurer EXP 60 (fame.gain_exp).
 
 const CHEST := [preload("res://assets/loot/chest_0.png"), preload("res://assets/loot/chest_1.png"), preload("res://assets/loot/chest_2.png"), preload("res://assets/loot/chest_3.png"), preload("res://assets/loot/chest_4.png")]
@@ -37,7 +36,7 @@ func _ready() -> void:
 	_build_card()
 
 func fat():
-	return arena.fatigue
+	return null                     # 피로도 removed (owner 2026-11-05)
 
 func chest_dims(gi: int) -> Vector2:
 	return Vector2(CHEST[gi].get_width(), CHEST[gi].get_height()) * CHK
@@ -170,18 +169,7 @@ func _swing_check() -> void:
 func hit_chest() -> void:
 	var C = chest
 	if C == null or C["broken"] or not C["landed"]: return
-	if not paid:
-		var F = fat()
-		var cost: int = F.COST if F != null else 40
-		if F != null and F.value() < cost:
-			if C["hintT"] <= 0.0:
-				C["hintT"] = 1200.0
-				arena.text(Vector2(C["x"], C["y"] - 200.0), "피로도가 부족하다 · %d 필요" % cost, Color("#ff9d9d"))
-				arena.sfx("guard", 0.5)
-			return
-		if F != null: F.spend(cost)
-		paid = true
-		arena.text(Vector2(C["x"], C["y"] - 220.0), "피로도 -%d" % cost, Color("#7fd0ff"))
+	paid = true                     # (피로도 removed, owner 2026-11-05: the chest always opens)
 	C["hp"] -= 1
 	C["hits"] += 1
 	C["wob"] = 1.0
@@ -246,7 +234,7 @@ func break_chest() -> void:
 		items.append(o)
 	if gi >= 1:
 		get_tree().create_timer(1.4).timeout.connect(func(): runes.mat_get("lamp", 1))
-	# repeat clears: opening with fatigue pays adventurer EXP
+	# repeat clears: opening the chest pays adventurer EXP
 	if paid and runes.boss_count() > 1 and arena.get("fame") != null and arena.fame.has_method("gain_exp"):
 		arena.fame.gain_exp(60)
 

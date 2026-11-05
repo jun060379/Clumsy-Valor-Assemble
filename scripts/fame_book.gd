@@ -1047,7 +1047,7 @@ func _imd(key: String) -> Array:
 	if key == "exp":
 		var D: Dictionary = fame.d_day()
 		return [["obs", "몬스터 관찰", "OBSERVE", "적을 알아갈수록 EXP가 들어온다.\n만남 · 첫 처치 · 숙련 · 완료, 네 단계.", null],
-			["dun", "던전 클리어", "DUNGEON", "던전을 처음 깨면 150.\n그 뒤로는 피로도 40을 써서 보스 보물상자를 열면 60.", ["던전 보기 ›", func(): _goto("gbk", "dun")]],
+			["dun", "던전 클리어", "DUNGEON", "던전을 처음 깨면 150.\n그 뒤로는 보스 보물상자를 열 때마다 60.", ["던전 보기 ›", func(): _goto("gbk", "dun")]],
 			["log", "모험 일지", "LOG", "장마다 적힌 과제를 끝내면 EXP, 장을 덮으면 장 보상.", ["일지 펼치기 ›", func(): _goto("abk", "ch")]],
 			["day", "일일 훈련", "DAILY", "활동도가 쌓일 때마다 단계 보상으로 EXP.\n오늘 활동도 %d / 500" % int(D["pt"]), ["훈련 보기 ›", func(): _goto("abk", "day")]]]
 	var r: int = fame.r

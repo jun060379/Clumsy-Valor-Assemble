@@ -188,17 +188,8 @@ func _initialize() -> void:
 	check(L != null and is_instance_valid(L), "boss clear makes the chest")
 	for i in 200: L.step(16.0)
 	check(L.chest != null and L.chest["landed"], "chest lands")
-	var F = arena.fatigue
-	F.v = 10
-	F.t = F.now()
 	L.hit_chest()
-	check(not L.paid and L.chest["hp"] == L.HP0, "chest stays shut without fatigue")
-	check(D.room()["type"] == "boss" and not R.town_gate(), "can leave without opening when fatigue is short")
-	F.v = F.MAX
-	F.t = F.now()
-	L.chest["hintT"] = 0.0
-	L.hit_chest()
-	check(L.paid and F.value() == F.MAX - F.COST, "first blow spends fatigue (%d)" % F.value())
+	check(L.paid, "the chest opens on the first blow (no 피로도)")
 	check(R.town_gate(), "town door waits for the chest")
 	var rb0: int = R.rune_count()
 	var sh0: int = arena.shilling
@@ -210,7 +201,6 @@ func _initialize() -> void:
 		L.hit_chest()
 		blows += 1
 	check(L.chest["broken"] and blows == goal + 1 and L.grade == goal, "one blow per grade, the next breaks it (%d blows, goal %d)" % [blows, goal])
-	check(L.paid and F.value() == F.MAX - F.COST, "only the first blow costs")
 	for i in 300: L.step(16.0)
 	check(L.items.is_empty() and R.rune_count() > rb0 and arena.shilling > sh0, "loot collected: runes %d → %d" % [rb0, R.rune_count()])
 	check(not R.town_gate(), "town door opens after")
