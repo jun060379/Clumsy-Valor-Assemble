@@ -64,6 +64,7 @@ var t_wall: Texture2D
 var near_door = null
 var kind := "town"
 var lit                       # lit.gd: shade, ambient, lights, hall windows, fog (drawLighting)
+var hx := {}                     # pre-scaled (BS) textures, drawn 1:1
 var win_sv: SubViewport         # the hall windows drawn apart (LIT.wc): the heroine cut out of them
 var win_draw: Node2D
 var win_cut: Node2D
@@ -99,6 +100,10 @@ func _ready() -> void:
 	for f in DirAccess.get_files_at("res://assets/town"):
 		var k := f.replace(".import", "").get_basename()
 		if not tex.has(k): tex[k] = load("res://assets/town/" + k + ".png")
+	# owner 2026-11-06: the 1.35x sprites re-drawn at 1.35x on the 1-px grid (tools/rebake_town.py), drawn 1:1 — their
+	# pixels the same size as the characters'. tex[] keeps the originals for layout, climb tops and shadows
+	for k in tex.keys():
+		if ResourceLoader.exists("res://assets/town/hx/" + k + ".png"): hx[k] = load("res://assets/town/hx/" + k + ".png")
 	_build_tex()
 	_layout()
 	_build_climb()
@@ -636,7 +641,8 @@ func _win_step() -> void:
 func _draw_win_canvas() -> void:
 	var im: Texture2D = tex["g_hall_win"]
 	var y0 := win_y0()
-	win_draw.draw_texture_rect(im, Rect2(HXB, y0, im.get_width() * BS, im.get_height() * BS), false)
+	var imh: Texture2D = hx.get("g_hall_win", im)
+	win_draw.draw_texture_rect(imh, Rect2(HXB, y0, imh.get_width() if hx.has("g_hall_win") else im.get_width() * BS, imh.get_height() if hx.has("g_hall_win") else im.get_height() * BS), false)
 	var s2 = life.sil
 	if s2 != null:
 		# the silhouette darkens only the window pixels: the window art itself, tinted brown
@@ -645,7 +651,8 @@ func _draw_win_canvas() -> void:
 		var wy: float = s2["wy"] + 4.0
 		var brown := Color(70.0 / 255.0, 40.0 / 255.0, 25.0 / 255.0, 0.72)
 		for r in [Rect2(wx - 8.0, wy - 4.0, 16.0, 16.0), Rect2(wx - 3.0, wy - 14.0, 6.0, 10.0), Rect2(wx - 5.0, wy - 12.0, 10.0, 6.0)]:
-			win_draw.draw_texture_rect_region(im, Rect2(HXB + r.position.x * BS, y0 + r.position.y * BS, r.size.x * BS, r.size.y * BS), r, brown)
+			var dr := Rect2(HXB + r.position.x * BS, y0 + r.position.y * BS, r.size.x * BS, r.size.y * BS)
+			win_draw.draw_texture_rect_region(imh, dr, Rect2(r.position * BS, r.size * BS) if hx.has("g_hall_win") else r, brown)
 	for l in lit.L:
 		if l["k"] == "win": LIT.shape(win_draw, l, 1.0)
 
@@ -828,6 +835,10 @@ func _spr(k: String, x: float, y_bottom: float, sink := 0.0, flip := false, ci: 
 	var s := ks(k)
 	var w := im.get_width() * s
 	var h := im.get_height() * s
+	if hx.has(k):
+		im = hx[k]
+		w = im.get_width()
+		h = im.get_height()
 	var y := y_bottom - h + sink * PK * s
 	if flip:
 		ci.draw_set_transform_matrix(xf * Transform2D(0.0, Vector2(-1, 1), 0.0, Vector2(roundf(x) + w, 0)))
@@ -988,6 +999,14 @@ func _tree(k: String, x: float, y_bottom: float, sink: float, flip: bool, amp: f
 	var trunk: Texture2D = tex[k + "_trunk"]
 	var leaf: Texture2D = tex[k + "_leaf"]
 	var s := ks(k)
+	var rk := 1.0                     # texel rows per original row
+	var sk := sink * PK
+	if hx.has(k + "_trunk"):
+		trunk = hx[k + "_trunk"]
+		leaf = hx[k + "_leaf"]
+		rk = s
+		sk *= s
+		s = 1.0
 	var w := float(trunk.get_width())
 	var h := float(trunk.get_height())
 	x = roundf(x)
@@ -996,10 +1015,10 @@ func _tree(k: String, x: float, y_bottom: float, sink: float, flip: bool, amp: f
 	var g: float = 0.5 + life.gust * 1.1
 	var lean := (sin(t * 0.9 + ph) * 0.6 + sin(t * 0.37 + ph * 2.0) * 0.4) * amp * 1.6 * g
 	var rows: Array = TREE_ROWS[k]
-	var top: int = rows[0]
-	var bot: int = rows[1]
+	var top: int = roundi(rows[0] * rk)
+	var bot: int = mini(roundi(rows[1] * rk), int(h) - 1)
 	var span := maxf(1.0, bot - top)
-	var y0 := -h + sink * PK
+	var y0 := -h + sk
 	draw_set_transform(Vector2(x + (w * s if flip else 0.0), y_bottom), 0.0, Vector2(-s if flip else s, s))
 	draw_texture(trunk, Vector2(0, y0))
 	var r := top
@@ -1015,6 +1034,11 @@ func _tree(k: String, x: float, y_bottom: float, sink: float, flip: bool, amp: f
 func _sway(k: String, x: float, y_bottom: float, sink: float, flip: bool, amp: float, ph: float, vr: Rect2) -> void:
 	var im: Texture2D = tex[k]
 	var s := ks(k)
+	var sk := sink * PK
+	if hx.has(k):
+		im = hx[k]
+		sk *= s
+		s = 1.0
 	var w := float(im.get_width())
 	var h := float(im.get_height())
 	x = roundf(x)
@@ -1022,7 +1046,7 @@ func _sway(k: String, x: float, y_bottom: float, sink: float, flip: bool, amp: f
 	var t := Time.get_ticks_msec() / 1000.0
 	var g: float = 0.6 + life.gust * 0.8
 	var cut := floorf(h * 0.72)
-	var y0 := -h + sink * PK
+	var y0 := -h + sk
 	draw_set_transform(Vector2(x + (w * s if flip else 0.0), y_bottom), 0.0, Vector2(-s if flip else s, s))
 	var r := 0.0
 	while r < h:
