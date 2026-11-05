@@ -1382,25 +1382,35 @@ func step_luce(dt: float) -> void:
 				if f["hold"] <= 0.0:
 					# the orb sets off sideways of the line to the target (the first one arcs up, the second down)
 					var side := 1.0 if f["hold0"] < 200.0 else -1.0
-					var a0: float = dv.angle() - side * float(f["d"]) * 2.4
+					if randf() < 0.25: side = -side
+					# owner 2026-11-05: no two flights alike — each orb gets its own launch angle, loop time, loop size,
+					# how hard it turns in, and a little wander on the way PLACEHOLDER ranges
+					f["rms"] = BOLT_ORB_MS * randf_range(0.8, 1.25)
+					f["rg"] = randf_range(1.2, 2.4)
+					f["rw"] = randf_range(0.0, 0.9) * (1.0 if randf() < 0.5 else -1.0)
+					f["rwf"] = randf_range(1.5, 3.5)
+					var a0: float = dv.angle() - side * float(f["d"]) * randf_range(1.6, 2.8)
 					f["vx"] = cos(a0) * BOLT_ORB_V
 					f["vy"] = sin(a0) * BOLT_ORB_V
 					f["ph"] = "orb"
 					f["pt"] = 0.0
 					# a near target gets a tighter loop, so the spear always has room to fly
-					f["ov"] = clampf((tp - Vector2(f["x"], f["y"])).length() / 520.0, 0.35, 1.0)
+					f["ov"] = clampf((tp - Vector2(f["x"], f["y"])).length() / 520.0, 0.35, 1.0) * randf_range(0.8, 1.2)
 					if not live: f["tg"] = null
 				continue
 			f["pt"] = f.get("pt", 0.0) + dt
 			if ph == "orb":
 				# steer round so the heading meets the target line exactly as the orb time runs out: a smooth curve
 				var cur := Vector2(f["vx"], f["vy"]).angle()
-				var left: float = maxf(1.0, BOLT_ORB_MS - float(f["pt"]))
+				var oms: float = f.get("rms", BOLT_ORB_MS)
+				var left: float = maxf(1.0, oms - float(f["pt"]))
 				var dif := wrapf(dv.angle() - cur, -PI, PI)
-				cur += dif * minf(1.0, dt / left * 1.6)
+				cur += dif * minf(1.0, dt / left * float(f.get("rg", 1.6)))
+				var uw: float = clampf(f["pt"] / oms, 0.0, 1.0)
+				if uw < 0.7: cur += float(f.get("rw", 0.0)) * cos(uw * PI * float(f.get("rwf", 2.0))) * (1.0 - uw / 0.7) * dt / 160.0
 				# owner 2026-11-05: the first fifth it creeps, then it's shot out and keeps speeding up to three fifths,
 				# then slows down until it forms and the spear goes off
-				var u: float = clampf(f["pt"] / BOLT_ORB_MS, 0.0, 1.0)
+				var u: float = clampf(f["pt"] / oms, 0.0, 1.0)
 				var ov: float
 				if u < 0.2: ov = 0.12
 				elif u < 0.6: ov = lerpf(0.55, 1.0, pow((u - 0.2) / 0.4, 0.7))
@@ -1411,7 +1421,7 @@ func step_luce(dt: float) -> void:
 					pfx.spear_fx("eject", Vector2(f["x"], f["y"]), cur, f["sz"])
 				f["vx"] = cos(cur) * ov
 				f["vy"] = sin(cur) * ov
-				if f["pt"] >= BOLT_ORB_MS:
+				if f["pt"] >= oms:
 					f["ph"] = "form"
 					f["pt"] = 0.0
 					f["ang"] = dv.angle()
