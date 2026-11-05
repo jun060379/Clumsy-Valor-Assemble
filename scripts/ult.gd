@@ -593,36 +593,20 @@ func _draw() -> void:
 		draw_rect(Rect2(x - 30.0, y, 60.0 * auto_t / VOW, 5.0), Color("#ff9fd2"))
 
 ## a cluster of dark spheres jostling into one, a shifting rainbow rim (the ZZZ-style Hollow)
+## the hollow (땅 밑의 문 rift), baked from pixelfx (tools/pixelfx_fx/aida-ult-portal.js): 52 frames of 136x136 at
+## 30 fps, pivot at the centre, 37 art px in radius; opens 0-0.25 s, a seamless 1.2 s loop while it stays, sinks shut
+## over its last 0.25 s
+const HOLLOW := preload("res://assets/fx/aida_ult_portal.png")
 func _hollow(f: Dictionary) -> void:
-	var T: float = f["t"]
-	var L: float = f["life"]
-	var op := 1.0
-	if T < 150.0: op = UI_bk(T / 150.0)
-	elif T > L - 150.0: op = maxf(0.0, (L - T) / 150.0)
-	var R0: float = f["r"] * 2.0 * op
-	if R0 < 2.0: return
-	var ph := T / 1000.0
-	var c := Vector2(f["x"], f["y"])
-	var seed: float = f["seed"]
-	var blobs := [[0.0, 0.0, 1.0, 1.0]]
-	for i in 4:
-		var a := i / 4.0 * TAU + seed + ph * (1.2 + i * 0.4) * (1.0 if i % 2 == 0 else -1.0)
-		blobs.append([cos(a) * 0.5, sin(a) * 0.45, 0.55 + 0.1 * sin(seed + i), 1.0])
-	for b in blobs:
-		var bc: Vector2 = c + Vector2(b[0], b[1]) * R0
-		var br: float = b[2] * R0 * (1.0 + 0.12 * sin(ph * 8.0 + b[2] * 9.0))
-		draw_circle(bc, br + 3.0, Color(IRIS[int(ph * 6.0 + b[2] * 7.0) % IRIS.size()]))
-		draw_circle(bc, br + 1.0, Color("#b06cff"))
-	for b in blobs:
-		var bc2: Vector2 = c + Vector2(b[0], b[1]) * R0
-		var br2: float = b[2] * R0 * (1.0 + 0.12 * sin(ph * 8.0 + b[2] * 9.0))
-		draw_circle(bc2, br2, Color("#22093a"))
-		draw_circle(bc2, br2 * 0.7, Color("#12061f"))
-	draw_circle(c, R0 * 0.4, Color("#050208"))
-	for i in 6:
-		var a2 := seed * 3.0 + i * 1.1 + ph * (1.0 + i * 0.2)
-		var rr := R0 * (1.35 + 0.3 * sin(i + seed))
-		draw_rect(Rect2(c + Vector2(cos(a2), sin(a2)) * rr - Vector2(1.5, 1.5), Vector2(3, 3)), Color(IRIS[(i + int(T / 90.0)) % IRIS.size()]))
+	var T: float = f["t"] / 1000.0
+	var L: float = f["life"] / 1000.0
+	var ts: float
+	if T < 0.25: ts = T
+	elif T > L - 0.25: ts = 1.45 + (T - (L - 0.25))
+	else: ts = 0.25 + fmod(T - 0.25, 1.2)
+	var i := clampi(int(ts * 30.0), 0, 51)
+	var sc: float = 2.0 * f["r"] / 37.0
+	draw_texture_rect_region(HOLLOW, Rect2(roundf(f["x"]) - 68.0 * sc, roundf(f["y"]) - 68.0 * sc, 136.0 * sc, 136.0 * sc), Rect2((i % 8) * 136, (i / 8) * 136, 136, 136))
 
 static func UI_bk(u: float) -> float:
 	var x := clampf(u, 0.0, 1.0)
