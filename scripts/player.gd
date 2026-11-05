@@ -1404,12 +1404,7 @@ var mantled := false
 ## canvas point (230, 300); per climb frame, how far her feet hang under the lip and her body's centre (canvas px)
 ## per costume: the strip, which strip frame each of the 8 climb steps shows (climb_02 cut: owner 2026-11-05, it jumps),
 ## per step how far her feet hang under the lip and her body's centre, where the climb leaves her and the hang's feet / centre
-const LEDGE := {
-	"estelle_base": {"tex": preload("res://assets/chars/estelle_ledge.png"), "map": [6, 6, 8, 9, 10, 11, 12, 13],
-		"feet": [184, 184, 146, 98, 71, 0, 0, 0], "cx": [190, 190, 210, 224, 230, 329, 306, 309], "end": 309.0, "hang": [200.0, 195.0]},
-	"estelle_misuk": {"tex": preload("res://assets/chars/estelle_misuk_ledge.png"), "map": [6, 6, 7, 8, 9, 10, 11, 12],
-		"feet": [198, 198, 159, 125, 74, 0, 0, 0], "cx": [202, 202, 204, 217, 222, 336, 311, 322], "end": 322.0, "hang": [198.0, 202.0]},
-}
+const LEDGE := {}          # owner 2026-11-05: the hang / climb motion is off (strips kept in assets/chars/*_ledge.png)
 const HANG_REACH := [36.0, 150.0]         # world px her feet may be under a lip for her to catch it (PLACEHOLDER)
 var ledge_at := Vector2.ZERO              # the corner she holds / climbs over (world)
 var ledge_side := 1
