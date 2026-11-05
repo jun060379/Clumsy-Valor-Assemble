@@ -876,11 +876,11 @@ func _draw() -> void:
 	# 2. lower level: floor + valley, river
 	_shear(t_solid, RX1, RIV0, func(_x): return LOWF)
 	_shear(t_solid, RIV1, TOWN_W + PK, func(_x): return LOWF)
-	# the river: pixelfx water/town-river (tools/pixelfx_fx/town-river.js), 60 frames 240x96 at 15 fps, exactly the
+	# the river: pixelfx water/town-river (tools/pixelfx_fx/town-river.js), 120 frames 240x96 at 10 fps, exactly the
 	# river's width; deeper down its darkest step; the bridge deck's shadow lies on the water just under it
-	var rfi := int(tt * 15.0) % 60
-	draw_texture_rect_region(RIVER, Rect2(RIV0, LOWF + 18.0, 240.0, 96.0), Rect2((rfi % 5) * 240, (rfi / 5) * 96, 240, 96))
-	draw_rect(Rect2(RIV0, LOWF + 114.0, RIV1 - RIV0, 700.0), Color("#16304a"))
+	var rfi := int(tt * 10.0) % 120
+	draw_texture_rect_region(RIVER, Rect2(RIV0, LOWF + 18.0, 240.0, 96.0), Rect2((rfi % 7) * 240, (rfi / 7) * 96, 240, 96))
+	draw_rect(Rect2(RIV0, LOWF + 114.0, RIV1 - RIV0, 700.0), Color("#05222b"))
 	draw_rect(Rect2(RIV0, LOWF + 18.0, RIV1 - RIV0, 5.0), Color(0.05, 0.1, 0.18, 0.35))
 	# 3. lower plaza: light strings, fountain
 	var L: Texture2D = tex["q_lights"]
@@ -973,9 +973,9 @@ func _draw_front() -> void:
 	fxa.draw_front(front)
 	# the river in front of whoever wades it: the top rows of the water again, see-through, the waterline solid, so a
 	# body in the river is under the surface from the waist down (the bridge piers too)
-	var rfi2 := int(Time.get_ticks_msec() / 1000.0 * 15.0) % 60
-	front.draw_texture_rect_region(RIVER, Rect2(RIV0, LOWF + 20.0, 240.0, 44.0), Rect2((rfi2 % 5) * 240, (rfi2 / 5) * 96 + 2, 240, 44), Color(1, 1, 1, 0.55))
-	front.draw_texture_rect_region(RIVER, Rect2(RIV0, LOWF + 18.0, 240.0, 2.0), Rect2((rfi2 % 5) * 240, (rfi2 / 5) * 96, 240, 2))
+	var rfi2 := int(Time.get_ticks_msec() / 1000.0 * 10.0) % 120
+	front.draw_texture_rect_region(RIVER, Rect2(RIV0, LOWF + 20.0, 240.0, 44.0), Rect2((rfi2 % 7) * 240, (rfi2 / 7) * 96 + 2, 240, 44), Color(1, 1, 1, 0.55))
+	front.draw_texture_rect_region(RIVER, Rect2(RIV0, LOWF + 18.0, 240.0, 2.0), Rect2((rfi2 % 7) * 240, (rfi2 / 7) * 96, 240, 2))
 	fxa.draw_water(front)
 	fxa.draw_bits(front)
 	life.draw_front(front)

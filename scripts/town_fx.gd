@@ -15,7 +15,11 @@ extends RefCounted
 
 const FORGE_FIRE := preload("res://assets/fx/town/forge_fire.png")
 const SMOKE := preload("res://assets/fx/town/chimney_smoke.png")
-const RAYS := preload("res://assets/fx/town/canopy_rays.png")      # pixelfx weather/town-canopy-rays: 72 frames 360x230, 12 fps, pivot 180,216, cols 7
+# pixelfx weather/town-bigtree-rays, kept to the air under the big tree's canopy (tools/bake_town_fx.py rays): 48 frames
+# 690x150 at 8 fps, cols 6; its top-left 28 px in from the tree's left and 138 px above the tree's foot
+const RAYS := preload("res://assets/fx/town/tree_rays.png")
+const RAYS_AT := Vector2(28, -138)
+const RAYS_SZ := Vector2(690, 150)
 const FORGE_BOX := Vector2(80, 177)            # the hearth box in assets/town/hx/g_forge.png (bake_town_fx.py BOX)
 const FORGE_FW := 100
 const FORGE_FH := 75
@@ -320,12 +324,9 @@ func _draw_glow() -> void:
 	if rays_k <= 0.0: return
 	var tr = _tree_box("f_bigtree")
 	if tr == null or not arena.view_rect().grow(200.0).intersects(tr): return
-	# sun through the big tree's canopy: two copies of the pixelfx sheet across its width, on their own phases
-	var fi := int(t * 12.0) % 72
-	var gx: float = roundf(tr.get_center().x)
-	for j in 2:
-		var f2 := (fi + j * 29) % 72
-		glow.draw_texture_rect_region(RAYS, Rect2(gx - 180.0 + (j * 2 - 1) * 170.0, tr.end.y - 216.0, 360, 230), Rect2((f2 % 7) * 360, (f2 / 7) * 230, 360, 230), Color(1, 1, 1, rays_k))
+	# sun past the big tree's canopy edges, where its sprite leaves air under the leaves
+	var fi := int(t * 8.0) % 48
+	glow.draw_texture_rect_region(RAYS, Rect2(Vector2(roundf(tr.position.x), roundf(tr.end.y)) + RAYS_AT, RAYS_SZ), Rect2((fi % 6) * RAYS_SZ.x, (fi / 6) * RAYS_SZ.y, RAYS_SZ.x, RAYS_SZ.y), Color(1, 1, 1, rays_k))
 
 
 # ---------- water ----------

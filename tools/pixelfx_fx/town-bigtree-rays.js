@@ -4,14 +4,14 @@ import { fit, clamp, rand, mix, TAU, WHITE } from "../../core/index.js";
 import { clip, rows } from "./_lib.js";
 
 export const meta = {
-  name: "Town canopy rays",
-  desc: "Sun through gaps in a canopy: crisp slanting shafts, banded and threaded with strands, landing as bright dapples; motes flash in them.",
+  name: "Town big tree rays",
+  desc: "Sun past the big town tree's canopy edges (gaps measured from its sprite): crisp banded shafts with strands, dapples on the ground, motes.",
   tags: ["weather", "god rays", "light", "sunbeam", "canopy", "tree", "dapple", "dust", "ambient", "loop"],
-  size: [360, 230],
-  origin: [180, 216],
+  size: [718, 513],
+  origin: [0, 501],
   duration: 6,
   loop: true,
-  fps: 12,
+  fps: 8,
   bg: "light",
   options: {
     palette: ["#4a3410", "#8a6a2c", "#d4a94e", "#f4d886", "#fff4cc", "#ffffff"],
@@ -19,18 +19,19 @@ export const meta = {
   },
 };
 
-const D = 6, W = 360, X0 = -180;
+const D = 6, W = 718, X0 = 0;
 // the sun high on the left: shafts lean down to the right by this slope (dx per dy)
 const SL = 0.32;
 // gaps in the canopy: x where a shaft leaves the leaves (at y = top), half width, strength, breathing cycles
+// measured from assets/town/hx/f_bigtree_leaf+trunk (tools/bake_town_fx.py rays): canopy-bottom points with clear air
+// along the slant to the ground; x from the sprite's left, top up from the ground line
 const GAPS = [
-  { x: -132, top: -150, h: 6, k: 0.8, b: 1 },
-  { x: -96, top: -176, h: 4, k: 0.6, b: 2 },
-  { x: -56, top: -160, h: 9, k: 1.1, b: 1 },
-  { x: -18, top: -184, h: 3, k: 0.6, b: 3 },
-  { x: 18, top: -158, h: 7, k: 0.95, b: 2 },
-  { x: 58, top: -174, h: 5, k: 0.75, b: 1 },
-  { x: 96, top: -150, h: 3, k: 0.55, b: 2 },
+  { x: 30, top: -114, h: 4, k: 0.8, b: 1 },
+  { x: 92, top: -96, h: 6, k: 1.0, b: 2 },
+  { x: 146, top: -112, h: 3, k: 0.7, b: 1 },
+  { x: 560, top: -97, h: 5, k: 0.95, b: 2 },
+  { x: 622, top: -97, h: 3.5, k: 0.75, b: 1 },
+  { x: 690, top: -140, h: 4.5, k: 0.9, b: 3 },
 ];
 const STR = new Float32Array(720);
 
@@ -63,7 +64,7 @@ export function drawBack(p, t, o) {
   const q = clip(p, meta), S = o.seed, C = fit(o.palette, 6);
   const G = gaps(t, S);
   const L = C.map((c) => mix(C[0], c, 0.8));
-  rows(p, meta, -200, 12, (y, R) => {
+  rows(p, meta, -150, 12, (y, R) => {
     const floor = y > 0;
     for (let i = 0; i < W; i++) {
       const x = X0 + i + 0.5;
@@ -93,8 +94,8 @@ export function draw(p, t, o) {
 function motes(q, t, S, C, G, front) {
   for (let i = front ? 0 : 40; i < (front ? 40 : 110); i++) {
     const R = (k) => rand(S, i, k), n1 = 1 + Math.floor(R(1) * 2), n2 = 1 + Math.floor(R(2) * 2);
-    const x = -170 + R(3) * 330 + (6 + R(4) * 10) * Math.sin((TAU * n1 * t) / D + R(5) * TAU);
-    const y = -180 + R(6) * 176 + (5 + R(7) * 8) * Math.sin((TAU * n2 * t) / D + R(8) * TAU);
+    const x = R(3) < 0.5 ? 10 + R(3) * 360 : 500 + R(3) * 200 + (6 + R(4) * 10) * Math.sin((TAU * n1 * t) / D + R(5) * TAU);
+    const y = -130 + R(6) * 126 + (5 + R(7) * 8) * Math.sin((TAU * n2 * t) / D + R(8) * TAU);
     const e = lightAt(x, y, G);
     if (e < 0.15) continue;
     const k = Math.min(1, e);

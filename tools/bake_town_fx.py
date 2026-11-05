@@ -31,7 +31,7 @@ def forge(furnace):
         sheet.paste(Image.fromarray(arr), ((i % 10) * W, (i // 10) * H))
     sheet.save("assets/fx/town/forge_fire.png")
 
-if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] != "rim":
+if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] not in ("rim", "rays"):
     forge(sys.argv[1])
 
 
@@ -67,3 +67,32 @@ def rim(k):
 
 if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "rim":
     for k in RIM_KEYS: rim(k)
+
+
+# ---------- the big tree's sun rays (pixelfx weather/town-bigtree-rays, tools/pixelfx_fx/town-bigtree-rays.js) ----------
+# 48 frames 718x513 (the tree's hx sprite plus 12 rows of ground under it), cols 6. Kept only where the tree is not
+# (rays in the air under the canopy and the dapples), cropped to what is lit -> assets/fx/town/tree_rays.png + .json
+def rays(sheet):
+    import json
+    L = np.array(Image.open("assets/town/hx/f_bigtree_leaf.png").convert("RGBA"))[..., 3] > 127
+    T = np.array(Image.open("assets/town/hx/f_bigtree_trunk.png").convert("RGBA"))[..., 3] > 127
+    air = np.ones((513, 718), bool)
+    air[:501] = ~(L | T)
+    fr = frames(sheet, 718, 513, 6, 48)
+    arrs = []
+    for f in fr:
+        a = np.array(f)
+        a[..., 3] = (a[..., 3] * air).astype(np.uint8)
+        arrs.append(a)
+    tot = np.max([a[..., 3] for a in arrs], axis=0) > 0
+    ys, xs = np.nonzero(tot)
+    x0, x1, y0, y1 = xs.min(), xs.max() + 1, ys.min(), ys.max() + 1
+    W, H = int(x1 - x0), int(y1 - y0)
+    sheet_o = Image.new("RGBA", (W * 6, H * 8))
+    for i, a in enumerate(arrs):
+        sheet_o.paste(Image.fromarray(a[y0:y1, x0:x1]), ((i % 6) * W, (i // 6) * H))
+    sheet_o.save("assets/fx/town/tree_rays.png")
+    json.dump({"x": int(x0), "y": int(y0) - 501, "w": W, "h": H, "cols": 6, "n": 48, "fps": 8}, open("assets/fx/town/tree_rays.json", "w"))
+
+if __name__ == "__main__" and len(sys.argv) > 2 and sys.argv[1] == "rays":
+    rays(sys.argv[2])

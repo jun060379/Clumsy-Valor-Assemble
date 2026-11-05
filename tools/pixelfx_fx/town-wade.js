@@ -12,7 +12,7 @@ export const meta = {
   loop: false,
   fps: 30,
   bg: "ground",
-  options: { palette: ["#16304a", "#1d3d5e", "#264f78", "#3f6f9e", "#5f93c4", "#9fc7e6", "#e3f4ff", "#ffffff"], seed: 4 },
+  options: { palette: ["#05222b", "#08333d", "#0e4549", "#195a5b", "#2f7771", "#6aa591", "#c2e2cc", "#f2fbf2"], seed: 4 },
 };
 
 const G = 520, SY = 0.25, N = 11;
