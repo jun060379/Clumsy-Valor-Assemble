@@ -142,9 +142,7 @@ func step(dt: float) -> void:
 		f["t"] += dt
 		if f["t"] >= 700.0: _splash(f["x"] + f["dx"], 0.15)
 	fish = fish.filter(func(f): return f["t"] < 700.0)
-	# splash when you wade the river
-	if town.kind == "town" and P.position.x > town.RIV0 and P.position.x < town.RIV1 and P.position.y > town.LOWF + 20.0 and absf(P.vx) > 0.05 and randf() < dt / 60.0:
-		town.tfx.append({"k": "drop", "x": P.position.x + (randf() - 0.5) * 20.0, "y": town.LOWF + 20.0, "vx": (randf() - 0.5) * 0.15, "vy": -0.2, "t": 0.0, "life": 500.0, "floor": town.LOWF + 22.0})
+	# wading the river: town_fx.gd (splashes and rings)
 	# apples roll and fade
 	for a in apples:
 		a["t"] += dt
@@ -226,8 +224,7 @@ func _bflies(dt: float, vr: Rect2, P) -> void:
 	bflies = keep
 
 func _splash(x: float, v: float) -> void:
-	for i in 6:
-		town.tfx.append({"k": "drop", "x": x, "y": town.LOWF + 20.0, "vx": (randf() - 0.5) * 0.12, "vy": -v - randf() * 0.1, "t": 0.0, "life": 700.0, "floor": town.LOWF + 22.0})
+	if town.fxa != null: town.fxa.splash(x, town.LOWF + 20.0, 6, v > 0.17)
 
 ## rain and snow fall to the upper surface (the lower plaza sits under the terrace and stays dry)
 func surf_top(x: float) -> float:
@@ -246,15 +243,14 @@ func _weather(dt: float, vr: Rect2) -> void:
 		for d in rain:
 			d["y"] += d["v"] * dt
 			d["x"] += (0.12 + gust * 0.15) * dt
-			var gy := surf_top(d["x"])
+			var gy := minf(surf_top(d["x"]), town.fxa.roof_y(d["x"]) if town.fxa != null else INF)
 			if d["x"] > vx1 + 400.0 or d["x"] < vx0 - 400.0 or d["y"] > vr.end.y + 400.0:
 				# the view jumped (a teleport): fill the screen again
 				d["x"] = randf_range(vx0, vx1)
 				d["y"] = cy - 20.0 - randf() * vr.size.y
 				continue
 			if d["y"] > gy or d["x"] > vx1 or d["x"] < vx0 - 80.0:
-				if d["y"] > gy and randf() < 0.5:
-					town.tfx.append({"k": "drop", "x": d["x"], "y": gy - 1.0, "vx": (randf() - 0.5) * 0.08, "vy": -0.07 - randf() * 0.05, "t": 0.0, "life": 220.0, "floor": gy})
+				if d["y"] > gy and randf() < 0.6 and town.fxa != null: town.fxa.rain_hit(d["x"], gy)
 				d["x"] = randf_range(vx0, vx1) - 60.0
 				d["y"] = cy - 20.0 - randf() * 60.0
 	else:
@@ -453,12 +449,15 @@ func draw_front(ci: CanvasItem) -> void:
 	_draw_birds(ci, t)
 	# weather
 	if weather() == "rain" and not rain.is_empty():
+		# streaks on the 1-px grid (owner 2026-11-06): a bright head, a fainter tail stepping back along the wind
 		var sl := 0.12 + gust * 0.15
-		var pts := PackedVector2Array()
+		var hc := Color(200 / 255.0, 220 / 255.0, 240 / 255.0, 0.6)
+		var tc := Color(170 / 255.0, 195 / 255.0, 225 / 255.0, 0.3)
 		for d in rain:
-			pts.append(Vector2(d["x"], d["y"]))
-			pts.append(Vector2(d["x"] - sl * 14.0, d["y"] - 14.0))
-		ci.draw_multiline(pts, Color(190 / 255.0, 210 / 255.0, 235 / 255.0, 0.55), 1.2)
+			var X := roundf(d["x"])
+			var Y := roundf(d["y"])
+			ci.draw_rect(Rect2(X, Y - 3.0, 1, 3), hc)
+			ci.draw_rect(Rect2(X - roundf(sl * 6.0), Y - 9.0, 1, 6), tc)
 	elif weather() == "snow":
 		for d in snow:
 			var s := 4.0 if d["s"] > 1 else 2.0

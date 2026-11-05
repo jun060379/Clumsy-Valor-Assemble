@@ -7,6 +7,8 @@ extends RefCounted
 ##  - light: buildings and props near a fire or a lamp catch its colour on the edges that face it (rim, like the
 ##    characters' rimEntity); moths circle the lit lamps at night; by day the sun falls through the big tree's canopy in
 ##    shafts with dust turning in them
+##  - water: wading the river throws a crown of drops and spreads rings; the fountain's stream runs (light sliding
+##    down it) and churns where it lands; rain bursts on the roofs and the ground and rings the river
 ## Everything is drawn on the 1-px world grid (the characters' dot), positions from the placed sprites.
 
 const FORGE_FIRE := preload("res://assets/fx/town/forge_fire.png")
@@ -78,6 +80,10 @@ var rim: Node2D
 var rim_mat: ShaderMaterial
 var glow: Node2D                  # additive: moths' glints, the canopy shafts
 var moths: Array = []
+var drops: Array = []             # water drops in flight: {x, y, vx, vy, t, life, gy}
+var rings: Array = []             # rings on water: {x, y, t, life, r}
+var roofs: Array = []             # the climbable sprite tops (town.tpl "climb"), where rain lands
+var wade_f := -1
 var motes: Array = []
 
 
@@ -176,6 +182,7 @@ func step(dt: float) -> void:
 		f["y"] += f["vy"] * (1.0 - u * 0.5) * dt
 	puffs = puffs.filter(func(f): return f["t"] < f["life"])
 	_step_light(dt)
+	_step_water(dt)
 	var vp: Viewport = arena.get_viewport()
 	haze_mat.set_shader_parameter("wpx", (vp.get_final_transform() * vp.get_canvas_transform()).x.length())
 	haze.queue_redraw()
@@ -358,3 +365,103 @@ func _draw_glow() -> void:
 	for m in motes:
 		var k: float = 0.5 + 0.5 * sin(m["t"] / 300.0 + m["ph"])
 		glow.draw_rect(Rect2(roundf(m["x"]), roundf(m["y"]), 1, 1), Color(1.0, 0.97, 0.85, 0.9 * k * sun))
+
+
+# ---------- water ----------
+const W_HI := Color("#d9f2ff")
+const W_MID := Color("#9fd2ec")
+const W_LO := Color("#5f9fc4")
+
+## a splash at (x, y): a crown of drops thrown up and out (n), a ring or two spreading on the surface (big: 2)
+func splash(x: float, y: float, n: int, big := false) -> void:
+	for i in n:
+		var a := -PI / 2.0 + randf_range(-1.0, 1.0) * (0.9 if big else 1.2)
+		var sp := randf_range(0.06, 0.16) * (1.3 if big else 1.0)
+		drops.append({"x": x + randf_range(-3, 3), "y": y - 1.0, "vx": cos(a) * sp, "vy": sin(a) * sp, "t": 0.0, "life": 900.0, "gy": y})
+	rings.append({"x": x, "y": y, "t": 0.0, "life": 600.0 if big else 420.0, "r": 16.0 if big else 6.0})
+	if big: rings.append({"x": x, "y": y, "t": -140.0, "life": 700.0, "r": 24.0})
+
+## where rain landing at x stops: the highest climbable top over it (roofs, crates), else the ground
+func roof_y(x: float) -> float:
+	var y := INF
+	for r in roofs:
+		if x < r["x0"] or x > r["x1"]: continue
+		y = minf(y, lerpf(r["y0"], r["y1"], (x - r["x0"]) / maxf(1.0, r["x1"] - r["x0"])) - 3.0)
+	return y
+
+## a raindrop hits at (x, y): a tiny crown on stone and earth; rings where it falls on the river
+func rain_hit(x: float, y: float) -> void:
+	if x > town.RIV0 and x < town.RIV1 and absf(y - (town.LOWF + 20.0)) < 30.0:
+		rings.append({"x": x, "y": town.LOWF + 20.0, "t": 0.0, "life": 380.0, "r": 4.0 + randf() * 3.0})
+		return
+	for i in 3:
+		drops.append({"x": x, "y": y - 1.0, "vx": randf_range(-0.06, 0.06), "vy": -0.07 - randf() * 0.07, "t": 0.0, "life": 320.0, "gy": y})
+
+func _step_water(dt: float) -> void:
+	if roofs.is_empty():
+		for r in town.tpl:
+			if r.has("climb"): roofs.append(r)
+	var P = arena.player
+	# wading: every footfall in the river throws a crown; standing in it, the water rings round the legs now and then
+	if town.kind == "town" and P.position.x > town.RIV0 and P.position.x < town.RIV1 and P.position.y > town.LOWF + 10.0:
+		var wy: float = town.LOWF + 20.0
+		if P.anim == "run" and P.f != wade_f and P.f in P.SK.steps(P.who, "run"):
+			splash(P.position.x + P.dir * 6.0, wy, 7, false)
+		elif absf(P.vx) < 0.02 and randf() < dt / 900.0:
+			rings.append({"x": P.position.x, "y": wy, "t": 0.0, "life": 900.0, "r": 14.0})
+		if not P.on and P.vy > 0.3 and P.position.y > wy - 30.0 and not has_meta("dove"):
+			set_meta("dove", true)
+			splash(P.position.x, wy, 14, true)
+		if P.on: remove_meta("dove")
+	wade_f = P.f
+	# the fountain's stream churns where it lands
+	var fo = _fountain()
+	if fo != null and arena.view_rect().grow(100.0).has_point(fo + Vector2(140, 130)) and randf() < dt / 70.0:
+		var bx: float = fo.x + randf_range(124.0, 156.0)
+		drops.append({"x": bx, "y": fo.y + 128.0, "vx": randf_range(-0.05, 0.05), "vy": -0.06 - randf() * 0.07, "t": 0.0, "life": 500.0, "gy": fo.y + 129.0})
+	for d in drops:
+		d["t"] += dt
+		d["vy"] += 0.0006 * dt
+		d["x"] += d["vx"] * dt
+		d["y"] += d["vy"] * dt
+		if d["y"] > d["gy"] and d["vy"] > 0.0: d["t"] = d["life"]
+	drops = drops.filter(func(d): return d["t"] < d["life"])
+	for r in rings: r["t"] += dt
+	rings = rings.filter(func(r): return r["t"] < r["life"])
+
+func _fountain():
+	return Vector2(roundf(town.HDOOR - 52.0 * town.PK * town.BS), town.LOWF - 205.0)
+
+## front layer: drops, rings, the running stream
+func draw_water(ci: CanvasItem) -> void:
+	var t := Time.get_ticks_msec() / 1000.0
+	var fo = _fountain()
+	if fo != null and arena.view_rect().grow(60.0).has_point(fo + Vector2(140, 100)):
+		# light sliding down the stream (x 132..148, y 68..129 in the sprite): two bright runs and a dark seam
+		for i in 4:
+			var yy: float = fmod(t * 70.0 + i * 15.5, 62.0)
+			var x: float = fo.x + 134.0 + float((i * 5) % 12)
+			ci.draw_rect(Rect2(x, fo.y + 68.0 + yy, 1, 4), Color(W_HI, 0.85))
+		ci.draw_rect(Rect2(fo.x + 140.0 + roundf(sin(t * 9.0)), fo.y + 70.0, 1, 58), Color(W_LO, 0.35))
+		# foam at the foot
+		for i in 9:
+			var fx: float = fo.x + 122.0 + i * 4.0 + roundf(sin(t * 11.0 + i * 1.7) * 1.5)
+			var on := sin(t * 13.0 + i * 2.3) > -0.2
+			if on: ci.draw_rect(Rect2(fx, fo.y + 127.0 - (1.0 if i % 3 == 0 else 0.0), 2 if i % 2 == 0 else 1, 1), Color(W_HI, 0.9))
+	for d in drops:
+		var k: float = d["t"] / d["life"]
+		ci.draw_rect(Rect2(roundf(d["x"]), roundf(d["y"]), 1, 1), Color(W_HI if k < 0.5 else W_MID, 1.0 - k * 0.5))
+	for r in rings:
+		if r["t"] < 0.0: continue
+		var k: float = r["t"] / r["life"]
+		var R: float = 2.0 + (r["r"] - 2.0) * sqrt(k)
+		var n := maxi(8, roundi(R * 2.4))
+		var c := Color(W_HI if k < 0.4 else W_MID, (1.0 - k) * 0.8)
+		var seen := {}
+		for i in n:
+			var a := TAU * i / n
+			var p := Vector2(roundf(r["x"] + cos(a) * R), roundf(r["y"] + sin(a) * R * 0.28))
+			if seen.has(p): continue
+			seen[p] = true
+			if sin(a) < -0.1 and k > 0.5: continue           # the far side fades first
+			ci.draw_rect(Rect2(p, Vector2.ONE), c)

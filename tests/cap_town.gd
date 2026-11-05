@@ -28,6 +28,7 @@ func _initialize() -> void:
 			var xy := String(a).substr(3).split(",")
 			arena.player.position = Vector2(float(xy[0]), L.floor_at(float(xy[0])) if xy.size() < 2 else float(xy[1]))
 			await frames(40)
+			if args.has("run"): Input.action_press("right")
 			for i in 60:
 				await RenderingServer.frame_post_draw
 				root.get_texture().get_image().save_png(out + "/a%02d.png" % i)
