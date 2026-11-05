@@ -446,6 +446,22 @@ const L_BLESSFX := preload("res://assets/fx/luce/luce-bless.png")
 func bless(x: float, y: float) -> void:
 	_push({"k": "bk", "tex": L_BLESSFX, "x": x, "y": y, "d": 1.0, "n": 46, "fw": 320.0, "fh": 180.0, "cols": 6, "px": 160.0, "py": 160.0, "sc": S})
 
+## Kenin's gun, baked (tools/pixelfx_fx/kenin-muzzle*.js, kenin-impact.js, owner 2026-11-05), turned to the shot
+const K_MZ := preload("res://assets/fx/kenin/kenin-muzzle.png")
+const K_MZB := preload("res://assets/fx/kenin/kenin-muzzle-big.png")
+const K_IMP := preload("res://assets/fx/kenin/kenin-impact.png")
+func _kang(d: Vector2) -> Array:
+	# heading -> [mirror, angle] so a shot to the left is the right-facing art mirrored, not upside down
+	if d.x < 0.0: return [-1.0, d.angle() - PI]
+	return [1.0, d.angle()]
+func kmuzzle(o: Vector2, d: Vector2, big: bool) -> void:
+	var m := _kang(d)
+	if big: _push({"k": "bk", "tex": K_MZB, "x": o.x, "y": o.y, "d": m[0], "ang": m[1], "n": 26, "fw": 160.0, "fh": 104.0, "cols": 5, "px": 44.0, "py": 52.0, "sc": S})
+	else: _push({"k": "bk", "tex": K_MZ, "x": o.x, "y": o.y, "d": m[0], "ang": m[1], "n": 19, "fw": 96.0, "fh": 72.0, "cols": 4, "px": 36.0, "py": 36.0, "sc": S})
+func kimpact(x: float, y: float, d: Vector2, sz := 1.0) -> void:
+	var m := _kang(d)
+	_push({"k": "bk", "tex": K_IMP, "x": x, "y": y, "d": m[0], "ang": m[1], "n": 16, "fw": 72.0, "fh": 64.0, "cols": 4, "px": 40.0, "py": 32.0, "sc": S * sz})
+
 func heal_cross(px: float, py: float, s: float) -> void:
 	var x := 0.0
 	var y := 0.0
@@ -1205,8 +1221,8 @@ func _bk(g: CanvasItem, e: Dictionary) -> bool:
 	var sc: float = e["sc"]
 	var cols: int = e["cols"]
 	var src := Rect2((i % cols) * fw, (i / cols) * fh, fw, fh)
-	if e.has("ang"):                    # turned to a heading
-		g.draw_set_transform(Vector2(e["x"], e["y"]), e["ang"], Vector2(sc, sc))
+	if e.has("ang"):                    # turned to a heading (d < 0: mirrored first, so down stays down)
+		g.draw_set_transform(Vector2(e["x"], e["y"]), e["ang"], Vector2(sc * (-1.0 if float(e["d"]) < 0.0 else 1.0), sc))
 		g.draw_texture_rect_region(e["tex"], Rect2(-float(e["px"]), -float(e["py"]), fw, fh), src)
 		g.draw_set_transform_matrix(Transform2D.IDENTITY)
 		return true

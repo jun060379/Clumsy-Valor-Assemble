@@ -221,11 +221,11 @@ func fire(o: Vector2, d: Vector2, dmg: float, first := true, big := false) -> bo
 	if big:
 		arena.sfx("kshot_big", 1.0)          # ElevenLabs (Sprite Flow) hand-cannon boom
 		arena.sfx("kshot", 0.6)
-		arena.pfx.hit(o.x, o.y, int(signf(d.x)) if d.x != 0.0 else 1, 1.5)
+		arena.pfx.kmuzzle(o, d, true)
 		arena.post_wave(o, 0.6, 360.0, 0.15)
 	else:
 		arena.sfx("kshot", 0.75)             # ElevenLabs (Sprite Flow) pistol crack, 3 takes round robin
-		arena.pfx.hit(o.x, o.y, int(signf(d.x)) if d.x != 0.0 else 1, 0.7)
+		arena.pfx.kmuzzle(o, dd, false)
 	_shake(1.0, -int(signf(d.x)) if d.x != 0.0 else 1)
 	if ammo <= 0 and on_field(): _ran_dry()
 	return true
@@ -255,11 +255,11 @@ func _land_shot(s: Dictionary, m) -> void:
 	var big: bool = s.get("big", false)
 	m.hit(s["dmg"], signf(s["vx"]) * (9.0 if big else (1.5 if s["dry"] else 3.0)), s["mul"])
 	arena.hit_by = ""
-	arena.spark(Vector2(s["x"], s["y"]), 12 if big else (4 if s["dry"] else 7))
+	arena.spark(Vector2(s["x"], s["y"]), 6 if big else (3 if s["dry"] else 2))
+	if not s["dry"]: arena.pfx.kimpact(s["x"], s["y"], Vector2(s["vx"], s["vy"]), 1.5 if big else 1.0)
 	arena.sfx("hit3" if big else "hit1", 0.9 if big else (0.4 if s["dry"] else 0.6))
 	if big:
 		arena.hitstop = maxf(arena.hitstop, 60.0)
-		arena.pfx.hit(s["x"], s["y"], int(signf(s["vx"])), 1.3)
 		_shake(4.0, int(signf(s["vx"])))
 	if not s["dry"]:
 		arena.ult_gain(2.0 / BURST)
@@ -441,7 +441,7 @@ func _headshot(a: Dictionary) -> void:
 	var tg = a["tg"]
 	var mz := Vector2(a["x"] + a["dir"] * 30.0 * CH.SCALE["kenin"], a["y"] - 50.0 * CH.SCALE["kenin"])
 	arena.sfx("kshot_big", 1.0)
-	arena.pfx.hit(mz.x, mz.y, a["dir"], 1.0)
+	arena.pfx.kmuzzle(mz, Vector2(a["dir"], 0), true)
 	if tg == null or not is_instance_valid(tg) or not tg.alive():
 		return
 	var hp: Vector2 = Vector2(tg.position.x, tg.position.y - 70.0)
@@ -570,7 +570,6 @@ func _step_chain(dt: float) -> void:
 				arena.hit_by = ""
 				booms.append({"x": c.x, "y": c.y, "t": 0.0, "life": 300.0, "big": false, "r": 46.0})
 				arena.spark(c, 6)
-				arena.pfx.hit(c.x, c.y, 1 if it["i"] % 2 == 0 else -1, 0.9)
 				arena.sfx("hit2" if it["i"] % 2 == 0 else "hit1", 0.7, {"st": st})
 				arena.sfx("slam", 0.25, {"st": st})
 				arena.hitstop = maxf(arena.hitstop, 28.0)          # 스톱 모션: every pop holds the world a beat
@@ -602,7 +601,8 @@ func ult_shot(o: Vector2, at: Vector2, m) -> void:
 	var life := clampf(o.distance_to(at) / (SHOT_V * 1.6), 20.0, 200.0)
 	shots.append({"x": o.x, "y": o.y, "vx": v.x, "vy": v.y, "dmg": 0.0, "dry": false, "t": SHOT_LIFE - life, "mul": _mul(), "fake": true})
 	arena.sfx("kshot", 0.6, {"st": 1.0 + randf() * 2.0})
-	arena.pfx.hit(at.x, at.y, 1 if v.x >= 0.0 else -1, 0.9)
+	arena.pfx.kimpact(at.x, at.y, v, 1.0)
+	arena.pfx.kmuzzle(o, v.normalized(), false)
 	arena.spark(o, 3)
 	if m != null and is_instance_valid(m) and m.alive():
 		add_marks(m, 1, 40)
@@ -634,6 +634,7 @@ const OLV := Color("#9cc14a")
 const OLV_L := Color("#e2f5b8")
 const BRASS := Color("#f1c35a")
 const SOOT := Color("#26231f")
+const K_BOOM := preload("res://assets/fx/kenin/kenin-boom.png")
 const MARK_COL := [Color("#9cc14a"), Color("#c9d64a"), Color("#f1c35a"), Color("#f0963a"), Color("#ff5a3a")]
 
 func draw(g: CanvasItem) -> void:
@@ -717,18 +718,11 @@ func draw(g: CanvasItem) -> void:
 			for o in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1), Vector2(1, 1)]:
 				g.draw_string(UI.anton(true), tp + o * 1.5, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0, 0, 0, 0.85))
 			g.draw_string(UI.anton(true), tp, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, cc.lightened(0.25))
+	# booms, baked (tools/pixelfx_fx/kenin-boom.js, owner 2026-11-05): 32 frames of 200x180, pivot 100,120, its clock
+	# stretched to the boom's life, sized to its radius (the sheet's fireball is about 26 art px across)
 	for bo in booms:
 		var kk: float = bo["t"] / bo["life"]
-		var rad: float = float(bo.get("r", BOMB_R * (1.15 if bo["big"] else 1.0))) / PFX.S
-		var p := PFX.PX.new(g, bo["x"], bo["y"])
-		var f := PFX.fr(bo["t"])
-		if f < 2: p.disc(0, 0, rad * 0.45, Color("#fff4cf"))
-		var cc: Color = [Color("#fff4cf"), Color("#ffd06a"), Color("#f08a3a"), Color("#8c4a2a"), Color("#3a2a22")][mini(4, int(kk * 5.0))]
-		p.circle(0, 0, rad * (0.35 + kk * 0.75), cc)
-		if kk < 0.6: p.circle(0, 0, rad * (0.35 + kk * 0.75) - 1.0, cc)
-		for i in 10:
-			if kk > 0.7: break
-			var a := i / 10.0 * TAU + 0.2
-			var r0 := rad * (0.4 + kk * 0.8)
-			var r1 := r0 + (5.0 if i % 2 else 2.0) * (1.0 - kk)
-			p.line(cos(a) * r0, sin(a) * r0, cos(a) * r1, sin(a) * r1, OLV_L if i % 3 == 0 else Color("#ffd06a"))
+		var rad: float = float(bo.get("r", BOMB_R * (1.15 if bo["big"] else 1.0)))
+		var bi := clampi(int(kk * 32.0), 0, 31)
+		var bs: float = rad / 55.0
+		g.draw_texture_rect_region(K_BOOM, Rect2(bo["x"] - 100.0 * bs, bo["y"] - 120.0 * bs, 200.0 * bs, 180.0 * bs), Rect2((bi % 6) * 200, (bi / 6) * 180, 200, 180))
