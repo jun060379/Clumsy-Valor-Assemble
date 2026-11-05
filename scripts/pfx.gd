@@ -429,9 +429,11 @@ const L_PILLAR := preload("res://assets/fx/luce/luce-pillar.png")
 func pillar(x: float, y: float, _cs: float) -> void:
 	_push({"k": "bk", "tex": L_PILLAR, "x": x, "y": y, "d": 1.0, "n": 31, "fw": 180.0, "fh": 260.0, "cols": 7, "px": 90.0, "py": 236.0, "sc": S})
 
-func bolt(x: float, y: float, sz: float) -> void:
-	var cy: float = arena.view_rect().position.y
-	_push({"k": "bolt2", "x": x, "y": y, "H": jr(minf(y - cy + 40.0, 330.0) / S), "kk": 1.15 + 0.45 * minf(1.6, sz)})
+## Luce's holy thunder, baked (tools/pixelfx_fx/luce-thunder2.js on luce-strike.js, the library strike in her gold,
+## owner 2026-11-05): 51 frames of 240x264, pivot (120, 228), three bolt shapes
+const L_THUNDER := [preload("res://assets/fx/luce/luce-thunder_5.png"), preload("res://assets/fx/luce/luce-thunder_8.png"), preload("res://assets/fx/luce/luce-thunder_11.png")]
+func bolt(x: float, y: float, _sz: float) -> void:
+	_push({"k": "bk", "tex": L_THUNDER[randi() % 3], "x": x, "y": y, "d": 1.0 if randf() < 0.5 else -1.0, "n": 51, "fw": 240.0, "fh": 264.0, "cols": 8, "px": 120.0, "py": 228.0, "sc": S})
 
 func heal_cross(px: float, py: float, s: float) -> void:
 	var x := 0.0

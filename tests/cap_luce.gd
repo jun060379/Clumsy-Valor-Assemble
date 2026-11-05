@@ -48,7 +48,7 @@ func _initialize() -> void:
 	for k in 160:
 		if k in [0, 30]: Input.action_press("attack")
 		if k in [2, 32]: Input.action_release("attack")
-		if k == 62: P.set_anim("attack3")          # the third blow straight away (the press timing in a capture is unreliable)
+		if k == 62: P.set_anim(OS.get_environment("CAP_ANIM") if OS.get_environment("CAP_ANIM") != "" else "attack3")          # the third blow straight away (the press timing in a capture is unreliable)
 		await frames(1)
 		await shot("c_%03d" % k)
 	P.hp = P.hpm["luce"] * 0.3 if P.get("hp") != null else 0.0

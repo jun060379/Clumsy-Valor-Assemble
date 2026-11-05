@@ -1352,7 +1352,7 @@ func lightning(x: float, y: float, sz: float, dmg: float, d: int) -> void:
 		py += 30.0 + randf() * 30.0
 		px += (x - px) * 0.35 + (randf() - 0.5) * 50.0 * sz
 	pts.append(Vector2(x, y))
-	luce_fx.append({"by": player.who, "k": "lightning", "x": x, "y": y, "sz": sz, "dmg": dmg, "d": d, "pts": pts, "hits": [], "mul": player.atk_mul(), "t": 0.0, "life": 380.0})
+	luce_fx.append({"by": player.who, "k": "lightning", "x": x, "y": y, "sz": sz, "dmg": dmg, "d": d, "pts": pts, "hits": [], "mul": player.atk_mul(), "t": 0.0, "life": 420.0})
 	flash = maxf(flash, 0.12 + 0.06 * sz)
 	pfx.bolt(x, y, sz)
 
@@ -1363,6 +1363,7 @@ const BOLT_FORM_MS := 100.0
 const BOLT_SPEAR_V0 := 0.6
 const BOLT_SPEAR_ACC := 0.016
 const BOLT_SPEAR_MAX := 3.0
+const LIGHTNING_HIT := 160.0
 func step_luce(dt: float) -> void:
 	for f in luce_fx:
 		hit_by = String(f.get("by", ""))
@@ -1460,7 +1461,7 @@ func step_luce(dt: float) -> void:
 					break
 			if f["y"] > ground_y + 10.0 or f["x"] < -60.0 or f["x"] > world_w + 60.0:
 				f["t"] = f["life"] + 1.0
-		elif f["t"] < 120.0:
+		elif (f["t"] < 120.0) if f["k"] != "lightning" else (f["t"] >= LIGHTNING_HIT and f["t"] < LIGHTNING_HIT + 140.0):     # the baked thunder strikes at 0.16 s
 			var R2: float = 48.0 if f["k"] == "pillar" else 40.0 * f["sz"]
 			for m in foes():
 				if f["hits"].has(m): continue
