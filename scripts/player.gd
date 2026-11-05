@@ -1356,7 +1356,7 @@ func neutral_dodge() -> bool:
 ## auto-vault (Dead Cells-like, owner 2026-11-05): in the air, pushing into a rock's side with her feet no more than
 ## MANTLE px under its top, she hops up over the lip (once per jump) (PLACEHOLDER reach)
 const MANTLE := 52.0
-const LEDGE_ASSIST := 28.0
+const LEDGE_ASSIST := 46.0
 var mantled := false
 func _mantle(top: float, side: int) -> void:
 	if on or mantled or move_axis() != side or attacking() or a_busy_for_mantle(): return
@@ -1513,15 +1513,19 @@ func physics(dt: float, a: String) -> void:
 				if prev_y <= pl.y + 1.0 and position.y >= pl.y and position.x > pl.x - 2.0 and position.x < pl.x + pl.w + 2.0:
 					position.y = pl.y
 					landed = true
-	# ledge assist (Dead Cells-like, owner 2026-11-05): a jump that tops out with her feet just under a ledge's lip
-	# pulls her up onto it (not while holding down, not while dropping through)
-	if not landed and not on and vy > -0.12 and drop_t <= 0.0 and not keys["down"] and a != "dive":
+	# ledge assist (Dead Cells-like, owner 2026-11-05): coming up under a ledge, if the jump would top out with her feet
+	# a little short of its lip, it gets a smooth lift that carries her just over it (once per jump; not holding down,
+	# not dropping through) — no snap
+	if not landed and not on and not mantled and drop_t <= 0.0 and not keys["down"] and not (a in ["dive", "hurt", "death"]):
 		for pl in arena.platforms:
-			if position.y > pl.y and position.y - pl.y <= LEDGE_ASSIST and position.x > pl.x + 4.0 and position.x < pl.x + pl.w - 4.0:
-				position.y = pl.y
-				vy = 0.0
-				landed = true
-				arena.dust(position, 0, false)
+			var dy: float = position.y - pl.y
+			if dy <= 0.0 or dy > 110.0 or position.x < pl.x + 6.0 or position.x > pl.x + pl.w - 6.0: continue
+			var reach: float = vy * vy / (2.0 * GRAV) if vy < 0.0 else 0.0
+			var short: float = dy - reach
+			if short > 0.0 and short <= LEDGE_ASSIST and (vy > -0.3 or dy < 60.0):
+				mantled = true
+				vy = -sqrt(2.0 * GRAV * (dy + 12.0))
+				if not attacking() and anim in ["jump", "runjump"]: set_anim("jump", 3)
 				break
 	if landed and not on:
 		on = true

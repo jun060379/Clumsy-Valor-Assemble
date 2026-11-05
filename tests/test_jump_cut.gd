@@ -88,5 +88,19 @@ func _initialize() -> void:
 			if P.on: break
 			await process_frame
 		ok(absf(P.position.y - so.top) < 2.0, "a short hop into a rock vaults up on top (y %.0f top %.0f)" % [P.position.y, so.top])
+	# ledge assist: rising under a ledge a bit short of its lip, she's lifted onto it
+	var pl = null
+	for q in arena.platforms: pl = q
+	if pl != null:
+		await frames(20)
+		P.position = Vector2(pl.x + pl.w / 2.0, pl.y + 60.0)
+		P.on = false
+		P.mantled = false
+		P.set_anim("jump", 3)
+		P.vy = -0.3
+		for i in 300:
+			await process_frame
+			if P.on: break
+		ok(absf(P.position.y - pl.y) < 2.0, "a jump topping out under a ledge is lifted onto it (y %.0f lip %.0f)" % [P.position.y, pl.y])
 	print("DONE fails=%d" % fails)
 	quit(1 if fails > 0 else 0)
