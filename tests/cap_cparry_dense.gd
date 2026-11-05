@@ -19,14 +19,20 @@ func _initialize() -> void:
 	root.add_child(arena)
 	await frames(10)
 	arena.cfg.aim = "off"
+	if args.size() > 2 and args[2] == "kenin":
+		arena.fame.join()
+		arena.fame.rec.append("kenin")
+		arena.toggle_member("kenin")
 	arena.enter_dungeon()
 	await frames(60)
 	for m in arena.mobs: m.hp = 0.0
 	await frames(20)
 	var P = arena.player
-	P.party = ["aida", "estelle", "luce"]
+	var tgt: String = args[2] if args.size() > 2 else "estelle"
+	var first: String = "estelle" if tgt != "estelle" else "aida"
+	P.party = [first, tgt, "luce" if tgt != "luce" and first != "luce" else "aida"]
 	for c in P.party: P.hpm[c] = 100.0
-	P.switch_char("aida")
+	P.switch_char(first)
 	P.position.x += 520.0
 	P.dir = 1
 	await frames(20)
@@ -43,7 +49,7 @@ func _initialize() -> void:
 		await frames(1)
 	await frames(3)
 	await shot("cp_glint")
-	P.party_input("estelle")
+	P.party_input(tgt)
 	for i in 90:
 		if follow and i == 30:
 			await frames(1)

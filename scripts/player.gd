@@ -2492,12 +2492,40 @@ func counter_swap(m, nx: String) -> void:
 	add_ghost(160.0)
 	arena.sfx("dash", 0.7)
 
-## 초심 has its own 교대 패링 strip (skin_data cparry, owner 2026-11-06): slide in · down cut · clash · thrown back
+## 교대 패링 staged in 8 beats (owner 2026-11-06): in · wind-up · the blow · the clash (held) · jolted · lifted · thrown
+## back · landed braced. 초심 Estelle has her own strip (skin_data cparry); the others are posed from their own art:
+## Aida chops the blow down with the shovel and is flipped back, Luce raises a barrier of light, Kenin shoots the blade
+const CP_SEQ := {
+	"aida": [["dash", 2], ["attack1", 1], ["attack1", 2], ["attack1", 3], ["tag_in", 1], ["tag_in", 2], ["tag_in", 0], ["attack1", 4]],
+	"luce": [["dash", 2], ["heal", 0], ["heal", 1], ["heal", 2], ["lfinisher", 0], ["lfinisher", 0], ["heal", 3], ["heal", 3]],
+	"kenin": [["dash", 6], ["attack1", 1], ["attack1", 2], ["attack1", 3], ["hurt", 1], ["hurt", 2], ["hurt", 2], ["attack1", 5]]}
 func _cp_own() -> bool:
-	return who == "estelle" and not air_tag and SK.anims("estelle").has("cparry")
+	if air_tag: return false
+	if who == "estelle": return SK.anims("estelle").has("cparry")
+	return CP_SEQ.has(who)
 
 func _cp_frame(fi: int) -> void:
-	if anim != "cparry" or f != fi: set_anim("cparry", fi)
+	var an := "cparry"
+	var fr := fi
+	if who != "estelle":
+		an = CP_SEQ[who][fi][0]
+		fr = CP_SEQ[who][fi][1]
+	if anim != an or f != fr: set_anim(an, fr)
+
+## the clash's own mark per member, on top of the shared parry burst
+const L_SHIELD := preload("res://assets/fx/luce/luce-shield.png")
+func _cp_clash_fx(cpt: Vector2) -> void:
+	match who:
+		"estelle", "aida":
+			arena.slash_fx(Vector2(position.x + dir * 30.0 * CSCALE, position.y - 70.0 * CSCALE), 110.0 * CSCALE, -100.0, 30.0, dir, CH.COLOR[who], 1.0)
+		"luce":
+			arena.pfx._push({"k": "bk", "tex": L_SHIELD, "x": position.x + dir * 6.0, "y": position.y + 6.0, "d": 1.0, "n": 16, "fw": 88.0, "fh": 84.0, "cols": 9, "px": 44.0, "py": 68.0, "sc": arena.pfx.S * 1.5})
+			arena.sfx("ui_ok", 0.8)
+		"kenin":
+			var mz := Vector2(position.x + dir * 30.0 * CSCALE, position.y - 50.0 * CSCALE)
+			arena.pfx.kmuzzle(mz, Vector2(dir, 0), true)
+			arena.pfx.kimpact(cpt.x, cpt.y, Vector2(dir, 0), 1.6)
+			arena.sfx("kshot_big", 1.0)
 
 func _cp_pose(i: int) -> void:
 	var ps: Array = CP_POSE.get(who, CP_POSE["aida"])[i]
@@ -2551,7 +2579,8 @@ func _cp_step(dt: float) -> void:
 			if m.get("daze") != null: m.daze = maxf(m.daze, 600.0)
 			if who == "estelle": estg(m, E_STG["parry"])
 			elif ST.big(m): ST.add(arena, m, "stagger", 35.0, who)       # a boss: the groggy gauge takes the clash (PLACEHOLDER)
-		arena.slash_fx(Vector2(position.x + dir * 36.0 * CSCALE, position.y - 70.0 * CSCALE), 115.0 * CSCALE, deg_to_rad(70.0), deg_to_rad(-110.0), dir, Color("#fff1b0"), 1.4)
+		if _cp_own(): _cp_clash_fx(cpt)
+		else: arena.slash_fx(Vector2(position.x + dir * 36.0 * CSCALE, position.y - 70.0 * CSCALE), 115.0 * CSCALE, deg_to_rad(70.0), deg_to_rad(-110.0), dir, Color("#fff1b0"), 1.4)
 		arena.hitstop = maxf(arena.hitstop, 230.0)
 		arena.flash = maxf(arena.flash, 0.5)
 		arena.shake(11, dir)
@@ -2593,6 +2622,10 @@ func _cp_step(dt: float) -> void:
 		cp["fu"] = true
 	if rt > 150.0 and cp.get("fu", false) and live:
 		ax_rot = 0.0
+		if who == "aida":
+			cp = {}
+			aida_exec(m)                    # her chase is the rift: out behind it, the empowered cut
+			return
 		cp["dash"] = 0.0
 		cp["dto"] = clampf(m.position.x - dir * 72.0, 30.0, arena.world_w - 30.0)
 		set_anim("dash", 2)
