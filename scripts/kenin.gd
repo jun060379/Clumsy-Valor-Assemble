@@ -642,6 +642,7 @@ const OLV_L := Color("#e2f5b8")
 const BRASS := Color("#f1c35a")
 const SOOT := Color("#26231f")
 const K_BOOM := preload("res://assets/fx/kenin/kenin-boom.png")
+const K_MARK := preload("res://assets/fx/kenin/kenin-mark.png")
 const K_BOMB := preload("res://assets/fx/kenin/kenin-bomb.png")
 const K_BOMB_HOT := preload("res://assets/fx/kenin/kenin-bomb-hot.png")
 const MARK_COL := [Color("#9cc14a"), Color("#c9d64a"), Color("#f1c35a"), Color("#f0963a"), Color("#ff5a3a")]
@@ -709,21 +710,17 @@ func draw(g: CanvasItem) -> void:
 		var cc: Color = MARK_COL[mini(MARK_COL.size() - 1, n - 1)]
 		var beat := maxf(110.0, 330.0 - n * 30.0)
 		var pop := 1.0 + maxf(0.0, 1.0 - newest / 140.0) * 0.8
-		var r := (3.0 + (0.6 if int(t / beat) % 2 == 0 else 0.0)) * pop
 		var fly: bool = e.get("M") != null and e.M.has("fly")
 		var mp := Vector2(e.position.x - 26.0, e.position.y - (58.0 if fly else 126.0))
-		var p := PFX.PX.new(g, mp.x, mp.y)
-		p.disc(0, 0, r + 1.0, Color(0, 0, 0, 0.55))
-		p.circle(0, 0, r, cc)
-		p.line(-r - 2, 0, -r + 1, 0, OLV_L)
-		p.line(r - 1, 0, r + 2, 0, OLV_L)
-		p.line(0, -r - 2, 0, -r + 1, OLV_L)
-		p.line(0, r - 1, 0, r + 2, OLV_L)
-		if newest < 70.0: p.disc(0, 0, r * 0.6, Color.WHITE)
+		# the reticle, baked (tools/pixelfx_fx/kenin-mark.js, owner 2026-11-05): 31 frames of 40x40 in greys, tinted by
+		# the count; frames 0-5 the stamp slamming in (on every new stamp), 6-30 the breathing loop (faster when hotter)
+		var mi: int = int(newest / 20.0) if newest < 120.0 else 6 + int(t / (20.0 * beat / 330.0)) % 25
+		var ms: float = PFX.S * 0.85
+		g.draw_texture_rect_region(K_MARK, Rect2(mp.x - 20.0 * ms, mp.y - 20.0 * ms, 40.0 * ms, 40.0 * ms), Rect2((mi % 6) * 40, (mi / 6) * 40, 40, 40), cc.lightened(0.15))
 		if n >= 2:
 			var fs := int(16.0 * (1.0 + (pop - 1.0) * 0.5))
 			var txt := "×%d" % n
-			var tp := mp + Vector2(r * PFX.S + 6.0, fs * 0.38)
+			var tp := mp + Vector2(9.0 * PFX.S * 0.85 + 4.0, fs * 0.38)
 			for o in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1), Vector2(1, 1)]:
 				g.draw_string(UI.anton(true), tp + o * 1.5, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0, 0, 0, 0.85))
 			g.draw_string(UI.anton(true), tp, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, cc.lightened(0.25))
