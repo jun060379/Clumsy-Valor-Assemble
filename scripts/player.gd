@@ -112,6 +112,7 @@ var qte_gap := 0.0
 var tag_src := ""           # who opened the QTE the incoming member answered (등을 맡긴다)
 var l_bless_t := 0.0        # Luce's 빛의 가호 (ms left): the one in control's hits draw her bolts from the bench
 var l_bolt_cd := 0.0
+var halo_glint := 0.0      # the 빛의 가호 halo flares (ms left) when a bench bolt goes out
 var a_follow := {}          # Aida: the follow-up window after a launch {"m", "t" ms, "k" damage bonus}
 var a_left := {}            # Aida's 남은 균열 (left where she swapped out) {"x", "y", "t" ms to the burst}
 var cp_quiet := false        # swap() called by 교대 패링: no "TAG!" caption, no tag-in flash (the clash is the moment)
@@ -1043,7 +1044,6 @@ func step(dt: float) -> void:
 	elif a == "heal":
 		vx = 0.0
 		heal_t += dt
-		if randf() < dt / 75.0 and heal_t < 700.0: arena.pfx.heal_cross(position.x, position.y, CSCALE)
 		if heal_t >= 700.0 and not fx_done and _rk() and arena.runes.has("aura"):
 			fx_done = true
 			arena.runes.aura_start()
@@ -1066,6 +1066,7 @@ func step(dt: float) -> void:
 			heal_cd = 14000.0 * _cdk()
 			arena.sfx("ui_ok", 0.9)
 			arena.flash = 0.1
+			arena.pfx.bless(position.x, position.y)
 			arena.pfx.heal_burst(position.x, position.y, CSCALE)
 			arena.text(position + Vector2(0, -130.0 * CSCALE), "+%d" % int(hv), Color("#ffe9a8"))
 			if al > 0:
@@ -1279,6 +1280,7 @@ func use_skill(move: int) -> void:
 		if heal_cd <= 0.0 and on:
 			set_anim("heal")
 			heal_t = 0.0
+			arena.pfx.pray(position.x, position.y)
 			arena.sfx("swing", 0.2)
 	elif who == "kenin":
 		if arena.kenin.can_throw():
@@ -2055,6 +2057,7 @@ func die() -> void:
 func party_step(dt: float) -> void:
 	ST.ally_step(self, dt)
 	if l_bless_t > 0.0: l_bless_t -= dt
+	if halo_glint > 0.0: halo_glint -= dt
 	if l_bolt_cd > 0.0: l_bolt_cd -= dt
 	if a_exec_cd > 0.0: a_exec_cd -= dt
 	if not a_left.is_empty():
@@ -2843,6 +2846,7 @@ static func pix_slot(key: String, c: String, row: int, col: int, wa: Vector2, d:
 	return i
 
 ## `ci`: draw onto another canvas item (the townsfolk use the same sheets); null = the player itself
+
 func _rift_step(a: String, dt: float) -> void:
 	if who != "aida": return
 	var M: Dictionary = RIFTM["quick" if rift_q else "heavy"]
@@ -2995,6 +2999,7 @@ func bless_proc(e) -> void:
 	if l_bless_t <= 0.0 or l_bolt_cd > 0.0 or who == "luce" or not party.has("luce") or hpm.get("luce", 0.0) <= 0.0: return
 	if e == null or not is_instance_valid(e) or not e.alive(): return
 	l_bolt_cd = L_BOLT_GAP * _lm("boltGap")
+	halo_glint = 160.0
 	var lk: float = CH.STATS["luce"]["atk"] * (arena.runes.atk_k("luce") if _rk() else 1.0)
 	# 와바박 (owner 2026-11-04): a volley, not one bolt: 3 in quick succession (강림: 5), fanned out behind her spot.
 	# bless_bolt is the volley's total before the volley bonus (x1.25), split across the bolts. PLACEHOLDER

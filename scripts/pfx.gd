@@ -435,6 +435,17 @@ const L_THUNDER := [preload("res://assets/fx/luce/luce-thunder_5.png"), preload(
 func bolt(x: float, y: float, _sz: float) -> void:
 	_push({"k": "bk", "tex": L_THUNDER[randi() % 3], "x": x, "y": y, "d": 1.0 if randf() < 0.5 else -1.0, "n": 51, "fw": 240.0, "fh": 264.0, "cols": 8, "px": 120.0, "py": 228.0, "sc": S})
 
+## Luce's prayer, baked (tools/pixelfx_fx/luce-pray.js, owner 2026-11-05): 36 frames of 120x120 — the sigil, rising
+## motes, the halo gathering over her head, over the 0.7 s cast
+const L_PRAY := preload("res://assets/fx/luce/luce-pray.png")
+func pray(x: float, y: float) -> void:
+	_push({"k": "bk", "tex": L_PRAY, "x": x, "y": y, "d": 1.0, "n": 36, "fw": 120.0, "fh": 120.0, "cols": 6, "px": 60.0, "py": 108.0, "sc": S})
+
+## ...and let go (tools/pixelfx_fx/luce-bless.js): 46 frames of 320x180 — halo flash, the bell-stroke ring, light rain
+const L_BLESSFX := preload("res://assets/fx/luce/luce-bless.png")
+func bless(x: float, y: float) -> void:
+	_push({"k": "bk", "tex": L_BLESSFX, "x": x, "y": y, "d": 1.0, "n": 46, "fw": 320.0, "fh": 180.0, "cols": 6, "px": 160.0, "py": 160.0, "sc": S})
+
 func heal_cross(px: float, py: float, s: float) -> void:
 	var x := 0.0
 	var y := 0.0
@@ -590,6 +601,26 @@ func _draw_combat(g: CanvasItem) -> void:
 	if P != null and P.who == "luce" and P.has_method("target"):
 		var tg = P.target(420.0)
 		if tg != null: reticle(g, tg.position.x, tg.position.y - 50.0, P.t)
+	if P != null: _halo(g, P)
+
+## 빛의 가호: the library halo (pixelfx holy/halo, gold, 60 frames of 56x80, pivot 28,70) over the one in control while
+## it lasts; blinks over its last 3 s, flares when a bench bolt goes out (P.halo_glint)
+const L_HALO := preload("res://assets/fx/luce/luce-halo.png")
+const HALO_Y := 34.0         # lift above the sheet's own head height, x CSCALE, world px PLACEHOLDER
+func _halo(g: CanvasItem, P) -> void:
+	if P.l_bless_t <= 0.0 or P.anim == "death": return
+	if P.l_bless_t < 3000.0 and int(P.l_bless_t / 110.0) % 2 == 0: return
+	var i := int(P.t / 1000.0 * 30.0) % 60
+	var src := Rect2((i % 10) * 56.0, (i / 10) * 80.0, 56.0, 80.0)
+	var org: Vector2 = P.position + Vector2(-28.0 * S, -70.0 * S - HALO_Y * P.CSCALE)
+	g.draw_texture_rect_region(L_HALO, Rect2(org, Vector2(56.0, 80.0) * S), src)
+	if P.halo_glint > 0.0:
+		var k: float = P.halo_glint / 160.0
+		var hc: Vector2 = P.position + Vector2(0, -57.0 * S - HALO_Y * P.CSCALE)
+		var L := 14.0 * k + 4.0
+		g.draw_rect(Rect2(hc + Vector2(-L, -1), Vector2(L * 2.0, 2)), Color(1, 1, 0.9, k))
+		g.draw_rect(Rect2(hc + Vector2(-1, -L * 0.6), Vector2(2, L * 1.2)), Color(1, 1, 0.9, k))
+		g.draw_texture_rect_region(L_HALO, Rect2(org, Vector2(56.0, 80.0) * S), src, Color(1, 1, 1, 0.6 * k))
 
 
 # ---------- HIT: C's impact ring (a size smaller) + E's spark streaks ----------
