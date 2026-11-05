@@ -29,6 +29,12 @@ const AIDA_DIVE_M := preload("res://assets/fx/aida_dive_mask.png")
 const AIDA_THR := [preload("res://assets/fx/aida_thrust_s.png"), preload("res://assets/fx/aida_thrust_s_mask.png"), preload("res://assets/fx/aida_thrust_l.png"), preload("res://assets/fx/aida_thrust_l_mask.png")]
 const ASL := {"-100,30": "a1", "205,-12": "a2", "10,-190": "ah", "170,10": "ka", "60,-110": "air2", "-120,70": "air3"}
 var asl_tex := {}
+## Estelle's swing, baked from pixelfx (tools/pixelfx_fx/estelle-slash.js) per attack arc: 16 frames of 260x260 at
+## 50 fps, pivot (130, 126) at the arc's centre; her thrust (estelle-thrust.js, 15 frames of 240x64, pivot (12, 32),
+## 69 / 122 art px long) and her dive landing (estelle-dive-land.js, 19 frames of 240x80, pivot (120, 60))
+var esl_tex := {}
+const ETHR := [preload("res://assets/fx/estelle_thrust_s.png"), preload("res://assets/fx/estelle_thrust_l.png")]
+const EDIVE := preload("res://assets/fx/estelle_dive.png")
 func _asl(k: String) -> Array:
 	if not asl_tex.has(k):
 		asl_tex[k] = [load("res://assets/fx/aida_slash/aida_slash_%s.png" % k), load("res://assets/fx/aida_slash/aida_slash_%s_mask.png" % k)]
@@ -315,6 +321,10 @@ func _pal(ch: String) -> Array:
 ## pfxSlash: the swing crescent (Aida: the layered dimension tears) — r already includes the 1.12 of arcFx
 func slash(c: Vector2, r: float, a0: float, a1: float, d: int, ch: String, sy := 1.0) -> void:
 	var ak := "%d,%d" % [int(roundf(a0)), int(roundf(a1))]
+	if ch == "estelle" and ASL.has(ak):
+		if not esl_tex.has(ak): esl_tex[ak] = load("res://assets/fx/estelle_slash/estelle_slash_%s.png" % ASL[ak])
+		_push({"k": "bk", "tex": esl_tex[ak], "x": c.x, "y": c.y, "d": d, "n": 16, "fw": 260.0, "fh": 260.0, "cols": 4, "px": 130.0, "py": 126.0, "sc": S})
+		return
 	if ch == "aida" and ASL.has(ak):
 		var T := _asl(ASL[ak])
 		_push({"k": "asl", "tex": T[0], "mask": T[1], "x": c.x, "y": c.y, "d": d})
@@ -322,6 +332,12 @@ func slash(c: Vector2, r: float, a0: float, a1: float, d: int, ch: String, sy :=
 	_push({"k": "slash", "ch": ch, "x": c.x, "y": c.y, "d": d, "r": r, "a0": a0, "a1": a1, "sy": sy, "seed": randf() * 9.0})
 
 func thrust(x0: float, x1: float, y: float, ch: String) -> void:
+	if ch == "estelle":
+		var ed := signf(x1 - x0) if x1 != x0 else 1.0
+		var Lw := absf(x1 - x0) * 1.25 / S
+		var lg := Lw > 95.0
+		_push({"k": "bk", "tex": ETHR[1 if lg else 0], "x": x0, "y": y, "d": ed, "n": 15, "fw": 240.0, "fh": 64.0, "cols": 2, "px": 12.0, "py": 32.0, "sc": S * Lw / (122.0 if lg else 69.0)})
+		return
 	if ch == "aida":
 		var dir := signf(x1 - x0) if x1 != x0 else 1.0
 		var Ll := maxf(90.0, absf(x1 - x0) * 1.6) / S + 13.0
@@ -355,6 +371,14 @@ func dive_start(P) -> void:
 	_push({"k": "dive", "ch": P.who, "C": _pal(P.who), "x": P.position.x, "y0": P.position.y - 80.0 * cs, "y1": P.position.y - 30.0 * cs})
 
 func slam(x: float, y: float, ch: String, up := false) -> void:
+	if ch == "estelle" and not up:
+		_push({"k": "bk", "tex": EDIVE, "x": x, "y": y, "d": 1.0, "n": 19, "fw": 240.0, "fh": 80.0, "cols": 3, "px": 120.0, "py": 60.0, "sc": S})
+		dust(x + 14.0, y, 1, true)
+		dust(x - 14.0, y, -1, true)
+		if arena != null:
+			arena.air_push(x, y - 20.0, 1.0, 300.0, 0.5)
+			arena.air_push(x, y - 20.0, -1.0, 300.0, 0.5)
+		return
 	if ch == "aida" and not up:
 		_push({"k": "dland", "tex": AIDA_DIVE, "mask": AIDA_DIVE_M, "x": x, "y": y})
 		dust(x + 14.0, y, 1, true)
@@ -466,6 +490,7 @@ func _draw_cpu() -> void:
 			"asl": alive = _asl_draw(g, e)
 			"dland": alive = _dland(g, e)
 			"athr": alive = _athr(g, e)
+			"bk": alive = _bk(g, e)
 			"chg": alive = _charge(g, e)
 			"gate": alive = _gate_b(g, e)
 			"pil": alive = _pillar(g, e)
@@ -1121,6 +1146,23 @@ func _baked(g: CanvasItem, e: Dictionary, i: int, fw: float, fh: float, cols: in
 		m.set_shader_parameter("flip", d)
 	var ts := mt.get_size()
 	m.set_shader_parameter("region", Vector4(c * fw / ts.x, r * fh / ts.y, fw / ts.x, fh / ts.y))
+
+## a plain baked sheet (no mask), flipped by d, scaled by sc
+func _bk(g: CanvasItem, e: Dictionary) -> bool:
+	var i := int(e["t"] / 1000.0 * 50.0)
+	if i >= int(e["n"]): return false
+	var fw: float = e["fw"]
+	var fh: float = e["fh"]
+	var sc: float = e["sc"]
+	var cols: int = e["cols"]
+	var src := Rect2((i % cols) * fw, (i / cols) * fh, fw, fh)
+	if float(e["d"]) < 0.0:
+		g.draw_set_transform(Vector2(e["x"], e["y"]), 0.0, Vector2(-1.0, 1.0))
+		g.draw_texture_rect_region(e["tex"], Rect2(-float(e["px"]) * sc, -float(e["py"]) * sc, fw * sc, fh * sc), src)
+		g.draw_set_transform_matrix(Transform2D.IDENTITY)
+	else:
+		g.draw_texture_rect_region(e["tex"], Rect2(e["x"] - float(e["px"]) * sc, e["y"] - float(e["py"]) * sc, fw * sc, fh * sc), src)
+	return true
 
 ## Aida's thrust, baked, scaled to the jab's length
 func _athr(g: CanvasItem, e: Dictionary) -> bool:
