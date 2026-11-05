@@ -162,6 +162,7 @@ func step(dt: float) -> void:
 
 ## dust(x, y, n): the prototype's soft dust puffs (arena fx 'dust')
 static func puff(ar, x: float, y: float, n: int) -> void:
+	if ar.level != null and ar.level.has_method("wet_at") and ar.level.wet_at(x, y): return      # no dust in the river
 	for i in n:
 		ar.fx.append({"k": "dust", "x": x + (randf() - 0.5) * 40.0, "y": y - randf() * 8.0, "vx": (randf() - 0.5) * 0.12, "vy": -0.05 - randf() * 0.08,
 			"r": 4.0 + randf() * 5.0, "t": 0.0, "life": 300.0})

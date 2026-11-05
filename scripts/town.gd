@@ -371,6 +371,10 @@ func _build_climb() -> void:
 	_add_climb("q_fountain", HDOOR - 52.0 * PK * BS, LOWF, 0.0, false)
 
 
+## in the river below the bridge: feet here are in the water (owner 2026-11-06)
+func wet_at(x: float, y: float) -> bool:
+	return kind == "town" and x > RIV0 and x < RIV1 and y > LOWF + 20.0
+
 # ---------- surfaces ----------
 func terr_y(x: float) -> float:
 	if x < SX0: return G
@@ -967,6 +971,11 @@ func _draw_front() -> void:
 			"spark":
 				front.draw_rect(Rect2(roundf(f["x"] / PK) * PK, roundf(f["y"] / PK) * PK, PK, PK), Color(Color("#fde7a2") if k < 0.5 else Color("#ea7a26"), 1.0 - k))
 	fxa.draw_front(front)
+	# the river in front of whoever wades it: the top rows of the water again, see-through, the waterline solid, so a
+	# body in the river is under the surface from the waist down (the bridge piers too)
+	var rfi2 := int(Time.get_ticks_msec() / 1000.0 * 15.0) % 60
+	front.draw_texture_rect_region(RIVER, Rect2(RIV0, LOWF + 20.0, 240.0, 44.0), Rect2((rfi2 % 5) * 240, (rfi2 / 5) * 96 + 2, 240, 44), Color(1, 1, 1, 0.55))
+	front.draw_texture_rect_region(RIVER, Rect2(RIV0, LOWF + 18.0, 240.0, 2.0), Rect2((rfi2 % 5) * 240, (rfi2 / 5) * 96, 240, 2))
 	fxa.draw_water(front)
 	fxa.draw_bits(front)
 	life.draw_front(front)

@@ -348,6 +348,9 @@ func thrust(x0: float, x1: float, y: float, ch: String) -> void:
 	_push({"k": "thrust", "ch": ch, "x": x0, "x1": x1, "y": y, "seed": randf() * 99.0})
 
 func dust(x: float, y: float, d: int, big: bool) -> void:
+	if arena.level != null and arena.level.has_method("wet_at") and arena.level.wet_at(x, y):
+		arena.level.fxa.splash(x, arena.level.LOWF + 20.0, 12 if big else 7, big)     # in the river: water, not dust
+		return
 	_push({"k": "dust", "x": x, "y": y, "d": d, "big": big, "seed": 1.0 + floorf(randf() * 1.0e6)})
 
 ## pfxSpawn('hit'): the impact ring + spark streaks flying the way the blow travels (six at most at once)

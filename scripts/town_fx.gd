@@ -333,14 +333,14 @@ const W_HI := Color("#d9f2ff")
 const W_MID := Color("#9fd2ec")
 const W_LO := Color("#5f9fc4")
 
-## a splash at (x, y): a crown of drops thrown up and out (n), a ring or two spreading on the surface (big: 2)
-func splash(x: float, y: float, n: int, big := false) -> void:
-	for i in n:
-		var a := -PI / 2.0 + randf_range(-1.0, 1.0) * (0.9 if big else 1.2)
-		var sp := randf_range(0.06, 0.16) * (1.3 if big else 1.0)
-		drops.append({"x": x + randf_range(-3, 3), "y": y - 1.0, "vx": cos(a) * sp, "vy": sin(a) * sp, "t": 0.0, "life": 900.0, "gy": y})
-	rings.append({"x": x, "y": y, "t": 0.0, "life": 600.0 if big else 420.0, "r": 16.0 if big else 6.0})
-	if big: rings.append({"x": x, "y": y, "t": -140.0, "life": 700.0, "r": 24.0})
+## a splash at (x, y) on the waterline: a pixelfx one-shot — water/town-wade for a stride or a fish (30 frames 80x48,
+## pivot 30,36), water/splash (no stone, the river's palette; 76 frames 176x100, pivot 88,78) for a body dropping in
+const WADE := preload("res://assets/fx/town/wade.png")
+const DIVE := preload("res://assets/fx/town/dive.png")
+var shots: Array = []
+func splash(x: float, y: float, _n: int, big := false, flip := false) -> void:
+	if big: shots.append({"tex": DIVE, "fw": 176, "fh": 100, "cols": 7, "n": 76, "px": 88, "py": 78, "x": x, "y": y, "t": 0.0, "flip": false})
+	else: shots.append({"tex": WADE, "fw": 80, "fh": 48, "cols": 5, "n": 30, "px": 30, "py": 36, "x": x, "y": y, "t": 0.0, "flip": flip})
 
 ## where rain landing at x stops: the highest climbable top over it (roofs, crates), else the ground
 func roof_y(x: float) -> float:
@@ -367,7 +367,7 @@ func _step_water(dt: float) -> void:
 	if town.kind == "town" and P.position.x > town.RIV0 and P.position.x < town.RIV1 and P.position.y > town.LOWF + 10.0:
 		var wy: float = town.LOWF + 20.0
 		if P.anim == "run" and P.f != wade_f and P.f in P.SK.steps(P.who, "run"):
-			splash(P.position.x + P.dir * 6.0, wy, 7, false)
+			splash(P.position.x + P.dir * 4.0, wy, 7, false, P.dir < 0)
 		elif absf(P.vx) < 0.02 and randf() < dt / 900.0:
 			rings.append({"x": P.position.x, "y": wy, "t": 0.0, "life": 900.0, "r": 14.0})
 		if not P.on and P.vy > 0.3 and P.position.y > wy - 30.0 and not has_meta("dove"):
@@ -387,6 +387,8 @@ func _step_water(dt: float) -> void:
 		d["y"] += d["vy"] * dt
 		if d["y"] > d["gy"] and d["vy"] > 0.0: d["t"] = d["life"]
 	drops = drops.filter(func(d): return d["t"] < d["life"])
+	for sh in shots: sh["t"] += dt
+	shots = shots.filter(func(sh): return sh["t"] < sh["n"] * 1000.0 / 30.0)
 	for r in rings: r["t"] += dt
 	rings = rings.filter(func(r): return r["t"] < r["life"])
 
@@ -409,6 +411,17 @@ func draw_water(ci: CanvasItem) -> void:
 			var fx: float = fo.x + 122.0 + i * 4.0 + roundf(sin(t * 11.0 + i * 1.7) * 1.5)
 			var on := sin(t * 13.0 + i * 2.3) > -0.2
 			if on: ci.draw_rect(Rect2(fx, fo.y + 127.0 - (1.0 if i % 3 == 0 else 0.0), 2 if i % 2 == 0 else 1, 1), Color(W_HI, 0.9))
+	for sh in shots:
+		var fi: int = mini(int(sh["t"] * 30.0 / 1000.0), sh["n"] - 1)
+		var src := Rect2((fi % sh["cols"]) * sh["fw"], (fi / sh["cols"]) * sh["fh"], sh["fw"], sh["fh"])
+		var X: float = roundf(sh["x"])
+		var Y: float = roundf(sh["y"]) - sh["py"]
+		if sh["flip"]:
+			ci.draw_set_transform(Vector2(X, 0), 0.0, Vector2(-1, 1))
+			ci.draw_texture_rect_region(sh["tex"], Rect2(-sh["px"], Y, sh["fw"], sh["fh"]), src)
+			ci.draw_set_transform(Vector2.ZERO)
+		else:
+			ci.draw_texture_rect_region(sh["tex"], Rect2(X - sh["px"], Y, sh["fw"], sh["fh"]), src)
 	for d in drops:
 		var k: float = d["t"] / d["life"]
 		ci.draw_rect(Rect2(roundf(d["x"]), roundf(d["y"]), 1, 1), Color(W_HI if k < 0.5 else W_MID, 1.0 - k * 0.5))
