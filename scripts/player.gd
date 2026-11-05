@@ -12,6 +12,9 @@ const ST := preload("res://scripts/status.gd")      # 공용 상태 (P.ally: 보
 const GRAV := 0.0021
 const JUMPV := 0.74
 const DJUMPV := 0.80
+## an early release brakes the first jump's rise by this much more gravity (PLACEHOLDER: 2 ≈ half the height on a tap)
+const JUMP_CUT_G := 2.0
+var jump_cut := false
 const FALLMAX := 1.15
 var RUN := 0.36              # run speed (gear and 바람 걸음 scale it: runes.gd tick)
 const BUF := 170.0
@@ -857,8 +860,10 @@ func step(dt: float) -> void:
 		dash_cd = 200.0
 	if dash_cd > 0.0: dash_cd -= dt
 
-	if not keys["jump"] and not on and vy < -0.32 and "jump" in anim:
-		vy = -0.32
+	# variable jump height (owner 2026-11-05): letting go of jump early doesn't snap the rise off any more, it brakes it
+	# (heavier gravity while rising), so a tap still gets about half the height; only the first jump (the double jump
+	# always goes all the way), and an attack pressed right after takes over with the height it has (no cut in the gap)
+	jump_cut = not keys["jump"] and not on and vy < 0.0 and anim in ["jump", "runjump"]
 
 	var move := move_axis()
 	var a := anim
@@ -1376,6 +1381,7 @@ func physics(dt: float, a: String) -> void:
 		if a == "dive" or ((a in ["tp_in", "dig_out", "mark", "amark", "dig_in"]) and dig_air): g = 0.0
 		elif a == "airdash": g *= 0.35
 		elif a == "guard" or a == "parry": g *= 0.45
+		elif jump_cut: g *= JUMP_CUT_G
 		elif absf(vy) < 0.14 and not attacking(): g *= 0.55
 		elif vy > 0.0: g *= 1.55
 		vy = minf(FALLMAX, vy + g * dt)
