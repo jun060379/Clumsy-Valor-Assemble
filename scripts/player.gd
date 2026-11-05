@@ -1365,8 +1365,9 @@ func _mantle(top: float, side: int) -> void:
 	mantled = true
 	vy = -sqrt(2.0 * GRAV * (dy + 14.0))
 	vx = side * 0.12
-	set_anim("jump", 3)
+	set_anim("double_jump")          # the tuck-and-roll reads as a vault over the lip
 	arena.sfx("jump", 0.5)
+	arena.dust(position, side, false)
 
 func a_busy_for_mantle() -> bool:
 	return anim in ["hurt", "death", "dive", "guard", "parry", "tp_in", "dig_out", "dig_in", "mark", "amark"]
@@ -1525,7 +1526,9 @@ func physics(dt: float, a: String) -> void:
 			if short > 0.0 and short <= LEDGE_ASSIST and (vy > -0.3 or dy < 60.0):
 				mantled = true
 				vy = -sqrt(2.0 * GRAV * (dy + 12.0))
-				if not attacking() and anim in ["jump", "runjump"]: set_anim("jump", 3)
+				if not attacking() and anim in ["jump", "runjump"]:
+					set_anim("double_jump")          # a tuck up over the lip instead of a bare float
+					arena.sfx("jump", 0.4)
 				break
 	if landed and not on:
 		on = true
