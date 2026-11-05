@@ -519,7 +519,7 @@ func _step_luce(dt: float, P, S: float) -> void:
 			arena.post_wave(Vector2(fx0, fy0), 1.8, 700.0, 0.55)
 			arena.post_ca(0.03)
 			var vs: Vector2 = get_viewport_rect().size
-			fx.append({"k": "lbeam", "x": fx0 - D * 6.0, "y": fy0, "dir": D, "len": maxf(960.0, vs.x), "t": 0.0, "life": 860.0})
+			fx.append({"k": "lbeam", "x": fx0, "y": fy0, "dir": D, "len": maxf(960.0, vs.x), "t": 0.0, "life": 860.0})
 			fx.append({"k": "limp", "x": fx0, "y": fy0, "dir": D, "sc": 2.4, "t": 0.0, "life": 500.0})
 			for i in 14:
 				fx.append({"k": "twinkle", "x": fx0 + D * randf() * 500.0, "y": fy0 + (randf() - 0.5) * 120.0, "vy": -0.02 - randf() * 0.05, "t": 0.0, "life": 500.0 + randf() * 500.0})
@@ -622,7 +622,7 @@ func _hollow(f: Dictionary) -> void:
 
 ## Luce's ult, baked (tools/pixelfx_fx/luce-ult-*.js, owner 2026-11-05), 50 fps, 2 world px per art px:
 ## the star (24-frame loop, 128x128, centre), the punch impact (26 frames 240x200, pivot 90,100, faces right),
-## the beam (44 frames 480x128, pivot 8,64, stretched along to "len")
+## the beam (44 frames 500x128, pivot 28,64, a rounded root at the fist, stretched along to "len")
 const LU_STAR := preload("res://assets/fx/luce/luce-ult-star.png")
 const LU_IMP := preload("res://assets/fx/luce/luce-ult-impact.png")
 const LU_BEAM := preload("res://assets/fx/luce/luce-ult-beam.png")
@@ -644,7 +644,7 @@ func _luce_fx(f: Dictionary) -> void:
 			if i >= 44: return
 			var sx: float = f["len"] / 470.0
 			draw_set_transform(Vector2(f["x"], f["y"]), 0.0, Vector2(sx * f["dir"], 2.0))
-			draw_texture_rect_region(LU_BEAM, Rect2(-8, -64, 480, 128), Rect2((i % 4) * 480, (i / 4) * 128, 480, 128))
+			draw_texture_rect_region(LU_BEAM, Rect2(-28, -64, 500, 128), Rect2((i % 4) * 500, (i / 4) * 128, 500, 128))
 			draw_set_transform_matrix(Transform2D.IDENTITY)
 
 static func UI_bk(u: float) -> float:

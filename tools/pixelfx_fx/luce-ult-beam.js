@@ -8,8 +8,8 @@ export const meta = {
   name: "Luce ult beam",
   desc: "A spearhead races out, the beam stands full (white core, gold edges, aura dither), pulses and upright halo rings roll along it, then it draws to a hairline and breaks into motes.",
   tags: ["holy", "beam", "ultimate", "one-shot"],
-  size: [480, 128],
-  origin: [8, 64],
+  size: [500, 128],
+  origin: [28, 64],
   duration: 0.86,
   loop: false,
   fps: 50,
@@ -56,6 +56,21 @@ export function draw(p, t, o) {
       const a = x * 0.07 - t * 30 + s0, y = Math.sin(a) * (W * 1.15 + 2);
       p.px(x, y, Math.cos(a) > 0 ? (((x >> 2) + F) % 5 === 0 ? WHITE : G0) : G2);
     }
+    // the root: a rounded cap swelling out of the fist (no flat cut), a hot bulb of light and a flare on it
+    const R = W * 1.1;
+    for (let x = -Math.ceil(R); x < 0; x++) {
+      const w = W * 1.25 * Math.sqrt(Math.max(0, 1 - (x / R) * (x / R)));
+      for (let y = -Math.ceil(w); y <= Math.ceil(w); y++) {
+        const q = Math.abs(y) / Math.max(0.5, w);
+        if (q > 1) continue;
+        p.px(x, y, q < 0.45 ? WHITE : q < 0.7 ? W1 : q < 0.88 ? G0 : G1);
+      }
+    }
+    p.disc(2, 0, W * 0.75, WHITE, 1);
+    const fl = 10 + W * 0.9 + 4 * Math.sin(F * 1.3);
+    for (let i = 0; i <= fl; i++) { const c = i < fl * 0.4 ? WHITE : i < fl * 0.75 ? W1 : G0; p.px(2, -W * 0.6 - i, c); p.px(2, W * 0.6 + i, c); }
+    for (let i = 0; i <= fl * 0.6; i++) { const c = i < fl * 0.3 ? WHITE : G0; p.px(2 - W * 0.6 - i, 0, c); }
+    p.glow(0, 0, W * 2.4, G0, 0.4);
     // the spearhead while it races out
     if (t < T0 + 0.03) for (let i = 0; i < 18; i++) { const hw = (18 - i) * 0.9; p.line(front + i, -hw * 0.3, front + i, hw * 0.3, i < 6 ? WHITE : G0); }
     // edge sparks running out along it
