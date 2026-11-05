@@ -50,6 +50,9 @@ const BOB_RUN := [-4, 3, 1, -2, 3, 1, -3]              # world px, + = down: dip
 ## parry window (180 + 35 ms; drawn as guard frame 1 until a parry lands, player.gd _draw); after a parry lands the cut
 ## shows 110 ms and the raised blade 240 ms (기본's 200 + 150: the same 350 ms, a smear frame shouldn't hang)
 const PARRY4 := [180, 35, 110, 240]
+## 교대 패링, 초심 (owner 2026-11-06): slide in · the basic down cut (attack1 2-4) knocks the blow away · the clash bounces
+## her blade up and throws her back, she lands braced. Frames are posed by player.gd _cp_step, so the durations never run out
+const CPARRY7 := [1000000000, 1000000000, 1000000000, 1000000000, 1000000000, 1000000000, 1000000000, 1000000000]
 const STEP_RUN7 := [1, 4]       # the frames a foot lands (dust puffs, footstep sounds)
 const ROOT := "res://assets/skins/"
 
@@ -61,9 +64,9 @@ const SKINS := [
 		"dir": ROOT + "estelle_base/", "placeholder": true, "partial": true,
 		# own rows: 0 idle · 3 start · 4 stop · 5 turn · 6 jump · 7 runjump · 8-10 attack1-3 · 11 kneel · 12 kneel_attack ·
 		# 13 attack_high · 14 guard · 15 parry · 16 air_combo · 17 dive · 18 double_jump · 19 hurt · 20 death · 21 dash ·
-		# 22 vow · 23 air_guard · 24 air_parry · 26 tag_in · 27 tag_out · 28 teeter · 35 run (7) · 36-39 walk (35)
-		"rows": [0, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 26, 27, 28, 35, 36, 37, 38, 39],
-		"anims": {"run": [35, RUN7], "walk": [36, WALK_EST], "parry": [15, PARRY4], "air_parry": [24, PARRY4]},
+		# 22 vow · 23 air_guard · 24 air_parry · 26 tag_in · 27 tag_out · 28 teeter · 35 run (7) · 36-39 walk (35) · 40 cparry (8)
+		"rows": [0, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 26, 27, 28, 35, 36, 37, 38, 39, 40],
+		"anims": {"run": [35, RUN7], "walk": [36, WALK_EST], "parry": [15, PARRY4], "air_parry": [24, PARRY4], "cparry": [40, CPARRY7]},
 		"bob": {"run": BOB_RUN, "walk": []},      # run: Aida's bounce on top of the frames' own; walk: the frames' own
 		"steps": {"run": STEP_RUN7}, "stride": {"walk": STRIDE_EST},
 		"breath_top": 158,                         # the head's top in the idle cells (player.gd idle breathing)

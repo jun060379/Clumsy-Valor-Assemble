@@ -2492,6 +2492,13 @@ func counter_swap(m, nx: String) -> void:
 	add_ghost(160.0)
 	arena.sfx("dash", 0.7)
 
+## 초심 has its own 교대 패링 strip (skin_data cparry, owner 2026-11-06): slide in · down cut · clash · thrown back
+func _cp_own() -> bool:
+	return who == "estelle" and not air_tag and SK.anims("estelle").has("cparry")
+
+func _cp_frame(fi: int) -> void:
+	if anim != "cparry" or f != fi: set_anim("cparry", fi)
+
 func _cp_pose(i: int) -> void:
 	var ps: Array = CP_POSE.get(who, CP_POSE["aida"])[i]
 	var an: String = ps[0]
@@ -2511,16 +2518,21 @@ func _cp_step(dt: float) -> void:
 		position.y = air_y
 		on = false
 	# beat 1: in
+	if cp.has("dash"):
+		_cp_dash(dt)
+		return
 	if tt < CP_IN:
 		position.x += (to - position.x) * minf(1.0, dt / 40.0)
 		if int(tt / 30.0) != int(t0 / 30.0): add_ghost(140.0)
-		_cp_pose(0)
+		if _cp_own(): _cp_frame(0 if tt < 70.0 else (1 if tt < 105.0 else 2))     # in · the cut raised · coming down
+		else: _cp_pose(0)
 		return
 	# the clash
 	if not cp["hit"]:
 		cp["hit"] = true
 		position.x = to
-		_cp_pose(1)
+		if _cp_own(): _cp_frame(3)            # the cut lands on its blade: held through the freeze
+		else: _cp_pose(1)
 		var cpt := Vector2(position.x + dir * 44.0 * CSCALE, position.y - 72.0 * CSCALE)
 		if live:
 			var fp: Vector2 = m.flare_pos()
@@ -2557,27 +2569,33 @@ func _cp_step(dt: float) -> void:
 	# beat 2: thrown apart — one hard shove back (fast, easing out, feet skidding) and she braces where it leaves her
 	var rt := tt - CP_IN
 	var r0 := t0 - CP_IN
-	if rt < 90.0:
-		var k1 := 1.0 - pow(1.0 - clampf(rt / 90.0, 0.0, 1.0), 3.0)
-		var k0 := 1.0 - pow(1.0 - clampf(r0 / 90.0, 0.0, 1.0), 3.0)
-		position.x -= dir * 18.0 * CSCALE * (k1 - k0)
+	var own := _cp_own()
+	var kb_t := 140.0 if own else 90.0
+	if rt < kb_t:
+		var k1 := 1.0 - pow(1.0 - clampf(rt / kb_t, 0.0, 1.0), 3.0)
+		var k0 := 1.0 - pow(1.0 - clampf(r0 / kb_t, 0.0, 1.0), 3.0)
+		position.x -= dir * (34.0 if own else 18.0) * CSCALE * (k1 - k0)
 		ax_rot = -dir * 0.1 * (1.0 - k1)                 # knocked back on her heels, straightening as she stops
 		if r0 <= 0.0:
 			arena.dust(position, -dir, true)
 			add_ghost(120.0)
 		elif int(rt / 30.0) != int(r0 / 30.0): arena.dust(position, -dir, false)
 	else: ax_rot = 0.0
-	_cp_pose(2 if rt > 60.0 else 1)
-	# the follow-up window: her tag-in strike, x2.5
-	if rt > 200.0 and want("attack") and live:
+	if own: _cp_frame(3 if rt < 40.0 else (4 if rt < 80.0 else (5 if rt < 130.0 else (6 if rt < 220.0 else 7))))   # held · jolted · lifted · thrown back · landed
+	else: _cp_pose(2 if rt > 60.0 else 1)
+	# the follow-up window (owner 2026-11-06): a press of attack dashes her back in and the tag-in strike lands, x2.5.
+	# A press any time after the clash is kept and goes off once she has been thrown back
+	if want("attack"):
 		take("attack")
-		cp = {}
+		cp["fu"] = true
+	if rt > 150.0 and cp.get("fu", false) and live:
 		ax_rot = 0.0
-		tag_mul = maxf(tag_mul, 2.5)
-		var here := position.x
-		tag_in_at(m, position.x)
-		position.x = here                                   # the strike launches from where the shove left her, no re-entry
-		arena.text(position + Vector2(0, -175.0 * CSCALE), "추격!", Color("#ffe39a"))
+		cp["dash"] = 0.0
+		cp["dto"] = clampf(m.position.x - dir * 72.0, 30.0, arena.world_w - 30.0)
+		set_anim("dash", 2)
+		add_ghost(160.0)
+		arena.sfx("dash", 0.8)
+		arena.dust(position, dir, true)
 		return
 	if rt > CP_WIN - CP_IN or not live:
 		cp = {}
@@ -2586,6 +2604,28 @@ func _cp_step(dt: float) -> void:
 		if air_tag:
 			air_tag = false
 			on = false
+
+## the chase: a dash back in at the foe, ghosts trailing, then her tag-in strike lands from where the dash stops
+const CP_DASH := 150.0        # ms at most
+func _cp_dash(dt: float) -> void:
+	var m = cp["m"]
+	var d0: float = cp["dash"]
+	cp["dash"] = d0 + dt
+	var dto: float = cp["dto"]
+	if m != null and is_instance_valid(m) and m.alive(): dto = clampf(m.position.x - dir * 72.0, 30.0, arena.world_w - 30.0)
+	position.x += (dto - position.x) * minf(1.0, dt / 35.0)
+	if int(cp["dash"] / 30.0) != int(d0 / 30.0): add_ghost(140.0)
+	if anim != "dash": set_anim("dash", 2)
+	if absf(dto - position.x) > 10.0 and cp["dash"] < CP_DASH: return
+	cp = {}
+	if m == null or not is_instance_valid(m) or not m.alive():
+		set_anim("idle")
+		return
+	tag_mul = maxf(tag_mul, 2.5)
+	tag_in_at(m, position.x)
+	position.x = tag_to                                  # already there: the strike, no slide
+	if anim == "tag_in": set_anim("tag_in", 2)          # the dash was the wind-up: straight into the blow
+	arena.text(position + Vector2(0, -175.0 * CSCALE), "추격!", Color("#ffe39a"))
 
 func qte_offer(reason: String, data = null) -> void:
 	var cands: Array = CH.QTE_WHO.get(reason, []).filter(func(c): return party.has(c) and c != who and hpm[c] > 0.0)
@@ -2661,7 +2701,7 @@ func _draw() -> void:
 	if who == "estelle" and not on and (an == "guard" or an == "parry"):
 		an = "air_" + an
 	# invincible: she blinks out every other 60 ms (not while hurt or tagging in)
-	if inv > 0.0 and anim != "hurt" and anim != "tag_in" and a_exec.is_empty() and int(t / 60.0) % 2 == 0 and not arena.ult_busy(): return
+	if inv > 0.0 and anim != "hurt" and anim != "tag_in" and a_exec.is_empty() and cp.is_empty() and int(t / 60.0) % 2 == 0 and not arena.ult_busy(): return
 	var col := Color.WHITE
 	if anim == "hurt" and ft < 60.0: col.g = 3.0         # the hurt flash: white over the frame (char_pix flag 1)
 	col.a *= arena.ult_alpha()
