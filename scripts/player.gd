@@ -880,10 +880,11 @@ func step(dt: float) -> void:
 		vx = 0.0
 		vy = 0.0
 		hang_t += dt
+		ledge_off_t += dt
 		advance(dt, 0)
 		var mvh := move_axis()
 		if not ((keys["down"] and mvh != ledge_side) or mvh == -ledge_side): hang_drop_t = 0.0
-		if want("jump") or keys["up"] or (mvh == ledge_side and hang_t > 220.0):
+		if want("jump") or keys["up"] or (mvh == ledge_side and hang_t > 480.0):
 			take("jump")
 			_climb_start(ledge_at.y, ledge_at.x, ledge_side, 0)
 		elif (keys["down"] and mvh != ledge_side) or mvh == -ledge_side:
@@ -1410,6 +1411,7 @@ var regrab_t := 0.0
 var hang_t := 0.0
 var hang_drop_t := 0.0
 const HANG_DROP_HOLD := 140.0       # PLACEHOLDER
+const HANG_SNAP := 34.0             # how far (world px) she may be from the hang pose when she catches (PLACEHOLDER)
 var ledge_off := Vector2.ZERO              # a climb picked up mid-jump: the drawing starts where she was and eases in
 var ledge_off_t := 1e9
 const LEDGE_EASE := 170.0
@@ -1429,10 +1431,18 @@ func _hang_start(top: float, lip_x: float, side: int) -> bool:
 	var k := _lk()
 	var hm: Array = _ledge_meta()["hang"]
 	if top + hm[0] * k > arena.ground_y - 4.0: return false          # a low wall: no room to hang, she climbs it
+	# (owner 2026-11-05: it snapped her about) catch only falling, and only once her hands have come down to the lip:
+	# where she is must already be close to the hang pose, so the catch is a small settle, not a jump
+	var np := Vector2(lip_x - side * (230.0 - hm[1]) * k, top + hm[0] * k)
+	if vy < 0.0 or absf(position.y - np.y) > HANG_SNAP: return false
+	for so in arena.solids:          # never hang inside a rock
+		if np.y > so.top + 2.0 and np.x > so.x - 10.0 and np.x < so.x + so.w + 10.0: return false
+	ledge_off = position - np
+	ledge_off_t = 0.0
 	ledge_at = Vector2(lip_x, top)
 	ledge_side = side
 	dir = side
-	position = Vector2(lip_x - side * (230.0 - hm[1]) * k, top + hm[0] * k)
+	position = np
 	vx = 0.0
 	vy = 0.0
 	on = false
@@ -1492,7 +1502,7 @@ func _draw_ledge(c: String, an: String, fr: int, at: Vector2, d: int, col: Color
 	var tex: Texture2D = M["tex"]
 	var k: float = 0.5 * CH.SCALE[c]
 	var corner: Vector2 = at + (ledge_at - position)
-	if an == "climb" and ledge_off_t < LEDGE_EASE:
+	if ledge_off_t < LEDGE_EASE:
 		var q := ledge_off_t / LEDGE_EASE
 		corner += ledge_off * (1.0 - q) * (1.0 - q)
 	var i: int = (fr % 6) if an == "hang" else int(M["map"][mini(fr, 7)])
@@ -1687,7 +1697,7 @@ func physics(dt: float, a: String) -> void:
 			if dy <= 0.0 or dy > 110.0 or position.x < pl.x + 6.0 or position.x > pl.x + pl.w - 6.0: continue
 			var reach: float = vy * vy / (2.0 * GRAV) if vy < 0.0 else 0.0
 			var short: float = dy - reach
-			if short > 0.0 and short <= LEDGE_ASSIST and (vy > -0.3 or dy < 60.0):
+			if short > 0.0 and short <= LEDGE_ASSIST and vy > -0.12:
 				if not attacking() and _climb_start(pl.y, NAN, dir, -1, Vector2(pl.x, pl.x + pl.w)):
 					landed = true
 					break

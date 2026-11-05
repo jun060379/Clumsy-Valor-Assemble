@@ -28,7 +28,7 @@ func _initialize() -> void:
 	# falling beside a ledge's end: she catches the corner and hangs, sways, then climbs
 	var pl = arena.platforms[-1]
 	await frames(10)
-	P.position = Vector2(pl.x - 14.0, pl.y + 70.0)
+	P.position = Vector2(pl.x + pl.w + 14.0, pl.y + 120.0)
 	P.on = false
 	P.vy = 0.0
 	P.set_anim("jump", 4)
