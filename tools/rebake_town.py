@@ -33,3 +33,6 @@ if __name__ == "__main__":
     os.makedirs("assets/town/hx", exist_ok=True)
     for k in KEYS:
         rebake("assets/town/%s.png" % k).save("assets/town/hx/%s.png" % k)
+    # then the outlines back to one pixel (the sources are already thinned; scaling thickens them again)
+    import subprocess
+    subprocess.run(["python3", "tools/thin_outline.py"] + ["assets/town/hx/%s.png" % k for k in KEYS], check=True)
