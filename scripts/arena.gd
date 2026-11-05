@@ -1354,6 +1354,12 @@ func lightning(x: float, y: float, sz: float, dmg: float, d: int) -> void:
 	flash = maxf(flash, 0.12 + 0.06 * sz)
 	pfx.bolt(x, y, sz)
 
+## the bolt's flight (PLACEHOLDER feel numbers): orb speed px/ms and time, the form flash, the spear's push and top speed
+const BOLT_ORB_V := 0.5
+const BOLT_ORB_MS := 300.0
+const BOLT_FORM_MS := 100.0
+const BOLT_SPEAR_ACC := 0.006
+const BOLT_SPEAR_MAX := 2.2
 func step_luce(dt: float) -> void:
 	for f in luce_fx:
 		hit_by = String(f.get("by", ""))
@@ -1361,26 +1367,53 @@ func step_luce(dt: float) -> void:
 		if f["k"] == "bolt":
 			var tg = f["tg"]
 			var live: bool = tg != null and is_instance_valid(tg) and tg.alive()
+			# owner 2026-11-05: an orb curves in, turns into the spear, and the spear shoots straight, speeding up
+			var ap: Vector2 = f.get("aim", Vector2.INF)
+			var tp: Vector2 = (tg.position + Vector2(0, -50)) if live else (ap if ap.is_finite() else Vector2(f["x"] + f["d"] * 400.0, f["y"] + 40.0))
+			var dv := (tp - Vector2(f["x"], f["y"])).normalized()
+			var ph: String = f.get("ph", "hold")
 			if f["hold"] > 0.0:
 				f["hold"] -= dt
-				var ap: Vector2 = f.get("aim", Vector2.INF)
-				var tp: Vector2 = (tg.position + Vector2(0, -50)) if live else (ap if ap.is_finite() else Vector2(f["x"] + f["d"] * 400.0, f["y"] + 40.0))
-				var dv := (tp - Vector2(f["x"], f["y"])).normalized()
 				f["y"] -= 0.01 * dt
 				if f["hold"] <= 0.0:
-					f["vx"] = dv.x * 1.35
-					f["vy"] = dv.y * 1.35
+					# the orb sets off sideways of the line to the target (the first one arcs up, the second down)
+					var side := 1.0 if f["hold0"] < 200.0 else -1.0
+					var a0: float = dv.angle() - side * float(f["d"]) * 1.75
+					f["vx"] = cos(a0) * BOLT_ORB_V
+					f["vy"] = sin(a0) * BOLT_ORB_V
+					f["ph"] = "orb"
+					f["pt"] = 0.0
 					if not live: f["tg"] = null
-					sfx("thrust", 0.5)
 				continue
-			if live:
-				var tp2: Vector2 = tg.position + Vector2(0, -50)
-				var dv2 := (tp2 - Vector2(f["x"], f["y"])).normalized()
-				var sp := minf(1.25, Vector2(f["vx"], f["vy"]).length() + 0.0012 * dt)
-				var k2 := minf(1.0, dt * f["home"] * (1.0 + f["t"] / 250.0))
-				var v := Vector2(f["vx"], f["vy"]).lerp(dv2 * sp, k2).normalized() * sp
-				f["vx"] = v.x
-				f["vy"] = v.y
+			f["pt"] = f.get("pt", 0.0) + dt
+			if ph == "orb":
+				# steer round so the heading meets the target line exactly as the orb time runs out: a smooth curve
+				var cur := Vector2(f["vx"], f["vy"]).angle()
+				var left: float = maxf(1.0, BOLT_ORB_MS - float(f["pt"]))
+				var dif := wrapf(dv.angle() - cur, -PI, PI)
+				cur += dif * minf(1.0, dt / left * 1.6)
+				f["vx"] = cos(cur) * BOLT_ORB_V
+				f["vy"] = sin(cur) * BOLT_ORB_V
+				if f["pt"] >= BOLT_ORB_MS:
+					f["ph"] = "form"
+					f["pt"] = 0.0
+					f["ang"] = dv.angle()
+					f["vx"] = dv.x * 0.08
+					f["vy"] = dv.y * 0.08
+			elif ph == "form":
+				if f["pt"] >= BOLT_FORM_MS:
+					f["ph"] = "spear"
+					f["pt"] = 0.0
+					f["ang"] = dv.angle()
+					f["vx"] = dv.x * 0.35
+					f["vy"] = dv.y * 0.35
+					sfx("thrust", 0.5)
+			else:
+				# straight, speeding up (no more homing)
+				var sp := minf(BOLT_SPEAR_MAX, Vector2(f["vx"], f["vy"]).length() + BOLT_SPEAR_ACC * dt)
+				var hv := Vector2.from_angle(f["ang"]) * sp
+				f["vx"] = hv.x
+				f["vy"] = hv.y
 			f["x"] += f["vx"] * dt
 			f["y"] += f["vy"] * dt
 			f["trT"] += dt
@@ -1389,7 +1422,7 @@ func step_luce(dt: float) -> void:
 				f["tr"].push_front(Vector2(f["x"], f["y"]))       # newest first, one a pixel-frame
 				if f["tr"].size() > 10: f["tr"].pop_back()
 			var R: float = 16.0 * f["sz"]
-			for m in foes():
+			for m in (foes() if f.get("ph", "spear") == "spear" else []):
 				if f["hits"].has(m): continue
 				if absf(m.position.x - f["x"]) < R + 20.0 and m.position.y - 95.0 < f["y"] + R and m.position.y > f["y"] - R:
 					f["hits"].append(m)
@@ -1412,12 +1445,39 @@ func step_luce(dt: float) -> void:
 func _draw_luce() -> void:
 	for f in luce_fx:
 		if f["k"] == "bolt":
-			# luceBoltFx: the holy spear; while it holds it gathers inside a ring
-			var hold: float = f["hold"]
-			var ap := minf(1.0, 1.0 - hold / maxf(1.0, f["hold0"]) + 0.2) if hold > 0.0 else 1.0
-			var ang := atan2(f["vy"], f["vx"]) if Vector2(f["vx"], f["vy"]).length() > 0.01 else (0.0 if f["d"] > 0 else PI)
-			PFX.luce_bolt(fx_layer, f["t"], f["x"], f["y"], ang, f["sz"], null if hold > 0.0 else f["tr"], ap)
+			_draw_bolt(f)
 		# the pillar and the lightning are pfx.gd's (pfxPillar / pfxBolt)
+
+const L_ORB := preload("res://assets/fx/luce/luce-orb.png")
+const L_FORM := preload("res://assets/fx/luce/luce-spear-form.png")
+const L_SPEAR := preload("res://assets/fx/luce/luce-spear.png")
+## the bolt, baked (tools/pixelfx_fx/luce-orb.js, luce-spear-form.js, luce-spear.js): the orb popping in while it holds,
+## curving with a fading wake, the form flash, then the spear (132x32, pivot 84,16) turned to its heading
+func _draw_bolt(f: Dictionary) -> void:
+	var g := fx_layer
+	var sc: float = PFX.S * f["sz"]
+	var ph: String = f.get("ph", "hold")
+	var pos := Vector2(f["x"], f["y"])
+	if ph == "hold" or ph == "orb":
+		if ph == "orb":
+			var tr: Array = f["tr"]
+			for i in tr.size():
+				var q: Vector2 = tr[i]
+				var r := (4.0 - i * 0.45) * sc * 0.5
+				if r < 1.0: break
+				g.draw_rect(Rect2((q - Vector2(r, r)).snapped(Vector2(PFX.S, PFX.S)), Vector2(r, r) * 2.0), Color("#ffecaa") if i < 2 else (Color("#ffc85a") if i < 5 else Color("#d89a3a")))
+		var k := 1.0
+		if ph == "hold": k = clampf(1.0 - f["hold"] / maxf(1.0, f["hold0"]) + 0.3, 0.3, 1.0)
+		var fi := int(f["t"] / 20.0) % 16
+		var s2 := sc * k
+		g.draw_texture_rect_region(L_ORB, Rect2(pos - Vector2(20, 20) * s2, Vector2(40, 40) * s2), Rect2((fi % 4) * 40, (fi / 4) * 40, 40, 40))
+		return
+	var tex: Texture2D = L_FORM if ph == "form" else L_SPEAR
+	var n := 6 if ph == "form" else 16
+	var fi2 := mini(n - 1, int(f["pt"] / 20.0)) if ph == "form" else int(f["pt"] / 20.0) % 16
+	g.draw_set_transform(pos, f["ang"], Vector2(sc, sc))
+	g.draw_texture_rect_region(tex, Rect2(-84, -16, 132, 32), Rect2((fi2 % 2) * 132, (fi2 / 2) * 32, 132, 32))
+	g.draw_set_transform_matrix(Transform2D.IDENTITY)
 
 ## the sigil shows while she aims (P.anim mark / amark); t = P.t / 1000, k = (P.t / 500) % 1
 var sigil_add: Node2D
