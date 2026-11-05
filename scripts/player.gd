@@ -2739,6 +2739,8 @@ const AX_FOLLOW := 900.0     # the window after 3타 to press for it (ms)
 func ax_free(e) -> bool:
 	return e != null and is_instance_valid(e) and (ST.has(e, "stagger") or ST.groggy_on(e))
 var ax_rot := 0.0            # the sprite's clockwise tilt (rad) while she floats
+const AX_FP_BACK := preload("res://assets/fx/aida_fportal_back.png")
+const AX_FP_FRONT := preload("res://assets/fx/aida_fportal_front.png")
 var ax_portals: Array = []   # [{x, y, t, life, r}] the floor portals, drawn flat (the z axis) around her
 
 func aida_exec(tg, k := 1.0) -> void:
@@ -2916,45 +2918,13 @@ func _ax_draw_portals(front: bool) -> void:
 				var j := 1.0 + 0.08 * sin(a * 2.3)
 				px.px(cos(th) * rr * j, sin(th) * rr * 0.24 * j, c)
 			continue
-		# the eye: opens (0-0.2) from a slit, holds, shuts (0.75-0.95), a last white blink
-		var op := smoothstep(0.0, 0.2, u) * (1.0 - smoothstep(0.75, 0.95, u))
-		var rx := R * (0.55 + 0.45 * minf(1.0, u / 0.2))
-		var ry := R * 0.26 * op
-		if u < 0.06 or (u > 0.93 and u < 0.98):                             # the slit flashes white
-			if front: px.line(-rx, 0.0, rx, 0.0, Color.WHITE)
-			continue
-		if ry < 0.6: continue
-		var y0 := 0.0 if front else -ry
-		var y1 := ry if front else 0.0
-		# the void inside, a violet inner ring
-		var yy := int(floorf(y0))
-		while yy <= int(ceilf(y1)):
-			var f2 := 1.0 - pow(float(yy) / ry, 2.0)
-			if f2 > 0.0:
-				var hw := rx * sqrt(f2)
-				px.rect(-hw, yy, hw * 2.0 + 1.0, 1.0, TV)
-				if hw > 3.0:
-					px.px(-hw + 1.0, yy, TL[4])
-					px.px(hw - 1.0, yy, TL[4])
-			yy += 1
-		# the torn, flickering rim
-		var tt: float = pt["t"]
-		for a in 160:                       # dense enough for an unbroken rim at any size
-			var th := TAU * a / 160.0
-			var sy := sin(th)
-			if (sy >= 0.0) != front: continue
-			var tear := 1.0 + 0.1 * sin(a * 1.7 + tt * 0.02) + (0.12 if (a / 2 + int(tt / 60.0)) % 9 == 0 else 0.0)
-			var c: Color = TL[0] if sy > 0.3 else (TL[1] if absf(sy) < 0.3 else TL[2])
-			px.px(cos(th) * rx * tear, sy * ry * tear, c)
-			px.px(cos(th) * (rx * tear + 1.0), sy * (ry * tear + 0.6), TL[3])      # a violet glow just outside			if (a / 2 + int(tt / 45.0)) % 11 == 0: px.px(cos(th) * rx * tear, sy * ry * tear - 1.0, TL[1])   # a spark off the rim
-		# tear-motes circling inside
-		for m in 5:
-			var th := tt * 0.009 + m * TAU / 5.0
-			var sy := sin(th)
-			if (sy >= 0.0) != front: continue
-			px.px(cos(th) * rx * 0.6, sy * ry * 0.6, TL[2] if m % 2 else TL[1])
-		# the pupil: a thin dark slit of deeper void across the middle while it is open
-		if not front and op > 0.6: px.line(-rx * 0.35, -1.0, rx * 0.35, -1.0, TL[4])
+		# the portal, baked from pixelfx (tools/pixelfx_fx/aida-floor-portal.js): 18 frames of 180x84 by the portal's
+		# own clock, pivot (90, 54), drawn 50 art px in radius; its far half behind her, its near half in front
+		var fi := clampi(int(u * 18.0), 0, 17)
+		var sc: float = 2.0 * R / 50.0
+		var tex: Texture2D = AX_FP_FRONT if front else AX_FP_BACK
+		draw_texture_rect_region(tex, Rect2(roundf(pt["x"] - position.x) - 90.0 * sc, roundf(pt["y"] - position.y) - 54.0 * sc, 180.0 * sc, 84.0 * sc), Rect2((fi % 3) * 180, (fi / 3) * 84, 180, 84))
+
 func _aexec_end(tg, live: bool) -> void:
 	qte_offer("finisher")
 	_rev("heavy")
