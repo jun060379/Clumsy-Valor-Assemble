@@ -43,11 +43,15 @@ func _initialize() -> void:
 	await frames(5)
 	while not (m.st == "atk" and m.flared):
 		await frames(1)
-	for i in 60:
+	for i in 80:
 		if i == 9:
 			await frames(1)
 			Input.action_press("guard")
 		if i == 12: Input.action_release("guard")
+		if follow and i == 34:
+			await frames(1)
+			Input.action_press("attack")
+		if follow and i == 37: Input.action_release("attack")
 		await frames(1)
 		print(i, " ", P.anim, " ", P.f, " hp ", P.hp, " bash ", P.bash_t)
 		await shot("d%02d" % i)

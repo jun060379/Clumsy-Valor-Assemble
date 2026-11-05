@@ -1970,13 +1970,16 @@ func take_hit(m, raw: float) -> String:
 	if who == "estelle" and anim == "parry" and f <= pw and facing:
 		var pp: bool = m.get("flared") == true
 		if auto and mg != "gp": arena.ult.rose_burst(position + Vector2(dir * 34.0 * CSCALE, -62.0 * CSCALE))
-		bash_t = 420.0
-		f = 2
-		ft = 0.0
-		position.x -= dir * 14.0          # owner 2026-11-06: the down cut knocks the blow away and the clash pushes her back
-		arena.parry_fx(self, m)
+		var clash: bool = on and SK.anims("estelle").has("cparry")
+		if not clash:                     # in the air: the old bash (air_parry)
+			bash_t = 420.0
+			f = 2
+			ft = 0.0
+			position.x += dir * 16.0
+			arena.parry_fx(self, m)
 		m.hit(BAL.p("estelle", "parry_bash"), dir * 8, atk_mul())
-		estg(m, E_STG["pparry"] if pp else E_STG["parry"])
+		if pp: estg(m, E_STG["pparry"] - (E_STG["parry"] if clash else 0.0))   # the clash adds the plain parry's 경직
+		elif not clash: estg(m, E_STG["parry"])
 		if pp and _ev("pparryAoe") > 0.0:
 			# 방패 밀치기: a perfect parry shakes everyone near
 			for e2 in foes_alive():
@@ -1988,9 +1991,23 @@ func take_hit(m, raw: float) -> String:
 		if m.flared:
 			arena.perfect_parry(m)
 			_rev("pparry")
-		qte_offer("parry")
 		_rev("parry")
 		_rev("skill")
+		if clash:
+			# owner 2026-11-06: her own parry is the 교대 패링 clash — the down cut, both thrown apart, she lands braced,
+			# and a press of attack dashes her back in (_cp_step from the clash on: fx, knockback, 경직, QTE, follow-up)
+			air_tag = false
+			tag_ref = m
+			tag_to = position.x
+			tag_hit = true
+			tag_timer = 0.0
+			tag_mul = 1.0
+			cp = {"m": m, "t": CP_IN, "to": position.x, "hit": false, "fu": false}
+			inv = maxf(inv, 700.0)
+			party_lock = maxf(party_lock, CP_WIN - CP_IN + 150.0)
+			_cp_step(0.0)
+			return "parry"
+		qte_offer("parry")
 		return "parry"
 	if who == "estelle" and (anim == "guard" or anim == "parry" or anim == "backstep") and facing:
 		var tk0 := raw * 0.5 * 0.75 * _inm()
