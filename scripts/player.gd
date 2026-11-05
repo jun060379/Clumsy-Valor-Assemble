@@ -869,6 +869,7 @@ func step(dt: float) -> void:
 	if regrab_t > 0.0: regrab_t -= dt
 	if a == "climb":
 		# the ledge climb plays out in place (she already stands on the lip); a hit still interrupts it
+		ledge_off_t += dt
 		vx = 0.0
 		vy = 0.0
 		advance(dt, 0)
@@ -1389,7 +1390,7 @@ var mantled := false
 ## per step how far her feet hang under the lip and her body's centre, where the climb leaves her and the hang's feet / centre
 const LEDGE := {
 	"estelle_base": {"tex": preload("res://assets/chars/estelle_ledge.png"), "map": [6, 6, 8, 9, 10, 11, 12, 13],
-		"feet": [184, 184, 146, 98, 71, 0, 0, 0], "cx": [190, 190, 210, 224, 230, 329, 306, 309], "end": 309.0, "hang": [184.0, 190.0]},
+		"feet": [184, 184, 146, 98, 71, 0, 0, 0], "cx": [190, 190, 210, 224, 230, 329, 306, 309], "end": 309.0, "hang": [200.0, 195.0]},
 	"estelle_misuk": {"tex": preload("res://assets/chars/estelle_misuk_ledge.png"), "map": [6, 6, 7, 8, 9, 10, 11, 12],
 		"feet": [198, 198, 159, 125, 74, 0, 0, 0], "cx": [202, 202, 204, 217, 222, 336, 311, 322], "end": 322.0, "hang": [198.0, 202.0]},
 }
@@ -1397,6 +1398,9 @@ const HANG_REACH := [36.0, 150.0]         # world px her feet may be under a lip
 var ledge_at := Vector2.ZERO              # the corner she holds / climbs over (world)
 var ledge_side := 1
 var regrab_t := 0.0
+var ledge_off := Vector2.ZERO              # a climb picked up mid-jump: the drawing starts where she was and eases in
+var ledge_off_t := 1e9
+const LEDGE_EASE := 170.0
 
 func has_ledge_art() -> bool:
 	return LEDGE.has(SK.worn(who))
@@ -1440,6 +1444,13 @@ func _climb_start(top: float, lip_x: float, side: int, from := -1) -> bool:
 				st = i
 				break
 	var lx: float = lip_x if not is_nan(lip_x) else position.x - side * (float(M["cx"][st]) - 230.0) * k
+	ledge_off = Vector2.ZERO
+	ledge_off_t = 1e9
+	if from < 0:
+		# where that frame would draw her feet vs where her feet are now: slide the picture over instead of popping
+		var drawn := Vector2(lx + side * (float(M["cx"][st]) - 230.0) * k, top + float(M["feet"][st]) * k)
+		ledge_off = position - drawn
+		ledge_off_t = 0.0
 	ledge_at = Vector2(lx, top)
 	ledge_side = side
 	dir = side
@@ -1460,6 +1471,9 @@ func _draw_ledge(c: String, an: String, fr: int, at: Vector2, d: int, col: Color
 	var tex: Texture2D = M["tex"]
 	var k: float = 0.5 * CH.SCALE[c]
 	var corner: Vector2 = at + (ledge_at - position)
+	if an == "climb" and ledge_off_t < LEDGE_EASE:
+		var q := ledge_off_t / LEDGE_EASE
+		corner += ledge_off * (1.0 - q) * (1.0 - q)
 	var i: int = (fr % 6) if an == "hang" else int(M["map"][mini(fr, 7)])
 	var rot := 0.0
 	if an == "hang": rot = sin(t / 1000.0 * TAU / 1.6) * 0.06 * ledge_side
