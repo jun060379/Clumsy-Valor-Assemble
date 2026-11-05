@@ -872,6 +872,12 @@ func step(dt: float) -> void:
 		ledge_off_t += dt
 		vx = 0.0
 		vy = 0.0
+		# root motion: up first (she hauls herself up), then in over the lip (she steps onto it)
+		climb_t += dt
+		var u := clampf(climb_t / maxf(1.0, climb_T), 0.0, 1.0)
+		var uy := 1.0 - pow(1.0 - clampf(u / 0.7, 0.0, 1.0), 2.0)
+		var ux := smoothstep(0.3, 1.0, u)
+		position = Vector2(lerpf(climb_p0.x, climb_p1.x, ux), lerpf(climb_p0.y, climb_p1.y, uy))
 		advance(dt, 0)
 		queue_redraw()
 		return
@@ -1412,6 +1418,10 @@ var hang_t := 0.0
 var hang_drop_t := 0.0
 const HANG_DROP_HOLD := 140.0       # PLACEHOLDER
 const HANG_SNAP := 34.0             # how far (world px) she may be from the hang pose when she catches (PLACEHOLDER)
+var climb_p0 := Vector2.ZERO               # root motion (Dead Cells / Blasphemous style): where the climb starts / ends,
+var climb_p1 := Vector2.ZERO               # her real position (and so the camera and her hitbox) travels between them
+var climb_t := 0.0
+var climb_T := 1.0
 var ledge_off := Vector2.ZERO              # a climb picked up mid-jump: the drawing starts where she was and eases in
 var ledge_off_t := 1e9
 const LEDGE_EASE := 170.0
@@ -1478,6 +1488,7 @@ func _climb_start(top: float, lip_x: float, side: int, from := -1, span := Vecto
 	ledge_at = Vector2(lx, top)
 	ledge_side = side
 	dir = side
+	climb_p0 = position
 	position = Vector2(lx + side * (float(M["end"]) - 230.0) * k, top)      # where the climb leaves her standing
 	# (owner 2026-11-05 video: climbing up near a ledge's end left her standing past it, and she dropped off) keep the
 	# spot she ends on over the ledge, sliding the picture with it
@@ -1486,9 +1497,15 @@ func _climb_start(top: float, lip_x: float, side: int, from := -1, span := Vecto
 		ledge_at.x += nx - position.x
 		ledge_off -= Vector2(nx - position.x, 0.0)
 		position.x = nx
+	climb_p1 = position
+	position = climb_p0
+	var du: Array = SK.entry(who, "climb")[1]
+	climb_T = 0.0
+	for i in range(st, du.size()): climb_T += float(du[i])
+	climb_t = 0.0
 	vx = 0.0
 	vy = 0.0
-	on = true
+	on = false
 	air = 0
 	mantled = false
 	set_anim("climb", st)
@@ -1513,23 +1530,24 @@ func _draw_ledge(c: String, an: String, fr: int, at: Vector2, d: int, col: Color
 	ci.draw_set_transform(Vector2.ZERO)
 	return true
 
-func _mantle(top: float, side: int, lip_x: float) -> void:
-	if on or mantled or move_axis() != side or attacking() or a_busy_for_mantle(): return
+func _mantle(top: float, side: int, lip_x: float) -> bool:
+	if on or mantled or move_axis() != side or attacking() or a_busy_for_mantle(): return false
 	var dy := position.y - top
-	if dy <= 0.0: return
+	if dy <= 0.0: return false
 	if has_ledge_art():
-		if dy <= HANG_REACH[0] and _climb_start(top, lip_x, side): return
+		if dy <= HANG_REACH[0] and _climb_start(top, lip_x, side): return true
 		if dy <= HANG_REACH[1] and vy > -0.25:
-			if _hang_start(top, lip_x, side): return
-			_climb_start(top, lip_x, side)
-		return
-	if dy > MANTLE: return
+			if _hang_start(top, lip_x, side): return true
+			return _climb_start(top, lip_x, side)
+		return false
+	if dy > MANTLE: return false
 	mantled = true
 	vy = -sqrt(2.0 * GRAV * (dy + 14.0))
 	vx = side * 0.12
 	set_anim("double_jump")          # the tuck-and-roll reads as a vault over the lip
 	arena.sfx("jump", 0.5)
 	arena.dust(position, side, false)
+	return true
 
 func a_busy_for_mantle() -> bool:
 	return anim in ["hurt", "death", "dive", "guard", "parry", "tp_in", "dig_out", "dig_in", "mark", "amark"]
@@ -1595,10 +1613,10 @@ func physics(dt: float, a: String) -> void:
 				position.y = so.top
 			elif prev_x <= so.x - 12.0:
 				position.x = so.x - 12.0
-				_mantle(so.top, 1, so.x)
+				if _mantle(so.top, 1, so.x): return
 			elif prev_x >= so.x + so.w + 12.0:
 				position.x = so.x + so.w + 12.0
-				_mantle(so.top, -1, so.x + so.w)
+				if _mantle(so.top, -1, so.x + so.w): return
 			elif not (vy > 0.0 and position.y - so.top <= 40.0):
 				position.x = so.x - 12.0 if prev_x < so.x + so.w / 2.0 else so.x + so.w + 12.0
 			else:
@@ -1699,8 +1717,7 @@ func physics(dt: float, a: String) -> void:
 			var short: float = dy - reach
 			if short > 0.0 and short <= LEDGE_ASSIST and vy > -0.12:
 				if not attacking() and _climb_start(pl.y, NAN, dir, -1, Vector2(pl.x, pl.x + pl.w)):
-					landed = true
-					break
+					return          # the climb carries her up from here (root motion), not a landing
 				mantled = true
 				vy = -sqrt(2.0 * GRAV * (dy + 12.0))
 				if not attacking() and anim in ["jump", "runjump"]:
@@ -1844,6 +1861,7 @@ func advance(dt: float, move: int) -> void:
 			elif n == "dash":
 				set_anim("run" if move == dir else "idle")
 			elif n == "climb":
+				position = climb_p1
 				on = true
 				set_anim("idle")
 			elif n == "hang":
