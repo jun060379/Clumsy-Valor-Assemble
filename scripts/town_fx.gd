@@ -78,6 +78,39 @@ void fragment() {
 	COLOR = vec4(add, 1.0);
 }
 """
+const LEAF_SH := """
+shader_type canvas_item;
+render_mode unshaded;
+uniform float sun = 0.0;          // 0 at night or under cloud, 1 in full sun
+uniform float t = 0.0;
+const float BY[16] = float[](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
+float h2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float vn(vec2 p) {
+	vec2 i = floor(p), f = fract(p), u = f * f * (3.0 - 2.0 * f);
+	return mix(mix(h2(i), h2(i + vec2(1, 0)), u.x), mix(h2(i + vec2(0, 1)), h2(i + vec2(1, 1)), u.x), u.y);
+}
+void fragment() {
+	vec4 c = texture(TEXTURE, UV);
+	if (c.a < 0.5 || sun <= 0.0) discard;
+	vec2 tp = floor(UV / TEXTURE_PIXEL_SIZE);
+	float lum = dot(c.rgb, vec3(0.3, 0.59, 0.11));
+	// the sunlit tops of the leaf clumps: the art's two lightest leaf tones, and the texel up-left of it in leaf too
+	float up = texture(TEXTURE, UV + vec2(-1.0, -1.0) * TEXTURE_PIXEL_SIZE).a;
+	float lit = step(0.45, lum) * step(0.5, up);
+	float edge = step(0.55, lum) * (1.0 - step(0.5, texture(TEXTURE, UV + vec2(0.0, -2.0) * TEXTURE_PIXEL_SIZE).a));
+	if (lit + edge <= 0.0) discard;
+	// sun flecks: patches of the canopy catch the light as the leaves turn; they drift and swell slowly
+	float n = vn(tp / vec2(9.0, 6.0) + vec2(t * 0.35, -t * 0.12)) * 0.65 + vn(tp / 3.5 + vec2(-t * 0.8, t * 0.5)) * 0.35;
+	float b = (BY[int(mod(tp.x, 4.0)) + int(mod(tp.y, 4.0)) * 4] + 0.5) / 16.0;
+	float lv = floor((n - 0.38) * 6.0 + b * 0.6 + 0.15);
+	lv += edge * 1.0;                                   // the clump rims take it first
+	// a few leaves flash white for a moment
+	float sp = step(0.9975, h2(tp + floor(t * 7.0) * 13.1));
+	if (lv < 1.0 && sp < 0.5) discard;
+	vec3 hi = lv >= 2.0 || sp > 0.5 ? vec3(0.98, 1.0, 0.72) : vec3(0.8, 0.9, 0.42);
+	COLOR = vec4(mix(c.rgb, hi, (lv >= 2.0 || sp > 0.5 ? 0.7 : 0.42)), sun);
+}
+"""
 const RIM_K := 1.5                # rim strength (PLACEHOLDER)
 
 static var _discs: Array = []
@@ -101,6 +134,9 @@ var grass_f := -1
 var prev_g := 0.0
 var rays_k := 0.0
 var emis: Node2D                  # emissive: drawn over the ambient darkness (the furnace)
+var leaf_node: Node2D             # sun flecks on the big tree's leaves, drawn row by row exactly as the tree swayed
+var leaf_mat: ShaderMaterial
+var leaf_rec: Array = []
 
 
 func _init(tn) -> void:
@@ -133,6 +169,14 @@ func _init(tn) -> void:
 	glow.z_as_relative = false
 	glow.draw.connect(_draw_glow)
 	town.add_child(glow)
+	leaf_node = Node2D.new()
+	leaf_mat = ShaderMaterial.new()
+	var sh4 := Shader.new()
+	sh4.code = LEAF_SH
+	leaf_mat.shader = sh4
+	leaf_node.material = leaf_mat
+	leaf_node.draw.connect(_draw_leaves)
+	town.add_child(leaf_node)
 	emis = Node2D.new()
 	emis.z_index = 10
 	emis.z_as_relative = false
@@ -562,3 +606,22 @@ func draw_tent(ci: CanvasItem, b: Array) -> void:
 		r += 2
 	if flip: ci.draw_set_transform(Vector2.ZERO)
 
+
+
+# ---------- sun on the leaves ----------
+## town._tree hands over the rows of a tree's leaves as it drew them (offset, row, height)
+func leaf_rows(leaf: Texture2D, at: Vector2, sc: Vector2, y0: float, w: float, rows: Array) -> void:
+	leaf_rec.append([leaf, at, sc, y0, w, rows])
+	leaf_node.queue_redraw()
+
+func _draw_leaves() -> void:
+	var sun: float = arena.tod_now()["sun"]
+	var k := clampf((sun - 0.3) / 0.4, 0.0, 1.0) * (1.0 if arena.weather == "clear" else 0.25)
+	leaf_mat.set_shader_parameter("sun", k)
+	leaf_mat.set_shader_parameter("t", Time.get_ticks_msec() / 1000.0)
+	for L in leaf_rec:
+		leaf_node.draw_set_transform(L[1], 0.0, L[2])
+		for r in L[5]:
+			leaf_node.draw_texture_rect_region(L[0], Rect2(r.x, L[3] + r.y, L[4], r.z), Rect2(0, r.y, L[4], r.z))
+	leaf_node.draw_set_transform(Vector2.ZERO)
+	leaf_rec.clear()

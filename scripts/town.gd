@@ -1035,13 +1035,16 @@ func _tree(k: String, x: float, y_bottom: float, sink: float, flip: bool, amp: f
 	draw_set_transform(Vector2(x + (w * s if flip else 0.0), y_bottom), 0.0, Vector2(-s if flip else s, s))
 	draw_texture(trunk, Vector2(0, y0))
 	var r := top
+	var rec: Array = []                 # the rows as drawn, for town_fx's sun glints on the leaves
 	while r <= bot:
 		var u := 1.0 - (r - top) / span
 		var o := roundf((lean * u * u + sin(t * 2.6 + ph + r * 0.07) * 0.6 * u * g) / 2.0) * 2.0
 		var rh := minf(2.0, h - r)
 		draw_texture_rect_region(leaf, Rect2(o, y0 + r, w, rh), Rect2(0, r, w, rh))
+		rec.append(Vector3(o, r, rh))
 		r += 2
 	draw_set_transform(Vector2.ZERO)
+	if fxa != null and k == "f_bigtree": fxa.leaf_rows(leaf, Vector2(x + (w * s if flip else 0.0), y_bottom), Vector2(-s if flip else s, s), y0, w, rec)
 
 ## bush / grass clump: rows shear with the wind, the bottom 28% stays planted
 func _sway(k: String, x: float, y_bottom: float, sink: float, flip: bool, amp: float, ph: float, vr: Rect2) -> void:
