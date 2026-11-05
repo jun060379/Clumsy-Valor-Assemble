@@ -361,10 +361,13 @@ func hit(x: float, y: float, d: int, sz := 1.0) -> void:
 
 const L_SHIT := preload("res://assets/fx/luce/luce-spear-hit.png")
 const L_SLAUNCH := preload("res://assets/fx/luce/luce-spear-launch.png")
+const L_OEJECT := preload("res://assets/fx/luce/luce-orb-eject.png")
 ## Luce's spear kicking off / striking home, baked (tools/pixelfx_fx/luce-spear-launch.js, luce-spear-hit.js), turned to the flight
 func spear_fx(kind: String, at: Vector2, ang: float, sz: float) -> void:
 	if kind == "hit":
 		_push({"k": "bk", "tex": L_SHIT, "x": at.x, "y": at.y, "d": 1.0, "ang": ang, "n": 18, "fw": 120.0, "fh": 96.0, "cols": 4, "px": 44.0, "py": 48.0, "sc": S * sz})
+	elif kind == "eject":
+		_push({"k": "bk", "tex": L_OEJECT, "x": at.x, "y": at.y, "d": 1.0, "ang": ang, "n": 11, "fw": 64.0, "fh": 48.0, "cols": 3, "px": 40.0, "py": 24.0, "sc": S * sz})
 	else:
 		_push({"k": "bk", "tex": L_SLAUNCH, "x": at.x, "y": at.y, "d": 1.0, "ang": ang, "n": 10, "fw": 96.0, "fh": 48.0, "cols": 3, "px": 64.0, "py": 24.0, "sc": S * sz})
 
