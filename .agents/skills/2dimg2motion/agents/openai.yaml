@@ -1,0 +1,4 @@
+interface:
+  display_name: "2DImg2Motion"
+  short_description: "通过整角色关键姿势重绘与补间，生成透明动作序列帧"
+  default_prompt: "Use $2dimg2motion to turn this baseline image into a consistent transparent game-animation sequence using whole-character key-pose redraw and reference-guided in-betweens."
