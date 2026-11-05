@@ -879,12 +879,21 @@ func step(dt: float) -> void:
 		# hanging by one hand, swaying: up / jump / toward the ledge climbs, down / away lets go
 		vx = 0.0
 		vy = 0.0
+		hang_t += dt
 		advance(dt, 0)
 		var mvh := move_axis()
-		if want("jump") or keys["up"] or (mvh == ledge_side and ft > 160.0 and f > 0):
+		if not ((keys["down"] and mvh != ledge_side) or mvh == -ledge_side): hang_drop_t = 0.0
+		if want("jump") or keys["up"] or (mvh == ledge_side and hang_t > 220.0):
 			take("jump")
 			_climb_start(ledge_at.y, ledge_at.x, ledge_side, 0)
-		elif keys["down"] or mvh == -ledge_side:
+		elif (keys["down"] and mvh != ledge_side) or mvh == -ledge_side:
+			# letting go has to be meant (owner 2026-11-05 video: the touch stick held down-and-toward the wall dropped
+			# her at once): held a moment, and never in the first instant of the catch
+			hang_drop_t += dt
+			if hang_drop_t < HANG_DROP_HOLD or hang_t < 200.0:
+				queue_redraw()
+				return
+			hang_drop_t = 0.0
 			regrab_t = 300.0
 			position.x -= ledge_side * 6.0
 			vy = 0.05
@@ -1398,6 +1407,9 @@ const HANG_REACH := [36.0, 150.0]         # world px her feet may be under a lip
 var ledge_at := Vector2.ZERO              # the corner she holds / climbs over (world)
 var ledge_side := 1
 var regrab_t := 0.0
+var hang_t := 0.0
+var hang_drop_t := 0.0
+const HANG_DROP_HOLD := 140.0       # PLACEHOLDER
 var ledge_off := Vector2.ZERO              # a climb picked up mid-jump: the drawing starts where she was and eases in
 var ledge_off_t := 1e9
 const LEDGE_EASE := 170.0
@@ -1426,6 +1438,8 @@ func _hang_start(top: float, lip_x: float, side: int) -> bool:
 	on = false
 	air = 0
 	set_anim("hang", 0)
+	hang_t = 0.0
+	hang_drop_t = 0.0
 	arena.sfx("land", 0.3)
 	return true
 
@@ -1656,7 +1670,7 @@ func physics(dt: float, a: String) -> void:
 	# a little short of its lip, it gets a smooth lift that carries her just over it (once per jump; not holding down,
 	# not dropping through) — no snap
 	# catching a ledge's end from beside it (it has no side to push into): falling past its corner, pushing toward it
-	if not landed and not on and has_ledge_art() and regrab_t <= 0.0 and vy > -0.25 and drop_t <= 0.0 and not keys["down"] and not attacking() and not (a in ["dive", "hurt", "death"]):
+	if not landed and not on and has_ledge_art() and regrab_t <= 0.0 and vy > -0.25 and drop_t <= 0.0 and not attacking() and not (a in ["dive", "hurt", "death"]):    # (pushing toward it is the intent; a stick tilted down too still catches)
 		var mvg := move_axis()
 		for pl in arena.platforms:
 			var dyg: float = position.y - pl.y

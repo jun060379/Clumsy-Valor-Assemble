@@ -116,5 +116,23 @@ func _initialize() -> void:
 			if P.on and P.anim == "idle": break
 		await frames(30)
 		ok(P.on and absf(P.position.y - pl.y) < 2.0 and P.position.x >= pl.x, "a climb at a ledge's end leaves her on it (x %.0f, ledge %.0f..%.0f, y %.0f)" % [P.position.x, pl.x, pl.x + pl.w, P.position.y])
+	# (owner video, touch stick) hanging with the stick held down-and-toward the ledge: she climbs, she doesn't drop
+	if pl != null and P.has_ledge_art():
+		await frames(20)
+		P.position = Vector2(pl.x - 14.0, pl.y + 70.0)
+		P.on = false
+		P.vy = 0.0
+		P.regrab_t = 0.0
+		P.set_anim("jump", 4)
+		Input.action_press("right")
+		Input.action_press("down")
+		var seen_hang := false
+		for i in 200:
+			await process_frame
+			if P.anim == "hang": seen_hang = true
+			if P.on and P.anim in ["climb", "idle", "run", "start"] and absf(P.position.y - pl.y) < 2.0: break
+		Input.action_release("down")
+		Input.action_release("right")
+		ok(seen_hang and absf(P.position.y - pl.y) < 2.0, "down+toward on the stick while hanging climbs (hang %s, y %.0f lip %.0f)" % [seen_hang, P.position.y, pl.y])
 	print("DONE fails=%d" % fails)
 	quit(1 if fails > 0 else 0)
