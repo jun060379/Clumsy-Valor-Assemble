@@ -1,7 +1,6 @@
 """Black outlines to one pixel (owner 2026-11-06): the town sprites were drawn with 2-px dark outlines and line work, twice
 the dot of everything else. Outer outline: the dark second row inside a dark edge is repainted with the colour inside it.
-Inner line work: dark strokes at most 2 px thick (not part of a 3x3 dark patch) are skeletonised to 1 px. Removed pixels take
-the commonest light neighbour colour. Usage: python3 tools/thin_outline.py FILE.png [...]   (in place)"""
+Removed pixels take the colour of the pixel just inside them (the commonest light neighbour as a fallback). Usage: python3 tools/thin_outline.py FILE.png [...]   (in place)"""
 import sys
 import numpy as np
 from PIL import Image
@@ -30,37 +29,16 @@ def thin(path):
     olum = np.percentile(bl, 30)
     dark = op & (lum <= max(olum + 22.0, 58.0))
     kill = np.zeros_like(op)
-    # outer: a dark pixel just inside a dark edge pixel, with lighter colour further in
+    out = a.copy()
+    # outer: a dark pixel just inside a dark edge pixel, with lighter colour further in -> it takes that inner colour
     inner = op & ~border
     for dy, dx in N4:
         nb_edge_dark = sh(border & dark, dy, dx)
         further = sh(op & ~dark, -dy, -dx)
-        kill |= inner & dark & nb_edge_dark & further
-    # inner line work: thin dark strokes (no 3x3 dark patch) inside the sprite, not on the edge
-    patch = ndi.binary_dilation(ndi.binary_erosion(dark, np.ones((3, 3))), np.ones((3, 3)))
-    stroke = dark & ~patch & ~border & ~kill
-    skel = skeletonize(stroke)
-    # keep stroke pixels touching the edge outline so lines still meet it
-    kill |= stroke & ~skel
-    out = a.copy()
-    keep = op & ~kill
-    for _ in range(4):
-        todo = np.argwhere(kill & ~keep)
-        if len(todo) == 0: break
-        newly = []
-        for y, x in todo:
-            cols = {}
-            for dy, dx in N8:
-                yy, xx = y + dy, x + dx
-                if 0 <= yy < a.shape[0] and 0 <= xx < a.shape[1] and keep[yy, xx] and not dark[yy, xx]:
-                    c = tuple(out[yy, xx])
-                    cols[c] = cols.get(c, 0) + (2 if (dy == 0 or dx == 0) else 1)
-            if cols:
-                out[y, x] = max(cols, key=cols.get)
-                newly.append((y, x))
-        for y, x in newly:
-            keep[y, x] = True
-            dark[y, x] = False
+        k = inner & dark & nb_edge_dark & further & ~kill
+        ys, xs = np.nonzero(k)
+        out[ys, xs] = a[ys - dy, xs - dx]
+        kill |= k
     Image.fromarray(out).save(path)
     return int(kill.sum())
 

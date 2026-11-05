@@ -20,7 +20,17 @@ func _initialize() -> void:
 	if args.has("old"): arena.level.hx = {}
 	if args.has("nolit"): arena.level.lit.visible = false
 	var L = arena.level
-	for s in [["hall", L.HDOOR + 60.0, L.TTOP], ["cottage", 6900.0, L.LOWF], ["bigtree", 8900.0, L.LOWF], ["barn", 5700.0, L.G]]:
+	if args.has("camp"):                 # the campfire, every other frame for 3 s
+		arena.player.position = Vector2(4250.0, L.G)
+		await frames(40)
+		for i in 90:
+			await RenderingServer.frame_post_draw
+			root.get_texture().get_image().get_region(Rect2i(330, 280, 300, 170)).save_png(out + "/c%02d.png" % i)
+			await frames(2)
+		print("CAP done")
+		quit()
+		return
+	for s in [["camp", 4300.0, L.G], ["hall", L.HDOOR + 60.0, L.TTOP], ["cottage", 6900.0, L.LOWF], ["bigtree", 8900.0, L.LOWF], ["barn", 5700.0, L.G]]:
 		arena.player.position = Vector2(s[1], s[2])
 		await frames(40)
 		await shot(s[0])

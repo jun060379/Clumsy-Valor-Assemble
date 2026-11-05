@@ -19,6 +19,7 @@ const SL := 420.0
 const BAND := 58.0
 const SURFR := 6.0
 const PXK := 1.78
+const CAMPFIRE := preload("res://assets/fx/town/campfire.png")
 const LIFE := preload("res://scripts/town_life.gd")
 const TF := preload("res://scripts/townsfolk.gd")
 const BRAN := preload("res://scripts/bran.gd")
@@ -702,9 +703,7 @@ func step(dt: float) -> void:
 				"ph": randf() * 9.0, "c": Color("#6f8f44") if randf() < 0.5 else Color("#97ad58")})
 	# ambient: smoke, embers, fountain drops, leaves
 	var gx: float = life.gust * 0.03
-	_emit("camp", 170.0, dt, func(): tfx.append({"k": "smoke", "x": 4350.0 + 27.0 * PK + randf_range(-3, 3), "y": G - 64.0, "vx": 0.006 + gx, "vy": -0.03 - randf() * 0.012, "s": 10.0, "t": 0.0, "life": 2600.0, "dark": false}))
 	_emit("forge", 130.0, dt, func(): tfx.append({"k": "smoke", "x": 7428.0, "y": LOWF - 208.0 * BS, "vx": 0.006 + gx, "vy": -0.03 - randf() * 0.012, "s": 11.0 * BS, "t": 0.0, "life": 2600.0, "dark": true}))
-	_emit("emb", 160.0, dt, func(): tfx.append({"k": "ember", "x": 4350.0 + 27.0 * PK + randf_range(-8, 8), "y": G - 22.0, "vx": randf_range(-0.015, 0.015), "vy": -0.06 - randf() * 0.04, "t": 0.0, "life": 700.0 + randf() * 600.0}))
 	_emit("fnt", 60.0, dt, func(): tfx.append({"k": "drop", "x": HDOOR + randf_range(-8, 8), "y": LOWF - 100.0 * BS, "vx": randf_range(-0.025, 0.025), "vy": 0.02, "t": 0.0, "life": 1000.0, "floor": LOWF - 40.0 * BS}))
 	_emit("leaf", 420.0, dt, func(): tfx.append({"k": "leaf", "x": 8750.0 + randf() * 450.0, "y": LOWF - 340.0 + randf() * 120.0, "vx": 0.02, "vy": 0.025 + randf() * 0.02, "t": 0.0, "life": 6500.0, "ph": randf() * 9.0, "c": Color("#8f8a3a") if randf() < 0.5 else Color("#b8aa52")}))
 	_emit("leaf2", 1100.0, dt, func(): tfx.append({"k": "leaf", "x": randf() * 500.0, "y": G - 300.0, "vx": 0.02, "vy": 0.02 + randf() * 0.02, "t": 0.0, "life": 5000.0, "ph": randf() * 9.0, "c": Color("#9a9446")}))
@@ -923,19 +922,11 @@ func _draw() -> void:
 			E.draw_on(self, roundf(E.x), roundf(E.y))
 	_spr("q_bridge", RIV0 - 38.0, LOWF + 28.0)
 	bran.draw(self)
-	# campfire on the art-pixel grid
+	# campfire: pixelfx fire/town-campfire (tools/pixelfx_fx/town-campfire.js: the flames, smoke and sparks only — the stones
+	# and logs are the town art's), 90 frames at 30 fps, owner 2026-11-06
 	var fxx := 4350.0 + 27.0 * PK
-	var n := int(28.0 / PK)
-	var cols := [Color("#7a2a1e"), Color("#c0461f"), Color("#ea7a26"), Color("#f6b545"), Color("#fde7a2")]
-	for i in n:
-		var u := (i + 0.5) / n
-		var edge := 1.0 - absf(u - 0.5) * 2.0
-		var k := 0.55 + 0.45 * sin(tt * 10.0 + i * 1.9) * sin(tt * 6.3 + i * 0.7) + 0.2 * sin(tt * 17.0 + i)
-		var hh := maxi(1, roundi(32.0 / PK * (0.25 + 0.75 * edge) * maxf(0.3, k)))
-		var x0 := roundf((fxx - 14.0) / PK) * PK + i * PK
-		for j in hh:
-			var v := float(j) / hh
-			draw_rect(Rect2(x0, roundf((G - 9.0) / PK) * PK - (j + 1) * PK, PK, PK), cols[clampi(roundi((1.0 - v) * edge * 4.4 - 0.4), 0, 4)])
+	var cfi := int(tt * 30.0) % 90
+	draw_texture_rect_region(CAMPFIRE, Rect2(roundf(fxx - 64.0), roundf(G - 7.0 - 112.0), 128, 128), Rect2((cfi % 10) * 128, (cfi / 10) * 128, 128, 128))
 	life.draw_cat(self)
 
 func _draw_front() -> void:
