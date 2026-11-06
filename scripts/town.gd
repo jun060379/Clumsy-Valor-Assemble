@@ -279,8 +279,8 @@ func _layout() -> void:
 		["q_pot", HDOOR - 140.0, LOWF], ["q_pot", HDOOR + 112.0, LOWF], ["q_barrelL", 3560.0, LOWF], ["q_barrelM", 3616.0, LOWF], ["q_crateL", 4400.0, LOWF], ["q_crateS", 4464.0, LOWF],
 		["q_barrelL", 5000.0, LOWF], ["q_crateL", 5700.0, LOWF], ["q_barrelS", 5764.0, LOWF], ["q_crateS", 6650.0, LOWF], ["q_barrelM", 8150.0, LOWF]]
 	# stones on the ground (owner 2026-11-06), cut from the map scene, 2-px grid: [piece, x, surface y]
-	rocks = [["f2_rock", 1790.0, G], ["f2_pebble", 1534.0, G], ["f2_pebble", 5420.0, G], ["f2_rock", 6080.0, G],
-		["f2_pebble", 7050.0, LOWF], ["f2_rock", 8560.0, LOWF], ["f2_pebble", 9180.0, LOWF], ["f2_pebble", 2420.0, TTOP]]
+	rocks = [["f2_rock", 1790.0, G + 2.0], ["f2_pebble", 1534.0, G + 9.0], ["f2_pebble", 5420.0, G + 12.0], ["f2_rock", 6080.0, G - 4.0],
+		["f2_pebble", 7050.0, LOWF + 10.0], ["f2_rock", 8560.0, LOWF + 6.0], ["f2_pebble", 9180.0, LOWF + 13.0], ["f2_pebble", 2420.0, TTOP + 8.0]]
 	lamps = [[SX1 + 40.0, TTOP], [DX1 - 40.0, TTOP], [HDOOR - 400.0, LOWF], [HDOOR + 380.0, LOWF], [4700.0, LOWF], [5600.0, LOWF], [1700.0, G]]
 	light_strings = [[HDOOR - 420.0, HDOOR - 20.0], [HDOOR + 20.0, HDOOR + 420.0], [4250.0, 4650.0], [5250.0, 5650.0]]
 	STONE.append([HDOOR - 420.0, HDOOR + 420.0])               # the hall's forecourt / the plaza under it: paved
@@ -963,7 +963,9 @@ func _shear(t: Texture2D, x0: float, x1: float, f: Callable, clip_h := -1.0) -> 
 		var y: float = y0 - SURFR
 		gc.draw_texture_rect_region(t, Rect2(x, y, PK, th), Rect2(minf(sx, tw - PK), 0, PK, th))
 		x += PK
-	if vi >= 0 and not g2.is_empty(): _clear_caps(a, b, f)
+	if vi >= 0 and not g2.is_empty():
+		_clear_caps(a, b, f)
+		_stone_caps(a, b, f)
 
 ## ---------- ground plane (tools/make_town_ground2.py) ----------
 const RAISE := 12.0             # rows of the plane showing behind the stand line
@@ -1024,7 +1026,7 @@ func grass_feet() -> Array:
 	o.append([HXB, HXB + tex["g_hall"].get_width() * BS, 0.0])
 	o.append([RIV0 - 10.0, RIV1 + 10.0, 99.0])
 	for r in rocks:
-		if tex.has(r[0]): o.append([r[1] + 4.0, r[1] + tex[r[0]].get_width() - 4.0, 0.0])
+		if tex.has(r[0]): o.append([r[1] + 4.0, r[1] + tex[r[0]].get_width() - 4.0, r[2] - floor_at(r[1])])
 	return o
 
 ## stone paving (owner 2026-11-06: "이걸로 돌길이나 돌 장식도 깔 수 있는 거 아님?"): the hall's forecourt and the plaza under it
@@ -1061,6 +1063,25 @@ func _build_ground2() -> void:
 		if k == "stone": gr.fill(false)     # moss between the stones is not a turf lip
 		g2green[k] = gr
 		g2[k] = [ImageTexture.create_from_image(solid), ImageTexture.create_from_image(band)]
+
+## the paving's ends (tools/make_town_stone.py): cobbles thinning into the turf, the front curb ending on a stone.
+## The cap's first STONE_B px lie over the lawn (transparent where it is plain lawn), the rest over the paving.
+const STONE_B := 40.0
+func _stone_caps(a: float, b: float, f: Callable) -> void:
+	if not tex.has("k_stone_cap"): return
+	var gc: CanvasItem = gci if gci != null else self
+	var cap: Texture2D = tex["k_stone_cap"]
+	var cw := float(cap.get_width())
+	for z in STONE:
+		for side in 2:
+			var x0: float = z[0] - STONE_B if side == 0 else z[1] + STONE_B - cw
+			if x0 + cw < a or x0 > b: continue
+			var y0: float = roundf(f.call(z[0] if side == 0 else z[1])) - RAISE
+			if side == 0: gc.draw_texture_rect(cap, Rect2(x0, y0, cw, cap.get_height()), false)
+			else:
+				gc.draw_set_transform(Vector2(x0 + cw, 0), 0.0, Vector2(-1, 1))
+				gc.draw_texture_rect(cap, Rect2(0, y0, cw, cap.get_height()), false)
+				gc.draw_set_transform(Vector2.ZERO)
 
 ## the clearing's own ragged ends over the lawn at each clearing edge
 func _clear_caps(a: float, b: float, f: Callable) -> void:
@@ -1176,8 +1197,6 @@ func _draw() -> void:
 		var dk: String = d[0]
 		if dk.contains("tree"): _tree(dk, d[1], d[2], d[3], d[4], d[5], d[1] * 0.003, vr0)
 		else: _sway(dk, d[1], d[2], d[3], d[4], d[5] * (1.0 + life.rust.get(i, 0.0) * 4.0), d[1] * 0.003, vr0)
-	for r in rocks:
-		if tex.has(r[0]) and r[1] < vr0.end.x and r[1] + 120.0 > vr0.position.x: _spr(r[0], r[1], r[2] + 2.0)
 	for b in bld:
 		if b[0] == "g_anvil": continue
 		if b[0] == "g_wagon":
@@ -1207,7 +1226,6 @@ func _draw() -> void:
 	var cfi := int(tt * 30.0) % 90
 	# the flames start at the top of the log teepee (g_ring's apex at 54,1; the ring sits at G - 55), as a log fire does
 	draw_texture_rect_region(CAMPFIRE, Rect2(roundf(fxx - 64.0), roundf(G - 47.0 - 112.0), 128, 128), Rect2((cfi % 10) * 128, (cfi / 10) * 128, 128, 128))
-	if not _is_near(deco_props[2][1], deco_props[2][2]): life.draw_cat(self)    # the cat sleeps on deco_props[2]
 
 ## crates, barrels, benches, pots and lamps: the ones whose foot is on the stand line here, the nearer ones on near_node
 func _is_near(x: float, y: float) -> bool:
@@ -1217,23 +1235,42 @@ func _draw_near() -> void:
 	_draw_props(near_node, true)
 
 func _draw_props(ci: CanvasItem, near: bool) -> void:
+	# depth by where each thing meets the ground (owner 2026-11-06: "깊이 기준은 땅에 맞다는 기준으로 보고 앞에 있을 수록
+	# 앞에"): crates, barrels, lamps and rocks are drawn from the back of the plane to the front; the ones nearer than
+	# the people's stand line go on near_node, over the people
 	var vr0: Rect2 = arena.view_rect().grow(60.0)
 	var tms := float(Time.get_ticks_msec())
+	var items: Array = []
 	for i in deco_props.size():
 		var d: Array = deco_props[i]
-		if _is_near(d[1], d[2]) != near: continue
-		var j: float = life.jig.get(i, 0.0)
-		var xf := Transform2D.IDENTITY
-		if j > 0.02:
-			# struck: it rocks and hops
-			var cx: float = d[1] + tex[d[0]].get_width() * ks(d[0]) / 2.0
-			var c := Vector2(cx, d[2])
-			xf = Transform2D(sin(tms / 28.0) * 0.08 * j, c) * Transform2D(0.0, -c - Vector2(0, absf(sin(tms / 60.0)) * 6.0 * j))
-		_spr(d[0], d[1], d[2], 0.0, d.size() > 3 and d[3], ci, xf)
-	for lp in lamps:
-		if _is_near(lp[0], lp[1]) != near: continue
-		_lamp(lp[0] - 28.0 * PK, lp[1], vr0, ci)
-	if near and _is_near(deco_props[2][1], deco_props[2][2]): life.draw_cat(ci)   # on its crate, as near as the crate
+		if _is_near(d[1], d[2]) == near and d[1] < vr0.end.x and d[1] + 200.0 > vr0.position.x: items.append([d[2], 0, i])
+	for i in lamps.size():
+		var lp: Array = lamps[i]
+		if _is_near(lp[0], lp[1]) == near: items.append([lp[1], 1, i])
+	for i in rocks.size():
+		var r: Array = rocks[i]
+		if tex.has(r[0]) and _is_near(r[1], r[2]) == near and r[1] < vr0.end.x and r[1] + 120.0 > vr0.position.x: items.append([r[2], 2, i])
+	items.sort_custom(func(p, q): return p[0] < q[0] or (p[0] == q[0] and p[1] < q[1]))
+	for it in items:
+		match it[1]:
+			0:
+				var i: int = it[2]
+				var d: Array = deco_props[i]
+				var j: float = life.jig.get(i, 0.0)
+				var xf := Transform2D.IDENTITY
+				if j > 0.02:
+					# struck: it rocks and hops
+					var cx: float = d[1] + tex[d[0]].get_width() * ks(d[0]) / 2.0
+					var c := Vector2(cx, d[2])
+					xf = Transform2D(sin(tms / 28.0) * 0.08 * j, c) * Transform2D(0.0, -c - Vector2(0, absf(sin(tms / 60.0)) * 6.0 * j))
+				_spr(d[0], d[1], d[2], 0.0, d.size() > 3 and d[3], ci, xf)
+				if i == 2: life.draw_cat(ci)          # the cat sleeps on this crate, as near as it
+			1:
+				var lp: Array = lamps[it[2]]
+				_lamp(lp[0] - 28.0 * PK, lp[1], vr0, ci)
+			2:
+				var r: Array = rocks[it[2]]
+				_spr(r[0], r[1], r[2], 0.0, false, ci)
 
 ## the grass blades (GPU, shaders/grass_blades.gdshader): only the chunks in view
 func _draw_blade_meshes(ci: CanvasItem, which: String) -> void:
