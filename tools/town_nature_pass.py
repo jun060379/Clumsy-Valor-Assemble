@@ -3,14 +3,14 @@
    then re-baked to hx as before.
 2. ground: the grass cap made thicker (grass about a third of the top band instead of a sliver), the black top line in
    the darkest grass, the dirt muted and darkened so it recedes under the walkway.
-Works from the originals at commit 77aa834 each run (idempotent). Usage: python3 tools/town_nature_pass.py"""
+Works from the git originals each run (idempotent). Usage: python3 tools/town_nature_pass.py"""
 import subprocess, io, colorsys
 import numpy as np
 from PIL import Image
 from rebake_town import rebake_crisp
 
 def orig(path):
-    return Image.open(io.BytesIO(subprocess.run(["git", "show", "77aa834:" + path], capture_output=True, check=True).stdout)).convert("RGBA")
+    return Image.open(io.BytesIO(subprocess.run(["git", "show", "HEAD:" + path], capture_output=True, check=True).stdout)).convert("RGBA")
 
 def toward(a, col, k, desat):
     rgb = a[..., :3].astype(float)
