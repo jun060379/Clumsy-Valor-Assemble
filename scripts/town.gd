@@ -31,7 +31,7 @@ const SKY := preload("res://scripts/sky.gd")
 ## the hall facade's windows (g_hall_win px): they light up from 18:40 and before 06:20
 const HALL_WIN := [[87, 359], [93, 289], [169, 287], [169, 369], [247, 235], [253, 365], [323, 129], [327, 233], [389, 359], [401, 235], [489, 369], [495, 287], [561, 289], [563, 359]]
 ## leaf rows of the canopies (baked by splitting each tree by the prototype's colour rule: g >= r*0.85 and g > b*1.3)
-const TREE_ROWS := {"f_tree2": [2, 247], "f_tree3": [2, 247], "f_bigtree": [2, 307]}
+const TREE_ROWS := {"f_tree2": [1, 178], "f_tree3": [1, 178], "f_bigtree": [2, 307]}
 const LAMP_BAN := Vector2(35, 86)     # where the lamp's banner (q_lamp_ban) sits on q_lamp
 ## the wagon's horse (horse_strip: 8 cells of 214x148; frame 0 is cut into base / neck / tail / neck root)
 const HCW := 214
