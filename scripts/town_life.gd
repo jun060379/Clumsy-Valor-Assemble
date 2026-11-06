@@ -4,6 +4,9 @@ extends RefCounted
 ## drawLife / BIRDS / drawFlies / drawWeather. Everything here works in world coordinates and only for what is near the screen.
 
 const BLADE_C := [Color("#4f6b34"), Color("#6f8f44"), Color("#97ad58"), Color("#bccd78")]
+const BLADE1 := Color8(131, 149, 64)  # the lawn blades in the lawn tile's own greens: root/body
+const BLADE2 := Color8(181, 194, 89)  # tips catching the light (the tile's top green)
+const BLADE0 := Color8(104, 128, 58)  # the roots, the tile's darkest lawn step   # a step off the lawn plane's greens so they read on it
 
 var town
 var arena
@@ -61,6 +64,7 @@ func step(dt: float) -> void:
 	var t := now()
 	var vr: Rect2 = arena.view_rect()
 	# wind: gusts come and go; a strong one throws leaves across the screen
+	step_push(dt)
 	gust_t -= dt
 	if gust_t <= 0.0:
 		gust = 1.6 if randf() < 0.35 else 1.0
@@ -361,55 +365,183 @@ func _flee(b: Dictionary, px: float, t0: float) -> void:
 var bl_r := PackedFloat32Array()
 var bl_h := PackedByteArray()
 var bl_c := PackedByteArray()
+var bl_d := PackedFloat32Array()     # depth on the ground plane: < 0 behind the stand line, > 0 in front (owner 2026-11-06)
 
 func _hsh(n: float) -> float:
 	var s := sin(n * 12.9898) * 43758.5453
 	return s - floorf(s)
 
-func build_blades() -> void:
-	var n := int(town.TOWN_W / 2.0) + 8
-	bl_r.resize(n)
-	bl_h.resize(n)
-	bl_c.resize(n)
-	for i in n:
-		var r := _hsh(i * 2.0)
-		bl_r[i] = r
-		if r < 0.45:
-			bl_h[i] = 0
-			continue
-		var r2 := _hsh(i * 2.0 + 0.37)
-		var tall := r2 > 0.93
-		bl_h[i] = 7 + int(_hsh(i * 2.0 + 1.1) * 4.0) if tall else 2 + int(r2 * 5.0)
-		bl_c[i] = mini(3, int(r2 * 3.2) + (1 if tall else 0))
+## value noise, smooth, in [0, 1], no period
+func _vn(u: float, seed: float) -> float:
+	var i := floorf(u)
+	var f := u - i
+	f = f * f * (3.0 - 2.0 * f)
+	return lerpf(_hsh(i * 1.731 + seed), _hsh((i + 1.0) * 1.731 + seed), f)
 
-func draw_blades(ci: CanvasItem, x0: float, x1: float, f: Callable) -> void:
-	if bl_h.is_empty(): build_blades()
+## the lawn's density/height map at (x, depth): tall meadow, short-cropped patches and a few bare spots
+func lawn_h(x: float, dd: float) -> float:
+	var u := x + dd * 7.0
+	return clampf(0.62 * _vn(u / 90.0, 3.0) + 0.38 * _vn(u / 23.0, 11.0), 0.0, 1.0)
+
+# ---------- the lawn (owner 2026-11-06; after Jarl's 2D GPU grass and the 2D grass shader demo) ----------
+# blades on depth rows of the ground plane, drawn back row to front row (the nearer root wins); along a row the
+# survivors come from a blue-noise-like threshold (evenly spaced, no clumps and voids) against the density map; long
+# blades, dark root to warm light tip, a small brightness jitter; wind = two harmonics (0.4x freq, 0.3x amp) with a
+# cubic bend, gusts rolling across press the blades a pixel and light their tips; walking leaves a push field that
+# decays behind you, eased so the grass leans far but never lies flat
+const ROWS := [-9.0, -5.0, -1.0, 3.0, 6.0, 9.0, 12.0, 15.0]     # down to the block's front edge (stand line + 16)
+const LAWN_ROOT := Color8(70, 92, 44)        # a clear step under the plane so the roots read
+const LAWN_FAR := Color8(170, 184, 86)
+const LAWN_BODY := [Color8(122, 143, 60), Color8(131, 149, 64), Color8(140, 156, 66)]
+const LAWN_TIP := [Color8(166, 180, 78), Color8(181, 194, 89)]
+const LAWN_GUST := Color8(214, 220, 128)
+var bl_rows := []                      # per row: PackedFloat32Array of x, and parallel arrays
+var push := PackedFloat32Array()       # walking push field, one cell per 4 px
+var _pp := Vector2.ZERO
+
+func _blue(i: int, x: float) -> float:
+	# interleaved gradient noise: a cheap blue-noise-like threshold, evenly spread along a row
+	return fposmod(52.9829189 * fposmod(0.06711056 * x + 0.00583715 * float(i * 37), 1.0), 1.0)
+
+func build_blades() -> void:
+	var edges: Array = town.grass_edges() if town.has_method("grass_edges") else []
+	var feet: Array = town.grass_feet() if town.has_method("grass_feet") else []
+	var plane: bool = not town.g2.is_empty()
+	var rows: Array = ROWS if plane else [0.0]
+	bl_rows = []
+	var n := int(town.TOWN_W)
+	var keepx := PackedFloat32Array()
+	keepx.resize(n)
+	for xi in n:
+		var x := float(xi)
+		var near := 999.0
+		for e in edges: near = minf(near, absf(x - e))
+		for ft in feet:
+			if x > ft[0] and x < ft[1]: near = 0.0
+			else: near = minf(near, minf(absf(x - ft[0]), absf(x - ft[1])))
+		var keep := 0.45 + 0.55 * smoothstep(0.0, 40.0, near)     # shorter near what stands there, never bare (footprints are skipped below)
+		if plane and town.gzone(x) == "clear":
+			var rim := 99.0
+			for z in town.CLEAR: rim = minf(rim, minf(absf(x - z[0]), absf(x - z[1])))
+			# a trodden path: bare, its rim fraying; on a wide one (the camp, the barn yard) low weed patches survive
+			# where feet do not go, in noise
+			var weeds := 0.0
+			var onslope: bool = (x > town.UPA - 40.0 and x < town.RX1 + 20.0) or (x > town.DX1 - 10.0 and x < town.DNB + 40.0) or (x > town.LWA - 40.0 and x < town.STX1 + town.SL + 20.0)
+			if rim > 30.0 and not onslope: weeds = 0.8 * smoothstep(0.7, 0.85, _vn(x / 23.0, 21.0) * 0.6 + _vn(x / 71.0, 5.0) * 0.4)
+			keep *= maxf(0.5 * maxf(0.0, 1.0 - rim / 14.0), weeds)
+		keepx[xi] = keep
+	for ri in rows.size():
+		var dd: float = rows[ri]
+		var xs := PackedFloat32Array()
+		var hs := PackedByteArray()
+		var cs := PackedByteArray()
+		var rs := PackedFloat32Array()
+		var x := 0.0
+		var k := 0
+		while x < town.TOWN_W - 1.0:
+			k += 1
+			var keep: float = keepx[int(x)]
+			var d2 := dd + roundf((_hsh(k * 0.77 + ri) - 0.5) * 4.0)     # rows overlap: no visible row lines
+			var blocked := false
+			for ft in feet:
+				if x > ft[0] - 1.0 and x < ft[1] + 1.0 and d2 < ft[2] + 3.0:
+					blocked = true
+					break
+			var hh := lawn_h(x, d2) * keep
+			# density map: bare under 0.12, full above 0.5
+			var dens := clampf((hh - 0.12) / 0.38, 0.0, 1.0)
+			if absf(d2 - 1.0) < 5.0: dens *= 0.55                    # thinner on the lane, bare spots where it is worn
+			if not blocked and keep > 0.04 and _blue(ri, x) < dens:
+				xs.append(x)
+				# the walking lane (the rows people stand on) is worn short; the meadow keeps its length further out
+				var lane := 1.0 - 0.6 * (1.0 - smoothstep(2.0, 7.0, absf(d2 - 1.0)))
+				# meadow patches away from the lane grow up again (the map's high spots), the rest stays cropped
+				var mead := smoothstep(0.4, 0.7, hh) * (1.0 - 0.7 * (1.0 - smoothstep(2.0, 7.0, absf(d2 - 1.0))))
+				hs.append(int(clampf((5.0 + hh * 10.0 + mead * 12.0) * lane + (_hsh(k * 3.7 + ri) - 0.5) * 4.0, 3.0, 22.0)))
+				if hs[hs.size() - 1] < 7:                   # no fuzz: a blade too short to read as one is left out
+					xs.resize(xs.size() - 1)
+					hs.resize(hs.size() - 1)
+					x += 1.0
+					continue
+				cs.append(int(_hsh(k * 4.3 + ri) * 2.99))
+				rs.append(_hsh(k * 6.9 + ri))
+			x += 1.0 + float(int(_hsh(k * 2.3 + ri) * 1.6))     # 1-2 px steps
+		bl_rows.append({"d": dd, "x": xs, "h": hs, "c": cs, "r": rs})
+	push.resize(int(town.TOWN_W / 4.0) + 2)
+	push.fill(0.0)
+
+## the walking push: whoever moves through the grass writes their speed into the field; it fades behind them
+func step_push(dt: float) -> void:
+	if push.is_empty(): return
 	var P = arena.player
+	var v: float = (P.position.x - _pp.x) / maxf(1.0, dt) * 16.0
+	_pp = P.position
+	var k := pow(0.5, dt / 380.0)
+	for i in push.size(): push[i] *= k
+	if absf(v) > 0.3:
+		var c := int(P.position.x / 4.0)
+		for o in range(-3, 4):
+			var j := c + o
+			if j >= 0 and j < push.size() and absf(push[j]) < absf(v):
+				push[j] = v * (1.0 - absf(o) / 4.0)
+
+func draw_blades(ci: CanvasItem, x0: float, x1: float, f: Callable, front := true) -> void:
+	if bl_rows.is_empty(): build_blades()
 	var vr: Rect2 = arena.view_rect()
 	var t := now() / 1000.0
-	var i0 := maxi(0, ceili(maxf(x0, vr.position.x - 10.0) / 2.0))
-	var i1 := mini(bl_h.size() - 1, ceili(minf(x1, vr.end.x + 10.0) / 2.0))
 	var lt: float = now() - float(land.get("t", -1e9))
-	for i in range(i0, i1):
-		var hg: int = bl_h[i]
-		if hg == 0: continue
-		var x := i * 2.0
-		var fy: float = f.call(x)
-		if fy < vr.position.y - 20.0 or fy > vr.end.y + 30.0: continue
-		var base := roundf((fy - town.SURFR + 7.0) / 2.0) * 2.0
-		var w := 0.25 + 0.5 * sin(x * 0.011 - t * 1.6) + 0.3 * sin(x * 0.037 - t * 2.9 + bl_r[i] * 3.0) + gust * 1.1 * (0.5 + 0.5 * sin(x * 0.006 - t * 4.2))
-		var bend := w * pow(hg / 4.0, 1.4) * 1.4
-		var dxp: float = x - P.position.x
-		if absf(dxp) < 30.0 and absf(P.position.y - fy) < 14.0:
-			var kk := 1.0 - absf(dxp) / 30.0
-			bend += (1.0 if dxp >= 0.0 else -1.0) * kk * kk * 5.5
-		if lt < 450.0 and absf(x - land["x"]) < 70.0 and absf(land["y"] - fy) < 14.0:
-			var k2: float = (1.0 - absf(x - land["x"]) / 70.0) * (1.0 - lt / 450.0)
-			bend += (1.0 if x >= land["x"] else -1.0) * k2 * 7.0
-		var c: Color = BLADE_C[bl_c[i]]
-		for y in hg:
-			var u := (y + 1.0) / hg
-			ci.draw_rect(Rect2(x + roundf(bend * u * u) * 2.0, base - (y + 1) * 2.0, 2.0, 2.0), BLADE_C[0] if y == 0 else c)
+	var a := maxf(x0, vr.position.x - 16.0)
+	var b := minf(x1, vr.end.x + 16.0)
+	var P = arena.player
+	for row in bl_rows:
+		var dd: float = row["d"]
+		if (dd > 0.0) != front: continue
+		var xs: PackedFloat32Array = row["x"]
+		var hs: PackedByteArray = row["h"]
+		var cs: PackedByteArray = row["c"]
+		var rs: PackedFloat32Array = row["r"]
+		var lo := 0
+		var hi := xs.size()
+		while lo < hi:
+			var mid := (lo + hi) / 2
+			if xs[mid] < a: lo = mid + 1
+			else: hi = mid
+		for i in range(lo, xs.size()):
+			var x: float = xs[i]
+			if x >= b: break
+			var fy: float = f.call(x)
+			var base := roundf(fy + dd)
+			var hg := float(hs[i])
+			var r: float = rs[i]
+			# on a slope the blades stand short and upright (no fur lying along the incline)
+			var slope := absf(float(f.call(x + 4.0)) - float(f.call(x - 4.0))) / 8.0
+			if slope > 0.15: hg = maxf(4.0, hg * 0.45)
+			# wind: the primary sway plus a 0.4x-frequency, 0.3x-amplitude second harmonic
+			var ph := x * 0.021 - t * 1.7 + r * 6.0
+			var sw := sin(ph) + 0.3 * sin(ph * 0.4 + 1.3)
+			var g := sin(x * 0.0065 - t * 2.4) * 0.6 + sin(x * 0.017 - t * 3.1 + 2.0) * 0.4      # the gust wave
+			var gw := maxf(0.0, g - 0.35) * (0.6 + gust)
+			var bend := (sw * 1.4 + 0.9 + gw * 6.0) * (hg / 14.0)
+			# the walking push (eased: leans far, never flat) and landings
+			var pv: float = push[int(x / 4.0)] if int(x / 4.0) < push.size() else 0.0
+			if absf(P.position.y - base) < 16.0 and absf(pv) > 0.05:
+				bend += signf(pv) * (1.0 - exp(-absf(pv) * 0.9)) * 7.0 * (hg / 14.0)
+			if lt < 450.0 and absf(x - land["x"]) < 70.0 and absf(land["y"] - fy) < 14.0:
+				bend += (1.0 if x >= land["x"] else -1.0) * (1.0 - absf(x - land["x"]) / 70.0) * (1.0 - lt / 450.0) * 7.0
+			var pressed := 1.0 if gw > 0.25 else 0.0
+			var h2 := hg - pressed
+			# cubic bend: the root stays, the tip goes; drawn as connected pixel runs (no dashes)
+			var prev := Vector2(x, base)
+			var segs := 4
+			for s2 in range(1, segs + 1):
+				var u := float(s2) / segs
+				var p := Vector2(x + roundf(bend * u * u * u * 3.0 * 0.5 + bend * u * 0.0), base - roundf(h2 * u))
+				var c: Color = LAWN_ROOT if s2 == 1 else (LAWN_BODY[cs[i]] if s2 < segs else (LAWN_GUST if pressed > 0.0 else LAWN_TIP[cs[i] % 2]))
+				# depth: back rows paler toward the plane's light top, front rows a step darker (the root most)
+				var dk := clampf((dd + 9.0) / 24.0, 0.0, 1.0)
+				c = c.lerp(LAWN_FAR, (1.0 - dk) * 0.35) if dk < 0.5 else c.darkened((dk - 0.5) * (0.28 if s2 == 1 else 0.14))
+				ci.draw_line(prev + Vector2(0.5, 0), p + Vector2(0.5, 0), c, 2.0 if s2 <= 2 else 1.0)
+				prev = p
 
 ## apples, fish, pigeons and the weather, over the scene
 func draw_front(ci: CanvasItem) -> void:

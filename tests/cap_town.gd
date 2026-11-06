@@ -21,7 +21,7 @@ func _initialize() -> void:
 	if args.has("nolit"): arena.level.lit.visible = false
 	if args.has("noui"):                 # hide every UI layer and the hero (to see the scenery)
 		for c in arena.get_children():
-			if c is CanvasLayer: c.visible = false
+			if c is CanvasLayer and c.layer > 0: c.visible = false
 		arena.player.visible = false
 	var L = arena.level
 	for a in args:                       # at=X[,Y]: stand there and shoot every other frame for 2 s (h=HOUR sets the time)

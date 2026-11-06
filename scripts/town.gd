@@ -17,6 +17,11 @@ const RIV0 := 8350.0
 const RIV1 := 8590.0
 const SL := 420.0
 const BAND := 58.0
+# the slopes (owner 2026-11-06 dropped the stone stairs: back to the long slopes)
+const UPA := SX0                 # the slope up to the hall terrace: UPA..SX1
+const DNB := EX1                 # the slope down from it: DX1..DNB
+const RMA := SX0                 # the ramp down to the lower plaza: RMA..RX1
+const LWA := STX1                # the slope down to the lower street: LWA..STX1+SL
 const SURFR := 6.0
 const PXK := 1.78
 const CAMPFIRE := preload("res://assets/fx/town/campfire.png")
@@ -59,6 +64,7 @@ var bld: Array = []
 var deco_back: Array = []
 var sway_t := {}            # per tree: leaf-ball frame clock
 var deco_props: Array = []
+var deco_front: Array = []      # nature in front of the stand line: drawn after buildings and props
 var lamps: Array = []
 var light_strings: Array = []
 var doors: Array = []
@@ -111,6 +117,7 @@ func _ready() -> void:
 	for k in tex.keys():
 		if ResourceLoader.exists("res://assets/town/hx/" + k + ".png"): hx[k] = load("res://assets/town/hx/" + k + ".png")
 	_build_tex()
+	_build_ground2()
 	_layout()
 	_build_climb()
 	light_tex = GradientTexture2D.new()
@@ -186,8 +193,8 @@ func ks(k: String) -> float:
 	return BS if BIGK.has(k) else 1.0
 
 func _layout() -> void:
-	tpl = [{"x0": SX0, "x1": SX1, "y0": G, "y1": TTOP}, {"x0": SX1, "x1": DX1, "y0": TTOP, "y1": TTOP}, {"x0": DX1, "x1": EX1, "y0": TTOP, "y1": G},
-		{"x0": EX1, "x1": STX1, "y0": G, "y1": G}, {"x0": STX1, "x1": STX1 + SL, "y0": G, "y1": LOWF}, {"x0": RIV0 - 20.0, "x1": RIV1 + 20.0, "y0": LOWF, "y1": LOWF},
+	tpl = [{"x0": SX0, "x1": SX1, "y0": G, "y1": TTOP, "a": UPA}, {"x0": SX1, "x1": DX1, "y0": TTOP, "y1": TTOP}, {"x0": DX1, "x1": EX1, "y0": TTOP, "y1": G, "b": DNB},
+		{"x0": EX1, "x1": STX1, "y0": G, "y1": G}, {"x0": STX1, "x1": STX1 + SL, "y0": G, "y1": LOWF, "a": LWA}, {"x0": RIV0 - 20.0, "x1": RIV1 + 20.0, "y0": LOWF, "y1": LOWF},
 		_hp(12, 98, 141), _hp(207, 292, 141), _hp(10, 100, 115), _hp(205, 294, 115), _hp(37, 117, 56), _hp(186, 266, 56), _hp(74, 98, 30), _hp(202, 228, 30)]
 	# [sprite, left x, surface y, sink, door dx|null, name, target, flip]
 	bld = [["g_store", 300.0, G, 0, 160.0, "창고", ""], ["g_yard", 820.0, G, 0, 378.0, "훈련장", "arena"],
@@ -213,6 +220,13 @@ func _layout() -> void:
 		if BIGK.has(d[0]):
 			var w2: float = tex[d[0]].get_width()
 			d[1] = d[1] + w2 / 2.0 - w2 * BS / 2.0
+	# nature on the ground plane (owner 2026-11-06): one palette with the ground, no outlines; the old bushes become the
+	# old bushes kept (owner: the code-drawn shrub did not fit); small clusters at doors and trees, set at depths on the plane (y = stand line + d), calm stretches between
+	if tex.has("k_lawn"):
+		for d in deco_back:
+			if String(d[0]).begins_with("f_grass"): d[0] = ""      # the old grass sprites go too: the blades do that job
+		deco_back = deco_back.filter(func(d): return d[0] != "")
+		deco_back.sort_custom(func(p, q): return p[2] < q[2])
 	deco_props = [["q_barrelL", 630.0, G], ["q_barrelS", 690.0, G], ["q_crateL", 1560.0, G], ["q_crateS", 1624.0, G],
 		["q_barrelM", HX2 + 470.0, TTOP], ["q_barrelS", HX2 + 522.0, TTOP], ["q_crateL", HX2 + 120.0, TTOP],
 		["q_board", 2600.0, LOWF], ["q_bench", HDOOR - 230.0, LOWF], ["q_bench", HDOOR + 84.0, LOWF, true], ["q_planter", HDOOR - 320.0, LOWF], ["q_planter", HDOOR + 238.0, LOWF, true],
@@ -220,6 +234,21 @@ func _layout() -> void:
 		["q_barrelL", 5000.0, LOWF], ["q_crateL", 5700.0, LOWF], ["q_barrelS", 5764.0, LOWF], ["q_crateS", 6650.0, LOWF], ["q_barrelM", 8150.0, LOWF]]
 	lamps = [[SX1 + 40.0, TTOP], [DX1 - 40.0, TTOP], [HDOOR - 400.0, LOWF], [HDOOR + 380.0, LOWF], [4700.0, LOWF], [5600.0, LOWF], [1700.0, G]]
 	light_strings = [[HDOOR - 420.0, HDOOR - 20.0], [HDOOR + 20.0, HDOOR + 420.0], [4250.0, 4650.0], [5250.0, 5650.0]]
+	CLEAR.append([HDOOR - 230.0, HDOOR + 230.0])               # the hall's forecourt
+	for b in bld:
+		if b[0] == "g_yard": CLEAR.append([b[1] - 20.0, b[1] + tex["g_yard"].get_width() + 20.0])   # the whole training yard
+	CLEAR.append([7400.0, 7780.0])                             # the forge yard
+	# the slopes are walked paths too (owner 2026-11-06): worn dirt up and down them, grass left at the top and foot
+	CLEAR.append([UPA - 40.0, RX1 + 20.0])                     # the stair feet (worn): up to the terrace / down the ramp
+	CLEAR.append([DX1 - 10.0, DNB + 40.0])
+	CLEAR.append([LWA - 40.0, STX1 + SL + 20.0])
+	CLEAR.append([6720.0, 6880.0])                             # the bath house door
+	CLEAR.sort_custom(func(p, q): return p[0] < q[0])
+	# crates, barrels, benches, pots and lamps step forward onto the plane like the people (buildings stay at its back)
+	if tex.has("k_lawn"):
+		var dep := [6.0, 9.0, 4.0, 8.0, 11.0, 5.0, 7.0]
+		for i in deco_props.size(): deco_props[i][2] = deco_props[i][2] + dep[i % dep.size()]
+		for lp in lamps: lp[1] = lp[1] + 7.0
 
 ## build the strip textures once from the kit: ground strip on mirrored dirt (solid), and the earth band with a root edge
 func _build_tex() -> void:
@@ -380,22 +409,24 @@ func wet_at(x: float, y: float) -> bool:
 # ---------- surfaces ----------
 func terr_y(x: float) -> float:
 	if x < SX0: return G
-	if x < RX1: return G + (LOWF - G) * (x - SX0) / (RX1 - SX0)
+	if x < RX1: return G + (LOWF - G) * clampf((x - RMA) / (RX1 - RMA), 0.0, 1.0)
 	if x < RIV0 or x >= RIV1: return LOWF
 	return LOWF + 60.0
 
 func plat_y(p: Dictionary, x: float) -> float:
-	return p.y0 + (p.y1 - p.y0) * clampf((x - p.x0) / (p.x1 - p.x0), 0.0, 1.0)
+	var a: float = p.get("a", p.x0)
+	var b: float = p.get("b", p.x1)
+	return p.y0 + (p.y1 - p.y0) * clampf((x - a) / (b - a), 0.0, 1.0)
 
 func up_y(x: float) -> float:
-	if x < SX1: return G + (TTOP - G) * (x - SX0) / (SX1 - SX0)
+	if x < SX1: return G + (TTOP - G) * clampf((x - UPA) / (SX1 - UPA), 0.0, 1.0)
 	if x < DX1: return TTOP
-	if x < EX1: return TTOP + (G - TTOP) * (x - DX1) / (EX1 - DX1)
+	if x < EX1: return TTOP + (G - TTOP) * clampf((x - DX1) / (DNB - DX1), 0.0, 1.0)
 	if x < STX1: return G
-	return G + (LOWF - G) * minf(1.0, (x - STX1) / SL)
+	return G + (LOWF - G) * clampf((x - LWA) / (STX1 + SL - LWA), 0.0, 1.0)
 
 func ramp_y(x: float) -> float:
-	return G + (LOWF - G) * (x - SX0) / (RX1 - SX0) if x < RX1 else LOWF
+	return G + (LOWF - G) * clampf((x - RMA) / (RX1 - RMA), 0.0, 1.0) if x < RX1 else LOWF
 
 ## landing in town: the terrain (with slopes) and the sloped one-way surfaces. Returns true while standing.
 func land(P, prev_x: float, dt: float) -> bool:
@@ -584,7 +615,7 @@ func shade_props() -> Array:
 ## surfTop: what clouds land on from above
 func surf_top(x: float) -> float:
 	if x < SX0: return G
-	if x < STX1 + SL: return up_y(x) if x < STX1 else G + (LOWF - G) * minf(1.0, (x - STX1) / SL)
+	if x < STX1 + SL: return up_y(x)
 	return LOWF
 
 ## cloud shade stops at the terraces' edge: the lower plaza lives in their shade
@@ -833,11 +864,171 @@ func _shear(t: Texture2D, x0: float, x1: float, f: Callable, clip_h := -1.0) -> 
 	var tw := float(t.get_width())
 	var th: float = t.get_height() if clip_h < 0.0 else minf(t.get_height(), clip_h)
 	var x := a
+	var vi := 0 if t == t_solid else (1 if t == t_band else -1)
 	while x < b:
+		var y0: float = roundf(f.call(x + PK / 2.0))
+		if vi >= 0 and not g2.is_empty():
+			# the ground plane (owner 2026-11-06): its back edge RAISE px above the line people and buildings stand on
+			var k: String = gzone(x)
+			var tt: Texture2D = g2[k][vi]
+			var tw2 := float(tt.get_width())
+			var th2: float = tt.get_height() if clip_h < 0.0 else minf(tt.get_height(), clip_h + RAISE)
+			var sx2 := fposmod(x, tw2)
+			draw_texture_rect_region(tt, Rect2(x, y0 - RAISE, PK, th2), Rect2(minf(sx2, tw2 - PK), 0, PK, th2))
+			# the turf lip: wherever the top of this column is grass (the lawn, and the grassy bits inside the clearing),
+			# the green runs a ragged few rows down over the earth face -- the edge that makes the ground a block
+			var green: bool = k == "lawn" or (g2green.has(k) and g2green[k][int(sx2) % g2green[k].size()])
+			if green:
+				var d := roundf(3.0 + 6.0 * _vnoise(x / 11.0) + 2.0 * _vnoise(x / 3.0 + 40.0))
+				var rim := 99.0
+				for z in CLEAR: rim = minf(rim, minf(absf(x - z[0]), absf(x - z[1])))
+				if k != "lawn": d = roundf(1.0 + 3.0 * _vnoise(x / 2.0 + 9.0))     # a short ragged drip under a grassy bit
+				else: d = roundf(d * _lip_taper(x))
+				if d < 1.0:
+					x += PK
+					continue
+				draw_rect(Rect2(x, y0 - RAISE + LIPY, PK, d), LIPC)
+				draw_rect(Rect2(x, y0 - RAISE + LIPY + d, PK, 1.0), LIPC2)
+			x += PK
+			continue
 		var sx := fposmod(x, tw)
-		var y: float = roundf(f.call(x + PK / 2.0)) - SURFR
+		var y: float = y0 - SURFR
 		draw_texture_rect_region(t, Rect2(x, y, PK, th), Rect2(minf(sx, tw - PK), 0, PK, th))
 		x += PK
+	if vi >= 0 and not g2.is_empty(): _clear_caps(a, b, f)
+
+## ---------- ground plane (tools/make_town_ground2.py) ----------
+const RAISE := 12.0             # rows of the plane showing behind the stand line
+# trodden paths (owner 2026-11-06: a lot of it is walked -- worn dirt before every door and gate, the camp, the barn)
+var CLEAR := [[300.0, 700.0], [4080.0, 4960.0], [5440.0, 6100.0]]
+var g2 := {}
+var g2green := {}
+var capgreen := []                # per tile column: is the top of the ground grass there (for the turf lip)
+const LIPY := 28.0               # the row of the tile where the top meets the earth face
+const LIPC := Color8(112, 134, 57)
+const LIPC2 := Color8(88, 108, 50)
+## where the turf lip runs out (the last grassy column at each end of each clearing): it tapers to nothing toward
+## these over ~16 px, raggedly, instead of stopping in a straight cut
+var lip_ends := []
+func _lip_taper(x: float) -> float:
+	var m := 1.0
+	for e in lip_ends: m = minf(m, absf(x - e) / 16.0)
+	return clampf(m + 0.25 * (_vnoise(x / 2.3 + 5.0) - 0.5), 0.0, 1.0)
+
+## smooth value noise in [0, 1] (no period)
+func _vnoise(u: float) -> float:
+	var i := floorf(u)
+	var f := u - i
+	var a := fposmod(sin(i * 127.1) * 43758.5453, 1.0)
+	var b := fposmod(sin((i + 1.0) * 127.1) * 43758.5453, 1.0)
+	f = f * f * (3.0 - 2.0 * f)
+	return a + (b - a) * f
+## where buildings, props and fences meet the ground: the blades grow thick there (town_life.build_blades)
+func grass_edges() -> Array:
+	var o: Array = []
+	for b in bld:
+		var k: String = b[0]
+		if not tex.has(k): continue
+		var w: float = tex[k].get_width() * ks(k)
+		o.append(b[1] - 3.0)
+		o.append(b[1] + w + 3.0)
+	for d in deco_props:
+		o.append(d[1] - 3.0)
+		o.append(d[1] + tex[d[0]].get_width() * ks(d[0]) + 3.0)
+	for d in deco_back:
+		if String(d[0]).contains("tree") or String(d[0]) in ["f_oak", "f_round", "f_young", "f_tall"]:
+			var tw2: float = tex[d[0]].get_width() * ks(d[0])
+			o.append(d[1] + tw2 * 0.42)
+			o.append(d[1] + tw2 * 0.58)
+	o.append(HXB + 8.0)
+	o.append(HXB + tex["g_hall"].get_width() * BS - 8.0)
+	return o
+
+## footprints of what stands on the ground ([x0, x1, depth of its base on the plane]): no blade grows out of them
+func grass_feet() -> Array:
+	var o: Array = []
+	for b in bld:
+		var k: String = b[0]
+		if not tex.has(k) or k in ["g_yard", "g_ring"]: continue    # see-through fences: grass grows between the posts
+		o.append([b[1] + 2.0, b[1] + tex[k].get_width() * ks(k) - 2.0, 0.0])
+	for d in deco_props:
+		o.append([d[1], d[1] + tex[d[0]].get_width() * ks(d[0]), d[2] - floor_at(d[1])])
+	o.append([HXB, HXB + tex["g_hall"].get_width() * BS, 0.0])
+	o.append([RIV0 - 10.0, RIV1 + 10.0, 99.0])
+	return o
+
+func gzone(x: float) -> String:
+	for z in CLEAR:
+		if x >= z[0] and x < z[1]: return "clear"
+	return "lawn"
+
+func _build_ground2() -> void:
+	if not tex.has("k_lawn"): return
+	for k in ["lawn", "clear"]:
+		var im: Image = tex["k_" + k].get_image()
+		im.decompress()
+		im.convert(Image.FORMAT_RGBA8)
+		var w := im.get_width()
+		var h := im.get_height()
+		var deep := 520
+		var solid := Image.create(w, deep, false, Image.FORMAT_RGBA8)
+		solid.blit_rect(im, Rect2i(0, 0, w, h), Vector2i.ZERO)
+		var last := im.get_region(Rect2i(0, h - 1, w, 1))
+		for y in range(h, deep): solid.blit_rect(last, Rect2i(0, 0, w, 1), Vector2i(0, y))
+		var band := solid.get_region(Rect2i(0, 0, w, int(BAND + RAISE)))
+		var gr := []
+		for xx in w:
+			var ng := 0
+			for yy in range(14, 28):
+				var c := im.get_pixel(xx, yy)
+				if c.a > 0.5 and c.g > c.r + 0.03: ng += 1
+			gr.append(ng >= 3)             # grass reaching the front edge of the top at this column
+		g2green[k] = gr
+		g2[k] = [ImageTexture.create_from_image(solid), ImageTexture.create_from_image(band)]
+
+## the clearing's own ragged ends over the lawn at each clearing edge
+func _clear_caps(a: float, b: float, f: Callable) -> void:
+	if not tex.has("k_clear_cap"): return
+	var cap: Texture2D = tex["k_clear_cap"]
+	var cw := float(cap.get_width())
+	for z in CLEAR:
+		for side in 2:
+			var ex: float = z[0] if side == 0 else z[1]
+			var x0: float = ex - cw / 2.0
+			if x0 + cw < a or x0 > b: continue
+			var y0: float = roundf(f.call(ex)) - RAISE
+			if side == 0: draw_texture_rect(cap, Rect2(x0, y0, cw, cap.get_height()), false)
+			else:
+				draw_set_transform(Vector2(x0 + cw, 0), 0.0, Vector2(-1, 1))
+				draw_texture_rect(cap, Rect2(0, y0, cw, cap.get_height()), false)
+				draw_set_transform(Vector2.ZERO)
+			# the turf lip under the cap's grassy columns too: the green carries on down the face to where the path begins
+			if capgreen.is_empty():
+				var ci: Image = cap.get_image()
+				ci.decompress()
+				for xx in ci.get_width():
+					var ng := 0
+					for yy in range(14, 28):
+						var c := ci.get_pixel(xx, yy)
+						if c.a > 0.5 and c.g > c.r + 0.03: ng += 1
+					capgreen.append(ng >= 3)
+				var cwi := ci.get_width()
+				var last := 0
+				for xx in cwi:
+					if capgreen[xx]: last = xx
+					else: break
+				for zc in CLEAR:
+					lip_ends.append(zc[0] - cwi / 2.0 + last)
+					lip_ends.append(zc[1] + cwi / 2.0 - last)
+			for xx in int(cw):
+				var col: int = xx if side == 0 else int(cw) - 1 - xx
+				if not capgreen[col]: continue
+				var wx: float = x0 + xx
+				var d := roundf((3.0 + 6.0 * _vnoise(wx / 11.0) + 2.0 * _vnoise(wx / 3.0 + 40.0)) * _lip_taper(wx))
+				if d < 1.0: continue
+				var yb: float = roundf(f.call(wx)) - RAISE
+				draw_rect(Rect2(wx, yb + LIPY, 1.0, d), LIPC)
+				draw_rect(Rect2(wx, yb + LIPY + d, 1.0, 1.0), LIPC2)
 
 func _spr(k: String, x: float, y_bottom: float, sink := 0.0, flip := false, ci: CanvasItem = null, xf := Transform2D.IDENTITY) -> void:
 	if not tex.has(k): return
@@ -895,6 +1086,14 @@ func _draw() -> void:
 	_shear(t_band, SX0, STX1 + SL, up_y)
 	_shear(t_solid, STX1 - 40.0, STX1 + SL + 40.0, func(_x): return LOWF)
 	_shear(t_solid, SX0, RX1, ramp_y)
+	# the blades standing behind the stand line (the ones in front are drawn over the feet in _draw_front)
+	var flb: Callable = func(_x): return G
+	var flb2: Callable = func(_x): return LOWF
+	life.draw_blades(self, -PK, SX0, flb, false)
+	life.draw_blades(self, SX0, STX1 + SL, up_y, false)
+	life.draw_blades(self, SX0, RX1, ramp_y, false)
+	life.draw_blades(self, RX1, RIV0, flb2, false)
+	life.draw_blades(self, RIV1, TOWN_W + PK, flb2, false)
 	# 5. trees, buildings, the hall, props, lamps, bridge
 	var vr0: Rect2 = arena.view_rect().grow(60.0)
 	for i in deco_back.size():
@@ -926,6 +1125,9 @@ func _draw() -> void:
 		_spr(d[0], d[1], d[2], 0.0, d.size() > 3 and d[3], null, xf)
 	for lp in lamps:
 		_lamp(lp[0] - 28.0 * PK, lp[1], vr0)
+	for d in deco_front:
+		_ground_shadow(d[0], d[1], d[2])
+		_sway(d[0], d[1], d[2], 0.0, d[4], d[5], d[1] * 0.003, vr0)
 	var E = arena.eil
 	if E.map == "town" and not E.hide:
 		var vr: Rect2 = arena.view_rect()
@@ -996,6 +1198,7 @@ func _draw_front() -> void:
 		front.draw_string(fnt, Vector2(d["x"] - sw2 / 2.0, y2), s2, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#ffe9a8") if String(d.get("to", "")) != "" else Color("#cfd6e6"))
 
 func _front_shear(x0: float, x1: float, f: Callable) -> void:
+	if not g2.is_empty(): return
 	var vr: Rect2 = arena.view_rect()
 	var a := maxf(x0, floorf((vr.position.x - 10.0) / PK) * PK)
 	var b := minf(x1, vr.end.x + 10.0)
@@ -1058,6 +1261,15 @@ func _tree(k: String, x: float, y_bottom: float, sink: float, flip: bool, amp: f
 		r += 2
 	draw_set_transform(Vector2.ZERO)
 
+
+## contact shadow on the plane under a piece: the ground one step darker in a flat oval
+func _ground_shadow(k: String, x: float, y: float) -> void:
+	var w: float = tex[k].get_width()
+	var cx := roundf(x + w / 2.0)
+	var rx := roundf(w * 0.42)
+	draw_rect(Rect2(cx - rx + 2.0, y - 1.0, rx * 2.0 - 4.0, 1.0), Color(0.05, 0.09, 0.05, 0.28))
+	draw_rect(Rect2(cx - rx, y, rx * 2.0, 1.0), Color(0.05, 0.09, 0.05, 0.28))
+	draw_rect(Rect2(cx - rx + 3.0, y + 1.0, rx * 2.0 - 6.0, 1.0), Color(0.05, 0.09, 0.05, 0.2))
 
 ## bush / grass clump: rows shear with the wind, the bottom 28% stays planted
 func _sway(k: String, x: float, y_bottom: float, sink: float, flip: bool, amp: float, ph: float, vr: Rect2) -> void:
