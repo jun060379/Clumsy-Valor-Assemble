@@ -39,12 +39,12 @@ const HALL_WIN := [[87, 359], [93, 289], [169, 287], [169, 369], [247, 235], [25
 const TREE_ROWS := {"f_tree2": [2, 247], "f_tree3": [2, 247], "f_bigtree": [2, 307],
 	"f_oak": [0, 276], "f_round": [0, 251], "f_young": [0, 195], "f_tall": [0, 281]}   # tools/make_town_trees.py, drawn 1:1
 const LAMP_BAN := Vector2(30, 97)     # where the lamp's banner (q_lamp_ban) sits on q_lamp
-## the wagon's horse (horse_strip: 8 cells of 214x148; frame 0 is cut into base / neck / tail / neck root)
+## the wagon's horse (horse_strip: 8 cells of 214x184, 2-px grid, 2026-11-06 redraw; frame 0 is cut into base / neck / tail / neck root)
 const HCW := 214
-const HCH := 148
-const HDX := 159.0                   # the horse at the new wagon's shaft (g_wagon2 280 wide)
-const NECK_PIV := Vector2(128, 56)
-const TAIL_PIV := Vector2(30, 46)
+const HCH := 184
+const HDX := 210.0                   # the horse at the new wagon's shaft (g_wagon2 280 wide, horse 2026-11-06)
+const NECK_PIV := Vector2(128, 60)
+const TAIL_PIV := Vector2(28, 62)
 ## hour, sky tint rgba, ambient rgb, sun, lamp
 const TODK := [[0, [8, 12, 48, .72], [.32, .35, .58], 0, 1], [4.5, [20, 22, 70, .6], [.42, .42, .64], 0, 1], [5.8, [255, 140, 160, .38], [.72, .66, .82], .3, .8], [7.5, [255, 215, 190, .14], [.94, .9, .9], .75, .25],
 	[12, [255, 255, 255, 0], [1, 1, 1], 1, .1], [16, [255, 215, 160, .12], [1, .95, .88], .85, .2], [17.6, [255, 150, 90, .3], [.98, .82, .72], .6, .55], [18.5, [235, 105, 95, .4], [.86, .7, .74], .42, .85],
