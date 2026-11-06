@@ -1012,16 +1012,16 @@ func _front_shear(x0: float, x1: float, f: Callable) -> void:
 ## tree: the trunk stays, the canopy bends as one soft mass in 2 px rows (the top moves most)
 func _tree(k: String, x: float, y_bottom: float, sink: float, flip: bool, amp: float, ph: float, vr: Rect2) -> void:
 	if tex.has(k + "_sway"):
-		# leaf balls rippling in 1-px steps, baked (tools/make_tree_sway.py): 8 frames, 0.2 s each, quicker in a gust
+		# leaf balls rippling in 1-px steps, baked (tools/make_tree_sway.py): 24 frames 6 wide, 0.1 s each, quicker in a gust
 		var sw: Texture2D = tex[k + "_sway"]
-		var fw := float(sw.get_width() / 8)
-		var fh := float(sw.get_height())
+		var fw := float(sw.get_width() / 6)
+		var fh := float(sw.get_height() / 4)
 		x = roundf(x)
 		if x > vr.end.x or x + fw < vr.position.x or y_bottom - fh > vr.end.y or y_bottom < vr.position.y: return
-		sway_t[k + str(x)] = sway_t.get(k + str(x), ph * 7.0) + get_process_delta_time() * (1.0 + life.gust * 1.5) / 0.2
-		var fi: int = int(sway_t[k + str(x)]) % 8
+		sway_t[k + str(x)] = sway_t.get(k + str(x), ph * 7.0) + get_process_delta_time() * (1.0 + life.gust * 1.5) / 0.1
+		var fi: int = int(sway_t[k + str(x)]) % 24
 		draw_set_transform(Vector2(x + (fw if flip else 0.0), y_bottom), 0.0, Vector2(-1.0 if flip else 1.0, 1.0))
-		draw_texture_rect_region(sw, Rect2(0, -fh + sink * PK, fw, fh), Rect2(fi * fw, 0, fw, fh))
+		draw_texture_rect_region(sw, Rect2(0, -fh + sink * PK, fw, fh), Rect2((fi % 6) * fw, (fi / 6) * fh, fw, fh))
 		draw_set_transform(Vector2.ZERO)
 		return
 	var trunk: Texture2D = tex[k + "_trunk"]
