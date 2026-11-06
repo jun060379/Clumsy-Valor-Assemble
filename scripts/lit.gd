@@ -63,14 +63,14 @@ static func fl(t: float, k: float) -> float:
 
 ## The one sun every light and shadow in the town follows (owner 2026-11-07: "빛과 그림자 이론을 기반 삼아서"): the
 ## direction TOWARD the sun, x right, y up, z toward the viewer. It rises on the left (the sprite bakes' "_m" light,
-## bake_light2.py) and sets on the right ("_e"), low and a little behind the town at both ends of the day (long shadows
-## reaching forward over the street), high and a little in front of it at noon (short shadows, sunlit fronts).
+## tools/light_proxy.py) and sets on the right ("_e"), always a little on the viewer's side of the town so the fronts take
+## the sun (docs/work/town-art/LIGHT.md), low at both ends of the day, high at noon. tools/light_proxy.py sun3 = this.
 static func sun3(h: float) -> Vector3:
 	var hh := fposmod(h, 24.0)
 	var day := clampf((hh - 5.5) / 13.5, 0.0, 1.0)
 	var ang := day * PI
 	var el := deg_to_rad(16.0 + 46.0 * sin(ang))
-	var hz := Vector2(-cos(ang), -0.5 + 0.7 * sin(ang) * sin(ang)).normalized()
+	var hz := Vector2(-cos(ang), 0.45 + 0.25 * sin(ang)).normalized()
 	return Vector3(hz.x * cos(el), sin(el), hz.y * cos(el))
 
 ## the shadow's way down a standing surface: screen x per px of drop (away from the sun), y = 1

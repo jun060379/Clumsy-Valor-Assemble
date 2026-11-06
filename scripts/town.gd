@@ -625,7 +625,7 @@ func light_sources() -> Array:
 				if b.size() > 4 and b[4] != null and absf(b[1] + b[4] - near_door["x"]) < 2.0:
 					dk = ks(b[0])
 					break
-		L.append({"k": "soft", "x": near_door["x"], "y": near_door["y"] - 46.0 * dk, "r": 110.0 * dk, "a": 0.85, "c": Color8(255, 200, 130)})
+		L.append({"k": "soft", "x": near_door["x"], "y": near_door["y"] - 46.0 * dk, "r": 110.0 * dk, "a": 0.85 * clampf((tod_now()["lamp"] - 0.5) * 2.0, 0.0, 1.0), "c": Color8(255, 200, 130)})   # lamplight: no glow by day
 	var wf := hall_win()
 	if wf > 0.01:
 		var y0 := win_y0()
