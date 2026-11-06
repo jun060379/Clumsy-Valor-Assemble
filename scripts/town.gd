@@ -83,6 +83,13 @@ var shade                     # shade.gd: sun shadow volumes, cloud shadows, the
 var bg_layer: CanvasLayer
 var bg_node: Node2D
 var front: Node2D
+var ground_node: Node2D
+var blade_back: Node2D
+var blade_front: Node2D
+var blade_mat: ShaderMaterial
+var bmesh := {}
+var gci: CanvasItem              # what _shear draws on (the ground node)
+var g_vr := Rect2()              # the span the ground node was last drawn for
 var near_node: Node2D           # props standing nearer than the people's line (drawn over them)
 var light_tex: GradientTexture2D
 var tfx: Array = []
@@ -144,6 +151,26 @@ func _ready() -> void:
 	bg_node.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	bg_node.draw.connect(_draw_bg)
 	bg_layer.add_child(bg_node)
+	# the ground on its own canvas item under the blades behind the line, which are under the scenery (perf, owner
+	# 2026-11-06 "렉": the blades went to the GPU, shaders/grass_blades.gdshader)
+	ground_node = Node2D.new()
+	ground_node.z_index = -7
+	ground_node.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	ground_node.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+	ground_node.draw.connect(_draw_ground)
+	arena.add_child(ground_node)
+	blade_mat = ShaderMaterial.new()
+	blade_mat.shader = preload("res://shaders/grass_blades.gdshader")
+	blade_back = Node2D.new()
+	blade_back.z_index = -6
+	blade_back.material = blade_mat
+	blade_back.draw.connect(func(): _draw_blade_meshes(blade_back, "back"))
+	arena.add_child(blade_back)
+	blade_front = Node2D.new()
+	blade_front.z_index = 8
+	blade_front.material = blade_mat
+	blade_front.draw.connect(func(): _draw_blade_meshes(blade_front, "front"))
+	arena.add_child(blade_front)
 	front = Node2D.new()
 	front.z_index = 8
 	front.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -183,6 +210,9 @@ func cleanup() -> void:
 	bg_layer.queue_free()
 	front.queue_free()
 	near_node.queue_free()
+	ground_node.queue_free()
+	blade_back.queue_free()
+	blade_front.queue_free()
 	folk_node.queue_free()
 	lbl_layer.queue_free()
 	folk.town = null
@@ -768,6 +798,12 @@ func step(dt: float) -> void:
 	queue_redraw()
 	front.queue_redraw()
 	near_node.queue_redraw()
+	# the ground is static: drawn for the view and 600 px either side, redrawn only when the view leaves that
+	var gvr: Rect2 = arena.view_rect()
+	if not g_vr.encloses(gvr): ground_node.queue_redraw()
+	blade_back.queue_redraw()
+	blade_front.queue_redraw()
+	life.blade_uniforms(blade_mat)
 	bg_node.queue_redraw()
 	folk_node.queue_redraw()
 	labels.queue_redraw()
@@ -865,7 +901,9 @@ func _layer(im: Texture2D, par: float, y: float, k: float, cam_x: float, vs: Vec
 
 ## the strip texture sheared along y=f(x) in 2 px columns, so slopes become clean pixel stairs
 func _shear(t: Texture2D, x0: float, x1: float, f: Callable, clip_h := -1.0) -> void:
-	var vr: Rect2 = arena.view_rect()
+	# the town draws its ground on ground_node for a wide span; the training ground (extends this) on itself, for the view
+	var gc: CanvasItem = gci if gci != null else self
+	var vr: Rect2 = g_vr if gci != null else arena.view_rect()
 	var a := maxf(x0, floorf((vr.position.x - 10.0) / PK) * PK)
 	var b := minf(x1, vr.end.x + 10.0)
 	var tw := float(t.get_width())
@@ -881,7 +919,7 @@ func _shear(t: Texture2D, x0: float, x1: float, f: Callable, clip_h := -1.0) -> 
 			var tw2 := float(tt.get_width())
 			var th2: float = tt.get_height() if clip_h < 0.0 else minf(tt.get_height(), clip_h + RAISE)
 			var sx2 := fposmod(x, tw2)
-			draw_texture_rect_region(tt, Rect2(x, y0 - RAISE, PK, th2), Rect2(minf(sx2, tw2 - PK), 0, PK, th2))
+			gc.draw_texture_rect_region(tt, Rect2(x, y0 - RAISE, PK, th2), Rect2(minf(sx2, tw2 - PK), 0, PK, th2))
 			# the turf lip: wherever the top of this column is grass (the lawn, and the grassy bits inside the clearing),
 			# the green runs a ragged few rows down over the earth face -- the edge that makes the ground a block
 			var green: bool = k == "lawn" or (g2green.has(k) and g2green[k][int(sx2) % g2green[k].size()])
@@ -894,13 +932,13 @@ func _shear(t: Texture2D, x0: float, x1: float, f: Callable, clip_h := -1.0) -> 
 				if d < 1.0:
 					x += PK
 					continue
-				draw_rect(Rect2(x, y0 - RAISE + LIPY, PK, d), LIPC)
-				draw_rect(Rect2(x, y0 - RAISE + LIPY + d, PK, 1.0), LIPC2)
+				gc.draw_rect(Rect2(x, y0 - RAISE + LIPY, PK, d), LIPC)
+				gc.draw_rect(Rect2(x, y0 - RAISE + LIPY + d, PK, 1.0), LIPC2)
 			x += PK
 			continue
 		var sx := fposmod(x, tw)
 		var y: float = y0 - SURFR
-		draw_texture_rect_region(t, Rect2(x, y, PK, th), Rect2(minf(sx, tw - PK), 0, PK, th))
+		gc.draw_texture_rect_region(t, Rect2(x, y, PK, th), Rect2(minf(sx, tw - PK), 0, PK, th))
 		x += PK
 	if vi >= 0 and not g2.is_empty(): _clear_caps(a, b, f)
 
@@ -996,6 +1034,7 @@ func _build_ground2() -> void:
 ## the clearing's own ragged ends over the lawn at each clearing edge
 func _clear_caps(a: float, b: float, f: Callable) -> void:
 	if not tex.has("k_clear_cap"): return
+	var gc: CanvasItem = gci if gci != null else self
 	var cap: Texture2D = tex["k_clear_cap"]
 	var cw := float(cap.get_width())
 	for z in CLEAR:
@@ -1004,11 +1043,11 @@ func _clear_caps(a: float, b: float, f: Callable) -> void:
 			var x0: float = ex - cw / 2.0
 			if x0 + cw < a or x0 > b: continue
 			var y0: float = roundf(f.call(ex)) - RAISE
-			if side == 0: draw_texture_rect(cap, Rect2(x0, y0, cw, cap.get_height()), false)
+			if side == 0: gc.draw_texture_rect(cap, Rect2(x0, y0, cw, cap.get_height()), false)
 			else:
-				draw_set_transform(Vector2(x0 + cw, 0), 0.0, Vector2(-1, 1))
-				draw_texture_rect(cap, Rect2(0, y0, cw, cap.get_height()), false)
-				draw_set_transform(Vector2.ZERO)
+				gc.draw_set_transform(Vector2(x0 + cw, 0), 0.0, Vector2(-1, 1))
+				gc.draw_texture_rect(cap, Rect2(0, y0, cw, cap.get_height()), false)
+				gc.draw_set_transform(Vector2.ZERO)
 			# the turf lip under the cap's grassy columns too: the green carries on down the face to where the path begins
 			if capgreen.is_empty():
 				var ci: Image = cap.get_image()
@@ -1034,8 +1073,8 @@ func _clear_caps(a: float, b: float, f: Callable) -> void:
 				var d := roundf((3.0 + 6.0 * _vnoise(wx / 11.0) + 2.0 * _vnoise(wx / 3.0 + 40.0)) * _lip_taper(wx))
 				if d < 1.0: continue
 				var yb: float = roundf(f.call(wx)) - RAISE
-				draw_rect(Rect2(wx, yb + LIPY, 1.0, d), LIPC)
-				draw_rect(Rect2(wx, yb + LIPY + d, 1.0, 1.0), LIPC2)
+				gc.draw_rect(Rect2(wx, yb + LIPY, 1.0, d), LIPC)
+				gc.draw_rect(Rect2(wx, yb + LIPY + d, 1.0, 1.0), LIPC2)
 
 func _spr(k: String, x: float, y_bottom: float, sink := 0.0, flip := false, ci: CanvasItem = null, xf := Transform2D.IDENTITY) -> void:
 	if not tex.has(k): return
@@ -1060,8 +1099,11 @@ func _spr(k: String, x: float, y_bottom: float, sink := 0.0, flip := false, ci: 
 	else:
 		ci.draw_texture_rect(im, Rect2(roundf(x), y, w, h), false)
 
-func _draw() -> void:
-	var tt := Time.get_ticks_msec() / 1000.0
+## the ground: recess wall, floors, bands (static: the river is drawn with the scenery)
+func _draw_ground() -> void:
+	gci = ground_node
+	var gn := ground_node
+	g_vr = arena.view_rect().grow_individual(600.0, 200.0, 600.0, 200.0)
 	# 1. recess wall (dark dirt) behind the lower level
 	var pts := PackedVector2Array([Vector2(SX0, G)])
 	var x := SX0
@@ -1072,35 +1114,30 @@ func _draw() -> void:
 	pts.append(Vector2(SX0, LOWF + 20.0))
 	var uvs := PackedVector2Array()
 	for p in pts: uvs.append(p / t_wall.get_size())
-	draw_colored_polygon(pts, Color.WHITE, uvs, t_wall)
+	gn.draw_colored_polygon(pts, Color.WHITE, uvs, t_wall)
 	# 2. lower level: floor + valley, river
 	_shear(t_solid, RX1, RIV0, func(_x): return LOWF)
 	_shear(t_solid, RIV1, TOWN_W + PK, func(_x): return LOWF)
+	# 3. lower plaza: light strings, fountain
+	var L: Texture2D = tex["q_lights"]
+	for s in light_strings:
+		var yy: float = up_y((s[0] + s[1]) / 2.0) + BAND - 10.0
+		gn.draw_texture_rect(L, Rect2(s[0], yy, s[1] - s[0], L.get_height()), false)
+	_spr("q_fountain", HDOOR - 52.0 * PK * BS, LOWF, 0.0, false, gn)
+	# 4. upper bands, west street, ramp
+	_shear(t_solid, -PK, SX0, func(_x): return G)
+	_shear(t_band, SX0, STX1 + SL, up_y)
+	_shear(t_solid, STX1 - 40.0, STX1 + SL + 40.0, func(_x): return LOWF)
+	_shear(t_solid, SX0, RX1, ramp_y)
+
+func _draw() -> void:
+	var tt := Time.get_ticks_msec() / 1000.0
 	# the river: pixelfx water/town-river (tools/pixelfx_fx/town-river.js), 120 frames 240x96 at 10 fps, exactly the
 	# river's width; deeper down its darkest step; the bridge deck's shadow lies on the water just under it
 	var rfi := int(tt * 10.0) % 120
 	draw_texture_rect_region(RIVER, Rect2(RIV0, LOWF + 18.0, 240.0, 96.0), Rect2((rfi % 7) * 240, (rfi / 7) * 96, 240, 96))
 	draw_rect(Rect2(RIV0, LOWF + 114.0, RIV1 - RIV0, 700.0), Color("#05222b"))
 	draw_rect(Rect2(RIV0, LOWF + 18.0, RIV1 - RIV0, 5.0), Color(0.05, 0.1, 0.18, 0.35))
-	# 3. lower plaza: light strings, fountain
-	var L: Texture2D = tex["q_lights"]
-	for s in light_strings:
-		var yy: float = up_y((s[0] + s[1]) / 2.0) + BAND - 10.0
-		draw_texture_rect(L, Rect2(s[0], yy, s[1] - s[0], L.get_height()), false)
-	_spr("q_fountain", HDOOR - 52.0 * PK * BS, LOWF)
-	# 4. upper bands, west street, ramp
-	_shear(t_solid, -PK, SX0, func(_x): return G)
-	_shear(t_band, SX0, STX1 + SL, up_y)
-	_shear(t_solid, STX1 - 40.0, STX1 + SL + 40.0, func(_x): return LOWF)
-	_shear(t_solid, SX0, RX1, ramp_y)
-	# the blades standing behind the stand line (the ones in front are drawn over the feet in _draw_front)
-	var flb: Callable = func(_x): return G
-	var flb2: Callable = func(_x): return LOWF
-	life.draw_blades(self, -PK, SX0, flb, false)
-	life.draw_blades(self, SX0, STX1 + SL, up_y, false)
-	life.draw_blades(self, SX0, RX1, ramp_y, false)
-	life.draw_blades(self, RX1, RIV0, flb2, false)
-	life.draw_blades(self, RIV1, TOWN_W + PK, flb2, false)
 	# 5. trees, buildings, the hall, props, lamps, bridge
 	var vr0: Rect2 = arena.view_rect().grow(60.0)
 	for i in deco_back.size():
@@ -1165,6 +1202,17 @@ func _draw_props(ci: CanvasItem, near: bool) -> void:
 		_lamp(lp[0] - 28.0 * PK, lp[1], vr0, ci)
 	if near and _is_near(deco_props[2][1], deco_props[2][2]): life.draw_cat(ci)   # on its crate, as near as the crate
 
+## the grass blades (GPU, shaders/grass_blades.gdshader): only the chunks in view
+func _draw_blade_meshes(ci: CanvasItem, which: String) -> void:
+	if bmesh.is_empty():
+		var fg: Callable = func(_x): return G
+		var fl: Callable = func(_x): return LOWF
+		bmesh = life.build_blade_meshes([[-PK, SX0, fg], [SX0, STX1 + SL, up_y], [SX0, RX1, ramp_y], [RX1, RIV0, fl], [RIV1, TOWN_W + PK, fl]])
+	var vr: Rect2 = arena.view_rect()
+	for c in bmesh[which]:
+		if c[1] < vr.position.x or c[0] > vr.end.x: continue
+		ci.draw_mesh(c[2], null)
+
 func _draw_front() -> void:
 	# grass strip in front of feet
 	var fl: Callable = func(x): return G
@@ -1173,12 +1221,6 @@ func _draw_front() -> void:
 	_front_shear(SX0, RX1, ramp_y)
 	_front_shear(RX1, RIV0, func(_x): return LOWF)
 	_front_shear(RIV1, TOWN_W + PK, func(_x): return LOWF)
-	var fl2: Callable = func(_x): return LOWF
-	life.draw_blades(front, -PK, SX0, fl)
-	life.draw_blades(front, SX0, STX1 + SL, up_y)
-	life.draw_blades(front, SX0, RX1, ramp_y)
-	life.draw_blades(front, RX1, RIV0, fl2)
-	life.draw_blades(front, RIV1, TOWN_W + PK, fl2)
 	for f in tfx:
 		var k: float = f["t"] / f["life"]
 		match f["k"]:

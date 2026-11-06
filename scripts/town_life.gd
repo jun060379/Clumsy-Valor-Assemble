@@ -492,7 +492,15 @@ func draw_blades(ci: CanvasItem, x0: float, x1: float, f: Callable, front := tru
 	var lt: float = now() - float(land.get("t", -1e9))
 	var a := maxf(x0, vr.position.x - 16.0)
 	var b := minf(x1, vr.end.x + 16.0)
+	if a >= b: return
 	var P = arena.player
+	# the ground line sampled once per pixel for this span (perf, owner 2026-11-06 "렉"): f is piecewise linear, so
+	# reading it between the samples is the same line
+	var fa := floorf(a) - 8.0
+	var fn := int(b - fa) + 10
+	var fs := PackedFloat32Array()
+	fs.resize(fn)
+	for k in fn: fs[k] = float(f.call(fa + k))
 	for row in bl_rows:
 		var dd: float = row["d"]
 		if (dd > 0.0) != front: continue
@@ -506,15 +514,22 @@ func draw_blades(ci: CanvasItem, x0: float, x1: float, f: Callable, front := tru
 			var mid := (lo + hi) / 2
 			if xs[mid] < a: lo = mid + 1
 			else: hi = mid
+		# depth: back rows paler toward the plane's light top, front rows a step darker (the root most) -- one colour per
+		# segment kind per row, so the row goes out as a few batched multilines instead of a draw call per segment
+		var dk := clampf((dd + 9.0) / 24.0, 0.0, 1.0)
+		var pal := {}
+		var bk := {}
 		for i in range(lo, xs.size()):
 			var x: float = xs[i]
 			if x >= b: break
-			var fy: float = f.call(x)
+			var u0 := x - fa
+			var k0 := int(u0)
+			var fy: float = lerpf(fs[k0], fs[k0 + 1], u0 - k0)
 			var base := roundf(fy + dd)
 			var hg := float(hs[i])
 			var r: float = rs[i]
 			# on a slope the blades stand short and upright (no fur lying along the incline)
-			var slope := absf(float(f.call(x + 4.0)) - float(f.call(x - 4.0))) / 8.0
+			var slope := absf(fs[k0 + 4] - fs[k0 - 4]) / 8.0
 			if slope > 0.15: hg = maxf(4.0, hg * 0.45)
 			# wind: the primary sway plus a 0.4x-frequency, 0.3x-amplitude second harmonic
 			var ph := x * 0.021 - t * 1.7 + r * 6.0
@@ -528,20 +543,108 @@ func draw_blades(ci: CanvasItem, x0: float, x1: float, f: Callable, front := tru
 				bend += signf(pv) * (1.0 - exp(-absf(pv) * 0.9)) * 7.0 * (hg / 14.0)
 			if lt < 450.0 and absf(x - land["x"]) < 70.0 and absf(land["y"] - fy) < 14.0:
 				bend += (1.0 if x >= land["x"] else -1.0) * (1.0 - absf(x - land["x"]) / 70.0) * (1.0 - lt / 450.0) * 7.0
-			var pressed := 1.0 if gw > 0.25 else 0.0
+			var pressed := 1 if gw > 0.25 else 0
 			var h2 := hg - pressed
 			# cubic bend: the root stays, the tip goes; drawn as connected pixel runs (no dashes)
-			var prev := Vector2(x, base)
-			var segs := 4
-			for s2 in range(1, segs + 1):
-				var u := float(s2) / segs
-				var p := Vector2(x + roundf(bend * u * u * u * 3.0 * 0.5 + bend * u * 0.0), base - roundf(h2 * u))
-				var c: Color = LAWN_ROOT if s2 == 1 else (LAWN_BODY[cs[i]] if s2 < segs else (LAWN_GUST if pressed > 0.0 else LAWN_TIP[cs[i] % 2]))
-				# depth: back rows paler toward the plane's light top, front rows a step darker (the root most)
-				var dk := clampf((dd + 9.0) / 24.0, 0.0, 1.0)
-				c = c.lerp(LAWN_FAR, (1.0 - dk) * 0.35) if dk < 0.5 else c.darkened((dk - 0.5) * (0.28 if s2 == 1 else 0.14))
-				ci.draw_line(prev + Vector2(0.5, 0), p + Vector2(0.5, 0), c, 2.0 if s2 <= 2 else 1.0)
+			var prev := Vector2(x + 0.5, base)
+			for s2 in range(1, 5):
+				var u := float(s2) / 4.0
+				var p := Vector2(x + 0.5 + roundf(bend * u * u * u * 1.5), base - roundf(h2 * u))
+				var key := s2 * 16 + int(cs[i]) * 2 + pressed
+				if not bk.has(key):
+					var c: Color = LAWN_ROOT if s2 == 1 else (LAWN_BODY[cs[i]] if s2 < 4 else (LAWN_GUST if pressed > 0 else LAWN_TIP[cs[i] % 2]))
+					c = c.lerp(LAWN_FAR, (1.0 - dk) * 0.35) if dk < 0.5 else c.darkened((dk - 0.5) * (0.28 if s2 == 1 else 0.14))
+					pal[key] = c
+					bk[key] = []
+				var arr: Array = bk[key]      # a plain Array is shared by reference: appending does not copy it
+				arr.append(prev)
+				arr.append(p)
 				prev = p
+		var keys := bk.keys()
+		keys.sort()
+		for key in keys:
+			ci.draw_multiline(PackedVector2Array(bk[key]), pal[key], 2.0 if key < 48 else 1.0)
+
+## ---- the same blades on the GPU (town): baked once at rest into chunked meshes, bent by shaders/grass_blades ----
+const BLADE_CHUNK := 256.0
+## surfs: [[x0, x1, f], ...]. Returns {"back": [[cx0, cx1, mesh], ...], "front": [...]}
+func build_blade_meshes(surfs: Array) -> Dictionary:
+	if bl_rows.is_empty(): build_blades()
+	var out := {"back": [], "front": []}
+	for sf in surfs:
+		var x0: float = sf[0]
+		var x1: float = sf[1]
+		var f: Callable = sf[2]
+		var cx := x0
+		while cx < x1:
+			var cx1 := minf(x1, cx + BLADE_CHUNK)
+			for fr in [false, true]:
+				var m := _blade_mesh(cx, cx1, f, fr)
+				if m != null: out["front" if fr else "back"].append([cx - 30.0, cx1 + 30.0, m])
+			cx = cx1
+	return out
+
+func _blade_mesh(a: float, b: float, f: Callable, front: bool) -> ArrayMesh:
+	var vs := PackedVector2Array()
+	var uvs := PackedVector2Array()
+	var cols := PackedColorArray()
+	var idx := PackedInt32Array()
+	for row in bl_rows:
+		var dd: float = row["d"]
+		if (dd > 0.0) != front: continue
+		var xs: PackedFloat32Array = row["x"]
+		var hs: PackedByteArray = row["h"]
+		var cs: PackedByteArray = row["c"]
+		var rs: PackedFloat32Array = row["r"]
+		var dk := clampf((dd + 9.0) / 24.0, 0.0, 1.0)
+		for i in xs.size():
+			var x: float = xs[i]
+			if x < a: continue
+			if x >= b: break
+			var fy: float = f.call(x)
+			var base := roundf(fy + dd)
+			var hg := float(hs[i])
+			var slope := absf(float(f.call(x + 4.0)) - float(f.call(x - 4.0))) / 8.0
+			if slope > 0.15: hg = maxf(4.0, hg * 0.45)
+			var hv := roundf(hg) + clampf(rs[i], 0.0, 0.999) * 0.5
+			for s2 in range(1, 5):
+				var c: Color = LAWN_ROOT if s2 == 1 else (LAWN_BODY[cs[i]] if s2 < 4 else LAWN_TIP[cs[i] % 2])
+				c = c.lerp(LAWN_FAR, (1.0 - dk) * 0.35) if dk < 0.5 else c.darkened((dk - 0.5) * (0.28 if s2 == 1 else 0.14))
+				var wide := s2 <= 2
+				var w := 2.0 if wide else 1.0
+				var n0 := vs.size()
+				for e in 2:                    # the segment's lower end (u0) and upper end (u1)
+					var u := float(s2 - 1 + e) / 4.0
+					for side in 2:
+						var code := side + (2 if wide else 0) + (4 if s2 == 4 else 0)
+						vs.append(Vector2(x + side * w, base))
+						uvs.append(Vector2(u, hv))
+						cols.append(Color(c.r, c.g, c.b, (code + 0.5) / 16.0))
+				idx.append_array([n0, n0 + 1, n0 + 3, n0, n0 + 3, n0 + 2])
+	if vs.is_empty(): return null
+	var arr := []
+	arr.resize(Mesh.ARRAY_MAX)
+	arr[Mesh.ARRAY_VERTEX] = vs
+	arr[Mesh.ARRAY_TEX_UV] = uvs
+	arr[Mesh.ARRAY_COLOR] = cols
+	arr[Mesh.ARRAY_INDEX] = idx
+	var m := ArrayMesh.new()
+	m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+	return m
+
+var push_tex: ImageTexture
+## per frame: the wind clock, gust, the player, the landing and the push field into the blade material
+func blade_uniforms(mat: ShaderMaterial) -> void:
+	if push.is_empty(): return
+	var img := Image.create_from_data(push.size(), 1, false, Image.FORMAT_RF, push.to_byte_array())
+	if push_tex == null or push_tex.get_width() != push.size(): push_tex = ImageTexture.create_from_image(img)
+	else: push_tex.update(img)
+	mat.set_shader_parameter("pushtex", push_tex)
+	mat.set_shader_parameter("push_n", float(push.size()))
+	mat.set_shader_parameter("t", now() / 1000.0)
+	mat.set_shader_parameter("gust", gust)
+	mat.set_shader_parameter("py", arena.player.position.y)
+	mat.set_shader_parameter("land", Vector3(float(land.get("x", 0.0)), float(land.get("y", 0.0)), now() - float(land.get("t", -1e9))))
 
 ## apples, fish, pigeons and the weather, over the scene
 func draw_front(ci: CanvasItem) -> void:
