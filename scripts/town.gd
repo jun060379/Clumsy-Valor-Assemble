@@ -83,6 +83,7 @@ var shade                     # shade.gd: sun shadow volumes, cloud shadows, the
 var bg_layer: CanvasLayer
 var bg_node: Node2D
 var front: Node2D
+var near_node: Node2D           # props standing nearer than the people's line (drawn over them)
 var light_tex: GradientTexture2D
 var tfx: Array = []
 var emit_t := {}
@@ -148,6 +149,13 @@ func _ready() -> void:
 	front.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	front.draw.connect(_draw_front)
 	arena.add_child(front)
+	# props whose foot is set lower on the plane than the people's stand line are nearer the camera: drawn over the
+	# people (owner 2026-11-06: depth). z 1: over the player (0), under the grass blades in front (8) and the light (9)
+	near_node = Node2D.new()
+	near_node.z_index = 1
+	near_node.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	near_node.draw.connect(_draw_near)
+	arena.add_child(near_node)
 	life = LIFE.new(self)
 	fxa = TFX.new(self)
 	bran = BRAN.new(self)
@@ -174,6 +182,7 @@ func cleanup() -> void:
 	lit.cleanup()
 	bg_layer.queue_free()
 	front.queue_free()
+	near_node.queue_free()
 	folk_node.queue_free()
 	lbl_layer.queue_free()
 	folk.town = null
@@ -238,10 +247,7 @@ func _layout() -> void:
 	for b in bld:
 		if b[0] == "g_yard": CLEAR.append([b[1] - 20.0, b[1] + tex["g_yard"].get_width() + 20.0])   # the whole training yard
 	CLEAR.append([7400.0, 7780.0])                             # the forge yard
-	# the slopes are walked paths too (owner 2026-11-06): worn dirt up and down them, grass left at the top and foot
-	CLEAR.append([UPA - 40.0, RX1 + 20.0])                     # the stair feet (worn): up to the terrace / down the ramp
-	CLEAR.append([DX1 - 10.0, DNB + 40.0])
-	CLEAR.append([LWA - 40.0, STX1 + SL + 20.0])
+	# the slopes are grass (owner 2026-11-06: everywhere but the paths made dirt on purpose is grass, slopes too)
 	CLEAR.append([6720.0, 6880.0])                             # the bath house door
 	CLEAR.sort_custom(func(p, q): return p[0] < q[0])
 	# crates, barrels, benches, pots and lamps step forward onto the plane like the people (buildings stay at its back)
@@ -761,6 +767,7 @@ func step(dt: float) -> void:
 	_light_step(T)
 	queue_redraw()
 	front.queue_redraw()
+	near_node.queue_redraw()
 	bg_node.queue_redraw()
 	folk_node.queue_redraw()
 	labels.queue_redraw()
@@ -1112,19 +1119,7 @@ func _draw() -> void:
 	_spr("g_hall", HXB, TTOP, 1.0)
 	var fp := HM(HX2 + 162.0 * PK, HTOP2 + 6.0 * PK)
 	_flag(fp.x, fp.y, 1.75 * BS)
-	var tms := float(Time.get_ticks_msec())
-	for i in deco_props.size():
-		var d: Array = deco_props[i]
-		var j: float = life.jig.get(i, 0.0)
-		var xf := Transform2D.IDENTITY
-		if j > 0.02:
-			# struck: it rocks and hops
-			var cx: float = d[1] + tex[d[0]].get_width() * ks(d[0]) / 2.0
-			var c := Vector2(cx, d[2])
-			xf = Transform2D(sin(tms / 28.0) * 0.08 * j, c) * Transform2D(0.0, -c - Vector2(0, absf(sin(tms / 60.0)) * 6.0 * j))
-		_spr(d[0], d[1], d[2], 0.0, d.size() > 3 and d[3], null, xf)
-	for lp in lamps:
-		_lamp(lp[0] - 28.0 * PK, lp[1], vr0)
+	_draw_props(self, false)
 	for d in deco_front:
 		_ground_shadow(d[0], d[1], d[2])
 		_sway(d[0], d[1], d[2], 0.0, d[4], d[5], d[1] * 0.003, vr0)
@@ -1142,7 +1137,33 @@ func _draw() -> void:
 	var cfi := int(tt * 30.0) % 90
 	# the flames start at the top of the log teepee (g_ring's apex at 54,1; the ring sits at G - 55), as a log fire does
 	draw_texture_rect_region(CAMPFIRE, Rect2(roundf(fxx - 64.0), roundf(G - 47.0 - 112.0), 128, 128), Rect2((cfi % 10) * 128, (cfi / 10) * 128, 128, 128))
-	life.draw_cat(self)
+	if not _is_near(deco_props[2][1], deco_props[2][2]): life.draw_cat(self)    # the cat sleeps on deco_props[2]
+
+## crates, barrels, benches, pots and lamps: the ones whose foot is on the stand line here, the nearer ones on near_node
+func _is_near(x: float, y: float) -> bool:
+	return y > floor_at(x) + 0.5
+
+func _draw_near() -> void:
+	_draw_props(near_node, true)
+
+func _draw_props(ci: CanvasItem, near: bool) -> void:
+	var vr0: Rect2 = arena.view_rect().grow(60.0)
+	var tms := float(Time.get_ticks_msec())
+	for i in deco_props.size():
+		var d: Array = deco_props[i]
+		if _is_near(d[1], d[2]) != near: continue
+		var j: float = life.jig.get(i, 0.0)
+		var xf := Transform2D.IDENTITY
+		if j > 0.02:
+			# struck: it rocks and hops
+			var cx: float = d[1] + tex[d[0]].get_width() * ks(d[0]) / 2.0
+			var c := Vector2(cx, d[2])
+			xf = Transform2D(sin(tms / 28.0) * 0.08 * j, c) * Transform2D(0.0, -c - Vector2(0, absf(sin(tms / 60.0)) * 6.0 * j))
+		_spr(d[0], d[1], d[2], 0.0, d.size() > 3 and d[3], ci, xf)
+	for lp in lamps:
+		if _is_near(lp[0], lp[1]) != near: continue
+		_lamp(lp[0] - 28.0 * PK, lp[1], vr0, ci)
+	if near and _is_near(deco_props[2][1], deco_props[2][2]): life.draw_cat(ci)   # on its crate, as near as the crate
 
 func _draw_front() -> void:
 	# grass strip in front of feet
@@ -1299,20 +1320,21 @@ func _sway(k: String, x: float, y_bottom: float, sink: float, flip: bool, amp: f
 	draw_set_transform(Vector2.ZERO)
 
 ## street lamp: the banner under the arm flutters, more in a gust
-func _lamp(x: float, surf: float, vr: Rect2) -> void:
+func _lamp(x: float, surf: float, vr: Rect2, ci: CanvasItem = null) -> void:
+	if ci == null: ci = self
 	var base: Texture2D = tex["q_lamp_base"]
 	var ban: Texture2D = tex["q_lamp_ban"]
 	x = roundf(x)
 	if x > vr.end.x or x + base.get_width() < vr.position.x: return
 	var y := roundf(surf - base.get_height())
-	draw_texture(base, Vector2(x, y))
+	ci.draw_texture(base, Vector2(x, y))
 	var t := Time.get_ticks_msec() / 1000.0
 	var bh := float(ban.get_height())
 	var r := 0.0
 	while r < bh:
 		var u := r / bh
 		var o := roundf((sin(t * 2.4 - r * 0.09 + x * 0.01) * 1.6 + sin(t * 0.9 + x) * 1.2) * u * (0.5 + life.gust * 1.4))
-		draw_texture_rect_region(ban, Rect2(x + LAMP_BAN.x + o, y + LAMP_BAN.y + r, ban.get_width(), minf(2.0, bh - r)), Rect2(0, r, ban.get_width(), minf(2.0, bh - r)))
+		ci.draw_texture_rect_region(ban, Rect2(x + LAMP_BAN.x + o, y + LAMP_BAN.y + r, ban.get_width(), minf(2.0, bh - r)), Rect2(0, r, ban.get_width(), minf(2.0, bh - r)))
 		r += 2.0
 
 ## pennant on the hall's pole: pixel columns riding a travelling sine; limp when the wind drops
