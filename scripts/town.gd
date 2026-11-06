@@ -553,12 +553,13 @@ func floor_at(x: float) -> float:
 
 # ---------- time of day ----------
 ## the world's one clock lives on the arena (shared with the hall and Eilin's day)
-## which sun-side version to draw (owner 2026-11-06: the shading turns with the sun): the morning one while the sun is
-## low in the east, the evening one while it is low in the west, the art as drawn around noon and at night
+## which light version to draw (tools/bake_light2.py; owner 2026-11-06): morning while the sun is low in the east,
+## evening while it is low in the west, night under the moon and the town's lights, the art as drawn around noon
 func sun_side() -> String:
 	var hh := fposmod(float(arena.tod_h), 24.0)
 	if hh >= 5.5 and hh < 10.5: return "_m"
 	if hh >= 14.5 and hh < 19.5: return "_e"
+	if hh >= 19.5 or hh < 5.5: return "_n"           # moonlight + the lamps, fires and windows near each building
 	return ""
 
 func tod_now() -> Dictionary:
@@ -988,8 +989,8 @@ var g2 := {}
 var g2green := {}
 var capgreen := []                # per tile column: is the top of the ground grass there (for the turf lip)
 const LIPY := 28.0               # the row of the tile where the top meets the earth face
-const LIPC := Color8(112, 134, 57)
-const LIPC2 := Color8(88, 108, 50)
+const LIPC := Color8(111, 120, 56)        # leaf ramp step 3 (map palette)
+const LIPC2 := Color8(80, 81, 36)         # leaf ramp step 2
 ## where the turf lip runs out (the last grassy column at each end of each clearing): it tapers to nothing toward
 ## these over ~16 px, raggedly, instead of stopping in a straight cut
 var lip_ends := []

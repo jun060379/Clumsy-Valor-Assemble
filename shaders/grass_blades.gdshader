@@ -39,6 +39,6 @@ void vertex() {
 	float h2 = hg - pressed;
 	VERTEX = vec2(x + round(bend * u * u * u * 1.5) + side * w, base - round(h2 * u));
 	vec3 c = COLOR.rgb;
-	if (tip && pressed > 0.0) c = clamp(c * vec3(1.237, 1.176, 1.542), 0.0, 1.0);   // the tip catches the gust light
+	if (tip && pressed > 0.0) c = vec3(176.0, 195.0, 121.0) / 255.0;   // the tip catches the gust light: the leaf ramp's top step
 	COLOR = vec4(c, 1.0);
 }

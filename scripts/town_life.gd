@@ -390,11 +390,13 @@ func lawn_h(x: float, dd: float) -> float:
 # cubic bend, gusts rolling across press the blades a pixel and light their tips; walking leaves a push field that
 # decays behind you, eased so the grass leans far but never lies flat
 const ROWS := [-9.0, -5.0, -1.0, 3.0, 6.0, 9.0, 12.0, 15.0]     # down to the block's front edge (stand line + 16)
-const LAWN_ROOT := Color8(70, 92, 44)        # a clear step under the plane so the roots read
-const LAWN_FAR := Color8(170, 184, 86)
-const LAWN_BODY := [Color8(122, 143, 60), Color8(131, 149, 64), Color8(140, 156, 66)]
-const LAWN_TIP := [Color8(166, 180, 78), Color8(181, 194, 89)]
-const LAWN_GUST := Color8(214, 220, 128)
+# the lawn blades on the map palette's leaf ramp (assets/town/palette.png row 4, dark -> light; owner 2026-11-06:
+# one palette for the whole map): root, body, tip steps; far rows a step lighter, near rows a step darker
+const LEAF := [Color8(52, 51, 37), Color8(64, 66, 21), Color8(80, 81, 36), Color8(111, 120, 56), Color8(131, 141, 64), Color8(151, 161, 76), Color8(161, 178, 98), Color8(176, 195, 121)]
+const LAWN_ROOT := 3
+const LAWN_BODY := [4, 4, 5]
+const LAWN_TIP := [6, 7]
+const LAWN_GUST := 7
 var bl_rows := []                      # per row: PackedFloat32Array of x, and parallel arrays
 var push := PackedFloat32Array()       # walking push field, one cell per 4 px
 var _pp := Vector2.ZERO
@@ -553,8 +555,9 @@ func draw_blades(ci: CanvasItem, x0: float, x1: float, f: Callable, front := tru
 				var p := Vector2(x + 0.5 + roundf(bend * u * u * u * 1.5), base - roundf(h2 * u))
 				var key := s2 * 16 + int(cs[i]) * 2 + pressed
 				if not bk.has(key):
-					var c: Color = LAWN_ROOT if s2 == 1 else (LAWN_BODY[cs[i]] if s2 < 4 else (LAWN_GUST if pressed > 0 else LAWN_TIP[cs[i] % 2]))
-					c = c.lerp(LAWN_FAR, (1.0 - dk) * 0.35) if dk < 0.5 else c.darkened((dk - 0.5) * (0.28 if s2 == 1 else 0.14))
+					var st: int = LAWN_ROOT if s2 == 1 else (LAWN_BODY[cs[i]] if s2 < 4 else (LAWN_GUST if pressed > 0 else LAWN_TIP[cs[i] % 2]))
+					st += 1 if dk < 0.3 else (-1 if dk > 0.75 else 0)
+					var c: Color = LEAF[clampi(st, 0, LEAF.size() - 1)]
 					pal[key] = c
 					bk[key] = []
 				var arr: Array = bk[key]      # a plain Array is shared by reference: appending does not copy it
@@ -609,8 +612,9 @@ func _blade_mesh(a: float, b: float, f: Callable, front: bool) -> ArrayMesh:
 			hg = lerpf(hg, maxf(4.0, hg * 0.45), smoothstep(0.06, 0.3, slope))   # eases in with the rounded corner
 			var hv := roundf(hg) + clampf(rs[i], 0.0, 0.999) * 0.5
 			for s2 in range(1, 5):
-				var c: Color = LAWN_ROOT if s2 == 1 else (LAWN_BODY[cs[i]] if s2 < 4 else LAWN_TIP[cs[i] % 2])
-				c = c.lerp(LAWN_FAR, (1.0 - dk) * 0.35) if dk < 0.5 else c.darkened((dk - 0.5) * (0.28 if s2 == 1 else 0.14))
+				var st: int = LAWN_ROOT if s2 == 1 else (LAWN_BODY[cs[i]] if s2 < 4 else LAWN_TIP[cs[i] % 2])
+				st += 1 if dk < 0.3 else (-1 if dk > 0.75 else 0)
+				var c: Color = LEAF[clampi(st, 0, LEAF.size() - 1)]
 				var wide := s2 <= 2
 				var w := 2.0 if wide else 1.0
 				var n0 := vs.size()
