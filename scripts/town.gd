@@ -57,7 +57,8 @@ var HS := 0.0
 var tpl: Array = []            # sloped one-way surfaces {x0,x1,y0,y1}
 var bld: Array = []
 var deco_back: Array = []
-var sway_t := {}            # per tree: leaf-ball frame clock
+var sway_t := {}
+var t_var := {}             # ground variant -> [solid, band]            # per tree: leaf-ball frame clock
 var deco_props: Array = []
 var lamps: Array = []
 var light_strings: Array = []
@@ -213,6 +214,22 @@ func _layout() -> void:
 		if BIGK.has(d[0]):
 			var w2: float = tex[d[0]].get_width()
 			d[1] = d[1] + w2 / 2.0 - w2 * BS / 2.0
+	# nature pass (owner 2026-11-06): the old bushes become the new shrub; rocks and tufts sit on the seams between ground
+	# stretches; flowers gather at the doors and the big tree, the stretches between stay plain
+	for d in deco_back:
+		if String(d[0]).begins_with("f_bush"):
+			d[0] = "f_shrub"
+			d[3] = 1.5
+	var seam := ["f_rocks", "f_tufts"]
+	for i in GZONES.size() - 1:
+		var zx: float = GZONES[i][1]
+		if GZONES[i + 1][0] != zx: continue
+		var k: String = seam[i % 2]
+		deco_back.append([k, zx - tex[k].get_width() / 2.0, floor_at(zx), 1.5, i % 3 == 0, 0.0 if k == "f_rocks" else 0.5])
+	for fx in [400.0, 545.0, 1230.0, HDOOR - 470.0, HDOOR + 400.0, 5690.0, 5810.0, 6800.0, 8780.0, 9050.0]:
+		deco_back.append(["f_flowers", fx, floor_at(fx), 1.5, int(fx) % 2 == 0, 0.5])
+	for fx in [HDOOR - 520.0, HDOOR + 470.0, 6930.0]:          # the lower plaza and the bath house, on the lower floor
+		deco_back.append(["f_flowers", fx, LOWF, 1.5, false, 0.5])
 	deco_props = [["q_barrelL", 630.0, G], ["q_barrelS", 690.0, G], ["q_crateL", 1560.0, G], ["q_crateS", 1624.0, G],
 		["q_barrelM", HX2 + 470.0, TTOP], ["q_barrelS", HX2 + 522.0, TTOP], ["q_crateL", HX2 + 120.0, TTOP],
 		["q_board", 2600.0, LOWF], ["q_bench", HDOOR - 230.0, LOWF], ["q_bench", HDOOR + 84.0, LOWF, true], ["q_planter", HDOOR - 320.0, LOWF], ["q_planter", HDOOR + 238.0, LOWF, true],
@@ -229,6 +246,20 @@ func _build_tex() -> void:
 	di.decompress()
 	gi.convert(Image.FORMAT_RGBA8)
 	di.convert(Image.FORMAT_RGBA8)
+	var r := _solid_band(gi, di)
+	t_solid = r[0]
+	t_band = r[1]
+	# ground variants by stretch (tools/make_town_ground.py): [solid, band, rows of grass above the walk line]
+	for v in GOFF.keys():
+		if not tex.has("k_ground_" + v): continue
+		var vi: Image = tex["k_ground_" + v].get_image()
+		vi.decompress()
+		vi.convert(Image.FORMAT_RGBA8)
+		var rv := _solid_band(vi, di, true)
+		t_var[v] = [rv[0], rv[1]]
+	_build_tex2(di)
+
+func _solid_band(gi: Image, di: Image, clip := false) -> Array:
 	var gw := gi.get_width()
 	var gh := gi.get_height() - 2
 	var dh := di.get_height()
@@ -241,7 +272,6 @@ func _build_tex() -> void:
 		var gpart := gi.get_region(Rect2i(0, 0, gw, gh))
 		if i == 1: gpart.flip_x()
 		solid.blend_rect(gpart, Rect2i(Vector2i.ZERO, gpart.get_size()), Vector2i(i * gw, 0))
-	t_solid = ImageTexture.create_from_image(solid)
 	var bh := int(BAND)
 	var band := Image.create(gw * 2, bh, false, Image.FORMAT_RGBA8)
 	for i in 2:
@@ -252,10 +282,13 @@ func _build_tex() -> void:
 			y += dh
 		band.fill_rect(Rect2i(i * gw, bh - 8, gw, 4), Color(0.08, 0.04, 0.03, 1))
 		band.fill_rect(Rect2i(i * gw, bh - 4, gw, 4), Color8(42, 24, 16))
-		var gp2 := gi.get_region(Rect2i(0, 0, gw, gh))
+		var gp2 := gi.get_region(Rect2i(0, 0, gw, mini(gh, bh - 8) if clip else gh))
 		if i == 1: gp2.flip_x()
 		band.blend_rect(gp2, Rect2i(Vector2i.ZERO, gp2.get_size()), Vector2i(i * gw, 0))
-	t_band = ImageTexture.create_from_image(band)
+	return [ImageTexture.create_from_image(solid), ImageTexture.create_from_image(band)]
+
+func _build_tex2(di: Image) -> void:
+	var dh := di.get_height()
 	var wall := Image.create(di.get_width() * 2, dh * 2, false, Image.FORMAT_RGBA8)
 	for i in 2:
 		for j in 2:
@@ -791,7 +824,7 @@ func _draw_bg() -> void:
 	bg_node.draw_rect(Rect2(Vector2.ZERO, vs), Color(0.07, 0.05, 0.16, 0.2 * dim))
 	var fo: Texture2D = tex["bg_forest"]
 	_layer(hx.get("bg_forest", fo), 0.42, G + 2.0 - 242.0 * PXK - cam_y * 0.25, 1.0 if hx.has("bg_forest") else PXK, cam_x, vs)
-	bg_node.draw_rect(Rect2(0, G + 1.0 - cam_y * 0.25, vs.x, vs.y + 400.0), Color8(14, 74, 78))
+	bg_node.draw_rect(Rect2(0, G + 1.0 - cam_y * 0.25, vs.x, vs.y + 400.0), Color8(52, 101, 97))   # the forest floor, receded with it (tools/town_nature_pass.py)
 	# far haze: a vertical gradient, light above the forest, heavier toward the ground
 	var hy0 := G - 260.0 - cam_y * 0.25
 	var hy1 := G + 20.0 - cam_y * 0.25
@@ -833,11 +866,57 @@ func _shear(t: Texture2D, x0: float, x1: float, f: Callable, clip_h := -1.0) -> 
 	var tw := float(t.get_width())
 	var th: float = t.get_height() if clip_h < 0.0 else minf(t.get_height(), clip_h)
 	var x := a
+	var vi := 0 if t == t_solid else (1 if t == t_band else -1)
 	while x < b:
-		var sx := fposmod(x, tw)
-		var y: float = roundf(f.call(x + PK / 2.0)) - SURFR
-		draw_texture_rect_region(t, Rect2(x, y, PK, th), Rect2(minf(sx, tw - PK), 0, PK, th))
+		var tt := t
+		var off := 0.0
+		if vi >= 0:
+			var v := gzone(x)
+			if v != "" and t_var.has(v):
+				tt = t_var[v][vi]
+				off = GOFF[v] - SURFR
+		var tw2 := float(tt.get_width())
+		var th2: float = tt.get_height() if clip_h < 0.0 else minf(tt.get_height(), clip_h)
+		var sx := fposmod(x, tw2)
+		var y0: float = roundf(f.call(x + PK / 2.0)) - SURFR
+		draw_texture_rect_region(tt, Rect2(x, y0 - off, PK, th2), Rect2(minf(sx, tw2 - PK), 0, PK, th2))
+		if vi >= 0:
+			var sp := gspill(x)
+			if not sp.is_empty() and t_var.has(sp[0]) and sp[1] > 0.0:
+				var to: Texture2D = t_var[sp[0]][vi]
+				var o2: float = GOFF[sp[0]] - SURFR
+				var hh: float = minf(sp[1] + o2 + SURFR, th2)
+				var sx2 := fposmod(x, float(to.get_width()))
+				draw_texture_rect_region(to, Rect2(x, y0 - o2, PK, hh), Rect2(minf(sx2, to.get_width() - PK), 0, PK, hh))
 		x += PK
+
+## which ground runs where (owner 2026-11-06: lawns that run down the bank, bare clearings before doors and the camp,
+## paving on the plazas, a stone edging where green meets green)
+const GOFF := {"grass": 16.0, "bank": 16.0, "dirt": 5.0, "cobble": 6.0, "curb": 16.0}
+const GZONES := [[-400.0, 240.0, "bank"], [240.0, 720.0, "dirt"], [720.0, 1480.0, "grass"], [1480.0, 2350.0, "curb"],
+	[2350.0, 3600.0, "cobble"], [3600.0, 4080.0, "curb"], [4080.0, 4960.0, "dirt"], [4960.0, 5440.0, "grass"],
+	[5440.0, 6100.0, "dirt"], [6100.0, 6650.0, "bank"], [6650.0, 8150.0, "cobble"], [8150.0, 8350.0, "grass"], [8590.0, 9600.0, "bank"]]
+func gzone(x: float) -> String:
+	for z in GZONES:
+		if x >= z[0] and x < z[1]: return z[2]
+	return ""
+
+## where two stretches meet, the greener one spills over the other: its top rows reach down a ragged depth that thins
+## to nothing over 40 px (grass creeping onto the clearing / the paving), so there is never a straight seam.
+## -> [variant on top, depth in px] or [] away from a seam
+const GREEN := {"grass": 3, "bank": 3, "curb": 2, "cobble": 1, "dirt": 0}
+func gspill(x: float) -> Array:
+	for i in GZONES.size() - 1:
+		var zx: float = GZONES[i][1]
+		if GZONES[i + 1][0] != zx or absf(x - zx) > 40.0: continue
+		var l: String = GZONES[i][2]
+		var r: String = GZONES[i + 1][2]
+		var left_over: bool = GREEN[l] >= GREEN[r]
+		var d: float = (x - zx) if left_over else (zx - x)       # how far into the covered side
+		if d < 0.0: continue
+		var jit := 0.65 + 0.35 * fposmod(sin(floorf(x / 4.0) * 78.233) * 43758.5453, 1.0)
+		return [l if left_over else r, roundf((1.0 - d / 40.0) * 64.0 * jit / PK) * PK]
+	return []
 
 func _spr(k: String, x: float, y_bottom: float, sink := 0.0, flip := false, ci: CanvasItem = null, xf := Transform2D.IDENTITY) -> void:
 	if not tex.has(k): return
@@ -943,6 +1022,7 @@ func _draw() -> void:
 	life.draw_cat(self)
 
 func _draw_front() -> void:
+	_draw_fore()
 	# grass strip in front of feet
 	var fl: Callable = func(x): return G
 	_front_shear(-PK, SX0, fl)
@@ -995,16 +1075,41 @@ func _draw_front() -> void:
 		var sw2 := fnt.get_string_size(s2, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
 		front.draw_string(fnt, Vector2(d["x"] - sw2 / 2.0, y2), s2, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#ffe9a8") if String(d.get("to", "")) != "" else Color("#cfd6e6"))
 
+## foreground plane (owner 2026-11-06, art principles): a few dark leaf silhouettes nearer than the walkway, sliding
+## faster than the world, poking up from the bottom edge only now and then -- depth, never over the play space
+const FORE := [["f_bush1", 600.0, 1.0], ["f_grass1", 1180.0, 1.4], ["f_bush2", 2300.0, 1.2], ["f_bush3", 3900.0, 1.1],
+	["f_grass2", 5050.0, 1.5], ["f_bush1", 6200.0, 1.25], ["f_bush2", 7600.0, 1.0], ["f_grass1", 8900.0, 1.4]]
+func _draw_fore() -> void:
+	var vr: Rect2 = arena.view_rect()
+	var cx := vr.get_center().x
+	var bot := vr.end.y
+	var T := tod_now()
+	var c := Color(0.42, 0.56, 0.5).lerp(Color(0.1, 0.12, 0.2), 1.0 - T["sun"])
+	for f in FORE:
+		var im: Texture2D = hx.get(f[0], tex[f[0]])
+		var s: float = f[2] * (1.0 if hx.has(f[0]) else ks(f[0]))
+		var x: float = roundf(f[1] + (f[1] - cx) * 0.35)          # 1.35x the world's scroll
+		var w: float = im.get_width() * s
+		if x > vr.end.x or x + w < vr.position.x: continue
+		var h: float = im.get_height() * s
+		front.draw_texture_rect(im, Rect2(x, roundf(bot - h * 0.48), w, h), false, c)
+
 func _front_shear(x0: float, x1: float, f: Callable) -> void:
 	var vr: Rect2 = arena.view_rect()
 	var a := maxf(x0, floorf((vr.position.x - 10.0) / PK) * PK)
 	var b := minf(x1, vr.end.x + 10.0)
-	var tw := float(t_solid.get_width())
 	var x := a
 	while x < b:
+		var tt: Texture2D = t_solid
+		var r0 := 0.0                                   # the rows just above the walk line go in front of the feet
+		var v := gzone(x)
+		if v != "" and t_var.has(v):
+			tt = t_var[v][0]
+			r0 = GOFF[v] - SURFR
+		var tw := float(tt.get_width())
 		var sx := fposmod(x, tw)
 		var y: float = roundf(f.call(x + PK / 2.0)) - SURFR
-		front.draw_texture_rect_region(t_solid, Rect2(x, y, PK, SURFR), Rect2(minf(sx, tw - PK), 0, PK, SURFR))
+		front.draw_texture_rect_region(tt, Rect2(x, y, PK, SURFR), Rect2(minf(sx, tw - PK), r0, PK, SURFR))
 		x += PK
 
 
