@@ -17,7 +17,8 @@ the nearest step of the pixel's own ramp:
   sunlit (N.L > .3)                            +1
   sunlit, glancing                             0 (the evening's orange is the ambient's, lit.gd: not a second step)
   shade, facing up (sees the sky)              -1
-  shade, facing front / down                   -2
+  shade, facing front / down                   -2 (-1 on the lowest fifth: light bounced off the sunlit ground)
+  rim: the silhouette's sun-side edge          at least +1 (a backlit edge glows)
   night: -1 everywhere, then each lamp, fire, window: +1 / +2 / +3 by its light on the cell (facing it, unblocked,
          falling off with distance)
   python3 tools/light_proxy.py diagram g_hall OUT.png        the proxy over the sprite (planes by facing)
@@ -104,7 +105,9 @@ def in_sun(ys, xs, Z, T, solid, L, reach=160, t0=2):
 def solids_of(P):
     """the building as true solids ("solids" in the proxy): each the intersection of extrusions -- "xy": a convex
     outline on screen pushed through the depth, "yz": a convex section (screen y, depth z) pushed along x, "z": a depth
-    range [back, front]. Returned as half-spaces a.(x, y, z) <= c in screen cells (y down)."""
+    range [back, front]; "reach": the longest shadow it throws, in cells (a small part's shadow is kept short and
+    tidy, as a pixel artist keeps it: the long thin wedge of a low sun across a whole roof reads as a stain).
+    Returned as half-spaces a.(x, y, z) <= c in screen cells (y down)."""
     out = []
     for so in P.get("solids", []):
         H = []
@@ -120,7 +123,7 @@ def solids_of(P):
         if "yz" in so: poly(so["yz"], (1, 2))
         if "z" in so:
             H.append((np.array([0, 0, -1.0]), -so["z"][0])); H.append((np.array([0, 0, 1.0]), so["z"][1]))
-        out.append((so.get("name", ""), H))
+        out.append((so.get("name", ""), H, so.get("reach", 1e9)))
     return out
 
 
@@ -130,7 +133,8 @@ def sunlit(ys, xs, Z, L, solids, eps=0.75):
     P0 = np.stack([xs.astype(float), ys.astype(float), Z[ys, xs]], -1)
     D = np.array([L[0], -L[1], L[2]])
     hit = np.zeros(len(ys), bool)
-    for _, H in solids:
+    for sol in solids:
+        H = sol[1]; reach = sol[2] if len(sol) > 2 else 1e9
         t0 = np.full(len(ys), -1e9); t1 = np.full(len(ys), 1e9)
         for a, c in H:
             den = a @ D; num = c - P0 @ a
@@ -139,7 +143,7 @@ def sunlit(ys, xs, Z, L, solids, eps=0.75):
             t = num / den
             if den > 0: t1 = np.minimum(t1, t)
             else: t0 = np.maximum(t0, t)
-        hit |= t1 > np.maximum(t0, eps) + 0.25
+        hit |= (t1 > np.maximum(t0, eps) + 0.25) & (np.maximum(t0, eps) < reach)
     return ~hit
 
 
@@ -151,11 +155,29 @@ def levels_sun(N, Z, T, m, solid, h, evening, R=None, solids=None):
     # 1. the big masses: a plane's facing, and what the big solids throw on it
     sun = (ndl > 0.05) & (sunlit(ys, xs, Z, L, solids) if solids else in_sun(ys, xs, Z, T, solid, L))
     lv = np.zeros(len(ys), int)
-    lv[sun & (ndl > 0.3)] = 1
-    lv[sun & (ndl > 0.75)] = 2
     up = n[:, 1] > 0.45
-    lv[~sun & up] = -1
+    lv[sun & (ndl > 0.3)] = 1
+    lv[sun & up & (ndl > 0.2)] = 1                 # a roof that sees the sun at all reads as lit
+    lv[sun & (ndl > 0.75)] = 2
+    lv[~sun & up] = -1                             # shade that sees the sky
     lv[~sun & ~up] = -2
+    # the shade side is not flat: the low parts of a wall take the light bounced off the sunlit ground (a step up)
+    gy = ys.max()
+    lv[~sun & ~up & (ys > gy - 0.2 * (gy - ys.min()))] = -1
+    # rim: the sun-side edge of the silhouette catches the light even when the face behind it is turned away (backlit
+    # edges glow); one cell, on the outline facing the sun and on the tops when the sun is up
+    h_, w_ = m.shape
+    sx = 1 if L[0] > 0.15 else (-1 if L[0] < -0.15 else 0)
+    def outside(dx, dy):
+        X = xs + dx; Y = ys + dy
+        ok = (X >= 0) & (X < w_) & (Y >= 0) & (Y < h_)
+        r = np.ones(len(ys), bool); r[ok] = ~m[Y[ok], X[ok]]
+        return r
+    rim = np.zeros(len(ys), bool)
+    if sx != 0: rim |= outside(sx, 0)
+    if L[1] > 0.2: rim |= outside(0, -1)
+    rim &= ndl > -0.45
+    lv[rim] = np.maximum(lv[rim], 1)
     # 2. the detail, only inside the light: timbers throw a short shadow on the plaster and into the window recesses
     #    (one step: it must not break the mass), and the timber edge turned to the sun catches it (+1)
     if R is not None and R.any():
