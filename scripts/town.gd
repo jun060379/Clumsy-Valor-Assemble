@@ -31,7 +31,8 @@ const SKY := preload("res://scripts/sky.gd")
 ## the hall facade's windows (g_hall_win px): they light up from 18:40 and before 06:20
 const HALL_WIN := [[87, 359], [93, 289], [169, 287], [169, 369], [247, 235], [253, 365], [323, 129], [327, 233], [389, 359], [401, 235], [489, 369], [495, 287], [561, 289], [563, 359]]
 ## leaf rows of the canopies (baked by splitting each tree by the prototype's colour rule: g >= r*0.85 and g > b*1.3)
-const TREE_ROWS := {"f_tree2": [2, 247], "f_tree3": [2, 247], "f_bigtree": [2, 307]}
+const TREE_ROWS := {"f_tree2": [2, 247], "f_tree3": [2, 247], "f_bigtree": [2, 307],
+	"f_oak": [0, 276], "f_round": [0, 251], "f_young": [0, 195], "f_tall": [0, 281]}   # tools/make_town_trees.py, drawn 1:1
 const LAMP_BAN := Vector2(35, 86)     # where the lamp's banner (q_lamp_ban) sits on q_lamp
 ## the wagon's horse (horse_strip: 8 cells of 214x148; frame 0 is cut into base / neck / tail / neck root)
 const HCW := 214
@@ -204,8 +205,8 @@ func _layout() -> void:
 		var w: float = tex[k].get_width()
 		var ax: float = b[1] + b[4] if b.size() > 4 and b[4] != null else ((b[1] + w if b.size() > 7 and b[7] else b[1]) if k == "g_tentR" else b[1] + w / 2.0)
 		b[1] = ax - (ax - b[1]) * BS
-	deco_back = [["f_tree2", -30.0, G, 0, false, 1.4], ["f_tree3", 140.0, G, 0, true, 1.4], ["f_bush1", 250.0, G, 0, false, 0.8], ["f_grass1", 770.0, G, 0, false, 0.6],
-		["f_tree2", 1620.0, G, 0, true, 1.4], ["f_bush2", 1740.0, G, 0, false, 0.8], ["f_bush1", 4040.0, G, 0, true, 0.8], ["f_tree3", 5310.0, G, 0, false, 1.4], ["f_grass1", 6040.0, G, 0, true, 0.6],
+	deco_back = [["f_oak", -110.0, G, 0, false, 1.0], ["f_young", 735.0, G, 0, true, 1.6], ["f_bush1", 250.0, G, 0, false, 0.8], ["f_grass1", 770.0, G, 0, false, 0.6],
+		["f_round", 1560.0, G, 0, true, 1.3], ["f_bush2", 1740.0, G, 0, false, 0.8], ["f_bush1", 4040.0, G, 0, true, 0.8], ["f_tall", 5330.0, G, 0, false, 1.4], ["f_grass1", 6040.0, G, 0, true, 0.6],
 		["f_grass2", 8620.0, LOWF, 0, false, 0.6], ["f_bush3", 8620.0, LOWF, 0, false, 0.8], ["f_bigtree", 8700.0, LOWF, 0, false, 2.2], ["f_bush1", 9250.0, LOWF, 0, true, 0.8]]
 	for d in deco_back:
 		if BIGK.has(d[0]):
