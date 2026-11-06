@@ -1,0 +1,54 @@
+# tools/test.sh reads this. One test per line:  <test file>  <P0|P1>  <space-separated globs of the files it guards>
+# P0 = if it breaks the game does not run / cannot be played (boot, title, controls, moving, fighting, a sortie,
+#      saving, the boss).  P1 = the game at large (each system, feel, look, sound).
+# A test runs when any changed file matches one of its globs. "*" = runs on every change. Tests not listed here are P1
+# and run only with --all.
+test_title.gd        P0  scripts/title*.gd scripts/arena.gd scripts/ui_root.gd scenes/* project.godot
+test_controls.gd     P0  scripts/player.gd scripts/settings.gd scripts/touch_controls.gd scripts/options.gd project.godot
+test_walk.gd         P0  scripts/player.gd scripts/chars.gd scripts/char_bounds.gd assets/chars/*
+test_swap.gd         P0  scripts/player.gd scripts/arena.gd scripts/chars.gd
+test_dungeon.gd      P0  scripts/dungeon.gd scripts/cave_ter.gd scripts/mob.gd scripts/arena.gd
+test_sortie.gd       P0  scripts/sortie.gd scripts/arena.gd scripts/elements.gd scripts/ult.gd scripts/save_game.gd scripts/party_edit.gd
+test_slots.gd        P0  scripts/save_game.gd scripts/menu.gd scripts/title.gd
+test_ui.gd           P0  scripts/ui_*.gd scripts/menu.gd scripts/sweep.gd scripts/settings.gd
+bot_boss.gd          P0  scripts/player.gd scripts/mob.gd scripts/arena.gd scripts/status.gd scripts/ult*.gd scripts/balance.gd scripts/elements.gd scripts/dungeon.gd scripts/chars.gd scripts/memory.gd scripts/runes.gd
+test_aida.gd         P1  scripts/player.gd scripts/mob.gd assets/chars/aida*
+test_estelle.gd      P1  scripts/player.gd scripts/mob.gd scripts/status.gd
+test_luce.gd         P1  scripts/player.gd scripts/status.gd
+test_kenin.gd        P1  scripts/player.gd scripts/kenin.gd scripts/chars.gd
+test_cancel.gd       P1  scripts/player.gd
+test_jump_cut.gd     P1  scripts/player.gd
+test_runjump.gd      P1  scripts/player.gd
+test_feel.gd         P1  scripts/post_fx.gd scripts/arena.gd scripts/mob.gd scripts/player.gd
+test_qte_chain.gd    P1  scripts/player.gd scripts/status.gd
+test_qte_exec.gd     P1  scripts/player.gd scripts/mob.gd
+test_status.gd       P1  scripts/status.gd scripts/mob.gd
+test_w9.gd           P1  scripts/player.gd scripts/pfx.gd scripts/hud.gd
+test_pb.gd           P1  scripts/dungeon.gd scripts/mob.gd scripts/hud.gd
+test_pd.gd           P1  scripts/lit.gd scripts/cave_ter.gd scripts/dungeon.gd
+test_light.gd        P1  scripts/lit.gd scripts/sky.gd scripts/shade.gd scripts/town.gd
+test_town_life.gd    P1  scripts/town*.gd scripts/townsfolk.gd scripts/bran.gd assets/town/*
+test_w10.gd          P1  scripts/town*.gd scripts/hall*.gd scripts/pfx.gd
+test_hall.gd         P1  scripts/hall*.gd scripts/eilin.gd scripts/fame*.gd
+test_eilin_desk.gd   P1  scripts/eilin.gd scripts/fame.gd scripts/hall.gd
+test_eilin_walk.gd   P1  scripts/eilin.gd
+test_walk_cycles.gd  P1  scripts/chars.gd scripts/bran.gd assets/chars/*
+test_training.gd     P1  scripts/training.gd scripts/dummy.gd
+test_revive.gd       P1  scripts/player.gd scripts/town.gd scripts/dungeon.gd
+test_runes.gd        P1  scripts/runes.gd scripts/loot.gd scripts/ui_forge.gd
+test_pf.gd           P1  scripts/ui_bag.gd scripts/ui_forge.gd scripts/runes.gd
+test_memory.gd       P1  scripts/memory*.gd scripts/ui_char_mem.gd
+test_fame.gd         P1  scripts/fame*.gd
+test_pa.gd           P1  scripts/fame*.gd scripts/party_edit.gd scripts/save_game.gd
+test_skin.gd         P1  scripts/skin*.gd scripts/ui_wardrobe.gd assets/skins/*
+test_p1.gd           P1  scripts/touch_controls.gd scripts/hud.gd scripts/runes.gd
+test_pe.gd           P1  scripts/settings.gd scripts/options.gd
+test_w3.gd           P1  scripts/dialog.gd scripts/ui_char*.gd
+test_w4.gd           P1  scripts/party_edit.gd scripts/slow_bus.gd
+test_sfx.gd          P1  scripts/arena.gd assets/sfx/*
+test_sfx_run.gd      P1  scripts/arena.gd scripts/sortie.gd assets/sfx/*
+test_bgm.gd          P1  scripts/bgm.gd assets/music/*
+test_beat.gd         P1  scripts/beat*.gd scripts/bgm.gd
+test_audio_opts.gd   P1  scripts/options.gd default_bus_layout.tres
+test_fonts.gd        P1  assets/fonts/* scripts/ui_*.gd
+test_audit.gd        P1  *

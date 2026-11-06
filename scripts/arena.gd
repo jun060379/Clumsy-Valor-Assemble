@@ -801,7 +801,16 @@ func _fit_poll() -> void:
 		_fit_win = r.size
 		fit_view()
 
+## the bench (tests/bench_crowd.gd) sets this to a Dictionary: each subsystem's time per frame is added up (µs)
+var prof = null
+var _pt0 := 0
+func _pt(k: String) -> void:
+	var t := Time.get_ticks_usec()
+	prof[k] = prof.get(k, 0) + (t - _pt0)
+	_pt0 = t
+
 func _process(delta: float) -> void:
+	if prof != null: _pt0 = Time.get_ticks_usec()
 	_fit_poll()
 	sfx_step(minf(delta * 1000.0, 100.0))    # the snapped sounds land on their 16th whatever holds the world
 	# qWatch: long frames lower the render quality (menus and the title don't count)
@@ -845,7 +854,9 @@ func _process(delta: float) -> void:
 		player.buffer_only()          # a press during the hold is kept (the combo / follow-up inputs)
 	else:
 		dlg.hold_keys()
+		if prof != null: _pt("pre")
 		player.step(dt)
+		if prof != null: _pt("player.step")
 		if sortie != null: sortie.post_player(dt)
 		if ult != null:
 			ult.tick(dt)
@@ -853,11 +864,14 @@ func _process(delta: float) -> void:
 		for d in dummies:
 			d.step(dt)
 		if ghost != null: ghost.step(dt * wk)
+		if prof != null: _pt("ult/ghost")
 		for m in mobs:
 			m.step(dt * wk)
+		if prof != null: _pt("mob.step")
 		step_proj(dt * wk)
 		step_luce(dt)
 		kenin.step(dt)
+		if prof != null: _pt("proj/luce/kenin")
 		dodge_check()
 		eil.world(dt)
 		var lk := level_kind()
@@ -866,6 +880,7 @@ func _process(delta: float) -> void:
 			level.step(dt)
 		elif train != null:
 			train.step(dt)
+		if prof != null: _pt("level.step")
 	# fades between rooms
 	if fade_dir == 1:
 		fade = minf(1.0, fade + dt / 260.0)
@@ -882,6 +897,7 @@ func _process(delta: float) -> void:
 	for m in mobs:
 		m.fx_step(dt)         # 타격감: the squash eases back on real time, through a hitstop
 		m.queue_redraw()
+	if prof != null: _pt("mob.fx")
 	mobs = mobs.filter(func(m):
 		if m.dead > 2400.0:
 			m.queue_free()
@@ -920,6 +936,7 @@ func _process(delta: float) -> void:
 	shadow_node.queue_redraw()
 	sigil_add.queue_redraw()
 	sigil_top.queue_redraw()
+	if prof != null: _pt("fx/camera/rest")
 
 
 # ---------- background & ground ----------
