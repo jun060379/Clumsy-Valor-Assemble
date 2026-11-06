@@ -420,7 +420,8 @@ func build_blades() -> void:
 			if x > ft[0] and x < ft[1]: near = 0.0
 			else: near = minf(near, minf(absf(x - ft[0]), absf(x - ft[1])))
 		var keep := 0.45 + 0.55 * smoothstep(0.0, 40.0, near)     # shorter near what stands there, never bare (footprints are skipped below)
-		if plane and town.gzone(x) == "clear":
+		if plane and town.gzone(x) == "stone": keep = 0.0         # paving: no blades (the lawn's edge frames it)
+		elif plane and town.gzone(x) == "clear":
 			var rim := 99.0
 			for z in town.CLEAR: rim = minf(rim, minf(absf(x - z[0]), absf(x - z[1])))
 			# a trodden path: bare, its rim fraying; on a wide one (the camp, the barn yard) low weed patches survive

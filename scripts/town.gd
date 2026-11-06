@@ -64,6 +64,7 @@ var bld: Array = []
 var deco_back: Array = []
 var sway_t := {}            # per tree: leaf-ball frame clock
 var deco_props: Array = []
+var rocks: Array = []
 var deco_front: Array = []      # nature in front of the stand line: drawn after buildings and props
 var lamps: Array = []
 var light_strings: Array = []
@@ -277,9 +278,12 @@ func _layout() -> void:
 		["q_board", 2600.0, LOWF], ["q_bench", HDOOR - 230.0, LOWF], ["q_bench", HDOOR + 84.0, LOWF, true], ["q_planter", HDOOR - 320.0, LOWF], ["q_planter", HDOOR + 238.0, LOWF, true],
 		["q_pot", HDOOR - 140.0, LOWF], ["q_pot", HDOOR + 112.0, LOWF], ["q_barrelL", 3560.0, LOWF], ["q_barrelM", 3616.0, LOWF], ["q_crateL", 4400.0, LOWF], ["q_crateS", 4464.0, LOWF],
 		["q_barrelL", 5000.0, LOWF], ["q_crateL", 5700.0, LOWF], ["q_barrelS", 5764.0, LOWF], ["q_crateS", 6650.0, LOWF], ["q_barrelM", 8150.0, LOWF]]
+	# stones on the ground (owner 2026-11-06), cut from the map scene, 2-px grid: [piece, x, surface y]
+	rocks = [["f2_rock", 1790.0, G], ["f2_pebble", 1534.0, G], ["f2_pebble", 5420.0, G], ["f2_rock", 6080.0, G],
+		["f2_pebble", 7050.0, LOWF], ["f2_rock", 8560.0, LOWF], ["f2_pebble", 9180.0, LOWF], ["f2_pebble", 2420.0, TTOP]]
 	lamps = [[SX1 + 40.0, TTOP], [DX1 - 40.0, TTOP], [HDOOR - 400.0, LOWF], [HDOOR + 380.0, LOWF], [4700.0, LOWF], [5600.0, LOWF], [1700.0, G]]
 	light_strings = [[HDOOR - 420.0, HDOOR - 20.0], [HDOOR + 20.0, HDOOR + 420.0], [4250.0, 4650.0], [5250.0, 5650.0]]
-	CLEAR.append([HDOOR - 230.0, HDOOR + 230.0])               # the hall's forecourt
+	STONE.append([HDOOR - 420.0, HDOOR + 420.0])               # the hall's forecourt / the plaza under it: paved
 	for b in bld:
 		if b[0] == "g_yard": CLEAR.append([b[1] - 20.0, b[1] + tex["g_yard"].get_width() + 20.0])   # the whole training yard
 	CLEAR.append([7400.0, 7780.0])                             # the forge yard
@@ -1019,16 +1023,23 @@ func grass_feet() -> Array:
 		o.append([d[1], d[1] + tex[d[0]].get_width() * ks(d[0]), d[2] - floor_at(d[1])])
 	o.append([HXB, HXB + tex["g_hall"].get_width() * BS, 0.0])
 	o.append([RIV0 - 10.0, RIV1 + 10.0, 99.0])
+	for r in rocks:
+		if tex.has(r[0]): o.append([r[1] + 4.0, r[1] + tex[r[0]].get_width() - 4.0, 0.0])
 	return o
 
+## stone paving (owner 2026-11-06: "이걸로 돌길이나 돌 장식도 깔 수 있는 거 아님?"): the hall's forecourt and the plaza under it
+var STONE := []
 func gzone(x: float) -> String:
+	for z in STONE:
+		if x >= z[0] and x < z[1]: return "stone"
 	for z in CLEAR:
 		if x >= z[0] and x < z[1]: return "clear"
 	return "lawn"
 
 func _build_ground2() -> void:
 	if not tex.has("k_lawn"): return
-	for k in ["lawn", "clear"]:
+	for k in ["lawn", "clear", "stone"]:
+		if not tex.has("k_" + k): continue
 		var im: Image = tex["k_" + k].get_image()
 		im.decompress()
 		im.convert(Image.FORMAT_RGBA8)
@@ -1047,6 +1058,7 @@ func _build_ground2() -> void:
 				var c := im.get_pixel(xx, yy)
 				if c.a > 0.5 and c.g > c.r + 0.03: ng += 1
 			gr.append(ng >= 3)             # grass reaching the front edge of the top at this column
+		if k == "stone": gr.fill(false)     # moss between the stones is not a turf lip
 		g2green[k] = gr
 		g2[k] = [ImageTexture.create_from_image(solid), ImageTexture.create_from_image(band)]
 
@@ -1164,6 +1176,8 @@ func _draw() -> void:
 		var dk: String = d[0]
 		if dk.contains("tree"): _tree(dk, d[1], d[2], d[3], d[4], d[5], d[1] * 0.003, vr0)
 		else: _sway(dk, d[1], d[2], d[3], d[4], d[5] * (1.0 + life.rust.get(i, 0.0) * 4.0), d[1] * 0.003, vr0)
+	for r in rocks:
+		if tex.has(r[0]) and r[1] < vr0.end.x and r[1] + 120.0 > vr0.position.x: _spr(r[0], r[1], r[2] + 2.0)
 	for b in bld:
 		if b[0] == "g_anvil": continue
 		if b[0] == "g_wagon":
