@@ -102,7 +102,7 @@ func step(dt: float) -> void:
 	queue_redraw()
 
 func _draw() -> void:
-	var s := 0.82
+	var s := 1.0          # dummy.png is drawn at its size: rebuilt at the old 0.82 on the 2-px grid (2026-11-06)
 	var w := tex.get_width() * s
 	var h := tex.get_height() * s
 	var sg := -1.0 if kx < 0.0 else 1.0
