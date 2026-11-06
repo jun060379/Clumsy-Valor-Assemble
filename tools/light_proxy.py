@@ -17,7 +17,7 @@ the nearest step of the pixel's own ramp:
   sunlit (N.L > .3)                            +1
   sunlit, glancing                             0 (the evening's orange is the ambient's, lit.gd: not a second step)
   shade, facing up (sees the sky)              -1
-  shade, facing front / down                   -2 (-1 on the lowest fifth: light bounced off the sunlit ground)
+  shade, facing front / down                   -2
   rim: the silhouette's sun-side edge          at least +1 (a backlit edge glows)
   night: -1 everywhere, then each lamp, fire, window: +1 / +2 / +3 by its light on the cell (facing it, unblocked,
          falling off with distance)
@@ -161,9 +161,6 @@ def levels_sun(N, Z, T, m, solid, h, evening, R=None, solids=None):
     lv[sun & (ndl > 0.75)] = 2
     lv[~sun & up] = -1                             # shade that sees the sky
     lv[~sun & ~up] = -2
-    # the shade side is not flat: the low parts of a wall take the light bounced off the sunlit ground (a step up)
-    gy = ys.max()
-    lv[~sun & ~up & (ys > gy - 0.2 * (gy - ys.min()))] = -1
     # rim: the sun-side edge of the silhouette catches the light even when the face behind it is turned away (backlit
     # edges glow); one cell, on the outline facing the sun and on the tops when the sun is up
     h_, w_ = m.shape
