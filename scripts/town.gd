@@ -5,7 +5,7 @@ extends Node2D
 
 const PK := 2.0
 const BS := 1.35              # buildings and trees are drawn 1.35x; people-scale props stay 1x
-const BIGK := ["g_store", "g_tentR", "g_barn", "g_cottage", "g_well", "g_forge", "g_anvil", "g_kiln", "g_hall", "q_fountain", "f_tree2", "f_tree3", "f_bigtree", "f_bush1", "f_bush2", "f_bush3"]
+const BIGK := ["g_store", "g_tentR", "g_barn", "g_cottage", "g_well", "g_forge", "g_anvil", "g_kiln", "g_hall", "q_fountain", "f_bush1", "f_bush2", "f_bush3"]
 const TOWN_W := 9450.0
 const SX0 := 1850.0
 const SX1 := 2350.0
@@ -261,7 +261,7 @@ func _layout() -> void:
 		b[1] = ax - (ax - b[1]) * BS
 	deco_back = [["f_oak", -110.0, G, 7, false, 1.0], ["f_young", 735.0, G, 4.5, true, 1.6], ["f_bush1", 250.0, G, 0, false, 0.8], ["f_grass1", 770.0, G, 0, false, 0.6],
 		["f_round", 1560.0, G, 4.5, true, 1.3], ["f_bush2", 1740.0, G, 0, false, 0.8], ["f_bush1", 4040.0, G, 0, true, 0.8], ["f_tall", 5330.0, G, 4.5, false, 1.4], ["f_grass1", 6040.0, G, 0, true, 0.6],
-		["f_grass2", 8620.0, LOWF, 0, false, 0.6], ["f_bush3", 8620.0, LOWF, 0, false, 0.8], ["f_bigtree", 8700.0, LOWF, 0, false, 2.2], ["f_bush1", 9250.0, LOWF, 0, true, 0.8]]
+		["f_grass2", 8620.0, LOWF, 0, false, 0.6], ["f_bush3", 8620.0, LOWF, 0, false, 0.8], ["f_bigtree", 8609.0, LOWF, 0, false, 2.2], ["f_bush1", 9250.0, LOWF, 0, true, 0.8]]
 	for d in deco_back:
 		if BIGK.has(d[0]):
 			var w2: float = tex[d[0]].get_width()

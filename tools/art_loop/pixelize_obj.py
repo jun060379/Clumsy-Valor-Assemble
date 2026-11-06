@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """A high-resolution object picture -> a town sprite at its real size on the 1-px grid (owner 2026-11-06: the fence,
 yard, buildings, wagon, horse and lamp were drawn small and blown up, their pixels 2-3x the grass's).
-  python3 tools/art_loop/pixelize_obj.py IN.png OUT.png WIDTH [--colours N] [--bg white|alpha] [--crop x0,y0,x1,y1]
+  python3 tools/art_loop/pixelize_obj.py IN.png OUT.png WIDTH|-HEIGHT [--colours N] [--bg white|alpha] [--crop x0,y0,x1,y1]
 Steps: background off (flat white flood-filled from the border, or the alpha) -> crop -> area-average down to WIDTH px
 (colour averaged over the covered part only, alpha by coverage) -> k-means palette in Lab -> lone pixels to their
 neighbours -> a 1-px outline on the silhouette in the darker shade of the colour inside it (our rule: never black).
@@ -33,6 +33,7 @@ else:
 im = Image.fromarray(A.astype(np.uint8))
 bb = im.getbbox()
 im = im.crop(bb)
+if TW < 0: TW = max(1, round(-TW * im.width / im.height))     # a negative WIDTH means: that height
 s = TW / im.width
 w, h = TW, max(1, round(im.height * s))
 big = np.array(im).astype(float)

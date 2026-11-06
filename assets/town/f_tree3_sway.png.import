@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dis8c46ry26dy"
-path="res://.godot/imported/f_tree3_trunk.png-132683db3650e2e114eb6941008c8306.ctex"
+uid="uid://ci8g8lehmlos2"
+path="res://.godot/imported/f_tree3_sway.png-beca38c47a0adc22ece5780eb03a52b7.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/town/hx/f_tree3_trunk.png"
-dest_files=["res://.godot/imported/f_tree3_trunk.png-132683db3650e2e114eb6941008c8306.ctex"]
+source_file="res://assets/town/f_tree3_sway.png"
+dest_files=["res://.godot/imported/f_tree3_sway.png-beca38c47a0adc22ece5780eb03a52b7.ctex"]
 
 [params]
 
