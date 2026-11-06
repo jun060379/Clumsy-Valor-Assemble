@@ -62,9 +62,15 @@ def bake(name):
     ws = watershed(-lum, mk, mask=leaf)
     ys, xs = np.nonzero(leaf)
     own = ws[ys, xs] - 1
+    # the balls in a few big masses that move as one (owner 2026-11-07: "존나 흐물거리잖아" -- a dozen balls each on
+    # its own beat read as jelly): left, right and, on a tall crown, the top; a mass steps as a rigid unit
+    sx_ = np.array([q[1] for q in seeds]); sy_ = np.array([q[0] for q in seeds])
+    cxm = np.median(xs); top_cut = ys.min() + 0.33 * (ys.max() - ys.min())
+    grp = np.where(sx_ < cxm, 0, 1)
+    if h > w * 1.1: grp = np.where(sy_ < top_cut, 2, grp)
     order = sorted(range(len(seeds)), key=lambda i: lum[ys[own == i], xs[own == i]].mean() if (own == i).any() else 0)
     STEPS = [(1, -1), (1, 0), (0, 0)]       # up-right, down, left (home): the reference's loop
-    HOLD = 2
+    HOLD = 3
     rows = (NF + COLS - 1) // COLS
     out = np.zeros((A.shape[0] * rows, A.shape[1] * COLS, 4), np.uint8)
     for f in range(NF):
@@ -72,8 +78,7 @@ def bake(name):
         for i in order:
             sel = own == i
             if not sel.any(): continue
-            sy, sx = seeds[i]
-            start = int(round(sx / w * 14 + (1 - sy / h) * 2))       # the wave: left to right, tops a little later
+            start = [0, 6, 3][grp[i]]                                  # left mass, then the top, then the right
             k = (f - start) % NF // HOLD
             dx, dy = STEPS[k] if k < len(STEPS) else (0, 0)
             if dx == 0 and dy == 0: continue
