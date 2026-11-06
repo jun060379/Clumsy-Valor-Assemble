@@ -39,59 +39,74 @@ def leafmask(a):
     return m & ~trunkmask(a)
 
 def bake(name):
-    """Leaf-ball wave, after Slynyrd Pixelblog 33 (owner 2026-11-07: "너무 울렁거린다; 래퍼런스 찾아" -- the bending
-    field read as jelly). The reference: each ball of leaves is a rigid unit that steps up-right 1 px, down 1 px, left
-    1 px, home; the balls go in sequence so ONE wave crosses the crown per loop; nothing warps. Here on the town's
-    2-px cells (1 step = 1 cell = 2 px): 24 frames at 0.1 s; a ball's step lasts 2 frames and the wave reaches the
-    balls left to right (with the wind), the higher balls a frame later; most of the loop a ball rests. Behind the
-    balls the tree as drawn stays (no gaps); trunk and branches are drawn unmoved on top."""
-    A = np.array(Image.open(f"assets/town/{name}.png").convert("RGBA"))
-    a = A[::2, ::2].copy()
+    a = np.array(Image.open(f"assets/town/{name}.png").convert("RGBA"))
     h, w = a.shape[:2]
-    tm = trunkmask(a)
-    leaf = leafmask(a) & ~tm
+    leaf = leafmask(a)
     r, g, b = [a[..., i].astype(int) for i in range(3)]
-    lum = r + g + b
-    lit = ndimage.binary_opening(leaf & (lum > np.percentile(lum[leaf], 50)), iterations=1)
+    lit = leaf & (g > 92) & (g > b + 15)
+    lit = ndimage.binary_opening(lit, iterations=1)
     lab, n = ndimage.label(lit)
     sizes = ndimage.sum(lit, lab, range(1, n + 1))
-    seeds = [ndimage.center_of_mass(lit, lab, i + 1) for i in range(n) if sizes[i] >= 6]
+    seeds = [ndimage.center_of_mass(lit, lab, i + 1) for i in range(n) if sizes[i] >= 25]
+    seeds = np.array(seeds)                                   # (y, x)
+    # balls grown from the lit clumps over the luminance: the cuts fall in the dark crevices between clumps
     from skimage.segmentation import watershed
     mk = np.zeros((h, w), int)
     for i, (sy, sx) in enumerate(seeds): mk[int(sy), int(sx)] = i + 1
-    ws = watershed(-lum, mk, mask=leaf)
-    ys, xs = np.nonzero(leaf)
+    ws = watershed(-(r + g + b), mk, mask=leaf)
+    ys, xs = np.where(leaf)
     own = ws[ys, xs] - 1
-    # the balls in a few big masses that move as one (owner 2026-11-07: "존나 흐물거리잖아" -- a dozen balls each on
-    # its own beat read as jelly): left, right and, on a tall crown, the top; a mass steps as a rigid unit
-    sx_ = np.array([q[1] for q in seeds]); sy_ = np.array([q[0] for q in seeds])
-    cxm = np.median(xs); top_cut = ys.min() + 0.33 * (ys.max() - ys.min())
-    grp = np.where(sx_ < cxm, 0, 1)
-    if h > w * 1.1: grp = np.where(sy_ < top_cut, 2, grp)
-    order = sorted(range(len(seeds)), key=lambda i: lum[ys[own == i], xs[own == i]].mean() if (own == i).any() else 0)
-    STEPS = [(1, -1), (1, 0), (0, 0)]       # up-right, down, left (home): the reference's loop
-    HOLD = 3
+    # backdrop: the tree with every leaf pixel in the canopy's darkest leaf colour, seen only in the 1-px seams
+    lum = (r + g + b)[leaf]
+    dark = a[leaf][lum.argmin()]
+    base = a.copy()
+    # (the seams read as lines in dark; the untouched tree shows through them instead)
+    # back (dark) balls first, lit front balls last
+    order = sorted(range(len(seeds)), key=lambda i: (r + g + b)[ys[own == i], xs[own == i]].mean() if (own == i).any() else 0)
+    rng = np.random.default_rng(len(seeds))
+    phase = [seeds[i][1] / w * 2.4 + seeds[i][0] / h * 1.2 + rng.uniform(0, 1.6) for i in range(len(seeds))]
+    amp = [1.0 + 1.2 * (1.0 - seeds[i][0] / h) + rng.uniform(0, 0.5) for i in range(len(seeds))]   # tops swing most
+    # each ball's body: the colour most of it has (one flat fill where it has stepped away)
+    body = {}
+    for i in range(len(seeds)):
+        sel = own == i
+        if not sel.any(): continue
+        # its shaded body (the most used of its darker half): the place it leaves reads as the shade under it, not
+        # as a lit stripe along a branch
+        px_ = a[ys[sel], xs[sel]]
+        lm = px_[:, :3].astype(int).sum(-1)
+        dk = px_[lm <= np.percentile(lm, 40)]
+        cols, cnt = np.unique(dk, axis=0, return_counts=True)
+        body[i] = cols[cnt.argmax()]
     rows = (NF + COLS - 1) // COLS
-    out = np.zeros((A.shape[0] * rows, A.shape[1] * COLS, 4), np.uint8)
+    out = np.zeros((h * rows, w * COLS, 4), np.uint8)
     for f in range(NF):
-        o = a.copy()
+        o = base.copy()
+        # a ball that steps away leaves its old place; filled with its own body colour (owner 2026-11-07: "뒤에
+        # 텍스쳐 남고" -- the drawn tree under it read as a ghost of the leaves); moved balls then land on top
+        for i in order:
+            sel = own == i
+            if sel.any(): o[ys[sel], xs[sel]] = body[i]
         for i in order:
             sel = own == i
             if not sel.any(): continue
-            start = [0, 6, 3][grp[i]]                                  # left mass, then the top, then the right
-            k = (f - start) % NF // HOLD
-            dx, dy = STEPS[k] if k < len(STEPS) else (0, 0)
-            if dx == 0 and dy == 0: continue
+            th = 2 * np.pi * f / NF - phase[i]   # each ball rides its own small loop, the wave across the crown
+            # moves in whole 2-px steps: the town's pixel (owner 2026-11-06, the 2-px grid)
+            dx = 2 * int(round(amp[i] * 0.6 * np.sin(th)))
+            dy = 2 * int(round(amp[i] * 0.3 * np.sin(2 * th)))
             py, px = ys[sel] + dy, xs[sel] + dx
-            ok = (py >= 0) & (py < h) & (px >= 0) & (px < w) & ~tm[np.clip(py, 0, h - 1), np.clip(px, 0, w - 1)]
+            ok = (py >= 0) & (py < h) & (px >= 0) & (px < w)
             o[py[ok], px[ok]] = a[ys[sel][ok], xs[sel][ok]]
-        o[tm] = a[tm]
-        big = np.repeat(np.repeat(o, 2, 0), 2, 1)[:A.shape[0], :A.shape[1]]
         cy, cx = divmod(f, COLS)
-        out[cy * A.shape[0]:(cy + 1) * A.shape[0], cx * A.shape[1]:(cx + 1) * A.shape[1]] = big
+        out[cy * h:(cy + 1) * h, cx * w:(cx + 1) * w] = o
+    # trunk and branches on top, unmoved: a leaf ball stepping over a branch must not carry or cover its edge
+    tm = trunkmask(a)
+    for f in range(NF):
+        cy, cx = divmod(f, COLS)
+        fr = out[cy * h:(cy + 1) * h, cx * w:(cx + 1) * w]
+        fr[tm] = a[tm]
     Image.fromarray(out).save(f"assets/town/{name}_sway.png")
     print(name, len(seeds), "balls")
 
-
-for nm in (sys.argv[1:] or ["f_oak", "f_round", "f_young", "f_tall", "f_bigtree"]):
+for nm in (sys.argv[1:] or ["f_oak", "f_round", "f_young", "f_tall"]):
     bake(nm)
