@@ -171,6 +171,12 @@ func _ready() -> void:
 	blade_front.material = blade_mat
 	blade_front.draw.connect(func(): _draw_blade_meshes(blade_front, "front"))
 	arena.add_child(blade_front)
+	if arena.dbg.has("nograss"):
+		blade_back.visible = false
+		blade_front.visible = false
+	if arena.dbg.has("nolit"):
+		lit.visible = false
+		if shade.get("sv") != null: shade.sv.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	front = Node2D.new()
 	front.z_index = 8
 	front.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -443,26 +449,39 @@ func wet_at(x: float, y: float) -> bool:
 	return kind == "town" and x > RIV0 and x < RIV1 and y > LOWF + 20.0
 
 # ---------- surfaces ----------
+## a slope from 0 to 1 over u in [0, 1] with its two corners rounded over ROUND px (owner 2026-11-06: the slope met the
+## flat at a hard kink): straight in the middle, a quadratic ease at each end; walking and drawing both use it
+const ROUND := 70.0
+func rr(u: float, span: float) -> float:
+	u = clampf(u, 0.0, 1.0)
+	var c := clampf(ROUND / maxf(1.0, span), 0.0, 0.45)
+	if c <= 0.0: return u
+	var sl := 1.0 / (1.0 - c)
+	if u < c: return sl * u * u / (2.0 * c)
+	if u > 1.0 - c: return 1.0 - sl * (1.0 - u) * (1.0 - u) / (2.0 * c)
+	return sl * (u - c / 2.0)
+
 func terr_y(x: float) -> float:
 	if x < SX0: return G
-	if x < RX1: return G + (LOWF - G) * clampf((x - RMA) / (RX1 - RMA), 0.0, 1.0)
+	if x < RX1: return ramp_y(x)
 	if x < RIV0 or x >= RIV1: return LOWF
 	return LOWF + 60.0
 
 func plat_y(p: Dictionary, x: float) -> float:
 	var a: float = p.get("a", p.x0)
 	var b: float = p.get("b", p.x1)
-	return p.y0 + (p.y1 - p.y0) * clampf((x - a) / (b - a), 0.0, 1.0)
+	if p.y0 == p.y1: return p.y0
+	return p.y0 + (p.y1 - p.y0) * rr((x - a) / (b - a), b - a)
 
 func up_y(x: float) -> float:
-	if x < SX1: return G + (TTOP - G) * clampf((x - UPA) / (SX1 - UPA), 0.0, 1.0)
+	if x < SX1: return G + (TTOP - G) * rr((x - UPA) / (SX1 - UPA), SX1 - UPA)
 	if x < DX1: return TTOP
-	if x < EX1: return TTOP + (G - TTOP) * clampf((x - DX1) / (DNB - DX1), 0.0, 1.0)
+	if x < EX1: return TTOP + (G - TTOP) * rr((x - DX1) / (DNB - DX1), DNB - DX1)
 	if x < STX1: return G
-	return G + (LOWF - G) * clampf((x - LWA) / (STX1 + SL - LWA), 0.0, 1.0)
+	return G + (LOWF - G) * rr((x - LWA) / (STX1 + SL - LWA), STX1 + SL - LWA)
 
 func ramp_y(x: float) -> float:
-	return G + (LOWF - G) * clampf((x - RMA) / (RX1 - RMA), 0.0, 1.0) if x < RX1 else LOWF
+	return G + (LOWF - G) * rr((x - RMA) / (RX1 - RMA), RX1 - RMA) if x < RX1 else LOWF
 
 ## landing in town: the terrain (with slopes) and the sloped one-way surfaces. Returns true while standing.
 func land(P, prev_x: float, dt: float) -> bool:

@@ -530,7 +530,7 @@ func draw_blades(ci: CanvasItem, x0: float, x1: float, f: Callable, front := tru
 			var r: float = rs[i]
 			# on a slope the blades stand short and upright (no fur lying along the incline)
 			var slope := absf(fs[k0 + 4] - fs[k0 - 4]) / 8.0
-			if slope > 0.15: hg = maxf(4.0, hg * 0.45)
+			hg = lerpf(hg, maxf(4.0, hg * 0.45), smoothstep(0.06, 0.3, slope))   # eases in with the rounded corner
 			# wind: the primary sway plus a 0.4x-frequency, 0.3x-amplitude second harmonic
 			var ph := x * 0.021 - t * 1.7 + r * 6.0
 			var sw := sin(ph) + 0.3 * sin(ph * 0.4 + 1.3)
@@ -605,7 +605,7 @@ func _blade_mesh(a: float, b: float, f: Callable, front: bool) -> ArrayMesh:
 			var base := roundf(fy + dd)
 			var hg := float(hs[i])
 			var slope := absf(float(f.call(x + 4.0)) - float(f.call(x - 4.0))) / 8.0
-			if slope > 0.15: hg = maxf(4.0, hg * 0.45)
+			hg = lerpf(hg, maxf(4.0, hg * 0.45), smoothstep(0.06, 0.3, slope))   # eases in with the rounded corner
 			var hv := roundf(hg) + clampf(rs[i], 0.0, 0.999) * 0.5
 			for s2 in range(1, 5):
 				var c: Color = LAWN_ROOT if s2 == 1 else (LAWN_BODY[cs[i]] if s2 < 4 else LAWN_TIP[cs[i] % 2])

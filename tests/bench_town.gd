@@ -14,6 +14,7 @@ func _initialize() -> void:
 	arena.go_town(Vector2(5107.0, arena.ground_y), 1)
 	for i in 20: await process_frame
 	var all := []
+	arena.prof = {}
 	for x in SPOTS:
 		arena.player.position.x = x
 		arena.player.position.y = arena.level.floor_at(x)
@@ -28,6 +29,9 @@ func _initialize() -> void:
 		all += ft
 		print("TOWN x=%d %s" % [x, _st(ft)])
 	print("TOWN all %s" % _st(all))
+	var ks: Array = arena.prof.keys()
+	ks.sort_custom(func(p, q): return arena.prof[p] > arena.prof[q])
+	for k in ks: print("TOWN prof %s=%.3f ms/frame" % [k, arena.prof[k] / 1000.0 / (all.size() + SPOTS.size() * 30)])
 	quit()
 func _st(ft: Array) -> String:
 	var s := ft.duplicate()

@@ -45,6 +45,13 @@ const AW := 2000.0            # training ground width
 
 const H := 500.0
 var ground_y := H - 70.0
+## perf switches from the web address (owner 2026-11-06 "렉", to find it on the phone): ?fps shows the frame rate,
+## ?nograss hides the town grass blades, ?nolit turns off the town light and shade. Several: ?fps&nograss
+var dbg := {}
+var _dbg_lbl: Label
+var _dbg_acc := 0.0
+var _dbg_n := 0
+var _dbg_t := 0.0
 var world_w := AW
 var platforms: Array = []
 var player
@@ -131,6 +138,7 @@ var flash_rect: ColorRect
 
 func _ready() -> void:
 	RenderingServer.set_default_clear_color(Color("#0d0b10"))
+	_dbg_setup()
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	fit_view()
 	get_tree().root.size_changed.connect(fit_view)
@@ -696,6 +704,38 @@ func enter_dungeon() -> void:
 func leave_dungeon() -> void:
 	go_town(Vector2(5107.0, ground_y), -1)
 
+func _dbg_setup() -> void:
+	var q := ""
+	if OS.has_feature("web"): q = str(JavaScriptBridge.eval("location.search", true))
+	for a in OS.get_cmdline_user_args():
+		if String(a).begins_with("dbg="): q = String(a).substr(4)
+	for k in q.trim_prefix("?").split("&", false): dbg[k] = true
+	if not dbg.has("fps"): return
+	var cl := CanvasLayer.new()
+	cl.layer = 120
+	add_child(cl)
+	_dbg_lbl = Label.new()
+	_dbg_lbl.position = Vector2(8, 60)
+	_dbg_lbl.add_theme_font_size_override("font_size", 16)
+	_dbg_lbl.add_theme_color_override("font_outline_color", Color.BLACK)
+	_dbg_lbl.add_theme_constant_override("outline_size", 4)
+	cl.add_child(_dbg_lbl)
+
+## the ?fps readout: frames per second and the mean / worst frame over the last half second
+var _dbg_worst := 0.0
+func _dbg_tick(delta: float) -> void:
+	if _dbg_lbl == null: return
+	_dbg_acc += delta
+	_dbg_n += 1
+	_dbg_worst = maxf(_dbg_worst, delta)
+	_dbg_t += delta
+	if _dbg_t < 0.5: return
+	_dbg_lbl.text = "FPS %d  avg %.1f ms  worst %.1f ms  %s" % [Engine.get_frames_per_second(), _dbg_acc / _dbg_n * 1000.0, _dbg_worst * 1000.0, " ".join(dbg.keys())]
+	_dbg_acc = 0.0
+	_dbg_n = 0
+	_dbg_t = 0.0
+	_dbg_worst = 0.0
+
 func go_town(at: Vector2, d: int) -> void:
 	_drop_level()
 	for dm in dummies: dm.visible = false
@@ -811,6 +851,7 @@ func _pt(k: String) -> void:
 
 func _process(delta: float) -> void:
 	if prof != null: _pt0 = Time.get_ticks_usec()
+	_dbg_tick(delta)
 	_fit_poll()
 	sfx_step(minf(delta * 1000.0, 100.0))    # the snapped sounds land on their 16th whatever holds the world
 	# qWatch: long frames lower the render quality (menus and the title don't count)
