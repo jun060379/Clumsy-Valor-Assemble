@@ -75,9 +75,11 @@ def bake(name):
         # as a lit stripe along a branch
         px_ = a[ys[sel], xs[sel]]
         lm = px_[:, :3].astype(int).sum(-1)
-        dk = px_[lm <= np.percentile(lm, 40)]
+        dk = px_[lm <= np.percentile(lm, 15)]
         cols, cnt = np.unique(dk, axis=0, return_counts=True)
         body[i] = cols[cnt.argmax()]
+    op0 = a[..., 3] > 0
+    rim = leaf & ndimage.binary_dilation(~op0, structure=np.ones((5, 5)))   # the crown's outer two px
     rows = (NF + COLS - 1) // COLS
     out = np.zeros((h * rows, w * COLS, 4), np.uint8)
     for f in range(NF):
@@ -87,6 +89,7 @@ def bake(name):
         for i in order:
             sel = own == i
             if sel.any(): o[ys[sel], xs[sel]] = body[i]
+        o[rim] = 0                          # on the crown's outline the place left is open air, not a lit rim
         for i in order:
             sel = own == i
             if not sel.any(): continue
