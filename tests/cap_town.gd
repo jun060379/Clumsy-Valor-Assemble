@@ -1,6 +1,6 @@
 extends SceneTree
 ## the town at a few spots, the hero standing there (needs a display):
-## godot --path . --fixed-fps 60 --resolution 900x500 -s tests/cap_town.gd -- OUTDIR [old] [nolit]   (old: the 1.35x originals; nolit: no shade / lights)
+## godot --path . --fixed-fps 60 --resolution 900x500 -s tests/cap_town.gd -- OUTDIR [old] [nolit] [noui]   (old: the 1.35x originals; nolit: no shade / lights)
 var out := ""
 func frames(k: int) -> void:
 	for i in k: await process_frame
@@ -19,6 +19,10 @@ func _initialize() -> void:
 	await frames(20)
 	if args.has("old"): arena.level.hx = {}
 	if args.has("nolit"): arena.level.lit.visible = false
+	if args.has("noui"):                 # hide every UI layer and the hero (to see the scenery)
+		for c in arena.get_children():
+			if c is CanvasLayer: c.visible = false
+		arena.player.visible = false
 	var L = arena.level
 	for a in args:                       # at=X[,Y]: stand there and shoot every other frame for 2 s (h=HOUR sets the time)
 		if String(a).begins_with("h="): arena.tod_h = float(String(a).substr(2))

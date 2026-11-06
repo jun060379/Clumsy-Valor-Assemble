@@ -206,8 +206,8 @@ func _layout() -> void:
 		var w: float = tex[k].get_width()
 		var ax: float = b[1] + b[4] if b.size() > 4 and b[4] != null else ((b[1] + w if b.size() > 7 and b[7] else b[1]) if k == "g_tentR" else b[1] + w / 2.0)
 		b[1] = ax - (ax - b[1]) * BS
-	deco_back = [["f_oak", -110.0, G, 0, false, 1.0], ["f_young", 735.0, G, 0, true, 1.6], ["f_bush1", 250.0, G, 0, false, 0.8], ["f_grass1", 770.0, G, 0, false, 0.6],
-		["f_round", 1560.0, G, 0, true, 1.3], ["f_bush2", 1740.0, G, 0, false, 0.8], ["f_bush1", 4040.0, G, 0, true, 0.8], ["f_tall", 5330.0, G, 0, false, 1.4], ["f_grass1", 6040.0, G, 0, true, 0.6],
+	deco_back = [["f_oak", -110.0, G, 7, false, 1.0], ["f_young", 735.0, G, 4.5, true, 1.6], ["f_bush1", 250.0, G, 0, false, 0.8], ["f_grass1", 770.0, G, 0, false, 0.6],
+		["f_round", 1560.0, G, 4.5, true, 1.3], ["f_bush2", 1740.0, G, 0, false, 0.8], ["f_bush1", 4040.0, G, 0, true, 0.8], ["f_tall", 5330.0, G, 4.5, false, 1.4], ["f_grass1", 6040.0, G, 0, true, 0.6],
 		["f_grass2", 8620.0, LOWF, 0, false, 0.6], ["f_bush3", 8620.0, LOWF, 0, false, 0.8], ["f_bigtree", 8700.0, LOWF, 0, false, 2.2], ["f_bush1", 9250.0, LOWF, 0, true, 0.8]]
 	for d in deco_back:
 		if BIGK.has(d[0]):
