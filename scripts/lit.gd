@@ -61,13 +61,23 @@ static func soft_tex() -> Texture2D:
 static func fl(t: float, k: float) -> float:
 	return 0.85 + 0.1 * sin(t * 7.0 + k) + 0.05 * sin(t * 19.0 + k * 3.0)
 
-## todNow().dir: the sun from the left in the morning, from the right in the evening; low = long shadows
-static func sun_dir(h: float) -> Vector2:
+## The one sun every light and shadow in the town follows (owner 2026-11-07: "빛과 그림자 이론을 기반 삼아서"): the
+## direction TOWARD the sun, x right, y up, z toward the viewer. It rises on the left (the sprite bakes' "_m" light,
+## bake_light2.py) and sets on the right ("_e"), low and a little behind the town at both ends of the day (long shadows
+## reaching forward over the street), high and a little in front of it at noon (short shadows, sunlit fronts).
+static func sun3(h: float) -> Vector3:
 	var hh := fposmod(h, 24.0)
 	var day := clampf((hh - 5.5) / 13.5, 0.0, 1.0)
 	var ang := day * PI
-	var low := 1.0 - sin(ang)
-	return Vector2(-cos(ang) * (0.5 + low * 1.3), 1.0)
+	var el := deg_to_rad(16.0 + 46.0 * sin(ang))
+	var hz := Vector2(-cos(ang), -0.5 + 0.7 * sin(ang) * sin(ang)).normalized()
+	return Vector3(hz.x * cos(el), sin(el), hz.y * cos(el))
+
+## the shadow's way down a standing surface: screen x per px of drop (away from the sun), y = 1
+## (this used to point the other way: shadows fell left in the morning while the sprites were lit from the left)
+static func sun_dir(h: float) -> Vector2:
+	var v := sun3(h)
+	return Vector2(clampf(-v.x / v.y, -2.6, 2.6), 1.0)
 
 ## lightShape: one shaped light. `cut` draws it for the shade mask (the cut material reads alpha only).
 static func shape(ci: CanvasItem, l: Dictionary, mul: float) -> void:

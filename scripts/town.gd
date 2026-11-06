@@ -688,13 +688,16 @@ func shade_occluders() -> Array:
 		o.append([tx, b[1], b[2], b[3], b.size() > 7 and b[7], ks(k), false])
 	o.append([tex["g_hall"], HXB, TTOP, 1.0, false, BS, false])
 	for d in deco_back:
-		if d[0].contains("tree"): o.append([tex[d[0]], d[1], d[2], d[3], d[4], ks(d[0]), true])
+		if TREE_ROWS.has(d[0]): o.append([tex[d[0]], d[1], d[2], d[3], d[4], ks(d[0]), true])
 	return o
 
 func shade_props() -> Array:
 	var o: Array = []
 	for d in deco_props:
 		o.append([tex[d[0]], d[1], d[2], 0.0, d.size() > 3 and d[3], ks(d[0]), false])
+	for d in deco_back:          # the bushes take the shade too, and the street lamps
+		if not TREE_ROWS.has(d[0]): o.append([tex[d[0]], d[1], d[2], d[3], d[4], ks(d[0]), false])
+	for lp in lamps: o.append([tex["q_lamp_base"], roundf(lp[0] - 28.0 * PK), lp[1], 0.0, false, 1.0, false])
 	return o
 
 ## surfTop: what clouds land on from above
@@ -850,7 +853,7 @@ func step(dt: float) -> void:
 	# the ground is static: drawn for the view and 600 px either side, redrawn only when the view leaves that
 	if ground_mat != null:
 		var gt: String = sun_side().trim_prefix("_")
-		if gt == "": gt = "d"
+		if gt != "n": gt = "d"      # by day the sun's cast shade is live (shade.gd); the map keeps the contact shade
 		if gt != gmap_now:
 			gmap_now = gt
 			ground_mat.set_shader_parameter("gmap", gmaps[gt])

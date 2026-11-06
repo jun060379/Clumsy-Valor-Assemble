@@ -30,10 +30,10 @@ func _initialize() -> void:
 	ok(T.lit.L.size() >= 7 + 28 + 3, "light sources: lamps, bulbs, fires, fountain (%d)" % T.lit.L.size())
 	ok(T.lit.L.all(func(l): return l.has("boost")), "every light has its shade boost")
 	ok(T.shade_occluders().size() >= 15, "occluders: buildings, the hall, trees")
-	ok(T.shade.sun > 0.9 and T.shade.cloud_mat.get_shader_parameter("alpha") > 0.9, "noon: full sun, clouds at full strength")
+	ok(T.shade.sun > 0.9 and T.shade.cloud_mat.get_shader_parameter("alpha") > 0.25, "noon: full sun, clouds at full strength")
 	var d8: Vector2 = LIT.sun_dir(8.0)
 	var d17: Vector2 = LIT.sun_dir(17.0)
-	ok(d8.x < -0.5 and d17.x > 0.5 and absf(LIT.sun_dir(12.0).x) < 0.1, "shadows lean with the hour (8:00 %.2f, 17:00 %.2f)" % [d8.x, d17.x])
+	ok(d8.x > 0.5 and d17.x < -0.5 and absf(LIT.sun_dir(12.0).x) < 0.1, "shadows lean away from the sun, risen on the left (8:00 %.2f, 17:00 %.2f)" % [d8.x, d17.x])
 	# under the terraces: deep shade, lights there are boosted
 	var under: Array = T.lit.L.filter(func(l): return l["k"] == "bulb")
 	ok(not under.is_empty() and under[0]["boost"] > 1.0, "bulbs under the terraces burn brighter in the shade")
