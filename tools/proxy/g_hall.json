@@ -1,5 +1,6 @@
 {
  "_doc": "The guild hall's solid form (docs/work/town-art/LIGHT.md). Cells of assets/town/hx/g_hall.png at half size (1 cell = 2 px), x right, y down; z = depth toward the viewer in cells (the wings' front walls at 0). A plane: poly (screen cells), its depth z = z + dzdx * (x - at.x) + dzdy * (y - at.y), or an explicit normal n [x, y up, z toward viewer] for faces seen edge-on (the gable's verges). thick: how deep the solid behind the face is (for cast shadows). Later planes lie over earlier ones.",
+ "_solids_doc": "solids: the true volumes the sun's rays are tested against (screen cells x, y down; z depth toward the viewer). The building is 136 cells deep (the wings' front wall at 0, its back at -136).",
  "sprite": "g_hall",
  "planes": [
   {"name": "wing walls", "poly": [[0, 150], [436, 150], [436, 296], [0, 296]], "z": 0, "relief": {"wood": 2, "ochre": -3}, "thick": 60},
@@ -23,5 +24,19 @@
   {"name": "steps", "poly": [[170, 264], [262, 264], [262, 284], [170, 284]], "z": 26, "dzdy": 0.8, "at": [0, 264], "thick": 30},
   {"name": "barrels", "poly": [[268, 256], [326, 256], [326, 286], [268, 286]], "z": 24, "thick": 18},
   {"name": "forecourt", "poly": [[0, 280], [436, 280], [436, 296], [0, 296]], "z": 30, "n": [0, 1, 0.05], "thick": 4}
+ ],
+ "solids": [
+  {"name": "wings", "xy": [[20, 165], [418, 165], [418, 284], [20, 284]], "z": [-136, 0]},
+  {"name": "left wing roof", "xy": [[62, 78], [168, 78], [168, 172], [10, 172]], "yz": [[172, 12], [78, -63], [172, -138]]},
+  {"name": "right wing roof", "xy": [[268, 78], [376, 78], [426, 172], [268, 172]], "yz": [[172, 12], [78, -63], [172, -138]]},
+  {"name": "gable body", "xy": [[134, 120], [300, 120], [300, 284], [134, 284]], "z": [-136, 8]},
+  {"name": "gable roof", "xy": [[217, 26], [326, 150], [108, 150]], "z": [-136, 12]},
+  {"name": "left chimney", "xy": [[104, 44], [143, 44], [143, 100], [104, 100]], "z": [-68, -46]},
+  {"name": "right chimney", "xy": [[292, 44], [331, 44], [331, 100], [292, 100]], "z": [-68, -46]},
+  {"name": "finial", "xy": [[213, 0], [222, 0], [222, 32], [213, 32]], "z": [-4, 4]},
+  {"name": "sign", "xy": [[172, 184], [262, 184], [262, 206], [172, 206]], "z": [8, 11]},
+  {"name": "plinth", "xy": [[18, 264], [418, 264], [418, 284], [18, 284]], "z": [-136, 4]},
+  {"name": "steps", "xy": [[170, 264], [262, 264], [262, 284], [170, 284]], "z": [-136, 22]},
+  {"name": "barrels", "xy": [[268, 256], [326, 256], [326, 286], [268, 286]], "z": [8, 24]}
  ]
 }

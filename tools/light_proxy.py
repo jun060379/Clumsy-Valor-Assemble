@@ -3,8 +3,9 @@
 표현"; the rules: docs/work/town-art/LIGHT.md). A building's solid form is written by hand (tools/proxy/<sprite>.json:
 its walls, roof planes, eaves, chimneys as planes with a depth), never guessed from the picture. Then, per look:
   1. big masses: each plane's facing to the sun (N . L) gives the whole plane ONE light level
-  2. cast shadow: from each cell, a ray toward the sun through the proxy's depth; inside a solid on the way = shade
-     (eaves over walls, chimneys on the roof, the gable's body on the wings)
+  2. cast shadow: from each cell, a ray toward the sun, tested exactly against the building's SOLIDS ("solids": boxes
+     and roof prisms with their real depth, not faces with a guessed thickness): any solid on the way = shade
+     (eaves over walls, chimneys on the roof, the gable's roof on the wings)
   3. detail, inside the light only: a plane's small relief by material ("relief": timbers out of the plaster, panes
      sunk in their frames) throws one-step shadows a few cells long, and the relief's edge turned to the sun gets +1
   4. colour: the level moves each pixel along ITS material ramp (never "the nearest colour"): the ramps are cool and
@@ -100,13 +101,55 @@ def in_sun(ys, xs, Z, T, solid, L, reach=160, t0=2):
     return ~shade
 
 
-def levels_sun(N, Z, T, m, solid, h, evening, R=None):
+def solids_of(P):
+    """the building as true solids ("solids" in the proxy): each the intersection of extrusions -- "xy": a convex
+    outline on screen pushed through the depth, "yz": a convex section (screen y, depth z) pushed along x, "z": a depth
+    range [back, front]. Returned as half-spaces a.(x, y, z) <= c in screen cells (y down)."""
+    out = []
+    for so in P.get("solids", []):
+        H = []
+        def poly(pts, axes):
+            pts = np.array(pts, float); c = pts.mean(0)
+            for i in range(len(pts)):
+                p0, p1 = pts[i], pts[(i + 1) % len(pts)]
+                e = p1 - p0; nrm = np.array([e[1], -e[0]])
+                if nrm @ (c - p0) > 0: nrm = -nrm               # outward
+                a = np.zeros(3); a[axes[0]] = nrm[0]; a[axes[1]] = nrm[1]
+                H.append((a, nrm @ p0))
+        if "xy" in so: poly(so["xy"], (0, 1))
+        if "yz" in so: poly(so["yz"], (1, 2))
+        if "z" in so:
+            H.append((np.array([0, 0, -1.0]), -so["z"][0])); H.append((np.array([0, 0, 1.0]), so["z"][1]))
+        out.append((so.get("name", ""), H))
+    return out
+
+
+def sunlit(ys, xs, Z, L, solids, eps=0.75):
+    """a ray from each visible cell toward the sun: in shade when it passes through any solid (exact, no marching)"""
+    if not solids: return np.ones(len(ys), bool)
+    P0 = np.stack([xs.astype(float), ys.astype(float), Z[ys, xs]], -1)
+    D = np.array([L[0], -L[1], L[2]])
+    hit = np.zeros(len(ys), bool)
+    for _, H in solids:
+        t0 = np.full(len(ys), -1e9); t1 = np.full(len(ys), 1e9)
+        for a, c in H:
+            den = a @ D; num = c - P0 @ a
+            if abs(den) < 1e-9:
+                t1 = np.where(num < 0, -1e9, t1); continue
+            t = num / den
+            if den > 0: t1 = np.minimum(t1, t)
+            else: t0 = np.maximum(t0, t)
+        hit |= t1 > np.maximum(t0, eps) + 0.25
+    return ~hit
+
+
+def levels_sun(N, Z, T, m, solid, h, evening, R=None, solids=None):
     L = sun3(h)
     ys, xs = np.nonzero(m)
     n = N[ys, xs]
     ndl = n @ L
-    # 1. the big masses: a plane's facing, and what the big forms throw on it
-    sun = (ndl > 0.05) & in_sun(ys, xs, Z, T, solid, L)
+    # 1. the big masses: a plane's facing, and what the big solids throw on it
+    sun = (ndl > 0.05) & (sunlit(ys, xs, Z, L, solids) if solids else in_sun(ys, xs, Z, T, solid, L))
     lv = np.zeros(len(ys), int)
     lv[sun & (ndl > 0.3)] = 1
     lv[sun & (ndl > 0.75)] = 2
@@ -178,7 +221,7 @@ def bake(k, preview=None, lights=None, box=None):
     out = {}
     R = relief_map(nat, P, pid)
     for tag, h in (("m", 7.5), ("e", 17.5)):
-        lv, _, _, _, _ = levels_sun(N, Z, T, m & (pid >= 0), solid, h, tag == "e", R)
+        lv, _, _, _, _ = levels_sun(N, Z, T, m & (pid >= 0), solid, h, tag == "e", R, solids_of(P))
         img, miss = recolor(nat, m & (pid >= 0), lv)
         out[tag] = img
         print(k, tag, "off-palette cells kept as drawn:", miss)
@@ -213,7 +256,7 @@ def bake_night(nat, m, pid, N, Z, T, solid, lights, box):
         lp = np.array([cx, -cy, lz])
         v = lp - P3; dist = np.linalg.norm(v, axis=-1); v /= np.maximum(dist[:, None], 1e-6)
         face = np.clip((n * v).sum(-1), 0, 1)
-        if kind == "win": face = np.maximum(face, 0.6)               # a window lights its own frame and the wall round it
+        if kind == "win": face = np.where(n[:, 2] > 0.9, np.maximum(face, 0.6), 0.0)   # its own wall, never the roof
         fall = np.clip(1.0 - dist / reach, 0, 1) ** 1.5
         add += la * face * fall * (0.5 if kind == "win" else 1.6)
     step = np.where(add > 1.1, 3, np.where(add > 0.55, 2, np.where(add > 0.18, 1, 0)))
