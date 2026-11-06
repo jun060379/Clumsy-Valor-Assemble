@@ -579,8 +579,10 @@ func tod_now() -> Dictionary:
 
 func lantern_at(x: float, surf: float) -> Vector2:
 	var im: Texture2D = tex["q_lamp"]
-	var lx := 76.0 / 113.0 * im.get_width() - 56.0     # the lantern glass on q_lamp (2026-11-06 redraw, 2-px grid)
-	var ly := 100.0 / 197.0 * im.get_height()
+	# the lantern glass's centre on q_lamp_base (x 74..97, y 81..98 of 113 x 197; owner 2026-11-07: the light had
+	# drifted off the glass when the lamp was redrawn)
+	var lx := 86.0 / 113.0 * im.get_width() - 56.0
+	var ly := 90.0 / 197.0 * im.get_height()
 	return Vector2(x + lx, surf - (im.get_height() - ly))
 
 

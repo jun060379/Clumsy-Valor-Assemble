@@ -1,0 +1,49 @@
+{
+ "_doc": "Each building's solid form in a few parts (tools/light_proxy.py from_spec; cells of the hx sprite at half size, x right, y down, z toward the viewer, the main front wall at 0). Read off the sprite by eye, part by part; the hall has its own full proxy (g_hall.json).",
+ "g_store": [
+  {"t": "wall", "name": "walls", "r": [6, 52, 210, 134], "z": 0, "d": 100},
+  {"t": "roof", "name": "roof", "poly": [[30, 3], [188, 3], [214, 57], [2, 57]], "eave": 57, "z": 8, "d": 100},
+  {"t": "wall", "name": "porch", "r": [62, 50, 154, 134], "z": 6, "d": 106},
+  {"t": "gable", "name": "gable", "apex": [108, 0], "l": [54, 56], "r": [162, 56], "z": 8, "d": 100, "w": 8},
+  {"t": "top", "name": "sill", "r": [14, 121, 202, 124], "z": 4}
+ ],
+ "g_barn": [
+  {"t": "wall", "name": "walls", "r": [8, 76, 302, 141], "z": 0, "d": 120},
+  {"t": "roof", "name": "roof", "poly": [[50, 24], [268, 24], [310, 78], [0, 78]], "eave": 78, "z": 8, "d": 120},
+  {"t": "wall", "name": "doors", "r": [100, 60, 210, 141], "z": 4, "d": 124},
+  {"t": "gable", "name": "gable", "apex": [155, 0], "l": [68, 76], "r": [242, 76], "z": 8, "d": 120, "w": 9}
+ ],
+ "g_cottage": [
+  {"t": "wall", "name": "right walls", "r": [118, 88, 202, 146], "z": 0, "d": 90},
+  {"t": "roof", "name": "right roof", "poly": [[70, 28], [175, 28], [214, 92], [118, 92]], "eave": 92, "z": 8, "d": 90},
+  {"t": "box", "name": "chimney", "r": [143, 6, 175, 56], "z": [-46, -22], "cap": 6, "reach": 16},
+  {"t": "wall", "name": "gable walls", "r": [12, 70, 122, 146], "z": 10, "d": 100},
+  {"t": "gable", "name": "gable", "apex": [64, 20], "l": [0, 86], "r": [130, 90], "z": 10, "d": 100, "w": 9}
+ ],
+ "g_well": [
+  {"t": "wall", "name": "stone ring", "r": [16, 72, 104, 106], "z": 12, "d": 40},
+  {"t": "cyl", "name": "left post", "r": [20, 10, 32, 76], "z": 4, "d": 8},
+  {"t": "cyl", "name": "right post", "r": [84, 10, 98, 76], "z": 4, "d": 8},
+  {"t": "roof", "name": "roof", "poly": [[20, 0], [100, 0], [118, 34], [0, 34]], "eave": 34, "z": 14, "d": 36},
+  {"t": "top", "name": "rim", "r": [16, 72, 104, 76], "z": 12}
+ ],
+ "g_forge": [
+  {"t": "wall", "name": "walls", "r": [96, 72, 282, 145], "z": 0, "d": 90},
+  {"t": "roof", "name": "roof", "poly": [[72, 24], [262, 24], [282, 76], [72, 76]], "eave": 76, "z": 8, "d": 90},
+  {"t": "roof", "name": "side roof", "poly": [[2, 76], [34, 54], [34, 88], [2, 88]], "eave": 88, "z": 10, "d": 30},
+  {"t": "wall", "name": "furnace", "r": [8, 78, 110, 145], "z": 14, "d": 60},
+  {"t": "box", "name": "stack", "r": [36, 0, 74, 120], "z": [-30, 16], "cap": 5},
+  {"t": "top", "name": "bench top", "r": [108, 118, 196, 122], "z": 6}
+ ],
+ "g_kiln": [
+  {"t": "dome", "name": "dome", "c": [77, 92], "rad": 80, "z": 0}
+ ],
+ "g_anvil": [
+  {"t": "box", "name": "anvil", "r": [0, 0, 45, 37], "z": [-20, 0], "cap": 5}
+ ],
+ "q_fountain": [
+  {"t": "wall", "name": "basin", "r": [0, 60, 141, 102], "z": 10, "d": 50},
+  {"t": "top", "name": "basin rim", "r": [0, 60, 141, 66], "z": 10},
+  {"t": "box", "name": "column", "r": [46, 0, 96, 62], "z": [-20, 4], "cap": 4}
+ ]
+}
