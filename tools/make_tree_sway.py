@@ -51,8 +51,9 @@ def bake(name):
             sel = own == i
             if not sel.any(): continue
             th = 2 * np.pi * f / NF - phase[i]   # each ball rides its own small loop, the wave across the crown
-            dx = int(round(amp[i] * np.sin(th)))
-            dy = int(round(amp[i] * 0.5 * np.sin(2 * th)))
+            # moves in whole 2-px steps: the town's pixel (owner 2026-11-06, the 2-px grid)
+            dx = 2 * int(round(amp[i] * 0.6 * np.sin(th)))
+            dy = 2 * int(round(amp[i] * 0.3 * np.sin(2 * th)))
             py, px = ys[sel] + dy, xs[sel] + dx
             ok = (py >= 0) & (py < h) & (px >= 0) & (px < w)
             o[py[ok], px[ok]] = a[ys[sel][ok], xs[sel][ok]]
