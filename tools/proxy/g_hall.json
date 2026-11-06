@@ -2,7 +2,7 @@
  "_doc": "The guild hall's solid form (docs/work/town-art/LIGHT.md). Cells of assets/town/hx/g_hall.png at half size (1 cell = 2 px), x right, y down; z = depth toward the viewer in cells (the wings' front walls at 0). A plane: poly (screen cells), its depth z = z + dzdx * (x - at.x) + dzdy * (y - at.y), or an explicit normal n [x, y up, z toward viewer] for faces seen edge-on (the gable's verges). thick: how deep the solid behind the face is (for cast shadows). Later planes lie over earlier ones.",
  "sprite": "g_hall",
  "planes": [
-  {"name": "wing walls", "poly": [[0, 150], [436, 150], [436, 296], [0, 296]], "z": 0, "thick": 60},
+  {"name": "wing walls", "poly": [[0, 150], [436, 150], [436, 296], [0, 296]], "z": 0, "relief": {"wood": 2, "ochre": -3}, "thick": 60},
   {"name": "left wing roof", "poly": [[62, 78], [168, 78], [168, 172], [10, 172]], "at": [0, 165], "z": 10, "dzdy": 0.84, "thick": 8},
   {"name": "right wing roof", "poly": [[268, 78], [376, 78], [426, 172], [268, 172]], "at": [0, 165], "z": 10, "dzdy": 0.84, "thick": 8},
   {"name": "left eave", "poly": [[10, 160], [140, 160], [140, 172], [10, 172]], "z": 10, "n": [0, -0.2, 1], "thick": 12},
@@ -11,7 +11,7 @@
   {"name": "left chimney cap", "poly": [[104, 44], [143, 44], [143, 50], [104, 50]], "z": -18, "n": [0, 1, 0.25], "thick": 26},
   {"name": "right chimney", "poly": [[292, 44], [331, 44], [331, 86], [292, 86]], "z": -18, "thick": 26},
   {"name": "right chimney cap", "poly": [[292, 44], [331, 44], [331, 50], [292, 50]], "z": -18, "n": [0, 1, 0.25], "thick": 26},
-  {"name": "gable wall", "poly": [[217, 40], [292, 120], [292, 270], [142, 270], [142, 120]], "z": 8, "thick": 80},
+  {"name": "gable wall", "poly": [[217, 40], [292, 120], [292, 270], [142, 270], [142, 120]], "z": 8, "relief": {"wood": 2, "ochre": -3}, "thick": 80},
   {"name": "gable side, left", "poly": [[134, 140], [142, 140], [142, 270], [134, 270]], "z": 4, "n": [-1, 0, 0.15], "thick": 16},
   {"name": "gable side, right", "poly": [[292, 140], [300, 140], [300, 270], [292, 270]], "z": 4, "n": [1, 0, 0.15], "thick": 16},
   {"name": "left verge", "poly": [[217, 28], [228, 40], [124, 152], [110, 145]], "z": 12, "n": [-0.72, 0.69, 0.08], "thick": 90},

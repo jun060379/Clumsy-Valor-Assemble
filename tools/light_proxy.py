@@ -5,12 +5,14 @@ its walls, roof planes, eaves, chimneys as planes with a depth), never guessed f
   1. big masses: each plane's facing to the sun (N . L) gives the whole plane ONE light level
   2. cast shadow: from each cell, a ray toward the sun through the proxy's depth; inside a solid on the way = shade
      (eaves over walls, chimneys on the roof, the gable's body on the wings)
-  3. detail: the art's own small shading stays as drawn inside each mass (the whole mass moves together)
+  3. detail, inside the light only: a plane's small relief by material ("relief": timbers out of the plaster, panes
+     sunk in their frames) throws one-step shadows a few cells long, and the relief's edge turned to the sun gets +1
   4. colour: the level moves each pixel along ITS material ramp (never "the nearest colour"): the ramps are cool and
      greyer at the dark end and warm and richer at the light end (tools/town_palette2.py), so a step is a move in
      value, hue, saturation and temperature together. Off-palette colours: none.
 Light levels (steps along the ramp, relative to the art as drawn, which is the noon look):
-  sunlit, facing the sun squarely (N.L > .55)  +1
+  sunlit, facing the sun squarely (N.L > .75)  +2
+  sunlit (N.L > .3)                            +1
   sunlit, glancing                             0 (the evening's orange is the ambient's, lit.gd: not a second step)
   shade, facing up (sees the sky)              -1
   shade, facing front / down                   -2
@@ -67,13 +69,27 @@ def proxy_maps(k, shape):
     return P, pid, N, Z, T
 
 
-def in_sun(ys, xs, Z, T, solid, L, reach=160):
+def relief_map(nat, P, pid):
+    """the small relief inside a plane (its "relief": {ramp name: cells out (+) or in (-)}): timbers standing out of
+    the plaster, window panes sunk behind their frames. Only the detail pass sees it."""
+    R = np.zeros(pid.shape)
+    names = PJ["names"]
+    ys, xs = np.nonzero(pid >= 0)
+    for y, x in zip(ys, xs):
+        rel = P["planes"][pid[y, x]].get("relief")
+        if not rel: continue
+        c = tuple(int(v) for v in nat[y, x, :3])
+        if c in INDEX: R[y, x] = rel.get(names[INDEX[c][0]], 0.0)
+    return R
+
+
+def in_sun(ys, xs, Z, T, solid, L, reach=160, t0=2):
     """march each cell's ray toward the sun through the proxy: it is in shade when it passes inside a solid"""
     h, w = Z.shape
     d = L / max(np.hypot(L[0], L[1]), 1e-6)            # per cell of screen travel
     z0 = Z[ys, xs]
     shade = np.zeros(len(ys), bool)
-    for t in range(2, reach):
+    for t in range(t0, reach):
         X = np.round(xs + d[0] * t).astype(int); Y = np.round(ys - d[1] * t).astype(int)
         ok = (X >= 0) & (X < w) & (Y >= 0) & (Y < h)
         zr = z0 + d[2] * t
@@ -83,17 +99,30 @@ def in_sun(ys, xs, Z, T, solid, L, reach=160):
     return ~shade
 
 
-def levels_sun(N, Z, T, m, solid, h, evening):
+def levels_sun(N, Z, T, m, solid, h, evening, R=None):
     L = sun3(h)
     ys, xs = np.nonzero(m)
     n = N[ys, xs]
     ndl = n @ L
+    # 1. the big masses: a plane's facing, and what the big forms throw on it
     sun = (ndl > 0.05) & in_sun(ys, xs, Z, T, solid, L)
     lv = np.zeros(len(ys), int)
-    lv[sun & (ndl > 0.55)] = 1
+    lv[sun & (ndl > 0.3)] = 1
+    lv[sun & (ndl > 0.75)] = 2
     up = n[:, 1] > 0.45
     lv[~sun & up] = -1
     lv[~sun & ~up] = -2
+    # 2. the detail, only inside the light: timbers throw a short shadow on the plaster and into the window recesses
+    #    (one step: it must not break the mass), and the timber edge turned to the sun catches it (+1)
+    if R is not None and R.any():
+        Zd = Z + R
+        det = sun & ~in_sun(ys, xs, Zd, T, solid, L, reach=10, t0=1)
+        lv[det] -= 1
+        d = L / max(np.hypot(L[0], L[1]), 1e-6)
+        sx = int(np.sign(np.round(d[0]))); sy = -int(np.sign(np.round(d[1] * 0.999)))
+        nx = np.clip(xs + sx, 0, Z.shape[1] - 1); ny = np.clip(ys + sy, 0, Z.shape[0] - 1)
+        edge = sun & ~det & (R[ys, xs] > 0) & (R[ny, nx] < R[ys, xs] - 0.5)
+        lv[edge] += 1
     out = np.zeros(m.shape, int); out[ys, xs] = lv
     return out, sun, ys, xs, ndl
 
@@ -134,8 +163,9 @@ def bake(k, preview=None, lights=None, box=None):
     P, pid, N, Z, T = proxy_maps(k, m.shape)
     solid = (pid >= 0) & m
     out = {}
+    R = relief_map(nat, P, pid)
     for tag, h in (("m", 8.0), ("e", 17.0)):
-        lv, _, _, _, _ = levels_sun(N, Z, T, m & (pid >= 0), solid, h, tag == "e")
+        lv, _, _, _, _ = levels_sun(N, Z, T, m & (pid >= 0), solid, h, tag == "e", R)
         img, miss = recolor(nat, m & (pid >= 0), lv)
         out[tag] = img
         print(k, tag, "off-palette cells kept as drawn:", miss)
