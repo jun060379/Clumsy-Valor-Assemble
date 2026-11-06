@@ -35,8 +35,7 @@ def rebake_crisp(src, K):
     return Image.fromarray(o)
 
 KEYS = ["g_store", "g_tentR", "g_barn", "g_cottage", "g_well", "g_forge", "g_anvil", "g_kiln", "g_hall", "g_hall_win", "q_fountain",
-        # f_tree2 / f_tree3 are drawn natively at this size now (owner's reference tree, 2026-11-06): not rebaked
-        "f_bigtree", "f_bigtree_leaf", "f_bigtree_trunk",
+        "f_tree2", "f_tree2_leaf", "f_tree2_trunk", "f_tree3", "f_tree3_leaf", "f_tree3_trunk", "f_bigtree", "f_bigtree_leaf", "f_bigtree_trunk",
         "f_bush1", "f_bush2", "f_bush3"]
 FAR = ["bg_mountains", "bg_forest"]
 if __name__ == "__main__":
