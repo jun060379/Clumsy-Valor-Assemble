@@ -38,11 +38,11 @@ const HALL_WIN := [[87, 359], [93, 289], [169, 287], [169, 369], [247, 235], [25
 ## leaf rows of the canopies (baked by splitting each tree by the prototype's colour rule: g >= r*0.85 and g > b*1.3)
 const TREE_ROWS := {"f_tree2": [2, 247], "f_tree3": [2, 247], "f_bigtree": [2, 307],
 	"f_oak": [0, 276], "f_round": [0, 251], "f_young": [0, 195], "f_tall": [0, 281]}   # tools/make_town_trees.py, drawn 1:1
-const LAMP_BAN := Vector2(35, 86)     # where the lamp's banner (q_lamp_ban) sits on q_lamp
+const LAMP_BAN := Vector2(30, 97)     # where the lamp's banner (q_lamp_ban) sits on q_lamp
 ## the wagon's horse (horse_strip: 8 cells of 214x148; frame 0 is cut into base / neck / tail / neck root)
 const HCW := 214
 const HCH := 148
-const HDX := 225.0
+const HDX := 159.0                   # the horse at the new wagon's shaft (g_wagon2 280 wide)
 const NECK_PIV := Vector2(128, 56)
 const TAIL_PIV := Vector2(30, 46)
 ## hour, sky tint rgba, ambient rgb, sun, lamp
@@ -549,8 +549,8 @@ func tod_now() -> Dictionary:
 
 func lantern_at(x: float, surf: float) -> Vector2:
 	var im: Texture2D = tex["q_lamp"]
-	var lx := 91.0 / 113.0 * im.get_width() - 56.0
-	var ly := 83.0 / 197.0 * im.get_height()
+	var lx := 76.0 / 113.0 * im.get_width() - 56.0     # the lantern glass on q_lamp (2026-11-06 redraw, 2-px grid)
+	var ly := 100.0 / 197.0 * im.get_height()
 	return Vector2(x + lx, surf - (im.get_height() - ly))
 
 
