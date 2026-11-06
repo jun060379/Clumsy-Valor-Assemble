@@ -39,57 +39,46 @@ def leafmask(a):
     return m & ~trunkmask(a)
 
 def bake(name):
-    a = np.array(Image.open(f"assets/town/{name}.png").convert("RGBA"))
+    """Natural sway (owner 2026-11-07: "모션 더 자연스럽게"): the crown BENDS instead of its balls jumping. On the 2-px
+    cells, every leaf cell is displaced by a smooth wind field: a slow lean of the whole crown plus a gust wave
+    travelling across it, scaled by how far the cell is from the nearest trunk / branch cell (leaves at a branch hold
+    on, the outer tips swing most). The frame is built by looking each cell up at (cell - displacement), so the canopy
+    stretches and closes instead of opening gaps or leaving ghosts; trunk and branches are drawn unmoved on top.
+    24 frames, one cell (2 px) steps."""
+    A = np.array(Image.open(f"assets/town/{name}.png").convert("RGBA"))
+    a = A[::2, ::2].copy()                        # cells
     h, w = a.shape[:2]
-    leaf = leafmask(a)
-    r, g, b = [a[..., i].astype(int) for i in range(3)]
-    lit = leaf & (g > 92) & (g > b + 15)
-    lit = ndimage.binary_opening(lit, iterations=1)
-    lab, n = ndimage.label(lit)
-    sizes = ndimage.sum(lit, lab, range(1, n + 1))
-    seeds = [ndimage.center_of_mass(lit, lab, i + 1) for i in range(n) if sizes[i] >= 25]
-    seeds = np.array(seeds)                                   # (y, x)
-    # balls grown from the lit clumps over the luminance: the cuts fall in the dark crevices between clumps
-    from skimage.segmentation import watershed
-    mk = np.zeros((h, w), int)
-    for i, (sy, sx) in enumerate(seeds): mk[int(sy), int(sx)] = i + 1
-    ws = watershed(-(r + g + b), mk, mask=leaf)
-    ys, xs = np.where(leaf)
-    own = ws[ys, xs] - 1
-    # backdrop: the tree with every leaf pixel in the canopy's darkest leaf colour, seen only in the 1-px seams
-    lum = (r + g + b)[leaf]
-    dark = a[leaf][lum.argmin()]
-    base = a.copy()
-    # (the seams read as lines in dark; the untouched tree shows through them instead)
-    # back (dark) balls first, lit front balls last
-    order = sorted(range(len(seeds)), key=lambda i: (r + g + b)[ys[own == i], xs[own == i]].mean() if (own == i).any() else 0)
-    rng = np.random.default_rng(len(seeds))
-    phase = [seeds[i][1] / w * 2.4 + seeds[i][0] / h * 1.2 + rng.uniform(0, 1.6) for i in range(len(seeds))]
-    amp = [1.0 + 1.2 * (1.0 - seeds[i][0] / h) + rng.uniform(0, 0.5) for i in range(len(seeds))]   # tops swing most
-    rows = (NF + COLS - 1) // COLS
-    out = np.zeros((h * rows, w * COLS, 4), np.uint8)
-    for f in range(NF):
-        o = base.copy()
-        for i in order:
-            sel = own == i
-            if not sel.any(): continue
-            th = 2 * np.pi * f / NF - phase[i]   # each ball rides its own small loop, the wave across the crown
-            # moves in whole 2-px steps: the town's pixel (owner 2026-11-06, the 2-px grid)
-            dx = 2 * int(round(amp[i] * 0.6 * np.sin(th)))
-            dy = 2 * int(round(amp[i] * 0.3 * np.sin(2 * th)))
-            py, px = ys[sel] + dy, xs[sel] + dx
-            ok = (py >= 0) & (py < h) & (px >= 0) & (px < w)
-            o[py[ok], px[ok]] = a[ys[sel][ok], xs[sel][ok]]
-        cy, cx = divmod(f, COLS)
-        out[cy * h:(cy + 1) * h, cx * w:(cx + 1) * w] = o
-    # trunk and branches on top, unmoved: a leaf ball stepping over a branch must not carry or cover its edge
     tm = trunkmask(a)
+    lf = leafmask(a) & ~tm
+    lf |= (a[..., 3] > 127) & ~tm & (np.arange(h)[:, None] < int(h * 0.86))
+    dist = ndimage.distance_transform_edt(~tm)
+    reach = max(8.0, np.percentile(dist[lf], 90)) if lf.any() else 8.0
+    wgt = np.clip(dist / reach, 0, 1) ** 1.3
+    yy, xx = np.mgrid[0:h, 0:w].astype(float)
+    hh = 1.0 - yy / h                              # higher swings more
+    rows = (NF + COLS - 1) // COLS
+    out = np.zeros((A.shape[0] * rows, A.shape[1] * COLS, 4), np.uint8)
+    region = ndimage.binary_dilation(lf, iterations=2) & ~tm
     for f in range(NF):
+        t = 2 * np.pi * f / NF
+        lean = 0.55 * np.sin(t) + 0.25 * np.sin(2 * t + 1.1)                   # the whole crown, slow
+        gust = 0.6 * np.sin(t - xx / max(w, 1) * 2 * np.pi * 0.8 - yy / h * 1.5)  # a wave across it
+        dx = np.round((lean + gust) * 1.6 * wgt * (0.5 + 0.5 * hh))
+        dy = np.round(0.45 * np.sin(2 * t - xx / max(w, 1) * 4.0) * wgt * hh)
+        sx = np.clip((xx - dx).astype(int), 0, w - 1); sy = np.clip((yy - dy).astype(int), 0, h - 1)
+        o = a.copy()
+        o[region] = 0
+        take = region & lf[sy, sx]
+        o[take] = a[sy[take], sx[take]]
+        keep = lf & ~take                          # a leaf cell with nothing coming in keeps its own colour: no holes
+        o[keep] = a[keep]
+        o[tm] = a[tm]
+        big = np.repeat(np.repeat(o, 2, 0), 2, 1)[:A.shape[0], :A.shape[1]]
         cy, cx = divmod(f, COLS)
-        fr = out[cy * h:(cy + 1) * h, cx * w:(cx + 1) * w]
-        fr[tm] = a[tm]
+        out[cy * A.shape[0]:(cy + 1) * A.shape[0], cx * A.shape[1]:(cx + 1) * A.shape[1]] = big
     Image.fromarray(out).save(f"assets/town/{name}_sway.png")
-    print(name, len(seeds), "balls")
+    print(name, "reach", round(reach, 1), "cells")
 
-for nm in (sys.argv[1:] or ["f_oak", "f_round", "f_young", "f_tall"]):
+
+for nm in (sys.argv[1:] or ["f_oak", "f_round", "f_young", "f_tall", "f_bigtree"]):
     bake(nm)
