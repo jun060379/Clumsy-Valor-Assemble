@@ -91,6 +91,9 @@ var blade_front: Node2D
 var blade_mat: ShaderMaterial
 var bmesh := {}
 var gci: CanvasItem              # what _shear draws on (the ground node)
+var ground_mat: ShaderMaterial
+var gmaps := {}
+var gmap_now := ""
 var g_vr := Rect2()              # the span the ground node was last drawn for
 var near_node: Node2D           # props standing nearer than the people's line (drawn over them)
 var light_tex: GradientTexture2D
@@ -165,6 +168,14 @@ func _ready() -> void:
 	ground_node.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 	ground_node.draw.connect(_draw_ground)
 	arena.add_child(ground_node)
+	# light and shade on the ground from what stands around it (tools/bake_ground_light.py, owner 2026-11-07)
+	if ResourceLoader.exists("res://assets/town/light/pal_lut.png"):
+		ground_mat = ShaderMaterial.new()
+		ground_mat.shader = preload("res://shaders/ground_lit.gdshader")
+		ground_mat.set_shader_parameter("pal_lut", load("res://assets/town/light/pal_lut.png"))
+		ground_mat.set_shader_parameter("pal_fx", load("res://assets/town/light/pal_fx.png"))
+		for t in ["d", "m", "e", "n"]: gmaps[t] = load("res://assets/town/light/ground_" + t + ".png")
+		ground_node.material = ground_mat
 	blade_mat = ShaderMaterial.new()
 	blade_mat.shader = preload("res://shaders/grass_blades.gdshader")
 	blade_back = Node2D.new()
@@ -836,6 +847,16 @@ func step(dt: float) -> void:
 	front.queue_redraw()
 	near_node.queue_redraw()
 	# the ground is static: drawn for the view and 600 px either side, redrawn only when the view leaves that
+	if ground_mat != null:
+		var gt: String = sun_side().trim_prefix("_")
+		if gt == "": gt = "d"
+		if gt != gmap_now:
+			gmap_now = gt
+			ground_mat.set_shader_parameter("gmap", gmaps[gt])
+			blade_mat.set_shader_parameter("gmap", gmaps[gt])
+			blade_mat.set_shader_parameter("pal_lut", ground_mat.get_shader_parameter("pal_lut"))
+			blade_mat.set_shader_parameter("pal_fx", ground_mat.get_shader_parameter("pal_fx"))
+			blade_mat.set_shader_parameter("lit_on", 1.0)
 	var gvr: Rect2 = arena.view_rect()
 	if not g_vr.encloses(gvr): ground_node.queue_redraw()
 	blade_back.queue_redraw()

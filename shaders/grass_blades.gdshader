@@ -12,6 +12,14 @@ uniform float py = 0.0;           // the player's feet
 uniform vec3 land = vec3(0.0, 0.0, 1e9);   // x, y, ms since landing
 uniform sampler2D pushtex : filter_nearest, repeat_disable;
 uniform float push_n = 1.0;
+// the ground's light map (tools/bake_ground_light.py): a blade in a building's shade or a lamp's pool takes the same
+// palette move as the ground under it
+uniform sampler2D gmap : filter_nearest, repeat_disable;
+uniform sampler2D pal_lut : filter_nearest, repeat_disable;
+uniform sampler2D pal_fx : filter_nearest, repeat_disable;
+uniform vec2 gmap_org = vec2(0.0, 120.0);
+uniform vec2 gmap_cell = vec2(4.0, 2.0);
+uniform float lit_on = 0.0;
 
 void vertex() {
 	int code = int(COLOR.a * 16.0);
@@ -40,5 +48,15 @@ void vertex() {
 	VERTEX = vec2(x + round(bend * u * u * u * 1.5) + side * w, base - round(h2 * u));
 	vec3 c = COLOR.rgb;
 	if (tip && pressed > 0.0) c = vec3(176.0, 195.0, 121.0) / 255.0;   // the tip catches the gust light: the leaf ramp's top step
+	if (lit_on > 0.5) {
+		ivec3 q = ivec3(clamp(floor(c * 255.0 / 8.0), 0.0, 31.0));
+		int idx = int(texelFetch(pal_lut, ivec2(q.r * 32 + q.g, q.b), 0).r * 255.0 + 0.5);
+		ivec2 gi = ivec2(floor((vec2(x, base) - gmap_org) / gmap_cell));
+		ivec2 gs = textureSize(gmap, 0);
+		vec4 L = (gi.x >= 0 && gi.y >= 0 && gi.x < gs.x && gi.y < gs.y) ? texelFetch(gmap, gi, 0) : vec4(0.0);
+		int col = 2;
+		if (L.b > 0.55) col = 5; else if (L.b > 0.16) col = 4; else if (L.r > 0.55) col = 0; else if (L.r > 0.2) col = 1; else if (L.g > 0.3) col = 3;
+		c = texelFetch(pal_fx, ivec2(col, idx), 0).rgb;
+	}
 	COLOR = vec4(c, 1.0);
 }
