@@ -76,7 +76,8 @@ var t_wall: Texture2D
 var near_door = null
 var kind := "town"
 var lit                       # lit.gd: shade, ambient, lights, hall windows, fog (drawLighting)
-var hx := {}                     # pre-scaled (BS) textures, drawn 1:1
+var hx := {}
+var lit_tex := {}                # sun-side versions: "<k>_m" / "<k>_e"                     # pre-scaled (BS) textures, drawn 1:1
 var win_sv: SubViewport         # the hall windows drawn apart (LIT.wc): the heroine cut out of them
 var win_draw: Node2D
 var win_cut: Node2D
@@ -125,6 +126,10 @@ func _ready() -> void:
 	# pixels the same size as the characters'. tex[] keeps the originals for layout, climb tops and shadows
 	for k in tex.keys():
 		if ResourceLoader.exists("res://assets/town/hx/" + k + ".png"): hx[k] = load("res://assets/town/hx/" + k + ".png")
+	# the sun-side versions (tools/bake_sun_light.py): <k>_m = sun from the left (morning), <k>_e = from the right
+	for f in DirAccess.get_files_at("res://assets/town/lit"):
+		var lk := f.replace(".import", "").get_basename()
+		if not lit_tex.has(lk): lit_tex[lk] = load("res://assets/town/lit/" + lk + ".png")
 	_build_tex()
 	_build_ground2()
 	_layout()
@@ -548,6 +553,14 @@ func floor_at(x: float) -> float:
 
 # ---------- time of day ----------
 ## the world's one clock lives on the arena (shared with the hall and Eilin's day)
+## which sun-side version to draw (owner 2026-11-06: the shading turns with the sun): the morning one while the sun is
+## low in the east, the evening one while it is low in the west, the art as drawn around noon and at night
+func sun_side() -> String:
+	var hh := fposmod(float(arena.tod_h), 24.0)
+	if hh >= 5.5 and hh < 10.5: return "_m"
+	if hh >= 14.5 and hh < 19.5: return "_e"
+	return ""
+
 func tod_now() -> Dictionary:
 	return arena.tod_now()
 
@@ -1139,6 +1152,8 @@ func _spr(k: String, x: float, y_bottom: float, sink := 0.0, flip := false, ci: 
 		im = hx[k]
 		w = im.get_width()
 		h = im.get_height()
+	var lv := sun_side()
+	if lv != "" and lit_tex.has(k + lv): im = lit_tex[k + lv]
 	var y := y_bottom - h + sink * PK * s
 	if flip:
 		ci.draw_set_transform_matrix(xf * Transform2D(0.0, Vector2(-1, 1), 0.0, Vector2(roundf(x) + w, 0)))
@@ -1434,7 +1449,7 @@ func _sway(k: String, x: float, y_bottom: float, sink: float, flip: bool, amp: f
 ## street lamp: the banner under the arm flutters, more in a gust
 func _lamp(x: float, surf: float, vr: Rect2, ci: CanvasItem = null) -> void:
 	if ci == null: ci = self
-	var base: Texture2D = tex["q_lamp_base"]
+	var base: Texture2D = lit_tex.get("q_lamp_base" + sun_side(), tex["q_lamp_base"])
 	var ban: Texture2D = tex["q_lamp_ban"]
 	x = roundf(x)
 	if x > vr.end.x or x + base.get_width() < vr.position.x: return
@@ -1527,7 +1542,7 @@ func _horse_step(dt: float) -> void:
 	H["tail"] = sin(H["t"] / 430.0) * 0.12 + sin(H["t"] / 170.0) * 0.05 * (1.0 if sin(H["t"] / 2300.0) > 0.6 else 0.0)
 
 func _draw_wagon(b: Array) -> void:
-	var W2: Texture2D = tex["g_wagon2"]
+	var W2: Texture2D = lit_tex.get("g_wagon2" + sun_side(), tex["g_wagon2"])
 	var x := roundf(b[1])
 	var vr: Rect2 = arena.view_rect()
 	if x > vr.end.x + 20.0 or x + 480.0 < vr.position.x: return
