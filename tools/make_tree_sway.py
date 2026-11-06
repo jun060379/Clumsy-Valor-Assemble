@@ -39,45 +39,53 @@ def leafmask(a):
     return m & ~trunkmask(a)
 
 def bake(name):
-    """Natural sway (owner 2026-11-07: "모션 더 자연스럽게"): the crown BENDS instead of its balls jumping. On the 2-px
-    cells, every leaf cell is displaced by a smooth wind field: a slow lean of the whole crown plus a gust wave
-    travelling across it, scaled by how far the cell is from the nearest trunk / branch cell (leaves at a branch hold
-    on, the outer tips swing most). The frame is built by looking each cell up at (cell - displacement), so the canopy
-    stretches and closes instead of opening gaps or leaving ghosts; trunk and branches are drawn unmoved on top.
-    24 frames, one cell (2 px) steps."""
+    """Leaf-ball wave, after Slynyrd Pixelblog 33 (owner 2026-11-07: "너무 울렁거린다; 래퍼런스 찾아" -- the bending
+    field read as jelly). The reference: each ball of leaves is a rigid unit that steps up-right 1 px, down 1 px, left
+    1 px, home; the balls go in sequence so ONE wave crosses the crown per loop; nothing warps. Here on the town's
+    2-px cells (1 step = 1 cell = 2 px): 24 frames at 0.1 s; a ball's step lasts 2 frames and the wave reaches the
+    balls left to right (with the wind), the higher balls a frame later; most of the loop a ball rests. Behind the
+    balls the tree as drawn stays (no gaps); trunk and branches are drawn unmoved on top."""
     A = np.array(Image.open(f"assets/town/{name}.png").convert("RGBA"))
-    a = A[::2, ::2].copy()                        # cells
+    a = A[::2, ::2].copy()
     h, w = a.shape[:2]
     tm = trunkmask(a)
-    lf = leafmask(a) & ~tm
-    lf |= (a[..., 3] > 127) & ~tm & (np.arange(h)[:, None] < int(h * 0.86))
-    dist = ndimage.distance_transform_edt(~tm)
-    reach = max(8.0, np.percentile(dist[lf], 90)) if lf.any() else 8.0
-    wgt = np.clip(dist / reach, 0, 1) ** 1.3
-    yy, xx = np.mgrid[0:h, 0:w].astype(float)
-    hh = 1.0 - yy / h                              # higher swings more
+    leaf = leafmask(a) & ~tm
+    r, g, b = [a[..., i].astype(int) for i in range(3)]
+    lum = r + g + b
+    lit = ndimage.binary_opening(leaf & (lum > np.percentile(lum[leaf], 50)), iterations=1)
+    lab, n = ndimage.label(lit)
+    sizes = ndimage.sum(lit, lab, range(1, n + 1))
+    seeds = [ndimage.center_of_mass(lit, lab, i + 1) for i in range(n) if sizes[i] >= 6]
+    from skimage.segmentation import watershed
+    mk = np.zeros((h, w), int)
+    for i, (sy, sx) in enumerate(seeds): mk[int(sy), int(sx)] = i + 1
+    ws = watershed(-lum, mk, mask=leaf)
+    ys, xs = np.nonzero(leaf)
+    own = ws[ys, xs] - 1
+    order = sorted(range(len(seeds)), key=lambda i: lum[ys[own == i], xs[own == i]].mean() if (own == i).any() else 0)
+    STEPS = [(1, -1), (1, 0), (0, 0)]       # up-right, down, left (home): the reference's loop
+    HOLD = 2
     rows = (NF + COLS - 1) // COLS
     out = np.zeros((A.shape[0] * rows, A.shape[1] * COLS, 4), np.uint8)
-    region = ndimage.binary_dilation(lf, iterations=2) & ~tm
     for f in range(NF):
-        t = 2 * np.pi * f / NF
-        lean = 0.55 * np.sin(t) + 0.25 * np.sin(2 * t + 1.1)                   # the whole crown, slow
-        gust = 0.6 * np.sin(t - xx / max(w, 1) * 2 * np.pi * 0.8 - yy / h * 1.5)  # a wave across it
-        dx = np.round((lean + gust) * 1.6 * wgt * (0.5 + 0.5 * hh))
-        dy = np.round(0.45 * np.sin(2 * t - xx / max(w, 1) * 4.0) * wgt * hh)
-        sx = np.clip((xx - dx).astype(int), 0, w - 1); sy = np.clip((yy - dy).astype(int), 0, h - 1)
         o = a.copy()
-        o[region] = 0
-        take = region & lf[sy, sx]
-        o[take] = a[sy[take], sx[take]]
-        keep = lf & ~take                          # a leaf cell with nothing coming in keeps its own colour: no holes
-        o[keep] = a[keep]
+        for i in order:
+            sel = own == i
+            if not sel.any(): continue
+            sy, sx = seeds[i]
+            start = int(round(sx / w * 14 + (1 - sy / h) * 2))       # the wave: left to right, tops a little later
+            k = (f - start) % NF // HOLD
+            dx, dy = STEPS[k] if k < len(STEPS) else (0, 0)
+            if dx == 0 and dy == 0: continue
+            py, px = ys[sel] + dy, xs[sel] + dx
+            ok = (py >= 0) & (py < h) & (px >= 0) & (px < w) & ~tm[np.clip(py, 0, h - 1), np.clip(px, 0, w - 1)]
+            o[py[ok], px[ok]] = a[ys[sel][ok], xs[sel][ok]]
         o[tm] = a[tm]
         big = np.repeat(np.repeat(o, 2, 0), 2, 1)[:A.shape[0], :A.shape[1]]
         cy, cx = divmod(f, COLS)
         out[cy * A.shape[0]:(cy + 1) * A.shape[0], cx * A.shape[1]:(cx + 1) * A.shape[1]] = big
     Image.fromarray(out).save(f"assets/town/{name}_sway.png")
-    print(name, "reach", round(reach, 1), "cells")
+    print(name, len(seeds), "balls")
 
 
 for nm in (sys.argv[1:] or ["f_oak", "f_round", "f_young", "f_tall", "f_bigtree"]):
