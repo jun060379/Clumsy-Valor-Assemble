@@ -90,7 +90,7 @@ def in_sun(ys, xs, Z, T, solid, L, reach=160, t0=2):
     d = L / max(np.hypot(L[0], L[1]), 1e-6)            # per cell of screen travel
     z0 = Z[ys, xs]
     shade = np.zeros(len(ys), bool)
-    for t in range(t0, reach):
+    for t in np.arange(t0, reach, 0.5):          # half-cell steps: a ray must not slip past a thin edge
         X = np.round(xs + d[0] * t).astype(int); Y = np.round(ys - d[1] * t).astype(int)
         ok = (X >= 0) & (X < w) & (Y >= 0) & (Y < h)
         zr = z0 + d[2] * t

@@ -9,7 +9,7 @@
       e  evening, sun from the right: the same to the left, longer
       n  night: contact shade only; pools of warm light round every lamp, fire, lit window and string bulb, wider
          across the plane than up and down it
-  assets/town/light/pal_lut.png   colour -> palette index (32 levels per channel; x = r*32 + g, y = b)
+  assets/town/light/pal_lut.png   colour -> palette index (64 levels per channel; x = r*64 + g, y = b)
   assets/town/light/pal_fx.png    per palette colour (row): [shade 2, shade 1, as is, sunlit, warm 1, warm 2] by the
                                   colour-theory move of bake_light2 (cool + greyer in shade, warm + richer in light),
                                   snapped back onto the palette
@@ -37,14 +37,23 @@ def pal_tables():
     labs = np.concatenate(RLAB)
     rid = np.concatenate([[i] * len(r) for i, r in enumerate(RAMPS)])
     n = len(cols)
-    lut = np.zeros((32, 32 * 32), np.uint8)
-    q = (np.arange(32) * 8 + 4).astype(float)
+    # 64 levels a channel (x = r * 64 + g, y = b); every palette colour owns its own bin exactly (the 32-level table
+    # took each bin's CENTRE's nearest colour, which sent 55 of the 73 palette colours to a neighbour: speckle)
+    Q = 64
+    lut = np.zeros((Q, Q * Q), np.uint8)
+    q = (np.arange(Q) * (256 // Q) + (128 // Q)).astype(float)
     R, Gg, B = np.meshgrid(q, q, q, indexing="ij")
     grid = np.stack([R, Gg, B], -1).reshape(-1, 3)
-    d = ((grid[:, None, :] - cols[None].astype(float)) ** 2).sum(-1).argmin(1).reshape(32, 32, 32)
-    for r in range(32):
-        for g in range(32):
-            lut[:, r * 32 + g] = d[r, g, :]
+    d = ((grid[:, None, :] - cols[None].astype(float)) ** 2).sum(-1).argmin(1).reshape(Q, Q, Q)
+    for i, c in enumerate(cols):
+        b_ = (c.astype(int) * Q) // 256
+        d[b_[0], b_[1], b_[2]] = i
+    for r in range(Q):
+        for g in range(Q):
+            lut[:, r * Q + g] = d[r, g, :]
+    for i, c in enumerate(cols):
+        b_ = (c.astype(int) * Q) // 256
+        assert lut[b_[2], b_[0] * Q + b_[1]] == i, "palette colours share a bin"
     Image.fromarray(lut).save(os.path.join(ROOT, "assets/town/light/pal_lut.png"))
     looks = [(-1.0, 285.0, 17.0, 0.45), (-1.0, 285.0, 9.0, 0.35), (0.0, 0, 0, 0), (1.0, 80.0, 8.0, 0.35),
              (1.0, 55.0, 14.0, 0.55), (1.0, 55.0, 24.0, 0.7)]

@@ -49,8 +49,8 @@ void vertex() {
 	vec3 c = COLOR.rgb;
 	if (tip && pressed > 0.0) c = vec3(176.0, 195.0, 121.0) / 255.0;   // the tip catches the gust light: the leaf ramp's top step
 	if (lit_on > 0.5) {
-		ivec3 q = ivec3(clamp(floor(c * 255.0 / 8.0), 0.0, 31.0));
-		int idx = int(texelFetch(pal_lut, ivec2(q.r * 32 + q.g, q.b), 0).r * 255.0 + 0.5);
+		ivec3 q = ivec3(clamp(floor(c * 255.0 / 4.0 + 0.001), 0.0, 63.0));
+		int idx = int(texelFetch(pal_lut, ivec2(q.r * 64 + q.g, q.b), 0).r * 255.0 + 0.5);
 		ivec2 gi = ivec2(floor((vec2(x, base) - gmap_org) / gmap_cell));
 		ivec2 gs = textureSize(gmap, 0);
 		vec4 L = (gi.x >= 0 && gi.y >= 0 && gi.x < gs.x && gi.y < gs.y) ? texelFetch(gmap, gi, 0) : vec4(0.0);
