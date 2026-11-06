@@ -10,7 +10,8 @@ extends Node2D
 ##     opaque pixel) is a post; the post's shadow runs away from the sun, as long as the post is tall over tan(sun
 ##     height), across the plane and into its depth (the street in front when the sun is behind the town). The caster's
 ##     footprint reaches back into the plane (buildings deep, trees round their trunk). Clipped to the ground band.
-##  2. everything standing is cleared from it (the ground's shadow lies under them, not on them)
+##  2. everything standing is cleared from it (the ground's shadow lies under them, not on them); and like 3. it only
+##     lands where there is ground or something standing (not on the far hills where the ground falls away)
 ##  3. standing things: each caster's silhouette slid down the sun's slope (lit.gd sun_dir) onto what stands beside it,
 ##     clipped at its foot, and NEVER on itself (the shader drops every texel inside its own unmoved silhouette): a
 ##     flat front cannot shade itself; its form shade is baked in its sprite (bake_light2.py)
@@ -49,17 +50,26 @@ void fragment() {
 	COLOR = vec4(c.rgb, texture(TEXTURE, UV).a > 0.5 ? c.a : 0.0);
 }
 """
+const CLEARB_SH := """
+shader_type canvas_item;
+render_mode blend_mul;
+// clears the ground plane's shade (blue) under a standing silhouette, leaves red and green
+void fragment() {
+	float a = texture(TEXTURE, UV).a > 0.5 ? 1.0 : 0.0;
+	COLOR = vec4(1.0, 1.0, 1.0 - a, 1.0);
+}
+"""
 const COMP_SH := """
 shader_type canvas_item;
 render_mode blend_mul;
 // the mask as light: 0 = in the sun, 1 = only the sky. TEXTURE: the ground / deep / cloud shade (alpha);
-// st: the standing shade (red) where something solid stands (green)
+// st: the standing shade (red) and the ground plane's shade (blue), only where something solid is (green)
 uniform vec3 sky = vec3(0.6, 0.66, 0.9);
 uniform vec3 sunc = vec3(1.0);
 uniform sampler2D st : filter_nearest;
 void fragment() {
 	vec4 b = texture(st, UV);
-	float a = max(texture(TEXTURE, UV).a, b.r * b.g);
+	float a = max(texture(TEXTURE, UV).a, max(b.r, b.b) * b.g);
 	COLOR = vec4(mix(sunc, sky, a), 1.0);
 }
 """
@@ -92,9 +102,10 @@ void fragment() {
 var arena
 var level
 var sv: SubViewport
-var sv2: SubViewport               # the standing shade: red = slid silhouettes, green = what can receive them
+var sv2: SubViewport               # red = slid silhouettes, blue = shadows on the ground plane, green = what can receive them
 var d_rcv: Node2D
-var d_ground: Node2D
+var d_ground: Node2D              # sv: the level's deep shade
+var d_gtri: Node2D                # sv2 blue: the casters' shadows on the ground plane
 var d_clear: Node2D
 var d_sun: Node2D
 var d_cloud: Node2D
@@ -149,9 +160,12 @@ func _init(a, lv) -> void:
 	material = comp_mat
 	sv = _vp()
 	sv2 = _vp()
-	d_ground = _node(_draw_ground, null)
-	d_clear = _node(_draw_clear, _mat(CUT_SH))
+	d_ground = _node(func(): level.shade_extra(d_ground), null)
 	d_rcv = _node(_draw_rcv, _mat(SOLID_SH), sv2)
+	var ga := CanvasItemMaterial.new()
+	ga.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	d_gtri = _node(_draw_ground, ga, sv2)
+	d_clear = _node(_draw_clear, _mat(CLEARB_SH), sv2)
 	d_sun = _node(_draw_sun, _mat(SELF_SH), sv2)
 	var c2 := _node(_draw_cut2, _mat(CUT_SH), sv2)
 	c2.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
@@ -191,7 +205,6 @@ func redraw() -> void:
 	queue_redraw()
 	for n in sv2.get_children(): n.queue_redraw()
 	d_ground.queue_redraw()
-	d_clear.queue_redraw()
 	d_sun.queue_redraw()
 	d_cloud.queue_redraw()
 	d_cut.queue_redraw()
@@ -288,12 +301,11 @@ func _draw_ground() -> void:
 			if tri.size() >= 3:
 				var cols := PackedColorArray()
 				cols.resize(tri.size())
-				cols.fill(Color(0, 0, 0, 1))
+				cols.fill(Color(0, 0, 1, 1))
 				var idx := PackedInt32Array()
 				idx.resize(tri.size())
 				for i in tri.size(): idx[i] = i
-				RenderingServer.canvas_item_add_triangle_array(d_ground.get_canvas_item(), idx, tri, cols)
-	level.shade_extra(d_ground)
+				RenderingServer.canvas_item_add_triangle_array(d_gtri.get_canvas_item(), idx, tri, cols)
 
 ## one caster's shadow on the ground plane as triangles: a post per 4 texture px of its silhouette
 func _ground_tris(o: Array, b: Rect2, away: Vector2, cot: float, reach: float, raise: float) -> PackedVector2Array:

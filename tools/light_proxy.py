@@ -10,7 +10,8 @@ its walls, roof planes, eaves, chimneys as planes with a depth), never guessed f
   4. colour: the level moves each pixel along ITS material ramp (never "the nearest colour"): the ramps are cool and
      greyer at the dark end and warm and richer at the light end (tools/town_palette2.py), so a step is a move in
      value, hue, saturation and temperature together. Off-palette colours: none.
-Light levels (steps along the ramp, relative to the art as drawn, which is the noon look):
+Light levels (relative to the art as drawn, which is the noon look), each a change of lightness (DL, Lab L) taken as
+the nearest step of the pixel's own ramp:
   sunlit, facing the sun squarely (N.L > .75)  +2
   sunlit (N.L > .3)                            +1
   sunlit, glancing                             0 (the evening's orange is the ambient's, lit.gd: not a second step)
@@ -40,7 +41,7 @@ def sun3(h):
     day = np.clip((h % 24.0 - 5.5) / 13.5, 0.0, 1.0)
     ang = day * np.pi
     el = np.radians(16.0 + 46.0 * np.sin(ang))
-    hz = np.array([-np.cos(ang), 0.45 + 0.25 * np.sin(ang)]); hz /= np.linalg.norm(hz)
+    hz = np.array([-np.cos(ang), -0.6 + 1.0 * np.sin(ang)]); hz /= np.linalg.norm(hz)
     return np.array([hz[0] * np.cos(el), np.sin(el), hz[1] * np.cos(el)])
 
 
@@ -127,6 +128,14 @@ def levels_sun(N, Z, T, m, solid, h, evening, R=None):
     return out, sun, ys, xs, ndl
 
 
+# a light level as a change of lightness (Lab L): the same for every material, so a pale plaster in shade drops as far
+# as a red roof does (its ramp's steps are closer together); the step taken is the one in the pixel's OWN ramp nearest
+# to that lightness (brightness order, never another material)
+DL = {3: 21.0, 2: 14.0, 1: 7.0, 0: 0.0, -1: -11.0, -2: -22.0, -3: -30.0}
+from skimage.color import rgb2lab
+RL = [rgb2lab(r[None].astype(float) / 255.0)[0][:, 0] for r in RAMPS]
+
+
 def recolor(nat, m, lv, extra=None):
     out = nat.copy()
     ys, xs = np.nonzero(m)
@@ -135,7 +144,11 @@ def recolor(nat, m, lv, extra=None):
         c = tuple(int(v) for v in nat[y, x, :3])
         if c not in INDEX: miss += 1; continue
         ri, si = INDEX[c]
-        s2 = int(np.clip(si + lv[y, x] + (0 if extra is None else extra[y, x]), 0, len(RAMPS[ri]) - 1))
+        k = int(np.clip(lv[y, x] + (0 if extra is None else extra[y, x]), -3, 3))
+        if k == 0: continue
+        s2 = int(np.abs(RL[ri] - (RL[ri][si] + DL[k])).argmin())
+        if k > 0: s2 = max(s2, min(si + 1, len(RL[ri]) - 1))      # a step of light always shows
+        else: s2 = min(s2, max(si - 1, 0))
         out[y, x, :3] = RAMPS[ri][s2]
     return out, miss
 
@@ -164,7 +177,7 @@ def bake(k, preview=None, lights=None, box=None):
     solid = (pid >= 0) & m
     out = {}
     R = relief_map(nat, P, pid)
-    for tag, h in (("m", 8.0), ("e", 17.0)):
+    for tag, h in (("m", 7.5), ("e", 17.5)):
         lv, _, _, _, _ = levels_sun(N, Z, T, m & (pid >= 0), solid, h, tag == "e", R)
         img, miss = recolor(nat, m & (pid >= 0), lv)
         out[tag] = img
@@ -202,7 +215,7 @@ def bake_night(nat, m, pid, N, Z, T, solid, lights, box):
         face = np.clip((n * v).sum(-1), 0, 1)
         if kind == "win": face = np.maximum(face, 0.6)               # a window lights its own frame and the wall round it
         fall = np.clip(1.0 - dist / reach, 0, 1) ** 1.5
-        add += la * face * fall * (1.2 if kind == "win" else 1.6)
+        add += la * face * fall * (0.5 if kind == "win" else 1.6)
     step = np.where(add > 1.1, 3, np.where(add > 0.55, 2, np.where(add > 0.18, 1, 0)))
     lv[ys, xs] += step
     img, miss = recolor(nat, m & (pid >= 0), lv)
