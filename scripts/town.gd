@@ -77,6 +77,9 @@ var near_door = null
 var kind := "town"
 var lit                       # lit.gd: shade, ambient, lights, hall windows, fog (drawLighting)
 var hx := {}
+## the pixel3d buildings stand ON the floor (owner 2026-11-07: "밑바닥 기준을 바닥 면적으로 삼아야지"): set down this many
+## px so the front of the footprint lies inside the ground band, not on its back edge
+const SETDOWN := {"g_cottage": 14.0, "g_well": 12.0}
 var sh_tex := {}                 # baked ground shadows under the pixel3d buildings: "<k>" / "<k>_m" / "<k>_e" (tools/pixel3d)
 var lit_tex := {}                # sun-side versions: "<k>_m" / "<k>_e"                     # pre-scaled (BS) textures, drawn 1:1
 var win_sv: SubViewport         # the hall windows drawn apart (LIT.wc): the heroine cut out of them
@@ -1183,7 +1186,7 @@ func _spr(k: String, x: float, y_bottom: float, sink := 0.0, flip := false, ci: 
 		h = im.get_height()
 	var lv := sun_side()
 	if lv != "" and lit_tex.has(k + lv): im = lit_tex[k + lv]
-	var y := y_bottom - h + sink * PK * s
+	var y := y_bottom - h + sink * PK * s + float(SETDOWN.get(k, 0.0))
 	# the ground shadow the building casts at this hour (owner 2026-11-07: "허공에 뜬거 수정"), drawn under it; its
 	# canvas starts 24 px left of the sprite (the render's margin) and at the sprite's top
 	if not flip and sh_tex.has(k + lv):
