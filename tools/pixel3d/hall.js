@@ -77,6 +77,23 @@ const HALL = (function () {
       g.computeVertexNormals();
       return add(g, mat, layer);
     }
+    // a curved shell: F(u, v) -> [x, y, z] on its top surface (u across, v along, both 0..1), sampled at us / vs,
+    // with a skirt dropped by D on every edge so it reads as a solid piece (owner 2026-11-07: tiles must bulge,
+    // "볼록함 ... 입체감", not a flat slab with texture)
+    function shell(layer, mat, F, us, vs, D) {
+      const P = us.map(u => vs.map(v => F(u, v)));
+      const tri = [], quad = (a, b, c, d) => tri.push(...a, ...b, ...c, ...a, ...c, ...d);
+      const dn = (p) => [p[0] + D[0], p[1] + D[1], p[2] + D[2]];
+      for (let i = 0; i < us.length - 1; i++) for (let j = 0; j < vs.length - 1; j++) quad(P[i][j], P[i + 1][j], P[i + 1][j + 1], P[i][j + 1]);
+      for (let i = 0; i < us.length - 1; i++) { quad(dn(P[i][0]), dn(P[i + 1][0]), P[i + 1][0], P[i][0]);
+        const L = vs.length - 1; quad(P[i][L], P[i + 1][L], dn(P[i + 1][L]), dn(P[i][L])); }
+      for (let j = 0; j < vs.length - 1; j++) { quad(P[0][j], P[0][j + 1], dn(P[0][j + 1]), dn(P[0][j]));
+        const L = us.length - 1; quad(dn(P[L][j]), dn(P[L][j + 1]), P[L][j + 1], P[L][j]); }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.Float32BufferAttribute(tri, 3));
+      g.computeVertexNormals();
+      return add(g, mat, layer);
+    }
     const mirror = (x) => W - x;
 
     // ---- ground and plinth
@@ -179,6 +196,10 @@ const HALL = (function () {
       add(g, "roofBase", "roof");
       // the eave board along the front edge
       box("roof", "fascia", fx(10), fx(140), 166, 170, ZE - 6, ZE + 1.5);
+      // the ridge cap: a half-round of tiles along the ridge (owner 2026-11-07: the roof needs body)
+      { const xa = fx(54.5), xb = fx(218);
+        shell("tiles", "tile", (u, v) => { const th = Math.PI * u; return [xa + (xb - xa) * v, yr + 2.6 * Math.sin(th), ZR + 3.0 * Math.cos(th)]; },
+              [0, 0.17, 0.33, 0.5, 0.67, 0.83, 1], [0, 1], [0, -2, 0]); }
       // tiles: five courses, staggered, joints leaning with the hip, each course's butt lifted over the one below
       const courses = [81, 98, 115, 132, 149, 166];
       const slopeN = new THREE.Vector3(0, ZE - ZR, yr - ye).normalize();   // the slope's outward normal: up and toward the viewer
@@ -207,16 +228,15 @@ const HALL = (function () {
           const lt = 0.6 + dz, lq = 2.6 + dz, lm = 4.4 + dz, lb = 2.8 + dz, fq = 0.16, f = 0.66;
           const rq = rt + fq * (rb - rt), xq0 = xt0 + fq * (xb0 - xt0), xq1 = xt1 + fq * (xb1 - xt1);
           const rm = rt + f * (rb - rt), xm0 = xt0 + f * (xb0 - xt0), xm1 = xt1 + f * (xb1 - xt1);
-          const seg = (xa0, xa1, ra, la, xc0, xc1, rc, lc) => {     // a: lower edge, c: upper edge
-            const v = [onSlope(xa0, ra), onSlope(xa1, ra), onSlope(xc1, rc), onSlope(xc0, rc)];
-            const fr = [v[0].clone().addScaledVector(slopeN, la), v[1].clone().addScaledVector(slopeN, la),
-                        v[2].clone().addScaledVector(slopeN, lc), v[3].clone().addScaledVector(slopeN, lc)];
-            const q = side ? [fr[1], fr[0], fr[3], fr[2], v[1], v[0], v[3], v[2]] : [...fr, ...v];
-            hexa("tiles", tmat, q.map(p => [p.x, p.y, p.z]));
+          // one curved tile: along the slope the lip / body / rolled foot profile, across it a bulge (higher in the
+          // middle), so the light turns over each tile instead of lying flat on it
+          const prof = (v) => v < fq ? lt + (lq - lt) * v / fq : v < f ? lq + (lm - lq) * (v - fq) / (f - fq) : lm + (lb - lm) * (v - f) / (1 - f);
+          const F = (u, v) => {
+            const x = (xt0 + u * (xt1 - xt0)) * (1 - v) + (xb0 + u * (xb1 - xb0)) * v, row = rt + (rb - rt) * v;
+            const p = onSlope(x, row).addScaledVector(slopeN, prof(v) + 1.6 * Math.sin(Math.PI * u));
+            return [p.x, p.y, p.z];
           };
-          seg(xq0, xq1, rq, lq, xt0, xt1, rt, lt);
-          seg(xm0, xm1, rm, lm, xq0, xq1, rq, lq);
-          seg(xb0, xb1, rb, lb, xm0, xm1, rm, lm);
+          shell("tiles", tmat, F, [0, 0.15, 0.35, 0.5, 0.65, 0.85, 1], [0, fq, 0.4, f, 0.83, 1], [-slopeN.x * 2, -slopeN.y * 2, -slopeN.z * 2]);
         }
       }
       // chimney behind the ridge-side of the slope
@@ -323,30 +343,30 @@ const HALL = (function () {
     const ZV0 = 14, ZV1 = 22;
     for (const s of [-1, 1]) {
       const xe = 218 + s * 112, re = 28 + 112;
-      bar("verge", "verge", 218, 28 + 6, xe, re + 6, 12, ZV0, ZV1);
+      bar("verge", "roofBase", 218, 28 + 6, xe, re + 6, 12, ZV0, ZV1 - 1);                // the board under the tiles
       bar("verge", "fascia", 218, 28 + 14, xe, re + 14, 4, ZV0 - 1, ZV1 - 0.5);
-      // the verge band itself: a lit top lip and the tile joints crossing it every few cells (short strokes, not a chain)
-      bar("verge", "tileLt", 218 + s * 2, 28 + 3, xe, re + 1, 2, ZV1 - 0.5, ZV1 + 0.2);
-      for (let i = 1, n = 14; i < n; i++) {
-        const t = i / n, px = 218 + (xe - 218) * t, pr = 28 + (re - 28) * t;
-        bar("verge", "roofBase", px, pr + 3, px + s * 3, pr + 10, 2, ZV1 - 0.5, ZV1 + 0.4);
+      // the verge: a run of rolled tiles down the slope, each one round across the band (it bulges toward the
+      // viewer in the middle) and lifting a little toward its lower end where it laps the next
+      for (let i = 0, n = 13; i < n; i++) {
+        const t0 = i / n, t1 = (i + 1) / n - 0.012;
+        const hh = Math.abs(Math.sin((i + 3) * 9.137 + s * 3.3) * 43758.5453) % 1;
+        const m = hh < 0.25 ? "tileDk" : hh > 0.85 ? "tileLt" : "tile";
+        const F = (u, v) => {
+          const t = t0 + (t1 - t0) * v, x = 218 + (xe - 218) * t, row = 28 + (re - 28) * t + 2 + 11 * u;
+          const z = ZV1 - 1 + 3.2 * Math.sin(Math.PI * u) + 0.9 * v;
+          return [x, Y(row, ZV1) + K * (z - ZV1) * 0, z];
+        };
+        shell("verge", m, F, [0, 0.2, 0.4, 0.6, 0.8, 1], [0, 0.5, 1], [0, 0, -2]);
       }
-      // the gable roof behind the verge (owner 2026-11-07: "윗지붕도 너무 매끈"): laid in rows of tiles running down
-      // the slope, back to the main ridge; each row its own piece with a joint, its front edge lifted so it catches
-      // the light, rows a shade apart now and then
-      hexa("verge", "roofBase", (() => { const a = [218, Y(28, ZV1) - 1, ZV0], b = [xe, Y(re, ZV1) - 1, ZV0];
-        return s < 0 ? [a, b, [b[0], b[1], -40], [a[0], a[1], -40], [a[0], a[1] - 6, ZV0], [b[0], b[1] - 6, ZV0], [b[0], b[1] - 6, -40], [a[0], a[1] - 6, -40]]
-                     : [b, a, [a[0], a[1], -40], [b[0], b[1], -40], [b[0], b[1] - 6, ZV0], [a[0], a[1] - 6, ZV0], [a[0], a[1] - 6, -40], [b[0], b[1] - 6, -40]]; })());
+      // the gable roof behind the verge: rows of tiles down the slope back to the main ridge, each row rounded
+      // across its width so the rows read as rolls, not stripes
+      const ya = Y(28, ZV1), yb = Y(re, ZV1);
       for (let k = 0, z0 = ZV0; z0 > -40; k++, z0 -= 9) {
-        const z1 = Math.max(-40, z0 - 8);
+        const z1 = Math.max(-40, z0 - 8.4);
         const hh = Math.abs(Math.sin((k + 5) * 7.77 + s * 1.9) * 43758.5453) % 1;
         const m = hh < 0.25 ? "tileDk" : hh > 0.85 ? "tileLt" : "tile";
-        const ya = Y(28, ZV1), yb = Y(re, ZV1);
-        const top = (x, y, z, lift) => [x, y + lift, z];
-        const A0 = top(218, ya, z0, 0.9), B0 = top(xe, yb, z0, 0.9), A1 = top(218, ya, z1, 0), B1 = top(xe, yb, z1, 0);
-        const dn = (p) => [p[0], p[1] - 3, p[2]];
-        const q = s < 0 ? [A0, B0, B1, A1, dn(A0), dn(B0), dn(B1), dn(A1)] : [B0, A0, A1, B1, dn(B0), dn(A0), dn(A1), dn(B1)];
-        hexa("verge", m, q);
+        const F = (u, v) => [218 + (xe - 218) * v, ya + (yb - ya) * v - 1 + 1.6 * Math.sin(Math.PI * u), z0 + (z1 - z0) * u];
+        shell("verge", m, F, [0, 0.25, 0.5, 0.75, 1], [0, 0.25, 0.5, 0.75, 1], [0, -3, 0]);
       }
     }
     // the finial on the apex
