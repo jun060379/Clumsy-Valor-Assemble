@@ -10,7 +10,7 @@ const BARREL = (function () {
   const W = DIM[0], H = DIM[1] + 8, B0 = DIM[1], K = 0.12, TOP = 4;
   const Y = (row, z) => B0 + K * z - row;
   const RAMP = { red: 0, wood: 1, ochre: 2, cream: 3, leaf: 4, green: 5, blue: 6, violet: 7, stone: 8, iron: 9 };
-  const MAT = { sand: ["ochre", 5], stave: ["wood", 5], staveLt: ["wood", 6], gap: ["wood", 2], hoop: ["iron", 3], head: ["wood", 6] };
+  const MAT = { sand: ["ochre", 5], stave: ["wood", 5], staveLt: ["wood", 6], gap: ["wood", 2], hoop: ["iron", 5], hoopDk: ["iron", 3], head: ["wood", 6] };
   const LAYERS = ["ground", "barrel"];
 
   function build(THREE) {
@@ -23,8 +23,12 @@ const BARREL = (function () {
     const N = 10, gap = 0.028;
     for (let i = 0; i < N; i++) { const a0 = i / N * Math.PI * 2 + gap / 2, len = Math.PI * 2 / N - gap;
       const g = new THREE.LatheGeometry(prof(0), 4, a0, len); const m = add(g, i % 4 === 1 ? "staveLt" : "stave", "barrel"); m.position.set(CX, 0, CZ); }
-    for (const t of [0.08, 0.3, 0.7, 0.92]) { const g = new THREE.TorusGeometry(rAt(t) + 0.5, 1.3, 6, 32); const m = add(g, "hoop", "barrel");
-      m.rotation.x = Math.PI / 2; m.position.set(CX, HT * t, CZ); m.scale.set(1, 1, 1.2); }
+    // the hoops (owner 2026-11-07: "통 테 금속으로"): flat iron bands round the staves, a bright worn edge along the top
+    // of each, a dark one under it - metal, not wood
+    const BH = Math.max(4, Math.round(HT * 0.085));                     // the band's height, as the reference's
+    for (const t of [0.09, 0.3, 0.7, 0.91]) { const r = rAt(t) + 1.4, y = HT * t;
+      { const g = new THREE.CylinderGeometry(r, r, BH, 40, 1, false); const m = add(g, "hoop", "barrel"); m.position.set(CX, y, CZ); }
+      { const g = new THREE.CylinderGeometry(r - 1.2, r - 1.2, BH + 0.6, 40, 1, false); const m = add(g, "hoopDk", "barrel"); m.position.set(CX, y, CZ); } }
     { const g = new THREE.CircleGeometry(rAt(1) - 2.5, 24); const m = add(g, "head", "barrel"); m.rotation.x = -Math.PI / 2; m.position.set(CX, HT - 1.5, CZ); }
     return parts;
   }
