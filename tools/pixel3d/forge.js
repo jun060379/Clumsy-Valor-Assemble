@@ -103,6 +103,9 @@ const FORGE = (function () {
         }
       }
     }
+    // how the two roofs meet (owner 2026-11-07, picked from three drawn ways: "2번" = B, the left roof lower, tucked
+    // under the end of the main roof)
+    const ROOFV = "B";
     const rowsFrom = (r0, r1, h) => { const r = []; for (let y = r0; y < r1; y += h) r.push(y); r.push(r1); return r; };
 
     // ---- the porch's back wall: planks, deep under the roof (it lives in the roof's shade most of the day)
@@ -168,7 +171,8 @@ const FORGE = (function () {
     // ---- the porch: roof on posts with knee braces over a low stone wall, the door set in a stone wall at the right
     const ZP = 9;                                                                    // posts close under the eave (Z 12)
     for (const [a, b] of [[115, 122], [194, 202], [265, 273]]) box("porch", "timber", a, b, 79, 128, ZP - 4, ZP);
-    box("porch", "timber", 2, 284, 75, 80, ZP - 4, ZP + 0.5);                     // the beam under the eave
+    box("porch", "timber", ROOFV === "B" ? 96 : 2, 284, 75, 80, ZP - 4, ZP + 0.5);   // the beam under the eave
+    if (ROOFV === "B") box("porch", "timber", 2, 108, 91, 96, ZP - 4, ZP + 0.5);     // the lower roof's own eave beam
     for (const [px0, px1] of [[115, 122], [194, 202], [265, 273]]) {             // knee braces, 1:1
       if (px0 > 110) bar("porch", "timber", px0, 96, px0 - 14, 81, 4, ZP - 3.5, ZP - 0.5);
       if (px1 < 280) bar("porch", "timber", px1, 96, px1 + 14, 81, 4, ZP - 3.5, ZP - 0.5);
@@ -257,11 +261,10 @@ const FORGE = (function () {
     // how the two roofs meet (owner 2026-11-07, "우측 건물이랑 좌측 건물이랑 지붕을 ... 말로 설명하기도 힘들다"): three ways
     // shown side by side for the owner to pick - A: one roof over both; B: the left one lower, tucked under the main
     // roof's end; C: the left one a front gable, open, its ridge running back into the main roof
-    const ROOFV = "A";
     if (ROOFV === "A") tileRoof(2, 287, 72, 25, 12, -40, -80, true, true);
     else {
       tileRoof(96, 287, 72, 25, 12, -40, -80, true, true);
-      if (ROOFV === "B") tileRoof(2, 110, 86, 50, 14, -36, -80, true, false);
+      if (ROOFV === "B") tileRoof(2, 106, 87, 52, 13, -34, -80, true, false);
       else {
         // an open front gable: apex x 51 row 34, the verges down to rows 86 at x 0 and 102; tiles laid down each verge,
         // the roof plane running back into the main roof; a tie beam and a king post in the open end
@@ -292,8 +295,9 @@ const FORGE = (function () {
     // 공간에 화로를 박고 그렇게 지붕을 이어서 생긴 공간을 작업 공간으로"): no walls - the main roof runs on to the left
     // end on the eave beam and a corner post; the hearth and its stack stand at the back of it; the floor in front is
     // the working space: an anvil on its block, a quench tub, coal by the hearth, a rack of tools
-    box("porch", "timber", 4, 11, 79, 128, ZP - 4, ZP);
-    bar("porch", "timber", 11, 96, 25, 81, 4, ZP - 3.5, ZP - 0.5);
+    const LT = ROOFV === "B" ? 95 : 79;                                             // the left post up to its eave beam
+    box("porch", "timber", 4, 11, LT, 128, ZP - 4, ZP);
+    bar("porch", "timber", 11, LT + 17, 25, LT + 2, 4, ZP - 3.5, ZP - 0.5);
     courses("stone wall", [128, 136, 145], () => [0, 16], ZP + 3, { w: 8, gx: 0, gr: 128, ch: 8 });
     // the mouth stays clear (x 46..88): the anvil on its block to its left, the quench tub to its right
     box("work", "timber", 16, 40, 132, 145, 2, 10);                                    // the anvil's block
