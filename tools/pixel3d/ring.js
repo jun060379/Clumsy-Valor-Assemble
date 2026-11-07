@@ -34,9 +34,9 @@ const RING = (function () {
       }
       g.computeVertexNormals(); const m = add(g, mat, "stones"); m.scale.set(sx, sy, sz); m.rotation.y = rot; m.position.set(x, y, z);
     };
-    for (let i = 0; i < 12; i++) {
-      const a = i / 12 * Math.PI * 2 + Math.PI / 2, r = 42;
-      rock(CX + Math.cos(a) * r, 3.4, CZ + Math.sin(a) * r * 0.75, 11 + rnd() * 3, 13 + rnd() * 3, 9 + rnd() * 2, -a + rnd() * 0.6, rnd() < 0.3 ? "stoneLt" : "stone");
+    for (let i = 0; i < 14; i++) {                                   // close enough that each stone meets the next
+      const a = i / 14 * Math.PI * 2 + Math.PI / 2, r = 42;
+      rock(CX + Math.cos(a) * r, 3.4, CZ + Math.sin(a) * r * 0.75, 14 + rnd() * 2, 13 + rnd() * 3, 9 + rnd() * 2, -a + rnd() * 0.6, rnd() < 0.3 ? "stoneLt" : "stone");
     }
     // the middle: a low heap of ash under the logs, charred chunks in it
     { const g = new THREE.SphereGeometry(1, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2); const m = add(g, "ash", "stones");
