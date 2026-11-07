@@ -9,7 +9,7 @@ const RING = (function () {
   const RAMP = { red: 0, wood: 1, ochre: 2, cream: 3, leaf: 4, green: 5, blue: 6, violet: 7, stone: 8, iron: 9 };
   const MAT = {
     sand: ["ochre", 5],
-    stone: ["cream", 3], stoneLt: ["cream", 4], log: ["wood", 4], logLt: ["wood", 5], ash: ["stone", 3],
+    stone: ["cream", 3], stoneLt: ["cream", 4], log: ["wood", 4], logLt: ["wood", 5], ash: ["stone", 5], char: ["stone", 2],
   };
   const LAYERS = ["ground", "stones", "logs"];
 
@@ -23,13 +23,27 @@ const RING = (function () {
 
     // ---- the hearth: ash on the ground inside the ring
     { const g = new THREE.CircleGeometry(30, 24); const m = add(g, "ash", "stones"); m.rotation.x = -Math.PI / 2; m.position.set(CX, 0.2, CZ); }
-    // ---- the stones: a ring of rounded field stones, each a little different
+    // ---- the stones (owner 2026-11-07: "돌 너무 둥글기만 한거랑 가운데 빈것만 어캐 해봐"): field stones, not balls - a
+    // few broad flat faces each, wider than tall, a flattish top, sat flat on the ground; one stands at the front middle so the ring has no gap
+    const rock = (x, y, z, sx, sy, sz, rot, mat) => {
+      const g = new THREE.IcosahedronGeometry(1, 0), pos = g.attributes.position, key = new Map();
+      for (let k = 0; k < pos.count; k++) {
+        const id = [pos.getX(k), pos.getY(k), pos.getZ(k)].map(v => v.toFixed(3)).join();
+        if (!key.has(id)) key.set(id, [0.8 + rnd() * 0.35, 0.8 + rnd() * 0.35, 0.8 + rnd() * 0.35]);
+        const [a, b, c] = key.get(id); pos.setXYZ(k, pos.getX(k) * a, Math.max(Math.min(pos.getY(k) * b, 0.55), -0.25), pos.getZ(k) * c);
+      }
+      g.computeVertexNormals(); const m = add(g, mat, "stones"); m.scale.set(sx, sy, sz); m.rotation.y = rot; m.position.set(x, y, z);
+    };
     for (let i = 0; i < 12; i++) {
-      const a = (i + 0.5) / 12 * Math.PI * 2, r = 42;
-      const g = new THREE.IcosahedronGeometry(1, 1); const m = add(g, rnd() < 0.3 ? "stoneLt" : "stone", "stones");
-      m.scale.set(11 + rnd() * 2, 6.5 + rnd() * 1.5, 8 + rnd() * 2);
-      m.position.set(CX + Math.cos(a) * r, 5, CZ + Math.sin(a) * r * 0.75); m.rotation.y = -a;
+      const a = i / 12 * Math.PI * 2 + Math.PI / 2, r = 42;
+      rock(CX + Math.cos(a) * r, 3.4, CZ + Math.sin(a) * r * 0.75, 11 + rnd() * 3, 13 + rnd() * 3, 9 + rnd() * 2, -a + rnd() * 0.6, rnd() < 0.3 ? "stoneLt" : "stone");
     }
+    // the middle: a low heap of ash under the logs, charred chunks in it
+    { const g = new THREE.SphereGeometry(1, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2); const m = add(g, "ash", "stones");
+      m.scale.set(24, 7, 16); m.position.set(CX, 0, CZ); }
+    for (let i = 0; i < 7; i++) { const a = rnd() * Math.PI * 2, d = rnd() * 16;
+      const g = new THREE.BoxGeometry(5 + rnd() * 3, 3, 3 + rnd() * 2); const m = add(g, "char", "stones");
+      m.position.set(CX + Math.cos(a) * d, 4 + rnd() * 2, CZ + Math.sin(a) * d * 0.7); m.rotation.set(rnd(), rnd() * 3, rnd()); }
     // ---- the logs (owner 2026-11-07: 엇갈린 장작): four lengths laid low across each other in a star, each resting on
     // the ones below at the middle and on the ground at its ends; cut ends a shade lighter
     for (let i = 0; i < 4; i++) {
