@@ -80,15 +80,16 @@ var hx := {}
 ## the pixel3d buildings stand ON the floor (owner 2026-11-07: "밑바닥 기준을 바닥 면적으로 삼아야지"): set down this many
 ## px so the front of the footprint lies inside the ground band, not on its back edge
 ## P3D[k] = [the sky rows above the reference's row 0 in px (FX anchored on the old sprite add it), set-down px]
-## (tools/export_pixel3d.py prints both; the set-down also covers the rows the render reaches below the reference)
+## (tools/export_pixel3d.py prints both; the set-down also covers the rows the render reaches below the reference;
+## the tents' pegs and the kiln's front are kept on/behind the stand line, owner 2026-11-08: "너무 앞으로 나와있음")
 const P3D := {"g_hall": [0.0, 0.0], "g_forge": [32.0, 14.0], "g_barn": [20.0, 14.0], "g_store": [20.0, 16.0],
-	"g_tentR": [48.0, 24.0], "g_tentL": [48.0, 24.0], "g_kiln": [16.0, 26.0], "q_fountain": [12.0, 14.0],
+	"g_tentR": [48.0, 10.0], "g_tentL": [48.0, 10.0], "g_kiln": [16.0, 14.0], "q_fountain": [12.0, 14.0],
 	"g_cottage": [20.0, 14.0], "g_well": [16.0, 14.0]}
 ## where the base of a pixel3d building meets the ground plane, px below the stand line (the P3D set-downs above are
 ## for 14); the plane's back edge is RAISE above the stand line (owner 2026-11-08: buildings behind the people, on the plane)
 var FOOT := 0.0
 func setdown(k: String) -> float:
-	if k == "g_hall": return 0.0          # the hall stands on its own plinth on the terrace paving
+	if k == "g_hall": return 8.0          # the hall on its own plinth on the terrace paving, a little forward (owner 2026-11-08)
 	return float(P3D[k][1]) - 14.0 + FOOT if P3D.has(k) else 0.0
 var sh_tex := {}                 # baked ground shadows under the pixel3d buildings: "<k>" / "<k>_m" / "<k>_e" (tools/pixel3d)
 var lit_tex := {}                # sun-side versions: "<k>_m" / "<k>_e"                     # pre-scaled (BS) textures, drawn 1:1
