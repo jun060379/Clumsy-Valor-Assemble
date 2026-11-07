@@ -1,0 +1,47 @@
+{
+ "round": 4,
+ "date": "2026-11-07",
+ "note": "noon (sun rule kept); clean slopes (1:1 verges, 2:1 braces, 1:2 hips and joints); tiles in three bands, some proud or sunk",
+ "files": [
+  "r4_hall.png"
+ ],
+ "refs": [
+  "assets/town/hx/g_cottage.png",
+  "assets/town/hx/g_store.png",
+  "assets/town/hx/g_well.png"
+ ],
+ "metrics": {
+  "files": {
+   "/home/claude/clumsy-valor-assemble/docs/work/pixel3d-hall/rounds/04/r4_hall.png": {
+    "orphans": 0,
+    "speckle": 0,
+    "outline_gaps": 0,
+    "thick_line": 835,
+    "semi_alpha": 0,
+    "colours": 30,
+    "off_palette": 3,
+    "size": "864x562"
+   }
+  },
+  "total": {
+   "orphans": 0,
+   "speckle": 0,
+   "outline_gaps": 0,
+   "thick_line": 835,
+   "semi_alpha": 0,
+   "off_palette": 3
+  }
+ },
+ "faults": 838,
+ "scores": {
+  "A": {
+   "ai": 6.0,
+   "fit": 5.0
+  },
+  "B": {
+   "ai": 6.0,
+   "fit": 5.0
+  },
+  "mean": 5.5
+ }
+}

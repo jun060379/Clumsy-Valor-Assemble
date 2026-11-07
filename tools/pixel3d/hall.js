@@ -14,7 +14,7 @@ const HALL = (function () {
   const MAT = {
     sand:    ["ochre", 5], stone: ["cream", 2], stoneLt: ["cream", 3], plaster: ["cream", 5],
     timber:  ["wood", 5],  frame: ["wood", 3], glass: ["ochre", 4], mullion: ["wood", 3],
-    roofBase: ["red", 0], tile: ["red", 2], verge: ["red", 2], fascia: ["wood", 1],
+    roofBase: ["red", 1], tile: ["red", 2], verge: ["red", 2], fascia: ["wood", 1],
     chimney: ["ochre", 1], chimCap: ["ochre", 4], chimTop: ["cream", 4],
     door:    ["wood", 3], doorGap: ["wood", 1], iron: ["iron", 2], sign: ["wood", 4], signRim: ["wood", 2],
     letter:  ["cream", 7], shield: ["cream", 3], finial: ["wood", 4], ball: ["ochre", 6],
@@ -95,8 +95,8 @@ const HALL = (function () {
         // upper band: short corner braces over the window's shoulders; lower band: a pitched brace over the window
         bar("timber", "timber", fx(a), 173, fx(a + 11), 184, 4, -2, 1.2);
         bar("timber", "timber", fx(b), 173, fx(b - 11), 184, 4, -2, 1.2);
-        bar("timber", "timber", fx(a), 230, fx(c), 211, 4, -2, 1.2);
-        bar("timber", "timber", fx(b), 230, fx(c), 211, 4, -2, 1.2);
+        bar("timber", "timber", fx(a), 222, fx(c), 211, 4, -2, 1.2);   // 2:1, a clean pixel step
+        bar("timber", "timber", fx(b), 222, fx(c), 211, 4, -2, 1.2);
         for (const [r0, r1] of [[179, 204], [225, 250]]) window_(fx(c) - 11, fx(c) + 11, r0, r1, 0);
         // the ground-floor windows of the wings have shutters, swung open against the wall
         for (const [sx0, sx1] of [[fx(c) - 17, fx(c) - 12], [fx(c) + 12, fx(c) + 17]]) box("windows", "shutter", sx0, sx1, 231, 250, 0, 1.2);
@@ -123,7 +123,7 @@ const HALL = (function () {
       const fx = side ? mirror : (x) => x;
       const P = (x, y, z) => [fx(x), y, z];
       // the roof body as one closed solid: front slope, hip end, back slope (the gable hides the inner end)
-      const e0 = P(12, ye, ZE), e1 = P(218, ye, ZE), r0 = P(62, yr, ZR), r1 = P(218, yr, ZR), b0 = P(12, ye, ZB), b1 = P(218, ye, ZB);   // runs on behind the gable to the middle
+      const e0 = P(12, ye, ZE), e1 = P(218, ye, ZE), r0 = P(54.5, yr, ZR), r1 = P(218, yr, ZR), b0 = P(12, ye, ZB), b1 = P(218, ye, ZB);   // runs on behind the gable to the middle
       const tri = [];
       const quad = (a, b, c, d) => tri.push(...a, ...b, ...c, ...a, ...c, ...d);
       const t3 = (a, b, c) => tri.push(...a, ...b, ...c);
@@ -139,21 +139,26 @@ const HALL = (function () {
       const courses = [81, 98, 115, 132, 149, 166];
       const slopeN = new THREE.Vector3(0, ZE - ZR, yr - ye).normalize();   // the slope's outward normal: up and toward the viewer
       const onSlope = (x, row) => { const u = (RE - row) / (RE - RR); return new THREE.Vector3(fx(x), ye + u * (yr - ye), ZE + u * (ZR - ZE)); };
-      const hipX = (row) => 12 + (RE - row) * 50 / (RE - RR);
+      const hipX = (row) => 12 + (RE - row) * 0.5;                    // the hip at 1:2
       for (let c = 0; c < 5; c++) {
         const rt = courses[c], rb = courses[c + 1] + 1.5;               // each course hangs 1.5 rows over the next
-        const lean = 0.35 * (rb - rt);
+        const lean = 0.5 * (rb - rt);                                   // joints at 1:2, like the hip
         for (let x = (c % 2 ? -11 : 0) + 4; x < 218; x += 22) {
           let xt0 = x + 0.8, xt1 = x + 21.2, xb0 = xt0 - lean, xb1 = xt1 - lean;
           const ht = hipX(rt), hb = hipX(rb);
           if (xt1 <= ht && xb1 <= hb) continue;
           xt0 = Math.max(xt0, ht); xb0 = Math.max(xb0, hb); // tiles stop where the gable covers them (its wall below the verge, the verge above): no tile pokes through
-          const cut = (row) => Math.max(142, Math.min(218, 218 - (row - 28) / 1.07 + 8));
+          const cut = (row) => Math.max(142, Math.min(218, 218 - (row - 28) + 8));
           xt1 = Math.min(Math.max(xt1, ht + 1), cut(rt)); xb1 = Math.min(Math.max(xb1, hb + 1), cut(rb));
           if (xt0 >= cut(rt) || xb0 >= cut(rb)) continue;
           // a tile in two bands: the upper rises out of the course (catches the light), the lower rolls down to its
           // butt (turns from the sun), the way the reference tiles are lit on top and dark at the foot
-          const lt = 1.0, lm = 4.4, lb = 3.0, f = 0.62;
+          // three bands: a steep lip that catches the light, the body, the foot rolled down into shade; some tiles sit a
+          // little proud or sunk (fixed per tile, not noise)
+          const hh = Math.abs(Math.sin((x + 7) * 12.9898 + c * 78.233) * 43758.5453) % 1;
+          const dz = hh > 0.85 ? 0.9 : hh < 0.12 ? -0.6 : 0.0;
+          const lt = 0.6 + dz, lq = 2.6 + dz, lm = 4.4 + dz, lb = 2.8 + dz, fq = 0.16, f = 0.66;
+          const rq = rt + fq * (rb - rt), xq0 = xt0 + fq * (xb0 - xt0), xq1 = xt1 + fq * (xb1 - xt1);
           const rm = rt + f * (rb - rt), xm0 = xt0 + f * (xb0 - xt0), xm1 = xt1 + f * (xb1 - xt1);
           const seg = (xa0, xa1, ra, la, xc0, xc1, rc, lc) => {     // a: lower edge, c: upper edge
             const v = [onSlope(xa0, ra), onSlope(xa1, ra), onSlope(xc1, rc), onSlope(xc0, rc)];
@@ -162,7 +167,8 @@ const HALL = (function () {
             const q = side ? [fr[1], fr[0], fr[3], fr[2], v[1], v[0], v[3], v[2]] : [...fr, ...v];
             hexa("tiles", "tile", q.map(p => [p.x, p.y, p.z]));
           };
-          seg(xm0, xm1, rm, lm, xt0, xt1, rt, lt);
+          seg(xq0, xq1, rq, lq, xt0, xt1, rt, lt);
+          seg(xm0, xm1, rm, lm, xq0, xq1, rq, lq);
           seg(xb0, xb1, rb, lb, xm0, xm1, rm, lm);
         }
       }
@@ -176,14 +182,14 @@ const HALL = (function () {
 
     // ---- the gable (front at Z 8)
     const ZG = 16;                                            // the gable stands out in front of the wing eaves (Z 12)
-    const vU = (x) => 40 + Math.abs(x - 218) * 1.05;          // the verge's underside, as a row
+    const vU = (x) => 40 + Math.abs(x - 218);                 // the verge's underside, as a row (1:1)          // the verge's underside, as a row
     slab("gable", "plaster", [[142, 264], [294, 264], [294, vU(294)], [218, 40], [142, vU(142)]], -40, ZG);
     for (const [a, b] of [[142, 150], [188, 195], [241, 248], [286, 294]]) {
       const top = Math.min(vU(a), vU(b)) - 2;
       box("gable timber", "timber", a, b, top, 264, ZG - 2, ZG + 1.5);
     }
     for (const [r0, r1] of [[104, 108], [136, 140], [176, 180], [258, 264]]) {
-      const half = (r0 - 40) / 1.05;
+      const half = r0 - 40;
       box("gable timber", "timber", Math.max(142, 218 - half), Math.min(294, 218 + half), r0, r1, ZG - 2, ZG + 1.5);
     }
     for (const [a, b] of [[150, 189], [195, 241], [247, 286]]) {
@@ -191,8 +197,8 @@ const HALL = (function () {
       bar("gable timber", "timber", b, 109, a, 135, 4, ZG - 2, ZG + 1.2);
     }
     for (const [a, b] of [[150, 189], [247, 286]]) {
-      bar("gable timber", "timber", a, 182, b, 224, 4, ZG - 2, ZG + 1.2);
-      bar("gable timber", "timber", b, 182, a, 224, 4, ZG - 2, ZG + 1.2);
+      bar("gable timber", "timber", a, 182, b, 182 + (b - a), 4, ZG - 2, ZG + 1.2);
+      bar("gable timber", "timber", b, 182, a, 182 + (b - a), 4, ZG - 2, ZG + 1.2);
     }
     for (const [x0, r0] of [[207, 80], [157, 150], [207, 150], [257, 150], [157, 227], [257, 227]]) window_(x0, x0 + 22, r0, r0 + 23, ZG);
 
@@ -248,7 +254,7 @@ const HALL = (function () {
     // the verges: two thick boards from the apex, an eave board under each, and the short gable roof behind them
     const ZV0 = 14, ZV1 = 22;
     for (const s of [-1, 1]) {
-      const xe = 218 + s * 112, re = 28 + 112 * 1.07;
+      const xe = 218 + s * 112, re = 28 + 112;
       bar("verge", "verge", 218, 28 + 6, xe, re + 6, 12, ZV0, ZV1);
       bar("verge", "fascia", 218, 28 + 14, xe, re + 14, 4, ZV0 - 1, ZV1 - 0.5);
       // the gable roof slope behind the verge
