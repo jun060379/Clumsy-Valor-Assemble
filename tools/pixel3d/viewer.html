@@ -104,7 +104,7 @@ for (const p of parts) { p.mesh.castShadow = p.mesh.receiveShadow = true; p.mesh
 
 // ---- material patterns ("텍스처"), drawn in code on each solid's own surface: each cell moves one step up or down its
 // own ramp (or, where plaster has fallen off, shows the brick under it); lines and blocks of 2+ cells only, no lone dots
-const PAT = { plaster: 1, timber: 2, door: 3, shutter: 3, stone: 4, stoneLt: 4, plinth: 7, chimney: 5, sand: 6 };
+const PAT = { tile: 8, tileDk: 8, tileLt: 8, plaster: 1, timber: 2, door: 3, shutter: 3, stone: 4, stoneLt: 4, plinth: 7, chimney: 5, sand: 6 };
 const patShader = `
   uniform int pat, brick; uniform vec3 size; varying vec3 lp, wp;
   float h(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
@@ -114,6 +114,12 @@ const patShader = `
     vec3 c = floor(wp + 0.0001);
     if (pat == 1) {                                         // plaster over brick
       if (brick == 2) {
+        // plaster: sparse trowel marks, short horizontal strokes one step down (3-6 cells, on a coarse grid: never dots)
+        vec2 g = floor(vec2(c.x / 9.0, c.y / 4.0));
+        if (h(g) > 0.55 && mod(c.y, 4.0) == 1.0) {
+          float sx = floor(h(g + 5.3) * 4.0), len = 3.0 + floor(h(g + 9.1) * 4.0), lx = c.x - g.x * 9.0;
+          if (lx >= sx && lx < sx + len) off = -1.0;
+        }
       } else if (brick == 0) {
         float row = floor(c.y / 4.0), sh = mod(row, 2.0) * 5.0;
         if (mod(c.y, 4.0) == 0.0 || mod(c.x + sh, 10.0) == 0.0) off = -1.0;   // faint joints, one step down
@@ -150,6 +156,10 @@ const patShader = `
       if (corner) { ro = 2.0; bo = 1.0; }                   // the round-off reads as the joint's dark
       else if (q.y > size.y - 2.0) off = 1.0;
       else if (q.y < 3.0) off = -1.0;
+    } else if (pat == 8) {                                  // tiles: a short scratch on some, along the slope (2-3 cells)
+      vec2 g = floor(vec2(c.x / 7.0, c.y / 5.0));
+      if (h(g + 2.7) > 0.8) { float lx = c.x - g.x * 7.0, ly = c.y - g.y * 5.0;
+        if (ly >= 1.0 && ly < 4.0 && lx == 2.0 + ly) off = -1.0; }
     } else if (pat == 5) {                                  // soot on the chimney's top courses
       if (c.y > 210.0) off = -1.0;
     } else if (pat == 6) {                                  // pebbles: small clumps here and there in the sand

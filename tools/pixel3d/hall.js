@@ -14,7 +14,7 @@ const HALL = (function () {
   const MAT = {
     sand:    ["ochre", 5], plinth: ["cream", 3], mortar2: ["wood", 2], crack: ["cream", 1], plinthHi: ["cream", 5], plinthLo: ["cream", 1], stone: ["cream", 2], stoneLt: ["cream", 3], plaster: ["cream", 6],
     timber:  ["wood", 5],  frame: ["wood", 3], glass: ["ochre", 4], mullion: ["wood", 3],
-    roofBase: ["red", 1], tile: ["red", 2], verge: ["red", 2], fascia: ["wood", 1],
+    roofBase: ["red", 1], tile: ["red", 2], tileDk: ["red", 1], tileLt: ["red", 3], verge: ["red", 2], fascia: ["wood", 1],
     chimney: ["ochre", 1], chimCap: ["wood", 5], chimTop: ["cream", 5],
     door:    ["wood", 3], doorGap: ["wood", 1], iron: ["iron", 2], sign: ["wood", 4], signRim: ["wood", 2],
     letter:  ["cream", 7], shield: ["cream", 3], finial: ["wood", 4], ball: ["ochre", 6],
@@ -201,6 +201,9 @@ const HALL = (function () {
           // little proud or sunk (fixed per tile, not noise)
           const hh = Math.abs(Math.sin((x + 7) * 12.9898 + c * 78.233) * 43758.5453) % 1;
           const dz = hh > 0.85 ? 0.9 : hh < 0.12 ? -0.6 : 0.0;
+          // whole tiles a shade apart (weathered, newer): one step down or up for the entire tile, never within it
+          const h2 = Math.abs(Math.sin((x + 3) * 4.1414 + c * 17.17) * 24634.6345) % 1;
+          const tmat = h2 < 0.2 ? "tileDk" : h2 > 0.88 ? "tileLt" : "tile";
           const lt = 0.6 + dz, lq = 2.6 + dz, lm = 4.4 + dz, lb = 2.8 + dz, fq = 0.16, f = 0.66;
           const rq = rt + fq * (rb - rt), xq0 = xt0 + fq * (xb0 - xt0), xq1 = xt1 + fq * (xb1 - xt1);
           const rm = rt + f * (rb - rt), xm0 = xt0 + f * (xb0 - xt0), xm1 = xt1 + f * (xb1 - xt1);
@@ -209,7 +212,7 @@ const HALL = (function () {
             const fr = [v[0].clone().addScaledVector(slopeN, la), v[1].clone().addScaledVector(slopeN, la),
                         v[2].clone().addScaledVector(slopeN, lc), v[3].clone().addScaledVector(slopeN, lc)];
             const q = side ? [fr[1], fr[0], fr[3], fr[2], v[1], v[0], v[3], v[2]] : [...fr, ...v];
-            hexa("tiles", "tile", q.map(p => [p.x, p.y, p.z]));
+            hexa("tiles", tmat, q.map(p => [p.x, p.y, p.z]));
           };
           seg(xq0, xq1, rq, lq, xt0, xt1, rt, lt);
           seg(xm0, xm1, rm, lm, xq0, xq1, rq, lq);
@@ -294,7 +297,7 @@ const HALL = (function () {
     // crack or a pit. Fixed seed.
     { let seed = 23;
       const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
-      for (const [x0s, x1s, r0, r1, zf] of [[182, 254, 262, 268, 22], [176, 260, 268, 274, 28], [170, 266, 274, 280, 34]]) {
+      for (const [x0s, x1s, r0, r1, zf] of [[182, 254, 264, 270, 22], [176, 260, 270, 276, 28], [170, 266, 276, 282, 34]]) {   // the lowest tread ends on the plinth's foot line (row 282)
         box("steps", "mortar2", x0s, x1s, r0, r1, -10, zf - 0.6);
         let x = x0s;
         while (x < x1s - 4) {
