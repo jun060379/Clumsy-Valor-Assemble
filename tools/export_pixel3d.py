@@ -44,4 +44,10 @@ for spec in sys.argv[2:]:
           out[r + 1 + i, c] = (38, 70, 76, max(al, int(out[r + 1 + i, c, 3])))
     if pad_l: out = np.concatenate([np.zeros((out.shape[0], pad_l, 4), np.uint8), out], 1)
     Image.fromarray(out).resize((out.shape[1] * 2, out.shape[0] * 2), Image.NEAREST).save(f"assets/town/shadow/{key}{suf}.png")
+  # night (viewer: the moon past 19:30): the sprite only - the ground keeps the noon contact shade, dimmed, in its map
+  import os
+  if os.path.exists(f"{S}/{n}_code_bB_21.png"):
+    im = Image.open(f"{S}/{n}_code_bB_21.png").convert("RGBA")
+    pad = Image.new("RGBA", (im.width, max(im.height, ch)), (0, 0, 0, 0)); pad.alpha_composite(im, (0, 0))
+    pad.crop((x0, 0, x0 + W, ch)).resize((W * 2, ch * 2), Image.NEAREST).save(f"assets/town/lit/{key}_n.png")
   print(key, "size", W * 2, ch * 2, "top_px", top * 2, "ext_px", (ch - top - Hh) * 2, "gap_cells", top + Hh - 1 - last)
