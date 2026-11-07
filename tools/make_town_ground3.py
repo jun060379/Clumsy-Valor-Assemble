@@ -117,12 +117,13 @@ def stone(curb=True):
     a = blank()
     rng = np.random.default_rng(21)
     STEPS, JOINT = [CREAM[0], CREAM[1], CREAM[2], CREAM[3]], STONE[6]
-    heights = [2, 2, 2, 2, 3, 3, 3, 3, 4]                      # courses, low at the back (sum 24; the curb takes 3)
+    heights = [2, 3, 3, 3, 3, 3, 3, 4]                         # courses, a little lower at the back (sum 24; the curb takes 3;
+                                                               # owner 2026-11-08: "돌은 너무 작아지는 게 가파른듯")
     r = 0
     for ci, h in enumerate(heights):
         x = -int(rng.integers(0, 8))
         while x < WC:
-            w = int(rng.integers(4, 8) if ci < 4 else rng.integers(6, 12))
+            w = int(rng.integers(6, 10) if ci < 3 else rng.integers(7, 12))
             tone = 1 + int(rng.random() < 0.25) - int(rng.random() < 0.15)    # each stone a step lighter or darker now and then
             for xx in range(max(0, x), min(WC, x + w)):
                 for rr in range(r, min(PR, r + h)):
