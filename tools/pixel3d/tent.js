@@ -122,7 +122,7 @@ const TENT = (function () {
     // frame - u along the ridge, v across it (toward its front-right side), y up - with both ends at right angles to
     // the ridge, then turned ANG about the vertical so the front end faces left-front and the ridge runs right and
     // back. Nothing sheared: every point goes through the same turn.
-    const ANG = 65 * Math.PI / 180, LR = 70, HW = 46, Hh = 82, CX = 60, CZ = 4;
+    const ANG = 65 * Math.PI / 180, LR = 70, HW = 46, Hh = 82, CX = 64, CZ = 4;
     const co = Math.cos(ANG), si = Math.sin(ANG);
     const T = (u, y, v) => V(CX + u * co + v * si, y, CZ - u * si + v * co);
     const A = T(0, Hh, 0), B = T(LR, Hh, 0);
@@ -153,15 +153,15 @@ const TENT = (function () {
       seg(T(u + o, Hh - 1, 3), T(u + o, Hh + 3, -3), ROPE, "rope");
     }
     seg(T(0, Hh + 1.5, 0), T(LR, Hh + 1.5, 0), 1.3, "pole");
-    for (const [u0, u1] of [[-1.8, -46], [LR + 1.8, LR + 46]]) {
-      const pg = T(u1, 0, 0);
-      seg(T(u0, Hh + 2, 0), pg.clone().add(V(0, 3, 0)), ROPE, "rope");
-      seg(pg.clone().add(V(0, -1, 0)), pg.clone().add(V(0, 6, 0)), 2.6, "peg");
+    // the guy lines (owner 2026-11-07: "말뚝이랑 텐트 줄 배치좀..."): from the top of each end's crossing a pair of lines
+    // splays out past the end's two foot corners to a peg each - clear of the door, all four pegs alike, the near
+    // front one standing where the reference has its lone stake
+    const PEG = (p) => { seg(p.clone().add(V(0, -1, 0)), p.clone().add(V(0, 10, 0)), 2.2, "peg");
+      seg(p.clone().add(V(-2.2, 7.5, 0)), p.clone().add(V(2.2, 7.5, 0)), ROPE, "rope"); };
+    for (const [u0, u1, vv] of [[-1.8, -20, 50], [LR + 1.8, LR + 12, 48]]) for (const sgn of [-1, 1]) {
+      const pg = T(u1, 0, sgn * vv); PEG(pg);
+      seg(T(u0, Hh + 2, 0), pg.clone().add(V(0, 7.5, 0)), ROPE, "rope");
     }
-    const stake = T(-22, 0, 30);
-    seg(stake.clone().add(V(0, -1, 0)), stake.clone().add(V(0, 18, 0)), 2.6, "pole");
-    seg(T(-1.8, Hh + 2, 0), stake.clone().add(V(0, 17, 0)), ROPE, "rope");
-    seg(stake.clone().add(V(-2.6, 16, 0)), stake.clone().add(V(2.6, 16, 0)), ROPE, "rope");
 
     if (MIRROR) {                                                    // reflect every part across the middle, keep faces outward
       const flip = new THREE.Matrix4().makeTranslation(W, 0, 0).multiply(new THREE.Matrix4().makeScale(-1, 1, 1));
