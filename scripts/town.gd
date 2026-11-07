@@ -1036,9 +1036,9 @@ func _shear(t: Texture2D, x0: float, x1: float, f: Callable, clip_h := -1.0) -> 
 
 ## ---------- ground plane (tools/make_town_ground2.py) ----------
 var RAISE := 12.0               # rows of the plane showing behind the stand line (+ DEEP)
-## extra depth of the plane behind the stand line (owner 2026-11-08: "지면 깊이를 더 늘려도 되긴할듯"; preview: ?deep20 / ?deep28):
+## extra depth of the plane behind the stand line (owner 2026-11-08: "한 30까지 해도 될듯 30으로"; ?deepN overrides, ?deep0 the old plane):
 ## the plane rows of the ground tiles are stretched back by this many rows
-var DEEP := 0
+var DEEP := 30
 # trodden paths (owner 2026-11-06: a lot of it is walked -- worn dirt before every door and gate, the camp, the barn)
 var CLEAR := [[300.0, 700.0], [4080.0, 4960.0], [5440.0, 6100.0]]
 var g2 := {}
