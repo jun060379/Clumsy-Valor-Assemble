@@ -1141,7 +1141,7 @@ func _build_ground2() -> void:
 	LIPY = 28.0 + DEEP
 	if DEEP > 0:
 		for ck in ["k_clear_cap", "k_stone_cap"]:
-			if not tex.has(ck): continue
+			if not tex.has(ck) or tex[ck].get_height() >= 101 + DEEP: continue      # drawn that deep already
 			var ci: Image = tex[ck].get_image()
 			ci.decompress()
 			ci.convert(Image.FORMAT_RGBA8)
@@ -1155,7 +1155,7 @@ func _build_ground2() -> void:
 		var h := im.get_height()
 		var deep := 520
 		var solid := Image.create(w, deep, false, Image.FORMAT_RGBA8)
-		if DEEP > 0:
+		if DEEP > 0 and h < 101 + DEEP:      # the old 28-row plane (tools/make_town_ground3.py draws it 58 deep)
 			im = _deepen(im)
 			h = im.get_height()
 		solid.blit_rect(im, Rect2i(0, 0, w, h), Vector2i.ZERO)
