@@ -216,28 +216,28 @@ const FORGE = (function () {
     box("door", "ironDk", 216, 244, 116, 118, ZD - 1.6, ZD - 1.0);                   // the strap hinge
     { const g = new THREE.TorusGeometry(1.8, 0.6, 6, 12); const m = add(g, "iron", "door"); m.position.set(241, Y(125, ZD - 1), ZD - 1); }
 
-    // ---- the roof: one long front slope, eave at row 72 (Z 12), ridge at row 25 (Z -40), hipped at the right end,
-    // running behind the chimney at the left; big tiles in four courses as on the hall
-    const ZE = 12, ZR = -40, RE = 72, RR = 25;
-    const ye = Y(RE, ZE), yr = Y(RR, ZR);
-    { const tri = [], quad = (a, b, c, d) => tri.push(...a, ...b, ...c, ...a, ...c, ...d), t3 = (a, b, c) => tri.push(...a, ...b, ...c);
-      const e0 = [2, ye, ZE], e1 = [287, ye, ZE], r0 = [25.5, yr, ZR], r1 = [263.5, yr, ZR], b0 = [2, ye, -80], b1 = [287, ye, -80];   // on over the open space to a hipped left end
-      quad(e0, e1, r1, r0); t3(e1, b1, r1); quad(b1, b0, r0, r1); quad(e0, b0, b1, e1); t3(e0, r0, b0);
-      const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(tri, 3)); g.computeVertexNormals();
-      add(g, "roofBase", "roof"); }
-    box("roof", "fascia", 2, 287, 72, 76, ZE - 6, ZE + 1.5);
-    { const xa = 25.5, xb = 263.5;                                                    // the ridge roll
-      shell("tiles", "tile", (u, v) => { const th = Math.PI * u; return [xa + (xb - xa) * v, yr + 2.6 * Math.sin(th), ZR + 3.0 * Math.cos(th)]; },
-            [0, 0.17, 0.33, 0.5, 0.67, 0.83, 1], [0, 1], [0, -2, 0]); }
-    { const courseRows = [25, 37, 49, 61, 72];
-      const slopeN = new THREE.Vector3(0, ZE - ZR, yr - ye).normalize();
-      const onSlope = (x, row) => { const u = (RE - row) / (RE - RR); return new THREE.Vector3(x, ye + u * (yr - ye), ZE + u * (ZR - ZE)); };
-      const hipX = (row) => 287 - (RE - row) * 0.5, hipL = (row) => 2 + (RE - row) * 0.5;
-      for (let c = 0; c < 4; c++) {
-        const rt = courseRows[c], rb = courseRows[c + 1] + 1.5, lean = 0.25 * (rb - rt);   // joints nearly upright, as the reference's
-        for (let x = 2 + (c % 2 ? -14 : 0); x < 290; x += 29) {
-          let xt0 = Math.max(x + 0.8, hipL(rt)), xt1 = x + 28.2, xb0 = Math.max(x + 0.8 + lean, hipL(rb)), xb1 = x + 28.2 + lean;
-          xt1 = Math.min(xt1, hipX(rt)); xb1 = Math.min(xb1, hipX(rb));
+    // ---- the roofs. tileRoof: a front slope of big tiles in four courses (as the hall's), eave row re at Z ze, ridge
+    // row rr at Z zr, hipped at either end (1:2), the body closed behind down to zb; with its eave board and ridge roll
+    function tileRoof(x0, x1, re, rr, ze, zr, zb, hipL0, hipR0) {
+      const ye = Y(re, ze), yr = Y(rr, zr), run = (re - rr) * 0.5;
+      const xl = hipL0 ? x0 + run : x0, xr = hipR0 ? x1 - run : x1;
+      { const tri = [], quad = (a, b, c, d) => tri.push(...a, ...b, ...c, ...a, ...c, ...d), t3 = (a, b, c) => tri.push(...a, ...b, ...c);
+        const e0 = [x0, ye, ze], e1 = [x1, ye, ze], r0 = [xl, yr, zr], r1 = [xr, yr, zr], b0 = [x0, ye, zb], b1 = [x1, ye, zb];
+        quad(e0, e1, r1, r0); t3(e1, b1, r1); quad(b1, b0, r0, r1); quad(e0, b0, b1, e1); t3(e0, r0, b0);
+        const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(tri, 3)); g.computeVertexNormals();
+        add(g, "roofBase", "roof"); }
+      box("roof", "fascia", x0, x1, re, re + 4, ze - 6, ze + 1.5);
+      shell("tiles", "tile", (u, v) => { const th = Math.PI * u; return [xl + (xr - xl) * v, yr + 2.6 * Math.sin(th), zr + 3.0 * Math.cos(th)]; },
+            [0, 0.17, 0.33, 0.5, 0.67, 0.83, 1], [0, 1], [0, -2, 0]);
+      const nC = 4, ch = (re - rr) / nC;
+      const slopeN = new THREE.Vector3(0, ze - zr, yr - ye).normalize();
+      const onSlope = (x, row) => { const u = (re - row) / (re - rr); return new THREE.Vector3(x, ye + u * (yr - ye), ze + u * (zr - ze)); };
+      const hR = (row) => hipR0 ? x1 - (re - row) * 0.5 : x1, hL = (row) => hipL0 ? x0 + (re - row) * 0.5 : x0;
+      for (let c = 0; c < nC; c++) {
+        const rt = rr + c * ch, rb = rr + (c + 1) * ch + 1.5, lean = 0.25 * (rb - rt);
+        for (let x = x0 + (c % 2 ? -14 : 0); x < x1 + 3; x += 29) {
+          let xt0 = Math.max(x + 0.8, hL(rt)), xt1 = x + 28.2, xb0 = Math.max(x + 0.8 + lean, hL(rb)), xb1 = x + 28.2 + lean;
+          xt1 = Math.min(xt1, hR(rt)); xb1 = Math.min(xb1, hR(rb));
           if (xt1 - xt0 < 4 || xb1 - xb0 < 4) continue;
           const hh = Math.abs(Math.sin((x + 7) * 12.9898 + c * 78.233) * 43758.5453) % 1, dz = hh > 0.85 ? 0.9 : hh < 0.12 ? -0.6 : 0.0;
           const h2 = Math.abs(Math.sin((x + 3) * 4.1414 + c * 17.17) * 24634.6345) % 1;
@@ -252,6 +252,39 @@ const FORGE = (function () {
           };
           shell("tiles", tmat, F, [0, 0.15, 0.35, 0.5, 0.65, 0.85, 1], [0, fq, 0.4, f, 0.83, 1], [-slopeN.x * 2, -slopeN.y * 2, -slopeN.z * 2]);
         }
+      }
+    }
+    // how the two roofs meet (owner 2026-11-07, "우측 건물이랑 좌측 건물이랑 지붕을 ... 말로 설명하기도 힘들다"): three ways
+    // shown side by side for the owner to pick - A: one roof over both; B: the left one lower, tucked under the main
+    // roof's end; C: the left one a front gable, open, its ridge running back into the main roof
+    const ROOFV = "A";
+    if (ROOFV === "A") tileRoof(2, 287, 72, 25, 12, -40, -80, true, true);
+    else {
+      tileRoof(96, 287, 72, 25, 12, -40, -80, true, true);
+      if (ROOFV === "B") tileRoof(2, 110, 86, 50, 14, -36, -80, true, false);
+      else {
+        // an open front gable: apex x 51 row 34, the verges down to rows 86 at x 0 and 102; tiles laid down each verge,
+        // the roof plane running back into the main roof; a tie beam and a king post in the open end
+        const AX = 51, AR = 34, ZG = 14, half = 51, re = AR + half * 1.0;
+        for (const sgn of [-1, 1]) {
+          const xe = AX + sgn * half;
+          bar("roof", "fascia", AX, AR + 9, xe, re + 9, 4, ZG - 6, ZG + 1);
+          for (let i = 0, n = 5; i < n; i++) {
+            const t0 = i / n + 0.006, t1 = (i + 1) / n - 0.012;
+            const hh = Math.abs(Math.sin((i + 3) * 9.137 + sgn * 3.3) * 43758.5453) % 1;
+            const m = hh < 0.15 ? "tileDk" : hh > 0.9 ? "tileLt" : "tile";
+            const pr = (u) => u < 0.55 ? 0.4 + 3.4 * u / 0.55 : 3.8 - 2.6 * (u - 0.55) / 0.45;
+            const F = (u, v) => { const t = t0 + (t1 - t0) * v, x = AX + (xe - AX) * t, row = AR + (re - AR) * t + 1 + 10 * u;
+              return [x, Y(row, ZG + 2), ZG + 1 + pr(u) + 0.7 * v]; };
+            shell("tiles", m, F, [0, 0.2, 0.4, 0.55, 0.75, 1], [0, 0.5, 1], [0, 0, -2.5]);
+          }
+          const ya = Y(AR, ZG + 2), yb = Y(re, ZG + 2);
+          shell("roof", "tile", (u, v) => [AX + (xe - AX) * v, ya + (yb - ya) * v - 1, ZG - 2 + (-60 - ZG + 2) * u], [0, 1], [0, 0.5, 1], [0, -3, 0]);
+        }
+        box("roof", "timber", 2, 100, 84, 89, ZG - 6, ZG - 2);                        // the tie beam
+        box("roof", "timber", AX - 3, AX + 3, AR + 12, 84, ZG - 6, ZG - 2);            // the king post
+        bar("roof", "timber", AX, 50, AX - 26, 84, 3, ZG - 6, ZG - 2.5);              // struts
+        bar("roof", "timber", AX, 50, AX + 26, 84, 3, ZG - 6, ZG - 2.5);
       }
     }
 
