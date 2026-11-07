@@ -105,7 +105,9 @@ const FORGE = (function () {
     }
     // how the two roofs meet (owner 2026-11-07, picked from three drawn ways: "2번" = B, the left roof lower, tucked
     // under the end of the main roof)
-    const ROOFV = "B";
+    // D (owner 2026-11-07, drawn on the picture): a lean-to - one slope from the main roof's top left corner down to the
+    // far left, a post where it meets the main building
+    const ROOFV = "D";
     const rowsFrom = (r0, r1, h) => { const r = []; for (let y = r0; y < r1; y += h) r.push(y); r.push(r1); return r; };
 
     // ---- the porch's back wall: planks, deep under the roof (it lives in the roof's shade most of the day)
@@ -171,7 +173,7 @@ const FORGE = (function () {
     // ---- the porch: roof on posts with knee braces over a low stone wall, the door set in a stone wall at the right
     const ZP = 9;                                                                    // posts close under the eave (Z 12)
     for (const [a, b] of [[115, 122], [194, 202], [265, 273]]) box("porch", "timber", a, b, 79, 128, ZP - 4, ZP);
-    box("porch", "timber", ROOFV === "B" ? 96 : 2, 284, 75, 80, ZP - 4, ZP + 0.5);   // the beam under the eave
+    box("porch", "timber", ROOFV === "A" ? 2 : 96, 284, 75, 80, ZP - 4, ZP + 0.5);   // the beam under the eave
     if (ROOFV === "B") box("porch", "timber", 2, 108, 91, 96, ZP - 4, ZP + 0.5);     // the lower roof's own eave beam
     for (const [px0, px1] of [[115, 122], [194, 202], [265, 273]]) {             // knee braces, 1:1
       if (px0 > 110) bar("porch", "timber", px0, 96, px0 - 14, 81, 4, ZP - 3.5, ZP - 0.5);
@@ -265,7 +267,34 @@ const FORGE = (function () {
     else {
       tileRoof(96, 287, 72, 25, 12, -40, -80, true, true);
       if (ROOFV === "B") tileRoof(2, 106, 87, 52, 13, -34, -80, true, false);
-      else {
+      else if (ROOFV === "D") {
+        // the lean-to: its front edge (the verge) runs from the main roof's top left corner (x 120, row 22) down to the
+        // eave at the far left (x 2, row 86); the plane runs straight back to Z -80 behind the hearth's stack line. Tiles
+        // in courses parallel to the low eave (front to back), each course stepping down the slope
+        const ZL = 13, ZB = -80, P0 = [120, 22], P1 = [2, 86];
+        const rowAt = (x) => P0[1] + (P1[1] - P0[1]) * (P0[0] - x) / (P0[0] - P1[0]);
+        const yAt = (x) => Y(rowAt(x), ZL);
+        { const tri = [], quad = (a, b, c, d) => tri.push(...a, ...b, ...c, ...a, ...c, ...d);
+          const a0 = [P0[0], yAt(P0[0]), ZL], a1 = [P1[0], yAt(P1[0]), ZL], b0 = [P0[0], yAt(P0[0]), ZB], b1 = [P1[0], yAt(P1[0]), ZB];
+          const lo = (p) => [p[0], p[1] - 4, p[2]];
+          quad(a1, a0, b0, b1); quad(lo(a0), lo(a1), lo(b1), lo(b0)); quad(a0, a1, lo(a1), lo(a0)); quad(b1, b0, lo(b0), lo(b1));
+          quad(a1, b1, lo(b1), lo(a1));
+          const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(tri, 3)); g.computeVertexNormals();
+          add(g, "roofBase", "roof"); }
+        bar("roof", "fascia", P0[0], P0[1] + 4, P1[0], P1[1] + 4, 4, ZL - 5, ZL + 1.5);   // the verge board under the tile edge
+        const n = 9, step = (P0[0] - P1[0]) / n;
+        for (let i = 0; i < n; i++) {                                                  // courses across the slope
+          const xa = P0[0] - i * step + 0.4, xb = P0[0] - (i + 1) * step - 1.4;          // each overlaps the next one down
+          for (let z0 = ZL + 1, k = 0; z0 > ZB; z0 -= 13, k++) {
+            const z1 = Math.max(ZB, z0 - 12.4);
+            const hh = Math.abs(Math.sin((i + 3) * 9.137 + k * 3.7) * 43758.5453) % 1;
+            const m = hh < 0.1 ? "tileDk" : hh > 0.93 ? "tileLt" : "tile";
+            const lift = (u) => u < 0.2 ? 0.6 + 2.0 * u / 0.2 : u < 0.7 ? 2.6 + 1.6 * (u - 0.2) / 0.5 : 4.2 - 1.6 * (u - 0.7) / 0.3;   // thick at its low edge
+            const F = (u, v) => { const x = xa + (xb - xa) * u; return [x, yAt(x) + lift(u), z0 + (z1 - z0) * v]; };
+            shell("tiles", m, F, [0, 0.2, 0.45, 0.7, 0.85, 1], [0, 0.08, 0.5, 0.92, 1], [0, -2, 0]);
+          }
+        }
+      } else {
         // an open front gable: apex x 51 row 34, the verges down to rows 86 at x 0 and 102; tiles laid down each verge,
         // the roof plane running back into the main roof; a tie beam and a king post in the open end
         const AX = 51, AR = 34, ZG = 14, half = 51, re = AR + half * 1.0;
@@ -295,10 +324,15 @@ const FORGE = (function () {
     // 공간에 화로를 박고 그렇게 지붕을 이어서 생긴 공간을 작업 공간으로"): no walls - the main roof runs on to the left
     // end on the eave beam and a corner post; the hearth and its stack stand at the back of it; the floor in front is
     // the working space: an anvil on its block, a quench tub, coal by the hearth, a rack of tools
-    const LT = ROOFV === "B" ? 95 : 79;                                             // the left post up to its eave beam
+    const LT = ROOFV === "B" ? 95 : ROOFV === "D" ? 89 : 79;                                             // the left post up to its eave beam
     box("porch", "timber", 4, 11, LT, 128, ZP - 4, ZP);
     bar("porch", "timber", 11, LT + 17, 25, LT + 2, 4, ZP - 3.5, ZP - 0.5);
     courses("stone wall", [128, 136, 145], () => [0, 16], ZP + 3, { w: 8, gx: 0, gr: 128, ch: 8 });
+    if (ROOFV === "D") {
+      box("porch", "timber", 92, 99, 34, 128, ZP - 4, ZP);                           // the post under the lean-to's upper end
+      box("porch", "timber", 99, 115, 114, 118, ZP - 3.5, ZP - 0.5);                 // a rail across to the building's post
+      courses("stone wall", [128, 136, 145], () => [88, 104], ZP + 3, { w: 8, gx: 88, gr: 128, ch: 8 });
+    }
     // the mouth stays clear (x 46..88): the anvil on its block to its left, the quench tub to its right
     box("work", "timber", 16, 40, 132, 145, 2, 10);                                    // the anvil's block
     box("work", "iron", 21, 35, 129, 132, 3, 9);                                       // the anvil: waist, face, horn
@@ -307,7 +341,7 @@ const FORGE = (function () {
     { const g = new THREE.ConeGeometry(2, 8, 10); const m = add(g, "iron", "work"); m.rotation.z = -Math.PI / 2; m.position.set(44, Y(124, 6), 6); }
     bar("work", "plank", 12, 145, 16, 126, 1.6, 4, 6);                                 // a hammer leaning on the block
     box("work", "iron", 13, 20, 123, 127, 3, 7);
-    { const g = new THREE.CylinderGeometry(6.5, 6, 12, 16); const m = add(g, "plank", "work"); m.position.set(97, Y(139, 4), 4);   // the quench tub
+    if (ROOFV !== "D") { const g = new THREE.CylinderGeometry(6.5, 6, 12, 16); const m = add(g, "plank", "work"); m.position.set(97, Y(139, 4), 4);   // the quench tub
       for (const r of [135, 143]) { const gg = new THREE.CylinderGeometry(6.8, 6.8, 1.4, 16); const mm = add(gg, "ironDk", "work"); mm.position.set(97, Y(r, 4), 4); } }
 
     return parts;
