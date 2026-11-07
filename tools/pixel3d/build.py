@@ -23,5 +23,13 @@ html = open("tools/pixel3d/viewer.html").read()
 html = (html.replace("__HALL_JS__", js)
             .replace("__PALETTE__", json.dumps(P)).replace("__STEPS__", json.dumps(steps))
             .replace("__REF__", "data:image/png;base64," + base64.b64encode(b.getvalue()).decode()))
+# each page names its own building (it said 본관 on every one)
+KO = {"hall": "본관", "forge": "대장간", "barn": "헛간", "cottage": "목욕집", "store": "창고", "tent": "텐트", "tentL": "텐트(반대쪽)",
+      "kiln": "숯가마", "well": "우물", "anvil": "모루", "fountain": "분수", "bench": "벤치", "benchL": "벤치(반대쪽)",
+      "board": "게시판", "bridge": "다리", "lamp": "가로등"}
+if NAME in KO:
+    html = (html.replace("<title>본관 코드 도트</title>", f"<title>{KO[NAME]} 코드 도트</title>")
+                .replace("<h1>본관 · 코드로 쌓은 도트</h1>", f"<h1>{KO[NAME]} · 코드로 쌓은 도트</h1>")
+                .replace("레퍼런스는 지금 본관 그림.", f"레퍼런스는 지금 {KO[NAME]} 그림."))
 open(sys.argv[1], "w").write(html)
 print("wrote", sys.argv[1], len(html) // 1024, "KB")

@@ -86,6 +86,11 @@ THREE.ColorManagement.enabled = false;                       // ids and palette 
 const { W, H, B0, K, MAT, RAMP, LAYERS } = HALL;
 const RW = W + 16, X0 = -12;                                 // the render is 16 cells wider: the west side shows
 const cv = document.getElementById("cv"), stage = document.getElementById("stage");
+// the stage takes the render's own shape (owner 2026-11-07: "왜 찌그러져있노 페이지" - it was fixed at the hall's
+// 452 x 296, squashing every other building), no taller than most of the screen
+stage.style.aspectRatio = `${RW} / ${H}`;
+stage.style.width = `min(100%, ${(72 * RW / H).toFixed(2)}vh)`;
+stage.style.justifySelf = "center";
 document.getElementById("ref").src = REF_SRC;
 const renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: false, alpha: true, preserveDrawingBuffer: true });
 renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
