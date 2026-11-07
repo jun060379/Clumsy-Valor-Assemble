@@ -172,9 +172,12 @@ const COTTAGE = (function () {
     const ZG = 16, AX = 65, AR = 22;
     const vU = (x) => AR + 12 + Math.abs(x - AX) * 1.0;
     slab("walls", "plaster", [[18, 80], [114, 80], [114, vU(114)], [AX, AR + 12], [18, vU(18)]], -40, ZG);
-    slab("walls", "mortar2", [[18, 140], [114, 140], [114, 80], [18, 80]], -40, ZG - 1, [[[47, 140], [83, 140], [83, 108], [65, 92], [47, 108]].reverse()]);
+    slab("walls", "mortar2", [[18, 140], [114, 140], [114, 80], [18, 80]], -40, ZG - 1, [archPts(47, 83, 93, 140).slice().reverse()]);
     courses("walls", rowsFrom(80, 140, 7), () => [20, 112], ZG, { w: 16, gx: 20, gr: 80, ch: 7,
-      holes: (r0, r1) => r1 >= 86 ? [[40, 90]] : [] });
+      // cut round the door's arch (radius 25 about x 65, row 111), not a whole block beside it (owner 2026-11-07:
+      // "문 아치 너머?에도 벽돌 넣기")
+      holes: (r0, r1) => { if (r1 < 86) return []; const rr = Math.min(r1, 111), hw = Math.sqrt(Math.max(0, 25.5 * 25.5 - (111 - rr) * (111 - rr)));
+        return [[Math.floor(65 - hw), Math.ceil(65 + hw)]]; } });
     for (const [a, b] of [[12, 22], [110, 120]]) box("timber", "timber", a, b, vU((a + b) / 2) - 1, 140, ZG - 2, ZG + 2.5);
     box("timber", "timber", 22, 110, 72, 80, ZG - 2, ZG + 2.5);                      // the beam
     for (const x of [36, 88]) box("timber", "timber", x, x + 8, 68, 82, ZG - 1, ZG + 4);   // corbel blocks at its ends
