@@ -39,58 +39,59 @@ def leafmask(a):
     return m & ~trunkmask(a)
 
 def bake(name):
-    """Rustle at the crown's edge only (owner 2026-11-07: every version that moved the crown or its balls read as
-    wobble, "울렁거린다"). Slynyrd Pixelblog 33, rustling leaves: one leaf at a time, moving with the wind, the next one
-    a frame later. Here: the crown's outline is cut into small tufts (a stretch of outline cells, three cells deep);
-    a tuft steps one cell (2 px) with the wind and back, the step running along the outline left to right like a gust
-    passing. The rest of the crown, the trunk and the branches never move. 24 frames; frame 23 = the tree as drawn."""
+    """The crown sways as ONE mass (owner 2026-11-07, after the per-ball versions: gaps, ghosts, jelly): the canopy
+    layer (every leaf cell) is cut from the trunk and branches, which stay still; the canopy moves in whole 2-px cells,
+    the top band first and the band below it a beat later, never more than one cell, easing in and out with holds at
+    the ends. Nothing is cut inside the canopy, so no gap or ghost can open; where it leans off a branch, the branch
+    shows (it is behind it); at its edge, the sky. 24 frames; frame 23 is the tree as drawn (at rest)."""
     A = np.array(Image.open(f"assets/town/{name}.png").convert("RGBA"))
     a = A[::2, ::2].copy()
     h, w = a.shape[:2]
     tm = trunkmask(a)
     op = a[..., 3] > 127
     canopy = op & ~tm
-    canopy[int(h * 0.86):] = False
-    air = ~op
-    # outline cells that face the air above or to the side (the leaves the wind catches)
-    edge = canopy & (ndimage.binary_dilation(air, structure=np.array([[0, 1, 0], [1, 0, 1], [0, 0, 0]])))
-    band = canopy & ndimage.binary_dilation(edge, iterations=2)
-    # tufts: the band cut every TW cells along x, top and sides apart
-    TW = 6
-    lab = np.zeros((h, w), int)
-    ys, xs = np.nonzero(band)
-    cyc = np.nonzero(canopy.any(1))[0]
-    mid = (cyc.min() + cyc.max()) / 2
-    for y, x in zip(ys, xs):
-        lab[y, x] = 1 + (x // TW) * 2 + (1 if y > mid else 0)
-    ids = [t for t in np.unique(lab) if t > 0]
-    rng = np.random.default_rng(len(ids))
-    pick = set(rng.choice(ids, size=max(1, int(len(ids) * 0.55)), replace=False).tolist())   # not every tuft every pass
+    canopy[int(h * 0.86):] = False                          # the grass at the foot stays
+    rows_c = np.nonzero(canopy.any(1))[0]
+    top, bot = rows_c.min(), rows_c.max()
+    # band per row: 2 = the top third (leads), 1 = the middle (follows), 0 = the lowest leaves (hold on)
+    band = np.zeros(h, int)
+    span = max(1, bot - top)
+    for y in range(top, bot + 1):
+        u = (y - top) / span
+        band[y] = 2 if u < 0.38 else (1 if u < 0.72 else 0)
+    # the lean, one cell at most: rest, ease out to +1 (with the wind), hold, back, rest; the follow band 2 frames later
+    lean = [0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0]
     rows = (NF + COLS - 1) // COLS
     out = np.zeros((A.shape[0] * rows, A.shape[1] * COLS, 4), np.uint8)
+    base = a.copy()
+    base[canopy] = 0
     for f in range(NF):
-        o = a.copy()
-        for t in ids:
-            if t not in pick: continue
-            sel = lab == t
-            ty, tx = np.nonzero(sel)
-            start = int(round(tx.mean() / w * 16))           # the gust runs left to right
-            k = f - start
-            if not (0 <= k < 3): continue                       # out on frames 0-2 of its turn, home otherwise
-            nx = np.clip(tx + 1, 0, w - 1)
-            ok = ~tm[ty, nx]
-            o[ty[ok], nx[ok]] = a[ty[ok], tx[ok]]
-            # the column it left takes the leaf just inside it (no gap, no lit rim)
-            lx = tx.min()
-            for y in np.unique(ty):
-                if canopy[y, lx] and lx - 1 >= 0 and canopy[y, lx - 1]:
-                    o[y, lx] = a[y, lx - 1]
+        o = base.copy()
+        for y in range(top, bot + 1):
+            sel = canopy[y]
+            if not sel.any(): continue
+            b = band[y]
+            d = 0 if b == 0 else lean[(f - (0 if b == 2 else 2)) % NF]
+            xs = np.nonzero(sel)[0]
+            nx = np.clip(xs + d, 0, w - 1)
+            keep = ~tm[y, nx] | (d == 0)
+            o[y, nx[keep]] = a[y, xs[keep]]
+        # a cell the crown left beside a branch (the branch held the leaves behind it) is not open air: it keeps
+        # its leaves; only the crown's trailing outer edge opens to the sky
+        empty = canopy & (o[..., 3] == 0)
+        left = np.zeros_like(op); left[:, 1:] = op[:, :-1]
+        o[empty & left] = a[empty & left]
+        # a one-cell notch where a band steps over the one below: closed with the leaves as drawn
+        t = o[..., 3] == 0
+        lt = np.zeros_like(t); rt = np.zeros_like(t); lt[:, 1:] = ~t[:, :-1]; rt[:, :-1] = ~t[:, 1:]
+        notch = canopy & t & lt & rt
+        o[notch] = a[notch]
         o[tm] = a[tm]
         big = np.repeat(np.repeat(o, 2, 0), 2, 1)[:A.shape[0], :A.shape[1]]
         cy, cx = divmod(f, COLS)
         out[cy * A.shape[0]:(cy + 1) * A.shape[0], cx * A.shape[1]:(cx + 1) * A.shape[1]] = big
     Image.fromarray(out).save(f"assets/town/{name}_sway.png")
-    print(name, len(pick), "tufts rustle")
+    print(name, "canopy rows", top, bot)
 
 
 for nm in (sys.argv[1:] or ["f_oak", "f_round", "f_young", "f_tall"]):
