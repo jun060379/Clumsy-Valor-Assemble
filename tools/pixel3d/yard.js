@@ -72,11 +72,13 @@ const YARD = (function () {
 
     // ---- the far fence (owner 2026-11-07: "좀 더 짙고 낮은 채도로 저 너머에 원경 울타리 깔기"): the same fence on the
     // yard's far side, plain, in darker, duller colours (the distance takes the warmth out)
-    { const ZF = -96;
-      for (const [r0, r1] of [[50, 58], [80, 88]]) cube("far", "farRail", 0, W, R(r1), R(r0), ZF - 3, ZF);
-      for (let d = 0; d <= C + 1; d += 87) for (const x of d ? [C - d, C + d] : [C]) {
-        cube("far", "farPost", x - 8, x + 8, 0, R(46), ZF - 5, ZF + 2);
-        cube("far", "farPost", x - 9.5, x + 9.5, R(46), R(42), ZF - 6, ZF + 3); } }
+    // (owner 2026-11-07: "원경이니까 멀고 작게") far back - this view lifts it well above the near fence - and at
+    // about half the size: shorter, thinner posts set closer, two thin rails
+    { const ZF = -470, PH = 46, PW = 4.5, SP = 48;
+      for (const [y0, y1] of [[27, 31], [12, 16]]) cube("far", "farRail", 0, W, y0, y1, ZF - 2, ZF);
+      for (let d = 0; d <= C + 1; d += SP) for (const x of d ? [C - d, C + d] : [C]) {
+        cube("far", "farPost", x - PW, x + PW, 0, PH, ZF - 3, ZF + 1.5);
+        cube("far", "farPost", x - PW - 1, x + PW + 1, PH, PH + 2.5, ZF - 3.5, ZF + 2); } }
 
     // ---- the dummies: a post with a cross arm, a bound straw body hung on it, a red sash, splayed feet
     const dummy = (px, side) => {                                     // side: which way the straw body hangs off the post
