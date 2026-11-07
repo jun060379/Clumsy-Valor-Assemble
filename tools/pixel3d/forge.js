@@ -237,21 +237,21 @@ const FORGE = (function () {
 
     // ---- the roofs. tileRoof: a front slope of big tiles in four courses (as the hall's), eave row re at Z ze, ridge
     // row rr at Z zr, hipped at either end (1:2), the body closed behind down to zb; with its eave board and ridge roll
-    function tileRoof(x0, x1, re, rr, ze, zr, zb, hipL0, hipR0) {
+    function tileRoof(x0, x1, re, rr, ze, zr, zb, hipL0, hipR0, kL = 0.5) {   // kL: the left hip's run in cells per row
       const ye = Y(re, ze), yr = Y(rr, zr), run = (re - rr) * 0.5;
-      const xl = hipL0 ? x0 + run : x0, xr = hipR0 ? x1 - run : x1;
+      const xl = hipL0 ? x0 + (re - rr) * kL : x0, xr = hipR0 ? x1 - run : x1;
       { const tri = [], quad = (a, b, c, d) => tri.push(...a, ...b, ...c, ...a, ...c, ...d), t3 = (a, b, c) => tri.push(...a, ...b, ...c);
         const e0 = [x0, ye, ze], e1 = [x1, ye, ze], r0 = [xl, yr, zr], r1 = [xr, yr, zr], b0 = [x0, ye, zb], b1 = [x1, ye, zb];
         quad(e0, e1, r1, r0); t3(e1, b1, r1); quad(b1, b0, r0, r1); quad(e0, b0, b1, e1); t3(e0, r0, b0);
         const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(tri, 3)); g.computeVertexNormals();
         add(g, "roofBase", "roof"); }
       box("roof", "fascia", x0, x1, re, re + 4, ze - 6, ze + 1.5);
-      shell("tiles", "tile", (u, v) => { const th = Math.PI * u; return [xl + (xr - xl) * v, yr + 2.6 * Math.sin(th), zr + 3.0 * Math.cos(th)]; },
+      if (xr - xl > 2) shell("tiles", "tile", (u, v) => { const th = Math.PI * u; return [xl + (xr - xl) * v, yr + 2.6 * Math.sin(th), zr + 3.0 * Math.cos(th)]; },
             [0, 0.17, 0.33, 0.5, 0.67, 0.83, 1], [0, 1], [0, -2, 0]);
       const nC = 4, ch = (re - rr) / nC;
       const slopeN = new THREE.Vector3(0, ze - zr, yr - ye).normalize();
       const onSlope = (x, row) => { const u = (re - row) / (re - rr); return new THREE.Vector3(x, ye + u * (yr - ye), ze + u * (zr - ze)); };
-      const hR = (row) => hipR0 ? x1 - (re - row) * 0.5 : x1, hL = (row) => hipL0 ? x0 + (re - row) * 0.5 : x0;
+      const hR = (row) => hipR0 ? x1 - (re - row) * 0.5 : x1, hL = (row) => hipL0 ? x0 + (re - row) * kL : x0;
       for (let c = 0; c < nC; c++) {
         const rt = rr + c * ch, rb = rr + (c + 1) * ch + 1.5, lean = 0.25 * (rb - rt);
         for (let x = x0 + (c % 2 ? -14 : 0); x < x1 + 3; x += 29) {
@@ -279,57 +279,13 @@ const FORGE = (function () {
     if (ROOFV === "A") tileRoof(2, 287, 72, 25, 12, -40, -80, true, true);
     else {
       tileRoof(ROOFV === "D" ? 86 : 96, 287, 72, 25, 12, -40, -80, ROOFV !== "D", true);   // D: its left end cut square, run on 10 cells over the post (owner)
-      if (ROOFV === "D") {
-        // the square end finished as a gable verge (owner 2026-11-07, circled: the raw cut end of the tiles): a barge
-        // board down the roof's end standing proud of the tiles, a row of verge tiles rolled over its edge, and the
-        // ridge roll's end capped - the way a gable end is closed on a tiled roof
-        const ye = Y(72, 12), yr = Y(25, -40), XE = 86;
-        const sl = (t, dx, up) => { const n = new THREE.Vector3(0, 12 + 40, yr - ye).normalize();   // a point on the slope, lifted
-          return [XE + dx, ye + (yr - ye) * t + n.y * up, 12 + (-40 - 12) * t + n.z * up]; };
-        { const tri = [], quad = (a, b, c, d) => tri.push(...a, ...b, ...c, ...a, ...c, ...d);       // the barge board
-          const A = [sl(0, -3, -6), sl(0, 3, -6), sl(1, 3, -6), sl(1, -3, -6)], B = [sl(0, -3, 6), sl(0, 3, 6), sl(1, 3, 6), sl(1, -3, 6)];
-          quad(B[0], B[1], B[2], B[3]); quad(A[3], A[2], A[1], A[0]); quad(A[0], A[1], B[1], B[0]); quad(B[3], B[2], A[2], A[3]);
-          quad(A[0], B[0], B[3], A[3]); quad(B[1], A[1], A[2], B[2]);
-          const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(tri, 3)); g.computeVertexNormals();
-          add(g, "fascia", "roof"); }
-        for (let i = 0, n = 5; i < n; i++) {                                            // verge tiles over the board's top
-          const t0 = i / n + 0.01, t1 = (i + 1) / n - 0.01;
-          shell("tiles", i % 3 === 1 ? "tileDk" : "tile", (u, v) => { const th = Math.PI * u; const p = sl(t0 + (t1 - t0) * v, -2.6 * Math.cos(th) + 0.4, 6 + 2.4 * Math.sin(th)); return p; },
-                [0, 0.2, 0.4, 0.6, 0.8, 1], [0, 0.5, 1], [0, -1.5, 0]);
-        }
-        { const g = new THREE.SphereGeometry(3.2, 10, 8); const m = add(g, "tile", "tiles"); const p = sl(1, 0.5, 7); m.position.set(p[0], p[1], p[2]); }   // the ridge end cap
-      }
       if (ROOFV === "B") tileRoof(2, 106, 87, 52, 13, -34, -80, true, false);
       else if (ROOFV === "D") {
-        // the lean-to as the owner drew it (2026-11-07: "우측 건물의 좌측 단편을 직각으로 처리하고. 그 상태에서 좌측 지붕이 우측
-        // 건물의 지붕을 기준으로 빗선으로 내려오는거야 ... 저걸 지붕위로 왜 쳐보내"): it starts at the main roof's top
-        // left corner (x 96, row 25) and comes down in a straight slant to the far left eave (x 2, row 86); the roof
-        // is the band under that line and nothing of it shows above - its plane falls away to the back exactly as
-        // fast as this view lifts what lies behind, so it stays edge-on and only the tiled band reads
-        const ZL = 13, P0 = [86, 25], P1 = [2, 86], BAND = 11;
-        const rowAt = (x) => P0[1] + (P1[1] - P0[1]) * (P0[0] - x) / (P0[0] - P1[0]);
-        { const tri = [], quad = (a, b, c, d) => tri.push(...a, ...b, ...c, ...a, ...c, ...d);
-          const pt = (x, dr, z) => [x, Y(rowAt(x) + dr, z), z];           // a point on the band, at depth z, same screen row
-          const zs = [ZL, ZL - 60];
-          for (const [dr0, dr1] of [[2, BAND]]) {
-            const a0 = pt(P0[0], dr0, zs[0]), a1 = pt(P1[0], dr0, zs[0]), b0 = pt(P0[0], dr0, zs[1]), b1 = pt(P1[0], dr0, zs[1]);
-            const c0 = pt(P0[0], dr1, zs[0]), c1 = pt(P1[0], dr1, zs[0]);
-            quad(a1, a0, b0, b1); quad(c0, c1, a1, a0);
-          }
-          const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(tri, 3)); g.computeVertexNormals();
-          add(g, "roofBase", "roof"); }
-        bar("roof", "fascia", P0[0], P0[1] + BAND + 1, P1[0], P1[1] + BAND + 1, 3, ZL - 5, ZL + 1);   // the board under the band
-        // tiles along the slant, as the hall's verge tiles: each one tips up at its top edge and rolls under at its foot
-        const n = 8;
-        for (let i = 0; i < n; i++) {
-          const t0 = i / n + 0.006, t1 = (i + 1) / n - 0.012;
-          const hh = Math.abs(Math.sin((i + 3) * 9.137) * 43758.5453) % 1;
-          const m = hh < 0.15 ? "tileDk" : hh > 0.9 ? "tileLt" : "tile";
-          const pr = (u) => u < 0.55 ? 0.4 + 3.4 * u / 0.55 : 3.8 - 2.6 * (u - 0.55) / 0.45;
-          const F = (u, v) => { const t = t0 + (t1 - t0) * v, x = P0[0] + (P1[0] - P0[0]) * t, row = rowAt(x) + 1 + (BAND - 1) * u;
-            return [x, Y(row, ZL + 2), ZL + 1 + pr(u) + 0.7 * v]; };
-          shell("tiles", m, F, [0, 0.2, 0.4, 0.55, 0.75, 1], [0, 0.5, 1], [0, 0, -2.5]);
-        }
+        // the left roof (owner 2026-11-07, drawn: "좌측 지붕이 우측 건물의 지붕을 기준으로 빗선으로 내려오는거야"): a slope
+        // facing the street like the main one, its upper edge the slant from the main roof's top left corner (x 86,
+        // row 25) down to the far left eave (x 2, row 86) - a hip as long as the roof is wide - its eave lower than the
+        // main one; the two meet along the main roof's left end
+        tileRoof(2, 86, 86, 25, 13, -40, -80, true, false, 84 / 61);
       } else {
         // an open front gable: apex x 51 row 34, the verges down to rows 86 at x 0 and 102; tiles laid down each verge,
         // the roof plane running back into the main roof; a tie beam and a king post in the open end
@@ -360,7 +316,7 @@ const FORGE = (function () {
     // 공간에 화로를 박고 그렇게 지붕을 이어서 생긴 공간을 작업 공간으로"): no walls - the main roof runs on to the left
     // end on the eave beam and a corner post; the hearth and its stack stand at the back of it; the floor in front is
     // the working space: an anvil on its block, a quench tub, coal by the hearth, a rack of tools
-    const LT = ROOFV === "B" ? 95 : ROOFV === "D" ? 89 : 79;                                             // the left post up to its eave beam
+    const LT = ROOFV === "B" ? 95 : ROOFV === "D" ? 90 : 79;                                             // the left post up to its eave beam
     box("porch", "timber", 4, 11, LT, 124, ZP - 4, ZP);
     bar("porch", "timber", 11, LT + 17, 25, LT + 2, 4, ZP - 3.5, ZP - 0.5);
     if (ROOFV === "D") {
