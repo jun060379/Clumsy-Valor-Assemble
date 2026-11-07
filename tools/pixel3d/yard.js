@@ -72,13 +72,25 @@ const YARD = (function () {
 
     // ---- the far fence (owner 2026-11-07: "좀 더 짙고 낮은 채도로 저 너머에 원경 울타리 깔기"): the same fence on the
     // yard's far side, plain, in darker, duller colours (the distance takes the warmth out)
-    // (owner 2026-11-07: "원경이니까 멀고 작게") far back - this view lifts it well above the near fence - and at
-    // about half the size: shorter, thinner posts set closer, two thin rails
-    { const ZF = -470, PH = 46, PW = 4.5, SP = 48;
-      for (const [y0, y1] of [[27, 31], [12, 16]]) cube("far", "farRail", 0, W, y0, y1, ZF - 2, ZF);
-      for (let d = 0; d <= C + 1; d += SP) for (const x of d ? [C - d, C + d] : [C]) {
-        cube("far", "farPost", x - PW, x + PW, 0, PH, ZF - 3, ZF + 1.5);
-        cube("far", "farPost", x - PW - 1, x + PW + 1, PH, PH + 2.5, ZF - 3.5, ZF + 2); } }
+    // (owner 2026-11-07: "원경이니까 멀고 작게" / "원근감. 그리고 투시도.") The yard laid out as a forced perspective,
+    // still a real solid so its shadows stay true: the far fence far back, half the size and a little over half as
+    // wide; a side fence down each side from the near fence's ends back to the far fence's, its posts shrinking and
+    // closing in as they go, so the lines run together toward the back as in a perspective drawing.
+    { const ZF = -470, FHALF = 205, PH = 46, PW = 4.5, SP = 41;
+      const fence = (pa, pb, ha, hb, wa, wb, n, rails) => {          // posts from a to b, height and width eased between
+        const at = (t) => [pa[0] + (pb[0] - pa[0]) * t, pa[1] + (pb[1] - pa[1]) * t, ha + (hb - ha) * t, wa + (wb - wa) * t];
+        for (let k = 0; k <= n; k++) { const t = k / n, [x, z, h, w] = at(t), mat = t > 0.5 ? "farPost" : "post";
+          cube("far", mat, x - w, x + w, 0, h, z - w * 0.6, z + w * 0.4);
+          cube("far", mat, x - w - 1, x + w + 1, h, h + w * 0.5, z - w * 0.7, z + w * 0.5); }
+        for (const f of rails) for (let k = 0; k < n; k++) {          // the rails, post to post, following the heights down
+          const [x0, z0, h0] = at(k / n), [x1, z1, h1] = at((k + 1) / n);
+          const a = V(x0, h0 * f, z0), b = V(x1, h1 * f, z1), mat = (k + 0.5) / n > 0.5 ? "farRail" : "rail";
+          const m = seg(a, b, Math.max(1.1, (h0 + h1) / 2 * 0.045), mat, "far"); }
+      };
+      fence([C - FHALF, ZF], [C + FHALF, ZF], PH, PH, PW, PW, Math.round(2 * FHALF / SP), [0.34, 0.66]);   // the far side
+      fence([4, -8], [C - FHALF, ZF], 86, PH, 9, PW, 7, [0.34, 0.66]);                                   // the left side
+      fence([W - 4, -8], [C + FHALF, ZF], 86, PH, 9, PW, 7, [0.34, 0.66]);                               // the right side
+    }
 
     // ---- the dummies: a post with a cross arm, a bound straw body hung on it, a red sash, splayed feet
     const dummy = (px, side) => {                                     // side: which way the straw body hangs off the post
