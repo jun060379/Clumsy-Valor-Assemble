@@ -179,7 +179,7 @@ function sunDir(h) {
 }
 
 // the oblique camera: one cell per pixel, front faces true, depth recedes up K rows per cell
-const CZ = 2000, KX = 0.18;                                  // KX: depth also shifts left, so west faces show (the sun's side)
+const CZ = 2000, KX = 0.0;                                   // a front view (owner 2026-11-07): no side faces
 const cam = new THREE.OrthographicCamera(X0, X0 + RW, B0, B0 - H, 1, 4000);
 cam.position.set(-KX * CZ, K * CZ, CZ);
 cam.updateMatrixWorld();
