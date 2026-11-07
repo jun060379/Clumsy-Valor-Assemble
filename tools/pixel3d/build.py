@@ -8,7 +8,7 @@ P = np.array(Image.open("assets/town/palette.png").convert("RGB")).tolist()
 steps = json.load(open("assets/town/palette.json"))["steps"]
 js = open(f"tools/pixel3d/{NAME}.js").read()
 if NAME != "hall": js += f"\nconst HALL = {NAME.upper()};\n"   # the viewer reads the building as HALL
-src = Image.open(f"assets/town/hx/g_{NAME}.png" if NAME != "forge2" else "assets/town/hx/g_forge.png").convert("RGBA")
+src = Image.open(f"assets/town/hx/g_{NAME}.png" if not NAME.startswith("forge") or NAME == "forge" else "assets/town/hx/g_forge.png").convert("RGBA")
 ref = src.resize((src.width // 2, src.height // 2), Image.NEAREST)
 b = io.BytesIO(); ref.save(b, "PNG", optimize=True)
 html = open("tools/pixel3d/viewer.html").read()
