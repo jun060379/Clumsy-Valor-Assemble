@@ -106,57 +106,51 @@ const FORGE = (function () {
     const rowsFrom = (r0, r1, h) => { const r = []; for (let y = r0; y < r1; y += h) r.push(y); r.push(r1); return r; };
 
     // ---- the porch's back wall: planks, deep under the roof (it lives in the roof's shade most of the day)
-    box("back wall", "plankDk", 108, 284, 74, 145, -30, -16);
-    for (let x = 109; x < 283; x += 7) box("back wall", "plank", x, Math.min(x + 6, 283), 76, 145, -16, -15.2);
+    box("back wall", "plankDk", 100, 284, 74, 145, -30, -16);
+    for (let x = 101; x < 283; x += 7) box("back wall", "plank", x, Math.min(x + 6, 283), 76, 145, -16, -15.2);
 
-    // ---- the forge hearth (owner 2026-11-07: "화덕 형태 좀 다듬기. 래퍼런스 찾아서"), laid out like a smith's masonry
-    // forge (FAO, "the blacksmith's forge": a raised hearth about a metre high, the fire on it under a hood that
-    // gathers the smoke into the chimney): a waist-high stone hearth with a lip, an open fire bay between two piers
-    // under a shallow stone arch, the hood above narrowing in straight slopes to the stack. All of it centred on the
-    // stack (x 54.5); a coal hole under the lip.
-    const ZF = 17;                                                                   // the hearth stands on its own, left of the shed
-    const CX = 54.5;
-    const hoodL = (r) => 16 + (94 - r) * 19 / 22, hoodR = (r) => 93 - (94 - r) * 19 / 22;   // 16..93 at row 94 -> 35..74 at row 72
-    const fspan = (r) => r < 94 ? [hoodL(r), hoodR(r)] : [16, 93];
-    // the arch over the bay: a segment of a circle (centre row 140), springing at row 100 from the piers' inner faces
-    const AR = 140, RI = Math.hypot(CX - 26, AR - 100), RO = RI + 6;
-    const arcPts = (rad, a0, a1, n) => { const p = []; for (let t = 0; t <= n; t++) { const a = a0 + (a1 - a0) * t / n; p.push([CX + rad * Math.cos(a), AR - rad * Math.sin(a)]); } return p; };
-    const aL = Math.atan2(AR - 100, 26 - CX), aR = Math.atan2(AR - 100, 83 - CX);   // the springing angles
-    const bay = [[26, 118], [83, 118], ...arcPts(RI, aR, aL, 16)];
-    slab("furnace", "mortar2", [[16, 145], [16, 94], [35, 72], [74, 72], [93, 94], [93, 145]], -30, ZF - 7,
-         [bay.slice().reverse(), [[42, 145], [42, 130], [67, 130], [67, 145]].reverse()]);
+    // ---- the furnace: a wide stone body under the chimney, its shoulders stepping in to the stack
+    const ZF = 6;
+    const fspan = (r) => r < 72 ? [35, 74] : r < 86 ? [35 - (r - 72) * 0.8, 74 + (r - 72) * 1.0] : r < 104 ? [24, 88 + (r - 86) * 0.6] : [19, 100];
+    // the fire mouth: an arch in the furnace, the hearth sill under it, the ash pit below
+    const mouth = archPts(46, 88, 92, 122);
+    slab("furnace", "mortar2", [[19, 145], [19, 104], [24, 104], [24, 86], [35, 72], [74, 72], [88, 86], [99, 104], [100, 145]], -30, ZF - 7,
+         [mouth.slice().reverse(), [[57, 145], [57, 131], [83, 131], [83, 145]].reverse()]);
+    const inMouth = (x0, x1, r0, r1) => x1 > 44 && x0 < 90 && r1 > 90 && r0 < 123;
+    const pit = (x0, x1, r0, r1) => x1 > 56 && x0 < 84 && r1 > 131;
+    // the courses are cut round the voussoir ring (radius 27 about x 67, row 113), the jambs, the sill and the pit
     const fHoles = (r0, r1) => {
-      const H = [];
-      if (r1 >= 86 && r0 < 100) { const rr = Math.min(r1, 100), hw = Math.sqrt(Math.max(0, RO * RO - (AR - rr) * (AR - rr))); H.push([CX - hw, CX + hw]); }
-      if (r1 >= 100 && r0 < 118) H.push([26, 83]);
-      if (r1 >= 117 && r0 < 123) H.push([14, 95]);                                 // the lip
-      if (r1 >= 126) H.push([42, 67]);                                             // the coal hole and its lintel
+      const H = [], rr = Math.min(Math.max(113, r0), r1);
+      if (r1 >= 86 && r0 <= 113) { const hw = Math.sqrt(Math.max(0, 27 * 27 - (113 - rr) * (113 - rr))); H.push([67 - hw, 67 + hw]); }
+      if (r1 > 113 && r0 < 122) H.push([40, 94]);
+      if (r1 >= 122 && r0 < 127) H.push([38, 96]);
+      if (r1 >= 127) H.push([56, 84]);
       return H.map(([a, b]) => [Math.floor(a), Math.ceil(b)]); };
     courses("furnace", rowsFrom(72, 145, 7), fspan, ZF, { w: 14, gx: 35, gr: 16, holes: fHoles });
-    // the hood's sloped edges: a weathering stone along each slope, catching the light
-    bar("furnace", "stone", 16, 94, 35, 72, 3, ZF - 1.5, ZF + 1);
-    bar("furnace", "stone", 93, 94, 74, 72, 3, ZF - 1.5, ZF + 1);
-    // the arch: nine voussoirs, the key in the middle a little proud
-    { const n = 9;
-      slab("furnace", "mortar2", [...arcPts(RO + 0.5, aL, aR, 16), ...arcPts(RI, aR, aL, 16)], ZF - 2, ZF + 0.5);
+    // the voussoirs round the mouth
+    { const cx = 67, sp = 113, ri = 21, ro = 27, n = 7;
+      slab("furnace", "mortar2", archPts(40, 94, 86, 122), ZF - 2, ZF + 0.5, [mouth.slice().reverse()]);
       for (let i = 0; i < n; i++) {
-        const a0 = aL + (aR - aL) * (i + 0.08) / n, a1 = aL + (aR - aL) * (i + 0.92) / n;
-        slab("furnace", "stone", [...arcPts(RO, a0, a1, 3), ...arcPts(RI, a1, a0, 3)], ZF - 1.2, ZF + (i === 4 ? 2.2 : 1.4));
+        const a0 = Math.PI * (i + 0.08) / n, a1 = Math.PI * (i + 0.92) / n, pts = [];
+        for (let t = 0; t <= 4; t++) { const a = a0 + (a1 - a0) * t / 4; pts.push([cx + ro * Math.cos(a), sp - ro * Math.sin(a)]); }
+        for (let t = 4; t >= 0; t--) { const a = a0 + (a1 - a0) * t / 4; pts.push([cx + ri * Math.cos(a), sp - ri * Math.sin(a)]); }
+        slab("furnace", i === 3 ? "stoneLt" : "stone", pts, ZF - 1.2, ZF + 1.4);
       }
+      for (const [x0, x1] of [[40, 46], [88, 94]]) { box("furnace", "stone", x0, x1, 113, 122, ZF - 1.2, ZF + 1.4); }
     }
-    // inside the bay: the sooty back of the hood and the fire bed on the hearth (the fire comes later as an effect -
-    // owner 2026-11-07, "불 텍스쳐는 뺄거지? 나중에 fx로 충당하고?" - on the bed, centre x 54.5, row 118)
-    slab("furnace", "soot", bay, -14, -12);
-    box("furnace", "soot", 26, 83, 116, 118, -12, ZF - 3);                           // the fire bed (its top recedes)
-    // the hearth lip: a long stone slab standing out over the hearth
-    box("furnace", "stone", 14, 95, 118, 122, ZF - 3, ZF + 4);
-    box("furnace", "plinthHi", 15, 94, 118, 119, ZF + 3.4, ZF + 4.2);
-    // the coal hole under the lip, a brick lintel over it
-    box("furnace", "soot", 42, 67, 130, 145, -8, -6);
-    for (let x = 41; x < 68; x += 7) box("furnace", "brick", x, Math.min(x + 6, 68), 126, 130, ZF - 1.5, ZF);
+    // inside the mouth: sooty back, the fire on its bed of embers (its own light)
+    slab("furnace", "soot", mouth, -14, -12);
+    // (no fire drawn here: owner 2026-11-07, "불 텍스쳐는 뺄거지? 나중에 fx로 충당하고?" - the flames come later as
+    // an effect laid in the mouth, centre x 67, floor row 122)
+    // the hearth sill: a long stone ledge standing out under the mouth
+    box("furnace", "stoneLt", 38, 96, 122, 125, ZF - 2, ZF + 6);
+    box("furnace", "plinthLo", 38, 96, 125, 126, ZF - 2, ZF + 5.5);
+    // the ash pit: a dark low opening under the sill with a brick lintel
+    box("furnace", "soot", 57, 83, 131, 145, -8, -6);
+    for (let x = 56; x < 84; x += 7) box("furnace", "brick", x, Math.min(x + 6, 84), 127, 131, ZF - 1.5, ZF);
 
     // ---- the chimney stack, a little narrower, with a capstone course
-    const ZC = 17;
+    const ZC = 2;
     // the stack and the furnace are one bond (owner 2026-11-07: "굴뚝이랑 화덕은 동렬 형태로" = 돌 줄을 맞춤): the same
     // stone, the same grid, the courses running on from the stack down into the furnace
     // the stack is shallow (12 deep): in this view a top recedes up K rows per cell, so a deep stack would show a tall
@@ -175,7 +169,7 @@ const FORGE = (function () {
     // ---- the porch: roof on posts with knee braces over a low stone wall, the door set in a stone wall at the right
     const ZP = 9;                                                                    // posts close under the eave (Z 12)
     for (const [a, b] of [[115, 122], [194, 202], [265, 273]]) box("porch", "timber", a, b, 79, 128, ZP - 4, ZP);
-    box("porch", "timber", 104, 284, 75, 80, ZP - 4, ZP + 0.5);                     // the beam under the eave
+    box("porch", "timber", 100, 284, 75, 80, ZP - 4, ZP + 0.5);                     // the beam under the eave
     for (const [px0, px1] of [[115, 122], [194, 202], [265, 273]]) {             // knee braces, 1:1
       if (px0 > 110) bar("porch", "timber", px0, 96, px0 - 14, 81, 4, ZP - 3.5, ZP - 0.5);
       if (px1 < 280) bar("porch", "timber", px1, 96, px1 + 14, 81, 4, ZP - 3.5, ZP - 0.5);
@@ -228,22 +222,22 @@ const FORGE = (function () {
     const ZE = 12, ZR = -40, RE = 72, RR = 25;
     const ye = Y(RE, ZE), yr = Y(RR, ZR);
     { const tri = [], quad = (a, b, c, d) => tri.push(...a, ...b, ...c, ...a, ...c, ...d), t3 = (a, b, c) => tri.push(...a, ...b, ...c);
-      const e0 = [104, ye, ZE], e1 = [287, ye, ZE], r0 = [127.5, yr, ZR], r1 = [263.5, yr, ZR], b0 = [104, ye, -80], b1 = [287, ye, -80];
-      quad(e0, e1, r1, r0); t3(e1, b1, r1); quad(b1, b0, r0, r1); quad(e0, b0, b1, e1); t3(e0, r0, b0);
+      const e0 = [60, ye, ZE], e1 = [287, ye, ZE], r0 = [60, yr, ZR], r1 = [263.5, yr, ZR], b0 = [60, ye, -80], b1 = [287, ye, -80];
+      quad(e0, e1, r1, r0); t3(e1, b1, r1); quad(b1, b0, r0, r1); quad(e0, b0, b1, e1); quad(e0, r0, b0, b0);
       const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(tri, 3)); g.computeVertexNormals();
       add(g, "roofBase", "roof"); }
-    box("roof", "fascia", 104, 287, 72, 76, ZE - 6, ZE + 1.5);
-    { const xa = 127.5, xb = 263.5;                                                    // the ridge roll
+    box("roof", "fascia", 74, 287, 72, 76, ZE - 6, ZE + 1.5);
+    { const xa = 74, xb = 263.5;                                                    // the ridge roll
       shell("tiles", "tile", (u, v) => { const th = Math.PI * u; return [xa + (xb - xa) * v, yr + 2.6 * Math.sin(th), ZR + 3.0 * Math.cos(th)]; },
             [0, 0.17, 0.33, 0.5, 0.67, 0.83, 1], [0, 1], [0, -2, 0]); }
     { const courseRows = [25, 37, 49, 61, 72];
       const slopeN = new THREE.Vector3(0, ZE - ZR, yr - ye).normalize();
       const onSlope = (x, row) => { const u = (RE - row) / (RE - RR); return new THREE.Vector3(x, ye + u * (yr - ye), ZE + u * (ZR - ZE)); };
-      const hipX = (row) => 287 - (RE - row) * 0.5, hipL = (row) => 104 + (RE - row) * 0.5;   // hipped at both ends
+      const hipX = (row) => 287 - (RE - row) * 0.5;
       for (let c = 0; c < 4; c++) {
         const rt = courseRows[c], rb = courseRows[c + 1] + 1.5, lean = 0.25 * (rb - rt);   // joints nearly upright, as the reference's
-        for (let x = 104 + (c % 2 ? -14 : 0); x < 290; x += 29) {
-          let xt0 = Math.max(x + 0.8, hipL(rt)), xt1 = x + 28.2, xb0 = Math.max(x + 0.8 + lean, hipL(rb)), xb1 = x + 28.2 + lean;
+        for (let x = 74 + (c % 2 ? -14 : 0); x < 290; x += 29) {
+          let xt0 = Math.max(x + 0.8, 74), xt1 = x + 28.2, xb0 = Math.max(x + 0.8 + lean, 74), xb1 = x + 28.2 + lean;
           xt1 = Math.min(xt1, hipX(rt)); xb1 = Math.min(xb1, hipX(rb));
           if (xt1 - xt0 < 4 || xb1 - xb0 < 4) continue;
           const hh = Math.abs(Math.sin((x + 7) * 12.9898 + c * 78.233) * 43758.5453) % 1, dz = hh > 0.85 ? 0.9 : hh < 0.12 ? -0.6 : 0.0;
@@ -262,8 +256,19 @@ const FORGE = (function () {
       }
     }
 
-    // (the hearth stands apart: owner 2026-11-07, "그냥 대장간이랑 화덕을 분리해서 옆에 둘까" - the shed's roof ends in a
-    // hip at x 104, a gap of open ground between it and the hearth's stack)
+    // ---- the lean-to at the left: a short roof down from the chimney over a post and a stone foot
+    // (back as it was: owner 2026-11-07, "그 지붕이랑 화덕 형태 지붕 잇기 전으로 돌려봐")
+    const ZL = 10;
+    box("lean-to", "timber", 12, 17, 80, 113, ZL - 6, ZL - 2);
+    courses("lean-to", [113, 124, 135, 145], () => [6, 28], ZL - 2, { w: 11, gx: 6, gr: 113, ch: 11 });
+    bar("lean-to", "roofBase", 35, 56, 2, 80, 7, ZL - 8, ZL);
+    bar("lean-to", "fascia", 35, 61, 2, 85, 3, ZL - 7, ZL + 0.5);
+    for (let i = 0, n = 4; i < n; i++) {                                           // tiles down the short slope
+      const t0 = i / n + 0.01, t1 = (i + 1) / n - 0.02;
+      const F = (u, v) => { const t = t0 + (t1 - t0) * v, x = 35 + (2 - 35) * t, row = 52 + (78 - 52) * t + 6 * u;
+        return [x, Y(row, ZL), ZL + 0.5 + (u < 0.5 ? 2.6 * u / 0.5 : 2.6 - 2.0 * (u - 0.5) / 0.5)]; };
+      shell("lean-to", i === 2 ? "tileDk" : "tile", F, [0, 0.25, 0.5, 0.75, 1], [0, 1], [0, 0, -2.5]);
+    }
 
     return parts;
   }
