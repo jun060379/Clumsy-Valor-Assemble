@@ -49,6 +49,11 @@ input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); }
       <button id="m-light" aria-pressed="false">빛만</button>
       <button id="m-layers" aria-pressed="false">층 3D</button>
     </div>
+    <div class="row seg" role="group" aria-label="벽돌">
+      <label>벽돌</label>
+      <button id="b-0" aria-pressed="true">전체 옅게</button>
+      <button id="b-1" aria-pressed="false">드러난 자국</button>
+    </div>
     <div class="row">
       <label for="hour">시간</label>
       <input type="range" id="hour" min="5.5" max="19" step="0.25" value="12">
@@ -95,6 +100,67 @@ for (const n of matNames) {
 }
 for (const p of parts) { p.mesh.castShadow = p.mesh.receiveShadow = true; p.mesh.userData.home = p.mesh.position.clone(); scene.add(p.mesh); }
 
+// ---- material patterns ("텍스처"), drawn in code on each solid's own surface: each cell moves one step up or down its
+// own ramp (or, where plaster has fallen off, shows the brick under it); lines and blocks of 2+ cells only, no lone dots
+const PAT = { plaster: 1, timber: 2, door: 3, stone: 4, stoneLt: 4, chimney: 5, sand: 6 };
+const patShader = `
+  uniform int pat, brick; uniform vec3 size; varying vec3 lp, wp;
+  float h(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+  // out: r = 0.5 + step / 4, g = (ramp + 1) / 255 for a ramp override, b = base step / 255
+  void main() {
+    float off = 0.0, ro = 0.0, bo = 0.0;
+    vec3 c = floor(wp + 0.0001);
+    if (pat == 1) {                                         // plaster over brick
+      if (brick == 0) {
+        float row = floor(c.y / 4.0), sh = mod(row, 2.0) * 5.0;
+        if (mod(c.y, 4.0) == 0.0 || mod(c.x + sh, 10.0) == 0.0) off = -1.0;   // faint joints, one step down
+      } else {
+        // patches where the plaster has come away (hand placed, low on the walls and by the corners)
+        vec3 P[7]; P[0] = vec3(48.0, 26.0, 11.0); P[1] = vec3(120.0, 104.0, 9.0); P[2] = vec3(168.0, 40.0, 10.0);
+        P[3] = vec3(276.0, 120.0, 9.0); P[4] = vec3(320.0, 24.0, 11.0); P[5] = vec3(392.0, 70.0, 10.0); P[6] = vec3(268.0, 170.0, 8.0);
+        for (int i = 0; i < 7; i++) {
+          vec2 d = (c.xy - P[i].xy) / vec2(P[i].z, P[i].z * 0.62);
+          float e = length(d) + 0.18 * h(floor(c.xy / 2.0) + float(i));   // a ragged edge, in 2-cell steps
+          if (e < 1.0) {
+            float row = floor(c.y / 3.0), sh = mod(row, 2.0) * 4.0;
+            bool joint = mod(c.y, 3.0) == 0.0 || mod(c.x + sh, 7.0) == 0.0;
+            ro = 3.0; bo = joint ? 4.0 : 2.0;               // ochre ramp: brick 2, mortar 4
+          } else if (e < 1.25) off = -1.0;                  // the broken plaster's edge
+        }
+      }
+    } else if (pat == 2) {                                  // timber grain along the long side, broken into runs
+      bool vert = size.y > size.x;
+      float along = vert ? lp.y : lp.x, across = (vert ? lp.x + size.x * 0.5 : lp.y + size.y * 0.5);
+      float w = vert ? size.x : size.y, k = floor(across);
+      float k1 = floor(w / 3.0), k2 = floor(w * 2.0 / 3.0);
+      if ((k == k1 || k == k2) && h(vec2(floor(along / 6.0), k)) > 0.4) off = -1.0;
+    } else if (pat == 3) {                                  // door planks: one grain line each, broken
+      if (mod(c.x - 199.0, 6.0) == 2.0 && h(vec2(floor(c.y / 6.0), floor(c.x / 6.0))) > 0.35) off = -1.0;
+    } else if (pat == 4 && size.x > 0.0) {                  // stone blocks: a lit top edge, chipped corners
+      vec2 q = lp.xy + size.xy * 0.5;
+      if (q.y > size.y - 1.0) off = 1.0;
+      if ((q.x < 2.0 || q.x > size.x - 2.0) && q.y < 2.0) off = -1.0;
+    } else if (pat == 5) {                                  // soot on the chimney's top courses
+      if (c.y > 210.0) off = -1.0;
+    } else if (pat == 6) {                                  // pebbles: small clumps here and there in the sand
+      vec2 b = floor(vec2(c.x, c.z) / 6.0);
+      if (h(b) > 0.86) { vec2 o = floor(vec2(h(b + 3.1), h(b + 7.7)) * 4.0); vec2 q = vec2(c.x, c.z) - b * 6.0 - o;
+        if (q.x >= 0.0 && q.x < 2.0 && q.y >= 0.0 && q.y < 3.0) off = -1.0; }
+    }
+    gl_FragColor = vec4(0.5 + off * 0.25, ro / 255.0, bo / 255.0, 1.0);
+  }`;
+const patVert = "varying vec3 lp, wp; void main() { lp = position; vec4 w = modelMatrix * vec4(position, 1.0); wp = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }";
+let brickMode = 0;
+const patMats = new Map();
+function patMat(p) {
+  const code = PAT[p.mat] || 0, g = p.mesh.geometry.parameters || {};
+  const size = g.width !== undefined && g.height !== undefined && g.depth !== undefined ? [g.width, g.height, g.depth] : [0, 0, 0];
+  const key = code + ":" + size.join(",");
+  if (!patMats.has(key)) patMats.set(key, new THREE.ShaderMaterial({ side: THREE.DoubleSide, vertexShader: patVert, fragmentShader: patShader,
+    uniforms: { pat: { value: code }, brick: { value: 0 }, size: { value: new THREE.Vector3(...size) } } }));
+  const m = patMats.get(key); m.uniforms.brick.value = brickMode; return m;
+}
+
 const sun = new THREE.DirectionalLight(0xffffff, Math.PI);   // Lambert: pi x N.L x shadow = N.L x shadow
 sun.castShadow = true;
 sun.shadow.mapSize.set(4096, 4096);
@@ -120,7 +186,7 @@ cam.projectionMatrix.multiply(new THREE.Matrix4().set(1, 0, 0, 0, 0, 1, -K, 0, 0
 cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
 
 const mkRT = () => new THREE.WebGLRenderTarget(W, H, { magFilter: THREE.NearestFilter, minFilter: THREE.NearestFilter });
-const rtId = mkRT(), rtLit = mkRT(), rtNrm = mkRT(), rtDep = mkRT();
+const rtId = mkRT(), rtLit = mkRT(), rtNrm = mkRT(), rtDep = mkRT(), rtPat = mkRT();
 const NP = PALETTE.length;
 const palData = new Uint8Array(8 * NP * 4);
 PALETTE.forEach((row, r) => { for (let s = 0; s < 8; s++) { const c = row[Math.min(s, row.length - 1)]; palData.set([c[0], c[1], c[2], STEPS[r]], (r * 8 + s) * 4); } });
@@ -128,12 +194,12 @@ const palTex = new THREE.DataTexture(palData, 8, NP, THREE.RGBAFormat);
 palTex.magFilter = palTex.minFilter = THREE.NearestFilter; palTex.needsUpdate = true;
 
 const comp = new THREE.ShaderMaterial({
-  uniforms: { tId: { value: rtId.texture }, tLit: { value: rtLit.texture }, tNrm: { value: rtNrm.texture }, tDep: { value: rtDep.texture },
+  uniforms: { tPat: { value: rtPat.texture }, tId: { value: rtId.texture }, tLit: { value: rtLit.texture }, tNrm: { value: rtNrm.texture }, tDep: { value: rtDep.texture },
               pal: { value: palTex }, mode: { value: 0 } },
   vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
   fragmentShader: `
     #include <packing>
-    uniform sampler2D tId, tLit, tNrm, tDep, pal; uniform int mode; varying vec2 vUv;
+    uniform sampler2D tPat, tId, tLit, tNrm, tDep, pal; uniform int mode; varying vec2 vUv;
     const vec2 S = vec2(${W}.0, ${H}.0);
     vec4 at(sampler2D t, vec2 c) { return texture2D(t, (c + 0.5) / S); }
     float dep(vec2 c) { return unpackRGBAToDepth(at(tDep, c)) * 3999.0; }      // in cells
@@ -147,6 +213,9 @@ const comp = new THREE.ShaderMaterial({
       vec4 id = at(tId, c);
       if (id.b < 0.5 / 255.0) discard;
       float r = floor(id.r * 255.0 + 0.5) - 1.0, base = floor(id.g * 255.0 + 0.5);
+      vec4 pt = at(tPat, c);
+      float poff = floor((pt.r - 0.5) * 4.0 + 0.5);
+      if (pt.g > 0.5 / 255.0 && mode != 1) { r = floor(pt.g * 255.0 + 0.5) - 1.0; base = floor(pt.b * 255.0 + 0.5); }
       float L = at(tLit, c).r, st = stepOf(L);
       if (mode == 1) st = 0.0;
       float d = dep(c);
@@ -188,6 +257,7 @@ const comp = new THREE.ShaderMaterial({
       float k = base + st;
       if (mode == 0 && occ >= 3.0) k -= 1.0;
       if (mode == 0 && hi == 1 && line == 0) k += 1.0;
+      if (mode == 0 && line == 0) k += poff;
       if (line == 1) k = base - 4.0; else if (line == 2) k = base + st - 2.0;
       vec3 col = palc(r, max(k, 0.0));
       if (mode == 2) col = vec3(st == 1.0 ? 0.95 : st == 0.0 ? 0.7 : st == -1.0 ? 0.45 : 0.22) * (occ >= 3.0 ? 0.75 : 1.0) + (hi == 1 ? 0.15 : 0.0);
@@ -200,6 +270,8 @@ const quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
 const pCam = new THREE.PerspectiveCamera(35, W / H, 1, 6000);
 let yaw = -0.6, pitch = 0.3, spread = 14, mode = "game";
+for (const b of [0, 1]) document.getElementById("b-" + b).addEventListener("click", () => { brickMode = b;
+  for (const k of [0, 1]) document.getElementById("b-" + k).setAttribute("aria-pressed", String(k === b)); if (mode !== "ref") render(); });
 const hourEl = document.getElementById("hour");
 
 function pass(rt, pick) {
@@ -234,6 +306,7 @@ function render() {
   pass(rtLit, () => litMat);
   pass(rtNrm, () => nrmMat);
   pass(rtDep, () => depMat);
+  pass(rtPat, p => patMat(p));
   renderer.setRenderTarget(null);
   renderer.setClearColor(0x000000, 0);
   renderer.clear();
