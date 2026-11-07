@@ -117,7 +117,7 @@ const HALL = (function () {
       const fx = side ? mirror : (x) => x;
       const P = (x, y, z) => [fx(x), y, z];
       // the roof body as one closed solid: front slope, hip end, back slope (the gable hides the inner end)
-      const e0 = P(12, ye, ZE), e1 = P(142, ye, ZE), r0 = P(62, yr, ZR), r1 = P(142, yr, ZR), b0 = P(12, ye, ZB), b1 = P(142, ye, ZB);
+      const e0 = P(12, ye, ZE), e1 = P(218, ye, ZE), r0 = P(62, yr, ZR), r1 = P(218, yr, ZR), b0 = P(12, ye, ZB), b1 = P(218, ye, ZB);   // runs on behind the gable to the middle
       const tri = [];
       const quad = (a, b, c, d) => tri.push(...a, ...b, ...c, ...a, ...c, ...d);
       const t3 = (a, b, c) => tri.push(...a, ...b, ...c);
@@ -137,12 +137,12 @@ const HALL = (function () {
       for (let c = 0; c < 5; c++) {
         const rt = courses[c], rb = courses[c + 1] + 1.5;               // each course hangs 1.5 rows over the next
         const lean = 0.35 * (rb - rt);
-        for (let x = (c % 2 ? -11 : 0) + 4; x < 172; x += 22) {
+        for (let x = (c % 2 ? -11 : 0) + 4; x < 218; x += 22) {
           let xt0 = x + 1.2, xt1 = x + 20.8, xb0 = xt0 - lean, xb1 = xt1 - lean;
           const ht = hipX(rt), hb = hipX(rb);
           if (xt1 <= ht && xb1 <= hb) continue;
-          xt0 = Math.max(xt0, ht); xb0 = Math.max(xb0, hb); xt1 = Math.min(Math.max(xt1, ht + 1), 142); xb1 = Math.min(Math.max(xb1, hb + 1), 142);
-          if (xt0 >= 142 || xb0 >= 142) continue;
+          xt0 = Math.max(xt0, ht); xb0 = Math.max(xb0, hb); xt1 = Math.min(Math.max(xt1, ht + 1), 218); xb1 = Math.min(Math.max(xb1, hb + 1), 218);
+          if (xt0 >= 218 || xb0 >= 218) continue;
           const lt = 1.6, lb = 4.6;
           const v = [onSlope(xb0, rb), onSlope(xb1, rb), onSlope(xt1, rt), onSlope(xt0, rt)];
           const front = [v[0].clone().addScaledVector(slopeN, lb), v[1].clone().addScaledVector(slopeN, lb),
@@ -158,7 +158,7 @@ const HALL = (function () {
     }
 
     // ---- the gable (front at Z 8)
-    const ZG = 8;
+    const ZG = 16;                                            // the gable stands out in front of the wing eaves (Z 12)
     const vU = (x) => 40 + Math.abs(x - 218) * 1.05;          // the verge's underside, as a row
     slab("gable", "plaster", [[142, 264], [294, 264], [294, vU(294)], [218, 40], [142, vU(142)]], -40, ZG);
     for (const [a, b] of [[142, 150], [189, 195], [241, 247], [286, 294]]) {
@@ -213,12 +213,12 @@ const HALL = (function () {
     }
 
     // steps, three treads stepping out toward the viewer
-    box("steps", "stoneLt", 182, 254, 262, 268, -10, 14);
-    box("steps", "stoneLt", 176, 260, 268, 274, -10, 20);
-    box("steps", "stoneLt", 170, 266, 274, 280, -10, 26);
+    box("steps", "stoneLt", 182, 254, 262, 268, -10, 22);
+    box("steps", "stoneLt", 176, 260, 268, 274, -10, 28);
+    box("steps", "stoneLt", 170, 266, 274, 280, -10, 34);
 
     // the verges: two thick boards from the apex, an eave board under each, and the short gable roof behind them
-    const ZV0 = 6, ZV1 = 14;
+    const ZV0 = 14, ZV1 = 22;
     for (const s of [-1, 1]) {
       const xe = 218 + s * 112, re = 28 + 112 * 1.07;
       bar("verge", "verge", 218, 28 + 6, xe, re + 6, 12, ZV0, ZV1);
@@ -231,8 +231,8 @@ const HALL = (function () {
       hexa("verge", "tile", q);
     }
     // the finial on the apex
-    { const g = new THREE.CylinderGeometry(1.6, 1.6, 26, 8); const m = add(g, "finial", "finial"); m.position.set(218, Y(18, 10), 10); }
-    { const g = new THREE.SphereGeometry(3, 12, 8); const m = add(g, "ball", "finial"); m.position.set(218, Y(4, 10), 10); }
+    { const g = new THREE.CylinderGeometry(1.6, 1.6, 26, 8); const m = add(g, "finial", "finial"); m.position.set(218, Y(18, 18), 18); }
+    { const g = new THREE.SphereGeometry(3, 12, 8); const m = add(g, "ball", "finial"); m.position.set(218, Y(4, 18), 18); }
 
     return parts;
   }
