@@ -13,6 +13,8 @@ shader_type canvas_item;
 // (white source-atop 0.8), 2 / 3 = afterimage (never pixelated: rgb is the tint, 0.75 / 0.8 of it over the sprite).
 uniform int mode = 2;              // 0 off, 1 dot, 2 dot + shading
 uniform bool marked = false;
+uniform int style = 0;            // PREVIEW (owner 2026-11-07, not approved): 1 = outline in the inner colour's dark shade,
+                                   // inner contour lines on the darker side of a colour break, speckle smoothed per region
 uniform float zoom = 1.0;          // screen px per world px (draws without a slot)
 const int NS = 16;
 uniform vec4 s_o[16];              // slot: integer world origin xy, fractional part xy
@@ -118,6 +120,23 @@ bool filled(sampler2D t, ivec2 cl, int si) {
 	return solid(t, cl + ivec2(1, 0), si) || solid(t, cl - ivec2(1, 0), si) || solid(t, cl + ivec2(0, 1), si) || solid(t, cl - ivec2(0, 1), si);
 }
 
+
+float lum(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
+// the dark shade of a colour (house style: lines are the inside colour, darker, a little cooler; never black)
+vec3 dark(vec3 c, float k) { return clamp(c * k * vec3(0.92, 0.9, 1.12) + vec3(4.0, 2.0, 10.0), 0.0, 255.0); }
+// region-preserving smoothing: the 3x3 solid neighbours that are close in colour (same material), averaged
+vec3 smooth3(sampler2D t, ivec2 cl, int si, vec3 c) {
+	vec3 acc = c * 2.0; float w = 2.0;
+	int R = style == 2 ? 2 : 1;
+	for (int dy = -R; dy <= R; dy++) for (int dx = -R; dx <= R; dx++) {
+		if (dx == 0 && dy == 0) continue;
+		vec4 n = wpx(t, cl + ivec2(dx, dy), si);
+		if (n.a < 100.0 || distance(n.rgb, c) > (style == 2 ? 56.0 : 46.0)) continue;
+		acc += n.rgb; w += 1.0;
+	}
+	return acc / w;
+}
+
 vec3 grade(vec3 col, float lit) {
 	if (mode == 2) {
 		float L = dot(col, vec3(0.299, 0.587, 0.114)) / 255.0 * lit;
@@ -174,10 +193,41 @@ void fragment() {
 			any = mode == 2 && (solid(TEXTURE, cl + ivec2(1, 0), si) || solid(TEXTURE, cl - ivec2(1, 0), si)
 				|| solid(TEXTURE, cl + ivec2(0, 1), si) || solid(TEXTURE, cl - ivec2(0, 1), si));
 			if (any) o = vec4(24.0, 14.0, 36.0, 255.0) / 255.0;
+			if (any && style >= 1) {
+				// the outline takes the dark shade of the colour it wraps
+				vec3 acc = vec3(0.0); float w = 0.0;
+				for (int k = 0; k < 4; k++) {
+					ivec2 d = k == 0 ? ivec2(1, 0) : k == 1 ? ivec2(-1, 0) : k == 2 ? ivec2(0, 1) : ivec2(0, -1);
+					vec4 n = wpx(TEXTURE, cl + d, si);
+					if (n.a >= 100.0) { acc += n.rgb; w += 1.0; }
+				}
+				o = vec4(floor(dark(acc / w, 0.3) / 8.0 + 0.5) * 8.0 / 255.0, 1.0);
+			}
 		} else {
 			vec4 Lt = s_l[si];
 			float vy = Lt.y > Lt.x ? (float(cl.y) - Lt.x) / (Lt.y - Lt.x) : 0.5;
-			o = vec4(grade(c.rgb, mode == 2 ? 1.08 - 0.22 * vy : 1.0) / 255.0, 1.0);
+			vec3 cc = c.rgb;
+			bool line = false;
+			if (style >= 1) {
+				cc = smooth3(TEXTURE, cl, si, c.rgb);
+				// inner contour: a strong colour break to a 4-neighbour, drawn on the darker side only (1 px)
+				// a pixel that differs from 3-4 of its neighbours is a speck, not a line: it takes their colour, except in
+				// the head (eyes and mouth are one or two dots), where it is kept and drawn as a line
+				float L = lum(c.rgb);
+				int nd = 0, nb = 0; vec3 dsum = vec3(0.0);
+				for (int k = 0; k < 4; k++) {
+					ivec2 d = k == 0 ? ivec2(1, 0) : k == 1 ? ivec2(-1, 0) : k == 2 ? ivec2(0, 1) : ivec2(0, -1);
+					vec4 n = wpx(TEXTURE, cl + d, si);
+					if (n.a < 100.0) continue;
+					if (distance(n.rgb, c.rgb) > (style == 2 ? 64.0 : 80.0)) { nd++; dsum += n.rgb; if (L < lum(n.rgb) - 16.0) nb++; }
+				}
+				bool head = vy < 0.15;
+				if (nd >= 3 && !head) cc = dsum / float(nd);
+				else if (style == 2 && head && nb < 2) line = false;          // the face: no lines but the eyes (dark dots with light on 2+ sides)
+				else line = nb >= 1;
+			}
+			o = vec4(grade(cc, mode == 2 ? 1.08 - 0.22 * vy : 1.0) / 255.0, 1.0);
+			if (line) o.rgb = floor(dark(o.rgb * 255.0, 0.55) / 8.0 + 0.5) * 8.0 / 255.0;
 		}
 		o *= vcol;
 		for (int i = 0; i < 3; i++) {

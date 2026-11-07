@@ -1,0 +1,291 @@
+<title>본관 층 분리 조명</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* layout: one stage (the building at true pixels, scaled up) with a control strip under it; single dark look like the
+   sprite sheets the owner reviews on */
+:root {
+  --bg: #2f3d48; --panel: #263240; --line: #3e5060; --fg: #e8e1d2; --dim: #9fb0bb; --accent: #e0a24a;
+  --f-ui: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --f-num: "IBM Plex Mono", ui-monospace, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-ui); font-size: 14px; }
+.wrap { max-width: 980px; margin: 0 auto; padding-block: 14px 28px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 12px; }
+h1 { font-size: 17px; margin: 0; font-weight: 600; text-wrap: balance; }
+.sub { color: var(--dim); font-size: 12.5px; margin: 2px 0 0; }
+.stage { position: relative; background: #556a5a; border: 1px solid var(--line); border-radius: 4px; overflow: hidden;
+  touch-action: none; aspect-ratio: 436 / 296; max-width: 100%; }
+.stage canvas, .stage img { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+.stage.free canvas { cursor: grab; }
+.ctl { display: grid; gap: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 12px; }
+.row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.seg button { font: inherit; font-size: 13px; color: var(--fg); background: transparent; border: 1px solid var(--line);
+  border-radius: 3px; padding: 6px 10px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #241a0c; border-color: var(--accent); font-weight: 600; }
+.seg button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+label { color: var(--dim); font-size: 12.5px; min-width: 3.6em; }
+input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); }
+.val { font-family: var(--f-num); font-variant-numeric: tabular-nums; font-size: 13px; min-width: 4.2em; text-align: right; }
+.note { color: var(--dim); font-size: 12.5px; line-height: 1.55; margin: 0; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; color: var(--dim); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400&family=IBM+Plex+Sans+KR:wght@400;600&display=swap">
+
+<div class="wrap">
+  <div>
+    <h1>본관 · 층 분리 조명</h1>
+    <p class="sub">스프라이트에서 구운 명암을 빼고, 손으로 적은 입체(층)에 해를 따로 비춘다. 색은 마을 팔레트의 같은 재질 램프 안에서만 고른다.</p>
+  </div>
+  <div class="stage" id="stage">
+    <canvas id="cv"></canvas>
+    <img id="orig" alt="원본 스프라이트" hidden>
+  </div>
+  <div class="ctl">
+    <div class="row seg" role="group" aria-label="보기">
+      <button id="m-game" aria-pressed="true">조명 결과</button>
+      <button id="m-flat" aria-pressed="false">명암 뺀 바탕</button>
+      <button id="m-light" aria-pressed="false">빛만</button>
+      <button id="m-layers" aria-pressed="false">층 분리 3D</button>
+      <button id="m-orig" aria-pressed="false">원본</button>
+    </div>
+    <div class="row">
+      <label for="hour">시간</label>
+      <input type="range" id="hour" min="5.5" max="19" step="0.25" value="12">
+      <span class="val" id="hour-v">12:00</span>
+    </div>
+    <div class="row" id="spread-row" hidden>
+      <label for="spread">벌리기</label>
+      <input type="range" id="spread" min="1" max="6" step="0.1" value="3">
+      <span class="val" id="spread-v">×3.0</span>
+    </div>
+    <div class="legend" id="legend" hidden></div>
+    <p class="note" id="note">해는 하나다. 왼쪽에서 떠서 오른쪽으로 지고, 정오엔 앞쪽 높이, 아침·저녁엔 마을 뒤쪽에 있다. 빛을 받는 면은 램프 한 칸 밝게, 덜 받는 면은 한 칸, 가려진 곳은 두 칸 어둡게.</p>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script>
+const META = __META__;
+const MAT_SRC = "__MAT__";
+const ORIG_SRC = "__ORIG__";
+const W = META.w, H = META.h;
+
+const cv = document.getElementById("cv");
+const stage = document.getElementById("stage");
+const renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: false, alpha: true, preserveDrawingBuffer: true });
+renderer.outputColorSpace = THREE.LinearSRGBColorSpace;   // palette bytes go out as they are
+renderer.toneMapping = THREE.NoToneMapping;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.BasicShadowMap;            // hard edges: one cell is in or out
+renderer.setPixelRatio(1);
+
+function loadImg(src) { return new Promise(r => { const i = new Image(); i.onload = () => r(i); i.src = src; }); }
+
+(async function main() {
+  const mi = await loadImg(MAT_SRC);
+  const c2 = document.createElement("canvas"); c2.width = W; c2.height = H;
+  const g = c2.getContext("2d"); g.drawImage(mi, 0, 0);
+  const mat = g.getImageData(0, 0, W, H).data;               // r = ramp + 1, g = flat step, b = layer, a = solid
+  document.getElementById("orig").src = ORIG_SRC;
+
+  // textures (row 0 = the sprite's top row; uv v = y / H, flipY off)
+  const tex = (data) => { const t = new THREE.DataTexture(data, W, H, THREE.RGBAFormat); t.magFilter = t.minFilter = THREE.NearestFilter;
+    t.flipY = false; t.generateMipmaps = false; t.colorSpace = THREE.NoColorSpace; t.needsUpdate = true; return t; };
+  const matTex = tex(new Uint8Array(mat));
+  const albedo = new Uint8Array(W * H * 4);
+  for (let i = 0; i < W * H; i++) {
+    if (!mat[i * 4 + 3]) continue;
+    const c = META.palette[mat[i * 4] - 1][mat[i * 4 + 1]];
+    albedo.set([c[0], c[1], c[2], 255], i * 4);
+  }
+  const albTex = tex(albedo);
+  const NP = META.palette.length, NS = 8;
+  const pal = new Uint8Array(NS * NP * 4);
+  META.palette.forEach((row, r) => { for (let s = 0; s < NS; s++) { const c = row[Math.min(s, row.length - 1)];
+    pal.set([c[0], c[1], c[2], META.steps[r]], (r * NS + s) * 4); } });
+  const palTex = new THREE.DataTexture(pal, NS, NP, THREE.RGBAFormat);
+  palTex.magFilter = palTex.minFilter = THREE.NearestFilter; palTex.needsUpdate = true;
+
+  // ---- the solid form: one mesh per proxy plane (screen cell x, y down; z toward the viewer), each showing only its cells
+  const scene = new THREE.Scene();
+  const layerGroup = new THREE.Group(); scene.add(layerGroup);
+  const layerMeshes = [];
+  META.planes.forEach((pl, li) => {
+    const at = pl.at || [0, 0], dx = pl.dzdx || 0, dy = pl.dzdy || 0;
+    const zf = (x, y) => pl.z + dx * (x - at[0]) + dy * (y - at[1]);
+    const n = pl.n ? new THREE.Vector3(pl.n[0], pl.n[1], pl.n[2]).normalize() : new THREE.Vector3(-dx, dy, 1).normalize();
+    // the plane over the polygon's bounding box (cells outside its own layer are cut by the mask)
+    const xs = pl.poly.map(p => p[0]), ys = pl.poly.map(p => p[1]);
+    const x0 = Math.max(0, Math.min(...xs) - 2), x1 = Math.min(W, Math.max(...xs) + 2);
+    const y0 = Math.max(0, Math.min(...ys) - 2), y1 = Math.min(H, Math.max(...ys) + 2);
+    const corners = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+    const pos = [], nor = [], uv = [];
+    for (const [x, y] of corners) { pos.push(x, -y, zf(x, y)); nor.push(n.x, n.y, n.z); uv.push(x / W, y / H); }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
+    geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+    geo.setIndex([0, 3, 1, 1, 3, 2]);
+    const mask = new Uint8Array(W * H * 4);
+    let count = 0;
+    for (let i = 0; i < W * H; i++) if (mat[i * 4 + 3] && mat[i * 4 + 2] === li) { mask.set([255, 255, 255, 255], i * 4); count++; }
+    const mTex = tex(mask);
+    const lit = new THREE.MeshLambertMaterial({ color: 0xffffff, alphaMap: mTex, alphaTest: 0.5, side: THREE.DoubleSide });
+    const flat = new THREE.MeshBasicMaterial({ map: albTex, alphaMap: mTex, alphaTest: 0.5, side: THREE.DoubleSide });
+    const mesh = new THREE.Mesh(geo, lit);
+    mesh.receiveShadow = true;
+    mesh.userData = { lit, flat, base: pos.slice(), name: pl.name, count };
+    layerGroup.add(mesh); layerMeshes.push(mesh);
+  });
+
+  // shadow casters: the proxy's solids (true volumes), invisible to the camera
+  const ghost = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
+  const solidGroup = new THREE.Group(); scene.add(solidGroup);
+  for (const s of META.solids) {
+    let mesh;
+    if (s.yz) {
+      // a roof: its (y, z) profile run across the x span
+      const xs = s.xy.map(p => p[0]);
+      const sh = new THREE.Shape(s.yz.map(([y, z]) => new THREE.Vector2(z, -y)));
+      const geo = new THREE.ExtrudeGeometry(sh, { depth: Math.max(...xs) - Math.min(...xs), bevelEnabled: false });
+      mesh = new THREE.Mesh(geo, ghost);
+      mesh.rotation.y = -Math.PI / 2;              // shape u -> world z, extrusion -> world -x
+      mesh.position.x = Math.max(...xs);
+    } else {
+      const sh = new THREE.Shape(s.xy.map(([x, y]) => new THREE.Vector2(x, -y)));
+      const geo = new THREE.ExtrudeGeometry(sh, { depth: s.z[1] - s.z[0], bevelEnabled: false });
+      mesh = new THREE.Mesh(geo, ghost);
+      mesh.position.z = s.z[0];
+    }
+    mesh.castShadow = true;
+    solidGroup.add(mesh);
+  }
+
+  const sun = new THREE.DirectionalLight(0xffffff, Math.PI);   // Lambert: pi x N.L x shadow -> N.L x shadow
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(4096, 4096);
+  Object.assign(sun.shadow.camera, { left: -420, right: 420, top: 420, bottom: -420, near: 1, far: 3000 });
+  sun.shadow.bias = -0.0015;
+  sun.shadow.normalBias = 1.2;
+  const center = new THREE.Vector3(W / 2, -H / 2, -60);
+  sun.target.position.copy(center);
+  scene.add(sun, sun.target);
+
+  // the sun of the town (lit.gd sun3): left at dawn, right at dusk; behind the town early and late, in front at noon
+  function sunDir(h) {
+    const day = Math.min(1, Math.max(0, (h - 5.5) / 13.5)), a = day * Math.PI;
+    return new THREE.Vector3(-Math.cos(a), 0.25 + 0.9 * Math.sin(a), -0.55 + 1.0 * Math.sin(a)).normalize();
+  }
+
+  // ---- passes
+  const frontCam = new THREE.OrthographicCamera(0, W, 0, -H, 1, 4000);
+  frontCam.position.set(0, 0, 1500);
+  const rt = new THREE.WebGLRenderTarget(W, H, { magFilter: THREE.NearestFilter, minFilter: THREE.NearestFilter });
+  const quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  const quadMat = new THREE.ShaderMaterial({
+    uniforms: { lit: { value: rt.texture }, mat: { value: matTex }, pal: { value: palTex }, mode: { value: 0 } },
+    vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
+    fragmentShader: `
+      uniform sampler2D lit, mat, pal; uniform int mode; varying vec2 vUv;
+      void main() {
+        vec2 c = (floor(vec2(vUv.x, 1.0 - vUv.y) * vec2(${W}.0, ${H}.0)) + 0.5) / vec2(${W}.0, ${H}.0);
+        vec4 m = texture2D(mat, c);
+        if (m.a < 0.5) discard;
+        float r = floor(m.r * 255.0 + 0.5) - 1.0, s = floor(m.g * 255.0 + 0.5);
+        float L = texture2D(lit, vec2(c.x, 1.0 - c.y)).r;
+        float st = L > 0.75 ? 1.0 : L > 0.35 ? 0.0 : L > 0.06 ? -1.0 : -2.0;   // one light test per cell
+        if (mode == 1) st = 0.0;
+        float n = texture2D(pal, vec2(0.5 / 8.0, (r + 0.5) / ${NP}.0)).a * 255.0;
+        float k = clamp(s + st, 0.0, n - 1.0);
+        vec3 col = texture2D(pal, vec2((k + 0.5) / 8.0, (r + 0.5) / ${NP}.0)).rgb;
+        if (mode == 2) col = vec3(st == 1.0 ? 0.95 : st == 0.0 ? 0.7 : st == -1.0 ? 0.45 : 0.22);
+        gl_FragColor = vec4(col, 1.0);
+      }`,
+  });
+  const quadScene = new THREE.Scene();
+  quadScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), quadMat));
+
+  // the 3D layer view: perspective, drag to turn
+  const pCam = new THREE.PerspectiveCamera(35, 436 / 296, 1, 6000);
+  let yaw = -0.6, pitch = 0.25, spread = 3;
+  const view3d = () => {
+    const d = 760;
+    pCam.position.set(center.x + d * Math.sin(yaw) * Math.cos(pitch), center.y + d * Math.sin(pitch), d * Math.cos(yaw) * Math.cos(pitch));
+    pCam.lookAt(center.x, center.y, 0);
+  };
+
+  let mode = "game";
+  const hourEl = document.getElementById("hour");
+  function render() {
+    const h = parseFloat(hourEl.value);
+    const hh = Math.floor(h), mm = Math.round((h - hh) * 60);
+    document.getElementById("hour-v").textContent = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+    sun.position.copy(center).addScaledVector(sunDir(h), 1500);
+    if (mode === "layers") {
+      const r = stage.getBoundingClientRect();
+      renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+      renderer.setSize(r.width, r.height, false);
+      layerMeshes.forEach(m => { m.material = m.userData.flat;
+        const p = m.geometry.attributes.position; const b = m.userData.base;
+        for (let i = 0; i < 4; i++) p.setZ(i, b[i * 3 + 2] * spread);
+        p.needsUpdate = true; });
+      solidGroup.visible = false;
+      view3d();
+      renderer.setRenderTarget(null);
+      renderer.setClearColor(0x2a3640, 1);
+      renderer.render(scene, pCam);
+      return;
+    }
+    renderer.setPixelRatio(1);
+    renderer.setSize(W, H, false);
+    layerMeshes.forEach(m => { m.material = m.userData.lit;
+      const p = m.geometry.attributes.position; const b = m.userData.base;
+      for (let i = 0; i < 4; i++) p.setZ(i, b[i * 3 + 2]);
+      p.needsUpdate = true; });
+    solidGroup.visible = true;
+    renderer.setRenderTarget(rt);
+    renderer.setClearColor(0x000000, 0);
+    renderer.clear();
+    renderer.render(scene, frontCam);
+    renderer.setRenderTarget(null);
+    renderer.setClearColor(0x000000, 0);
+    renderer.clear();
+    quadMat.uniforms.mode.value = mode === "flat" ? 1 : mode === "light" ? 2 : 0;
+    renderer.render(quadScene, quadCam);
+  }
+
+  // controls
+  const modes = { game: "m-game", flat: "m-flat", light: "m-light", layers: "m-layers", orig: "m-orig" };
+  const legend = document.getElementById("legend");
+  const hues = ["#e07a5f", "#81b29a", "#f2cc8f", "#3d85c6", "#c27ba0", "#9fc5e8", "#ffd966", "#b6d7a8", "#ea9999", "#a4c2f4"];
+  legend.innerHTML = META.planes.map((p, i) => `<span><i style="background:${hues[i % hues.length]}"></i>${i + 1}. ${p.name}</span>`).join("");
+  function setMode(m) {
+    mode = m;
+    for (const [k, id] of Object.entries(modes)) document.getElementById(id).setAttribute("aria-pressed", String(k === m));
+    document.getElementById("orig").hidden = m !== "orig";
+    cv.hidden = m === "orig";
+    document.getElementById("spread-row").hidden = m !== "layers";
+    legend.hidden = m !== "layers";
+    stage.classList.toggle("free", m === "layers");
+    render();
+  }
+  for (const [k, id] of Object.entries(modes)) document.getElementById(id).addEventListener("click", () => setMode(k));
+  hourEl.addEventListener("input", render);
+  const spreadEl = document.getElementById("spread");
+  spreadEl.addEventListener("input", () => { spread = parseFloat(spreadEl.value);
+    document.getElementById("spread-v").textContent = "×" + spread.toFixed(1); render(); });
+  let drag = null;
+  stage.addEventListener("pointerdown", e => { if (mode !== "layers") return; drag = [e.clientX, e.clientY, yaw, pitch]; stage.setPointerCapture(e.pointerId); });
+  stage.addEventListener("pointermove", e => { if (!drag) return;
+    yaw = drag[2] - (e.clientX - drag[0]) * 0.008;
+    pitch = Math.max(-0.2, Math.min(1.2, drag[3] + (e.clientY - drag[1]) * 0.006));
+    render(); });
+  stage.addEventListener("pointerup", () => { drag = null; });
+  window.addEventListener("resize", () => { if (mode === "layers") render(); });
+  render();
+})();
+</script>
