@@ -159,9 +159,8 @@ const patShader = `
     } else if (pat == 8) {                                  // tiles: a short scratch on some, along the slope (2-3 cells)
       vec2 g = floor(vec2(c.x / 7.0, c.y / 5.0));
       float lx = c.x - g.x * 7.0, ly = c.y - g.y * 5.0;
-      if (h(g + 2.7) > 0.62 && ly >= 1.0 && ly < 4.0 && lx == 2.0 + ly) off = -1.0;          // a scratch
-      if (h(g + 8.1) > 0.8 && ly == 2.0 && lx >= 1.0 && lx < 4.0) off = -1.0;                   // a hairline crack
-      if (h(g + 4.4) > 0.86 && ly == 1.0 && lx >= 3.0 && lx < 6.0) off = 1.0;                   // a worn, sunlit edge
+      if (h(g + 2.7) > 0.8 && ly >= 1.0 && ly < 4.0 && lx == 2.0 + ly) off = -1.0;           // a scratch, now and then
+
     } else if (pat == 5) {                                  // soot on the chimney's top courses
       if (c.y > 210.0) off = -1.0;
     } else if (pat == 6) {                                  // pebbles: small clumps here and there in the sand
@@ -188,7 +187,7 @@ sun.castShadow = true;
 sun.shadow.mapSize.set(4096, 4096);
 Object.assign(sun.shadow.camera, { left: -360, right: 360, top: 360, bottom: -360, near: 1, far: 3000 });
 sun.shadow.bias = -0.0008;
-sun.shadow.normalBias = 0.6;
+sun.shadow.normalBias = 1.0;
 const center = new THREE.Vector3(W / 2, 110, -30);
 sun.target.position.copy(center);
 scene.add(sun, sun.target);
@@ -208,7 +207,7 @@ cam.projectionMatrix.multiply(new THREE.Matrix4().set(1, 0, KX, 0, 0, 1, -K, 0, 
 cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
 
 const mkRT = () => new THREE.WebGLRenderTarget(RW, H, { magFilter: THREE.NearestFilter, minFilter: THREE.NearestFilter });
-const rtId = mkRT(), rtLit = mkRT(), rtNrm = mkRT(), rtDep = mkRT(), rtPat = mkRT();
+const rtId = mkRT(), rtLit = mkRT(), rtFace = mkRT(), rtNrm = mkRT(), rtDep = mkRT(), rtPat = mkRT();
 const NP = PALETTE.length;
 const palData = new Uint8Array(8 * NP * 4);
 PALETTE.forEach((row, r) => { for (let s = 0; s < 8; s++) { const c = row[Math.min(s, row.length - 1)]; palData.set([c[0], c[1], c[2], STEPS[r]], (r * 8 + s) * 4); } });
@@ -250,12 +249,12 @@ function twinTex(kind) {
 const shadeTex = twinTex("shade"), sunTex = twinTex("sun");
 
 const comp = new THREE.ShaderMaterial({
-  uniforms: { tPat: { value: rtPat.texture }, tId: { value: rtId.texture }, tLit: { value: rtLit.texture }, tNrm: { value: rtNrm.texture }, tDep: { value: rtDep.texture },
+  uniforms: { tPat: { value: rtPat.texture }, tId: { value: rtId.texture }, tLit: { value: rtLit.texture }, tFace: { value: rtFace.texture }, tNrm: { value: rtNrm.texture }, tDep: { value: rtDep.texture },
               pal: { value: palTex }, shadeT: { value: shadeTex }, sunT: { value: sunTex }, mode: { value: 0 } },
   vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
   fragmentShader: `
     #include <packing>
-    uniform sampler2D tPat, tId, tLit, tNrm, tDep, pal, shadeT, sunT; uniform int mode; varying vec2 vUv;
+    uniform sampler2D tPat, tId, tLit, tFace, tNrm, tDep, pal, shadeT, sunT; uniform int mode; varying vec2 vUv;
     const vec2 S = vec2(${RW}.0, ${H}.0);
     vec4 at(sampler2D t, vec2 c) { return texture2D(t, (c + 0.5) / S); }
     float dep(vec2 c) { return unpackRGBAToDepth(at(tDep, c)) * 3999.0; }      // in cells
@@ -272,7 +271,14 @@ const comp = new THREE.ShaderMaterial({
       vec4 pt = at(tPat, c);
       float poff = floor((pt.r - 0.5) * 4.0 + 0.5);
       if (pt.g > 0.5 / 255.0 && mode != 1) { r = floor(pt.g * 255.0 + 0.5) - 1.0; base = floor(pt.b * 255.0 + 0.5); }
-      float L = at(tLit, c).r, st = stepOf(L);
+      // two light readings (owner 2026-11-07: a whole facade must not flip colour at some hour): how much a face
+      // turns to the sun (no shadows) and whether something solid stands between it and the sun (cast shade).
+      // Facing moves a face at most one step either way and keeps its own hue; only cast shade (and the corners'
+      // occlusion) is cool, dull and deep.
+      float L = at(tLit, c).r, Lf = at(tFace, c).r;
+      bool castSh = Lf > 0.2 && L < Lf * 0.45;     // grazing faces never count as shaded: no acne specks
+      float st = Lf > 0.7 ? 1.0 : Lf > 0.04 ? 0.0 : -1.0;          // only faces fully turned away step down
+      if (castSh) st = min(st, 0.0) - 2.0;
       if (mode == 1) st = 0.0;
       float d = dep(c);
       vec3 n = at(tNrm, c).rgb * 2.0 - 1.0;
@@ -324,7 +330,7 @@ const comp = new THREE.ShaderMaterial({
       if (mode == 0 && line == 0) {
         float n = texture2D(pal, vec2(0.5 / 8.0, (r + 0.5) / ${NP}.0)).a * 255.0;
         vec2 tc = vec2((clamp(max(k, 0.0), 0.0, n - 1.0) + 0.5) / 8.0, (r + 0.5) / ${NP}.0);
-        if (st < 0.0 || aoed) col = texture2D(shadeT, tc).rgb;          // shade: cooler, duller
+        if (castSh || aoed) col = texture2D(shadeT, tc).rgb;              // cast shade: cooler, duller
         else if (st > 0.0) col = texture2D(sunT, tc).rgb;              // full sun: warmer, richer
       }
       // the outline: the dark of the warm ramps (the reference draws stone, plaster and wood alike in dark brown,
@@ -374,6 +380,7 @@ function render() {
   renderer.setSize(RW, H, false);
   pass(rtId, p => idMats[p.mat]);
   pass(rtLit, () => litMat);
+  sun.castShadow = false; pass(rtFace, () => litMat); sun.castShadow = true;
   pass(rtNrm, () => nrmMat);
   pass(rtDep, () => depMat);
   pass(rtPat, p => patMat(p));

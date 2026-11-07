@@ -231,9 +231,12 @@ const HALL = (function () {
           // one curved tile: along the slope the lip / body / rolled foot profile, across it a bulge (higher in the
           // middle), so the light turns over each tile instead of lying flat on it
           const prof = (v) => v < fq ? lt + (lq - lt) * v / fq : v < f ? lq + (lm - lq) * (v - fq) / (f - fq) : lm + (lb - lm) * (v - f) / (1 - f);
+          // (no bulge across: it striped every tile; the reference tile is one body, lit lip, shaded foot, its lower
+          // corners rounded off)
           const F = (u, v) => {
-            const x = (xt0 + u * (xt1 - xt0)) * (1 - v) + (xb0 + u * (xb1 - xb0)) * v, row = rt + (rb - rt) * v;
-            const p = onSlope(x, row).addScaledVector(slopeN, prof(v) + 1.0 * Math.sin(Math.PI * u));
+            const nr = v > 0.78 ? 1 - 0.14 * (v - 0.78) / 0.22 : 1, uu = 0.5 + (u - 0.5) * nr;
+            const x = (xt0 + uu * (xt1 - xt0)) * (1 - v) + (xb0 + uu * (xb1 - xb0)) * v, row = rt + (rb - rt) * v;
+            const p = onSlope(x, row).addScaledVector(slopeN, prof(v));
             return [p.x, p.y, p.z];
           };
           shell("tiles", tmat, F, [0, 0.15, 0.35, 0.5, 0.65, 0.85, 1], [0, fq, 0.4, f, 0.83, 1], [-slopeN.x * 2, -slopeN.y * 2, -slopeN.z * 2]);
