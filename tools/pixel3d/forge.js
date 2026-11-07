@@ -110,7 +110,7 @@ const FORGE = (function () {
     for (let x = 101; x < 283; x += 7) box("back wall", "plank", x, Math.min(x + 6, 283), 76, 145, -16, -15.2);
 
     // ---- the furnace: a wide stone body under the chimney, its shoulders stepping in to the stack
-    const ZF = -16;                                                                  // set back under the joined roof, its mouth still in plain view (owner 2026-11-07)
+    const ZF = -84;                                                                  // at the back, just behind the roof's back eave (Z -80): the open floor runs to it under the roof
     const fspan = (r) => r < 72 ? [35, 74] : r < 86 ? [35 - (r - 72) * 0.8, 74 + (r - 72) * 1.0] : r < 104 ? [24, 88 + (r - 86) * 0.6] : [19, 100];
     // the fire mouth: an arch in the furnace, the hearth sill under it, the ash pit below
     const mouth = archPts(46, 88, 92, 122);
@@ -150,7 +150,7 @@ const FORGE = (function () {
     for (let x = 56; x < 84; x += 7) box("furnace", "brick", x, Math.min(x + 6, 84), 127, 131, ZF - 1.5, ZF);
 
     // ---- the chimney stack, a little narrower, with a capstone course
-    const ZC = -20;                                                                  // the stack stands back with the hearth, up through the roof, tall above it
+    const ZC = -88;                                                                  // the stack rises behind the roof, past its ridge - it never goes through the roof (owner 2026-11-07: "상식적으로 굴뚝이 지붕을 뚫고 나오겠냐")
     // the stack and the furnace are one bond (owner 2026-11-07: "굴뚝이랑 화덕은 동렬 형태로" = 돌 줄을 맞춤): the same
     // stone, the same grid, the courses running on from the stack down into the furnace
     // the stack is shallow (12 deep): in this view a top recedes up K rows per cell, so a deep stack would show a tall
