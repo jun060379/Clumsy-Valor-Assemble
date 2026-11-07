@@ -118,57 +118,49 @@ const TENT = (function () {
     //   "end" - the ridge runs straight back; the front end with its door faces us, the slopes show above it.
     //   "side" - the ridge runs across, as the reference's level ridge and level foot; the long slope faces us, the
     //            ends lean out to the pegs (hipped), the door is cut in the slope under the left crossing.
-    const FORM = "side";
-    const Hh = FORM === "end" ? 86 : 80, ZF = 6;
-    let A, B, D, faces, door, dn;
-    const sub = (u, v) => u.clone().sub(v);
-    if (FORM === "end") {
-      D = V(0, 0, -64);
-      A = V(46, Hh, ZF); const L = V(13, 0, ZF), M = V(79, 0, ZF);
-      B = A.clone().add(D); const R = M.clone().add(D), L2 = L.clone().add(D);
-      faces = [[A, L, M], [A, M, R, B], [A, B, L2, L], [B, R, L2]];
-      door = (x, y) => V(x, y, ZF);
-    } else {
-      const zr = -12, w = 26;
-      A = V(46, Hh, zr); B = V(101, Hh, zr); D = sub(B, A);
-      const L = V(13, 0, zr + w), M = V(134, 0, zr + w), L2 = V(13, 0, zr - w), R2 = V(134, 0, zr - w);
-      faces = [[A, L, M, B], [A, B, R2, L2], [A, L2, L], [B, M, R2]];
-      door = (x, y) => V(x, y, zr + w * (1 - y / Hh));                  // a point on the front slope
-    }
-    dn = D.clone().normalize();
-    for (const f of faces) face("canvas", "canvas", f);
-    // the door: the canvas parted from well up and drawn back either side - an upturned V, dark inside to the ground,
-    // a light fold along each parted edge; the middle pole stands in it
-    face("door", "doorGap", [door(46, 64), door(33, 0), door(59, 0)], 0.5);
-    face("door", "canvas", [door(46, 64), door(31, 0), door(33, 0), door(46, 60)], 0.9);
-    face("door", "canvas", [door(46, 64), door(46, 60), door(59, 0), door(61, 0)], 0.9);
-    const ZP = FORM === "end" ? ZF + 1.6 : null;
-
-    // ---- the poles and lines: the middle pole down the front end, short crossed poles over each end of the ridge, the
-    // ridge pole between them; one rope for every line - the lashings, a guy line from each crossing out along the
-    // ridge to a peg, and one from the front crossing down to the stake by the door
+    // (owner 2026-11-07: "제대로된 텐트를 만들고 돌린다는 방법은 없는거?") A proper ridge tent built square in its own
+    // frame - u along the ridge, v across it (toward its front-right side), y up - with both ends at right angles to
+    // the ridge, then turned ANG about the vertical so the front end faces left-front and the ridge runs right and
+    // back. Nothing sheared: every point goes through the same turn.
+    const ANG = 35 * Math.PI / 180, LR = 70, HW = 40, Hh = 82, CX = 34, CZ = 4;
+    const co = Math.cos(ANG), si = Math.sin(ANG);
+    const T = (u, y, v) => V(CX + u * co + v * si, y, CZ - u * si + v * co);
+    const A = T(0, Hh, 0), B = T(LR, Hh, 0);
+    const Lf = T(0, 0, -HW), Mf = T(0, 0, HW), Lb = T(LR, 0, -HW), Mb = T(LR, 0, HW);
+    face("canvas", "canvas", [A, Lf, Mf]);                               // the front end
+    face("canvas", "canvas", [A, Mf, Mb, B]);                            // the near side
+    face("canvas", "canvas", [A, B, Lb, Lf]);                            // the far side
+    face("canvas", "canvas", [B, Mb, Lb]);                               // the back end
+    // the door in the front end, at the foot of its middle pole: the canvas parted from well up and drawn back either
+    // side - an upturned V, dark inside to the ground, a light fold along each parted edge
+    const dE = (v, y) => T(-0.01, y, v);
+    face("door", "doorGap", [dE(0, 64), dE(-14, 0), dE(14, 0)], 0.5);
+    face("door", "canvas", [dE(0, 64), dE(-16, 0), dE(-14, 0), dE(0, 60)], 0.9);
+    face("door", "canvas", [dE(0, 64), dE(0, 60), dE(14, 0), dE(16, 0)], 0.9);
+    // ---- the poles and lines: the middle pole up the front end, crossed poles over each end of the ridge (in the
+    // end's plane), the ridge pole between them; one rope for every line - the lashings, a guy line from each crossing
+    // out along the ridge to a peg, and one from the front crossing down to the stake by the door
     const ROPE = 0.8;
     const seg = (a, b, r, mat) => { const m = a.clone().add(b).multiplyScalar(0.5);
       const g = new THREE.CylinderGeometry(r, r, a.distanceTo(b), 10); const mesh = add(g, mat, "poles");
       mesh.position.copy(m); mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); return mesh; };
-    if (FORM === "end") seg(V(46, -1, ZP), V(46, Hh + 4, ZP), 1.6, "pole");
-    else seg(door(46, -1).add(V(0, 0, 1)), door(46, 62).add(V(0, 0, 1)), 1.6, "pole");   // seen through the doorway
-    for (const C of [A, B]) {
-      const c = C.clone().add(V(0, 1, 1.6));
-      seg(c.clone().add(V(-7, -8, 0)), c.clone().add(V(6, 7, 0)), 1.6, "pole");
-      seg(c.clone().add(V(7, -8, 0)), c.clone().add(V(-6, 7, 0)), 1.6, "pole");
-      seg(c.clone().add(V(-3, -2, 1.4)), c.clone().add(V(3, 2, 1.4)), ROPE, "rope");
-      seg(c.clone().add(V(-3, 2, 1.4)), c.clone().add(V(3, -2, 1.4)), ROPE, "rope");
+    seg(T(-1.8, -1, 0), T(-1.8, Hh + 4, 0), 1.6, "pole");
+    for (const u of [-1.8, LR + 1.8]) {
+      const o = u < 0 ? -1.4 : 1.4;
+      seg(T(u, Hh - 8, -8), T(u, Hh + 8, 7), 1.6, "pole");
+      seg(T(u, Hh - 8, 8), T(u, Hh + 8, -7), 1.6, "pole");
+      seg(T(u + o, Hh - 1, -3), T(u + o, Hh + 3, 3), ROPE, "rope");
+      seg(T(u + o, Hh - 1, 3), T(u + o, Hh + 3, -3), ROPE, "rope");
     }
-    seg(A.clone().add(V(0, 1.5, 0)), B.clone().add(V(0, 1.5, 0)), 1.3, "pole");
-    const pegF = A.clone().addScaledVector(dn, -42).setY(0), pegB = B.clone().addScaledVector(dn, 42).setY(0);
-    for (const [C, p] of [[A, pegF], [B, pegB]]) {
-      seg(C.clone().add(V(0, 2, 1.6)), p.clone().add(V(0, 3, 0)), ROPE, "rope");
-      seg(p.clone().add(V(0, -1, 0)), p.clone().add(V(0, 6, 0)), 2.6, "peg");
+    seg(T(0, Hh + 1.5, 0), T(LR, Hh + 1.5, 0), 1.3, "pole");
+    for (const [u0, u1] of [[-1.8, -46], [LR + 1.8, LR + 46]]) {
+      const pg = T(u1, 0, 0);
+      seg(T(u0, Hh + 2, 0), pg.clone().add(V(0, 3, 0)), ROPE, "rope");
+      seg(pg.clone().add(V(0, -1, 0)), pg.clone().add(V(0, 6, 0)), 2.6, "peg");
     }
-    const stake = V(84, 0, 24);
+    const stake = T(-22, 0, 30);
     seg(stake.clone().add(V(0, -1, 0)), stake.clone().add(V(0, 18, 0)), 2.6, "pole");
-    seg(A.clone().add(V(0, 2, 1.6)), stake.clone().add(V(0, 17, 0)), ROPE, "rope");
+    seg(T(-1.8, Hh + 2, 0), stake.clone().add(V(0, 17, 0)), ROPE, "rope");
     seg(stake.clone().add(V(-2.6, 16, 0)), stake.clone().add(V(2.6, 16, 0)), ROPE, "rope");
 
     if (MIRROR) {                                                    // reflect every part across the middle, keep faces outward
