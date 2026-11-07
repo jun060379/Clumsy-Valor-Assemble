@@ -80,7 +80,7 @@ const FORGE = (function () {
     // course shifted half a stone; the same small rounding on every corner; a lit top edge. Over a mortar bed that
     // leaves the openings (`skip`) open; `span(row)` gives the wall's [x0, x1] on a row (sloped or curved outlines).
     function courses(layer, rows, span, zf, opts = {}) {
-      const { w = 14, skip = () => false } = opts;
+      const { w = 14, skip = () => false, gx = 35, gr = 16, ch = 7 } = opts;   // the bond's grid: x origin, first row, course height
       for (let i = 0; i < rows.length - 1; i++) {
         const r0 = rows[i], r1 = rows[i + 1] - 1;
         const [a, b] = span(r0 + (r1 - r0) / 2);
@@ -91,7 +91,9 @@ const FORGE = (function () {
           if (!open && m0 === null) m0 = xx;
           if (open && m0 !== null) { box(layer, "mortar2", m0, xx, r0, r1 + 1, zf - 6, zf - 0.8); m0 = null; }
         }
-        const x00 = a - (i % 2 ? Math.floor(w / 2) : 0);
+        const par = Math.floor((r0 - gr) / ch + 0.01) % 2 !== 0;
+        let x00 = gx - (par ? Math.floor(w / 2) : 0);
+        x00 -= Math.ceil((x00 - a) / w) * w;                                     // the first joint on the grid at or left of a
         for (let x = x00; x < b - 2; x += w) {
           const x0 = Math.max(x, a), x1 = Math.min(x + w - 2, b);
           if (x1 - x0 < 3 || skip(x0, x1, r0, r1)) continue;
@@ -121,7 +123,7 @@ const FORGE = (function () {
          [mouth.slice().reverse(), [[57, 145], [57, 131], [83, 131], [83, 145]].reverse()]);
     const inMouth = (x0, x1, r0, r1) => x1 > 44 && x0 < 90 && r1 > 90 && r0 < 123;
     const pit = (x0, x1, r0, r1) => x1 > 56 && x0 < 84 && r1 > 131;
-    courses("furnace", rowsFrom(72, 145, 7), fspan, ZF, { w: 14, skip: (a, b, c, d) => inMouth(a, b, c, d) || pit(a, b, c, d) });
+    courses("furnace", rowsFrom(72, 145, 7), fspan, ZF, { w: 14, gx: 35, gr: 16, skip: (a, b, c, d) => inMouth(a, b, c, d) || pit(a, b, c, d) });
     // the voussoirs round the mouth
     { const cx = 67, sp = 113, ri = 21, ro = 27, n = 7;
       slab("furnace", "mortar2", archPts(40, 94, 86, 122), ZF - 2, ZF + 0.5, [mouth.slice().reverse()]);
@@ -146,11 +148,20 @@ const FORGE = (function () {
 
     // ---- the chimney stack, a little narrower, with a capstone course
     const ZC = 2;
-    slab("chimney", "mortar2", [[35, 72], [74, 72], [74, 9], [35, 9]], -26, ZC - 1);
-    courses("chimney", rowsFrom(9, 72, 7), () => [35, 74], ZC, { w: 13 });
-    box("chimney", "stoneLt", 33, 76, 3, 9, -12, ZC + 2);                         // the capstone course, not too deep
-    box("chimney", "plinthHi", 33, 76, 3, 4, -12, ZC + 2.2);
-    box("chimney", "soot", 37, 72, 2, 3, -10, -2);
+    // the stack and the furnace are one bond (owner 2026-11-07: "굴뚝이랑 화덕은 동렬 형태로" = 돌 줄을 맞춤): the same
+    // stone, the same grid, the courses running on from the stack down into the furnace
+    slab("chimney", "mortar2", [[35, 72], [74, 72], [74, 16], [35, 16]], -26, ZC - 1);
+    courses("chimney", rowsFrom(16, 72, 7), () => [35, 74], ZC, { w: 14, gx: 35, gr: 16 });
+    // the top (owner 2026-11-07: "굴뚝 윗부분 형태 다듬고"): a corbel course standing out a little, a capstone wider
+    // still with its corners rounded and a lit top edge, and the crown of the flue on it, set back
+    slab("chimney", "stone", [[33, 15], [33, 11], [34, 10], [75, 10], [76, 11], [76, 15]], -22, ZC + 1.2);
+    box("chimney", "plinthHi", 34, 75, 10, 11, ZC + 0.6, ZC + 1.4);
+    box("chimney", "mortar2", 33, 76, 15, 16, -22, ZC + 0.6);
+    slab("chimney", "stoneLt", [[31, 10], [31, 7], [33, 5], [76, 5], [78, 7], [78, 10]], -24, ZC + 2.4);
+    box("chimney", "plinthHi", 33, 76, 5, 6, ZC + 1.8, ZC + 2.6);
+    box("chimney", "mortar2", 31, 78, 9.5, 10, -24, ZC + 2);
+    slab("chimney", "stone", [[38, 5], [38, 2], [39, 1], [70, 1], [71, 2], [71, 5]], -18, ZC - 2);    // the flue's crown, set back
+    box("chimney", "plinthHi", 39, 70, 1, 2, ZC - 2.6, ZC - 1.8);
 
     // ---- the porch: roof on posts with knee braces over a low stone wall, the door set in a stone wall at the right
     const ZP = 9;                                                                    // posts close under the eave (Z 12)
@@ -188,9 +199,8 @@ const FORGE = (function () {
     }
 
     // ---- the door wall: stone, an arched plank door in a wooden frame
-    const ZD = 0;
-    const dOpen = (x0, x1, r0, r1) => x1 > 211 && x0 < 251 && r1 > 80;
-    courses("door", rowsFrom(80, 145, 8), () => [204, 259], ZD, { w: 14, skip: dOpen });
+    // (no stone either side: owner 2026-11-07, "문 좌우 얼룩덜룩 일자형 기둥 빼고" - the door sits in the plank wall)
+    const ZD = -12;
     slab("door", "frame", archPts(210, 252, 82, 145), ZD - 1, ZD + 1.5, [archPts(214, 248, 86, 145).slice().reverse()]);
     slab("door", "doorGap", archPts(214, 248, 86, 145), ZD - 3, ZD - 2.6);
     { const rad = 17, cx = 231, spring = 103;
