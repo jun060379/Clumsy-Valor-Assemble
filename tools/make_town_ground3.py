@@ -175,4 +175,23 @@ if __name__ == "__main__":
     save("k_clear", clear(), f"{O}/k_clear.png")
     save("k_stone", stone(), f"{O}/k_stone.png")
     save("k_clear_cap", cap("clear", 19, 10, 31), f"{O}/k_clear_cap.png")
-    save("k_stone_cap", cap("stone", 48, 20, 32), f"{O}/k_stone_cap.png")
+    if len(sys.argv) > 2:
+        # the plaza's paving modelled (owner 2026-11-08: "돌 바닥은 좀 모델링으로 할만해보이는데 요철이 있고 중세라"):
+        # the pixel3d render (tools/pixel3d/paving.js, CELL 2, render row 0 = tile row 0, module x 0 = world PX0) laid
+        # into the paving strip and, for its ends thinning into the turf, into the lawn strip; the lawn's earth face
+        # under it; the old cap goes (the render has its own ends)
+        R = Image.open(sys.argv[2]).convert("RGBA")
+        R = np.array(R.crop((6, 0, 6 + 460, R.height)).resize((920, R.height * 2), Image.NEAREST))
+        PX0 = 3024 - 420 - 40
+        lawn_im = np.array(Image.open("assets/town/k_lawn.png"))
+        st = lawn_im.copy()                                          # the paving strip: the lawn's plane and face
+        for im in (st, lawn_im):
+            seg = im[:R.shape[0], PX0:PX0 + 920]
+            m = R[:, :, 3] > 0
+            seg[m] = R[m]
+        Image.fromarray(st).save("assets/town/k_stone.png")
+        Image.fromarray(lawn_im).save("assets/town/k_lawn.png")
+        Image.fromarray(np.zeros((131, 96, 4), np.uint8)).save("assets/town/k_stone_cap.png")
+        print("paving laid at", PX0)
+    else:
+        save("k_stone_cap", cap("stone", 48, 20, 32), f"{O}/k_stone_cap.png")
