@@ -6,14 +6,18 @@ from PIL import Image
 NAME = sys.argv[2] if len(sys.argv) > 2 else "hall"
 P = np.array(Image.open("assets/town/palette.png").convert("RGB")).tolist()
 steps = json.load(open("assets/town/palette.json"))["steps"]
-MIRRORED = {"tentL": "tent"}                  # the same solid reflected, lit by the same sun (not a flipped sprite)
+MIRRORED = {"tentL": "tent", "benchL": "bench"}                  # the same solid reflected, lit by the same sun (not a flipped sprite)
 js = open(f"tools/pixel3d/{MIRRORED.get(NAME, NAME)}.js").read()
 if NAME in MIRRORED: js = js.replace("const MIRROR = false;", "const MIRROR = true;")
 if NAME != "hall": js += f"\nconst HALL = {MIRRORED.get(NAME, NAME).upper()};\n"   # the viewer reads the building as HALL
-REFN = {"forge2": "g_forge", "forge3": "g_forge", "tent": "g_tentR", "tentL": "g_tentR", "fountain": "q_fountain"}.get(NAME, "g_" + NAME)
-src = Image.open(f"assets/town/hx/{REFN}.png").convert("RGBA")
+REFN = {"forge2": "g_forge", "forge3": "g_forge", "tent": "g_tentR", "tentL": "g_tentR", "fountain": "q_fountain", "bench": "q_bench", "benchL": "q_bench"}.get(NAME, "g_" + NAME)
+import os
+# the big buildings' references are drawn at twice the cell (assets/town/hx, halved here); the props are drawn at
+# one cell per pixel (assets/town) and taken as they are
+HX = os.path.exists(f"assets/town/hx/{REFN}.png")
+src = Image.open(f"assets/town/hx/{REFN}.png" if HX else f"assets/town/{REFN}.png").convert("RGBA")
 if NAME in MIRRORED: src = src.transpose(Image.FLIP_LEFT_RIGHT)
-ref = src.resize((src.width // 2, src.height // 2), Image.NEAREST)
+ref = src.resize((src.width // 2, src.height // 2), Image.NEAREST) if HX else src
 b = io.BytesIO(); ref.save(b, "PNG", optimize=True)
 html = open("tools/pixel3d/viewer.html").read()
 html = (html.replace("__HALL_JS__", js)
