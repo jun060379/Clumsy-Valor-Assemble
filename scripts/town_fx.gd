@@ -225,7 +225,7 @@ func draw_front(ci: CanvasItem) -> void:
 func _draw_haze() -> void:
 	var w := white()
 	var cx: float = 4350.0 + 27.0 * town.PK
-	haze.draw_texture_rect(w, Rect2(cx - 20.0, town.G - 70.0, 40.0, 56.0), false, Color(1, 1, 1, 0.9))
+	haze.draw_texture_rect(w, Rect2(cx - 20.0, town.G - town.CAMP_UP - 70.0, 40.0, 56.0), false, Color(1, 1, 1, 0.9))
 	var o = origin("g_forge")
 	if o != null:
 		var p: Vector2 = o + FORGE_CHIMNEY
