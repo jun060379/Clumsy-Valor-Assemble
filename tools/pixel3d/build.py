@@ -7,10 +7,13 @@ NAME = sys.argv[2] if len(sys.argv) > 2 else "hall"
 P = np.array(Image.open("assets/town/palette.png").convert("RGB")).tolist()
 steps = json.load(open("assets/town/palette.json"))["steps"]
 MIRRORED = {"tentL": "tent", "benchL": "bench", "planterL": "planter"}                  # the same solid reflected, lit by the same sun (not a flipped sprite)
-js = open(f"tools/pixel3d/{MIRRORED.get(NAME, NAME)}.js").read()
+SIZED = {"barrelL": "barrel", "barrelM": "barrel", "barrelS": "barrel", "crateL": "crate", "crateS": "crate"}   # one module, SIZE picked
+BASE = MIRRORED.get(NAME) or SIZED.get(NAME) or NAME
+js = open(f"tools/pixel3d/{BASE}.js").read()
 if NAME in MIRRORED: js = js.replace("const MIRROR = false;", "const MIRROR = true;")
-if NAME != "hall": js += f"\nconst HALL = {MIRRORED.get(NAME, NAME).upper()};\n"   # the viewer reads the building as HALL
-REFN = {"forge2": "g_forge", "forge3": "g_forge", "tent": "g_tentR", "tentL": "g_tentR", "fountain": "q_fountain", "bench": "q_bench", "benchL": "q_bench", "board": "q_board", "bridge": "q_bridge", "lamp": "q_lamp", "planter": "q_planter", "planterL": "q_planter", "pot": "q_pot", "ring": "g_ring", "lights": "q_lights", "yard": "g_yard", "wagon": "g_wagon2"}.get(NAME, "g_" + NAME)
+if NAME in SIZED: js = js.replace('const SIZE = "L";', f'const SIZE = "{NAME[-1]}";')
+if NAME != "hall": js += f"\nconst HALL = {BASE.upper()};\n"   # the viewer reads the building as HALL
+REFN = {"forge2": "g_forge", "forge3": "g_forge", "tent": "g_tentR", "tentL": "g_tentR", "fountain": "q_fountain", "bench": "q_bench", "benchL": "q_bench", "board": "q_board", "bridge": "q_bridge", "lamp": "q_lamp", "planter": "q_planter", "planterL": "q_planter", "pot": "q_pot", "ring": "g_ring", "lights": "q_lights", "yard": "g_yard", "wagon": "g_wagon2", "barrelL": "q_barrelL", "barrelM": "q_barrelM", "barrelS": "q_barrelS", "crateL": "q_crateL", "crateS": "q_crateS"}.get(NAME, "g_" + NAME)
 import os
 # the big buildings' references are drawn at twice the cell (assets/town/hx, halved here); the props are drawn at
 # one cell per pixel (assets/town) and taken as they are
@@ -26,7 +29,7 @@ html = (html.replace("__HALL_JS__", js)
 # each page names its own building (it said 본관 on every one)
 KO = {"hall": "본관", "forge": "대장간", "barn": "헛간", "cottage": "목욕집", "store": "창고", "tent": "텐트", "tentL": "텐트(반대쪽)",
       "kiln": "숯가마", "well": "우물", "anvil": "모루", "fountain": "분수", "bench": "벤치", "benchL": "벤치(반대쪽)",
-      "board": "게시판", "bridge": "다리", "lamp": "가로등", "planter": "화분 상자", "planterL": "화분 상자(반대쪽)", "pot": "화분", "ring": "모닥불", "lights": "줄 조명", "yard": "훈련장 울타리", "wagon": "마차"}
+      "board": "게시판", "bridge": "다리", "lamp": "가로등", "planter": "화분 상자", "planterL": "화분 상자(반대쪽)", "pot": "화분", "ring": "모닥불", "lights": "줄 조명", "yard": "훈련장 울타리", "wagon": "마차", "barrelL": "통(대)", "barrelM": "통(중)", "barrelS": "통(소)", "crateL": "상자(대)", "crateS": "상자(소)"}
 if NAME in KO:
     html = (html.replace("<title>본관 코드 도트</title>", f"<title>{KO[NAME]} 코드 도트</title>")
                 .replace("<h1>본관 · 코드로 쌓은 도트</h1>", f"<h1>{KO[NAME]} · 코드로 쌓은 도트</h1>")
