@@ -13,7 +13,7 @@ const HALL = (function () {
   const RAMP = { red: 0, wood: 1, ochre: 2, cream: 3, leaf: 4, green: 5, blue: 6, violet: 7, stone: 8, iron: 9 };
   const MAT = {
     sand:    ["ochre", 5], stone: ["cream", 2], stoneLt: ["cream", 3], plaster: ["cream", 5],
-    timber:  ["wood", 5],  frame: ["wood", 3], glass: ["ochre", 2], mullion: ["wood", 4],
+    timber:  ["wood", 5],  frame: ["wood", 3], glass: ["ochre", 4], mullion: ["wood", 3],
     roofBase: ["red", 0], tile: ["red", 3], verge: ["red", 3], fascia: ["wood", 2],
     chimney: ["ochre", 1], chimCap: ["ochre", 4], chimTop: ["cream", 4],
     door:    ["wood", 3], doorGap: ["wood", 1], iron: ["iron", 2], sign: ["wood", 4], signRim: ["wood", 2],
@@ -79,7 +79,7 @@ const HALL = (function () {
     // ---- ground and plinth
     { const g = new THREE.PlaneGeometry(W, 54); g.rotateX(-Math.PI / 2);
       const m = add(g, "sand", "ground"); m.position.set(W / 2, 0, 4 + 27); }
-    for (let x = 20; x < 416; x += 25) box("plinth", "stone", x, Math.min(x + 24, 416), 266, 282, -80, 5);
+    for (let x = 20; x < 416; x += 25) box("plinth", "stone", x, Math.min(x + 24, 416), 266, 282, -4, 5);
 
     // ---- the wings: plaster body, timber frame, windows
     box("walls", "plaster", 28, 408, 168, 266, -78, 0);
@@ -101,12 +101,14 @@ const HALL = (function () {
       }
     }
     function window_(x0, x1, r0, r1, z) {
-      const outer = archPts(x0, x1, r0, r1), inner = archPts(x0 + 2, x1 - 2, r0 + 2, r1);
+      // reference windows: a heavy dark frame, four light panes behind a cross of mullions, a stone sill
+      const outer = archPts(x0, x1, r0, r1), inner = archPts(x0 + 3, x1 - 3, r0 + 3, r1 - 2);
       slab("windows", "frame", outer, z, z + 1.6, [inner.slice().reverse()]);
       slab("windows", "glass", inner, z, z + 0.3);
-      const cx = (x0 + x1) / 2, mid = (r0 + 2 + (x1 - x0) / 2 + r1) / 2;
-      box("windows", "mullion", cx - 1, cx + 1, r0 + 2, r1, z, z + 0.9);
-      box("windows", "mullion", x0 + 2, x1 - 2, mid - 1, mid + 1, z, z + 0.9);
+      box("windows", "frame", x0 + 3, x1 - 3, r1 - 2, r1, z, z + 1.6);
+      const cx = (x0 + x1) / 2, mid = Math.round((r0 + 3 + (x1 - x0) / 2 + r1 - 2) / 2);
+      box("windows", "mullion", cx - 1, cx + 1, r0 + 3, r1 - 2, z, z + 0.9);
+      box("windows", "mullion", x0 + 3, x1 - 3, mid - 1, mid + 1, z, z + 0.9);
       box("windows", "stoneLt", x0 - 2, x1 + 2, r1, r1 + 3, z, z + 3);   // the sill
     }
 
@@ -131,18 +133,20 @@ const HALL = (function () {
       box("roof", "fascia", fx(10), fx(140), 166, 170, ZE - 6, ZE + 1.5);
       // tiles: five courses, staggered, joints leaning with the hip, each course's butt lifted over the one below
       const courses = [81, 98, 115, 132, 149, 166];
-      const slopeN = new THREE.Vector3(0, ZE - ZR, ye - yr).normalize().multiplyScalar(1); // toward the viewer and up
+      const slopeN = new THREE.Vector3(0, ZE - ZR, yr - ye).normalize();   // the slope's outward normal: up and toward the viewer
       const onSlope = (x, row) => { const u = (RE - row) / (RE - RR); return new THREE.Vector3(fx(x), ye + u * (yr - ye), ZE + u * (ZR - ZE)); };
       const hipX = (row) => 12 + (RE - row) * 50 / (RE - RR);
       for (let c = 0; c < 5; c++) {
         const rt = courses[c], rb = courses[c + 1] + 1.5;               // each course hangs 1.5 rows over the next
         const lean = 0.35 * (rb - rt);
         for (let x = (c % 2 ? -11 : 0) + 4; x < 218; x += 22) {
-          let xt0 = x + 1.2, xt1 = x + 20.8, xb0 = xt0 - lean, xb1 = xt1 - lean;
+          let xt0 = x + 0.8, xt1 = x + 21.2, xb0 = xt0 - lean, xb1 = xt1 - lean;
           const ht = hipX(rt), hb = hipX(rb);
           if (xt1 <= ht && xb1 <= hb) continue;
-          xt0 = Math.max(xt0, ht); xb0 = Math.max(xb0, hb); xt1 = Math.min(Math.max(xt1, ht + 1), 218); xb1 = Math.min(Math.max(xb1, hb + 1), 218);
-          if (xt0 >= 218 || xb0 >= 218) continue;
+          xt0 = Math.max(xt0, ht); xb0 = Math.max(xb0, hb); // tiles stop where the gable covers them (its wall below the verge, the verge above): no tile pokes through
+          const cut = (row) => Math.max(142, Math.min(218, 218 - (row - 28) / 1.07 + 8));
+          xt1 = Math.min(Math.max(xt1, ht + 1), cut(rt)); xb1 = Math.min(Math.max(xb1, hb + 1), cut(rb));
+          if (xt0 >= cut(rt) || xb0 >= cut(rb)) continue;
           const lt = 1.6, lb = 4.6;
           const v = [onSlope(xb0, rb), onSlope(xb1, rb), onSlope(xt1, rt), onSlope(xt0, rt)];
           const front = [v[0].clone().addScaledVector(slopeN, lb), v[1].clone().addScaledVector(slopeN, lb),
