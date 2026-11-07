@@ -10,7 +10,7 @@
 // build.py tentL sets MIRROR.
 const TENT = (function () {
   const MIRROR = false;
-  const W = 150, H = 125, B0 = 95, K = 0.25, TOP = 16;
+  const W = 150, H = 140, B0 = 95, K = 0.25, TOP = 24;
   const Y = (row, z) => B0 + K * z - row;
   const RAMP = { red: 0, wood: 1, ochre: 2, cream: 3, leaf: 4, green: 5, blue: 6, violet: 7, stone: 8, iron: 9 };
   const MAT = {
@@ -122,7 +122,7 @@ const TENT = (function () {
     // frame - u along the ridge, v across it (toward its front-right side), y up - with both ends at right angles to
     // the ridge, then turned ANG about the vertical so the front end faces left-front and the ridge runs right and
     // back. Nothing sheared: every point goes through the same turn.
-    const ANG = 35 * Math.PI / 180, LR = 70, HW = 40, Hh = 82, CX = 34, CZ = 4;
+    const ANG = 65 * Math.PI / 180, LR = 70, HW = 46, Hh = 82, CX = 60, CZ = 4;
     const co = Math.cos(ANG), si = Math.sin(ANG);
     const T = (u, y, v) => V(CX + u * co + v * si, y, CZ - u * si + v * co);
     const A = T(0, Hh, 0), B = T(LR, Hh, 0);
@@ -144,11 +144,11 @@ const TENT = (function () {
     const seg = (a, b, r, mat) => { const m = a.clone().add(b).multiplyScalar(0.5);
       const g = new THREE.CylinderGeometry(r, r, a.distanceTo(b), 10); const mesh = add(g, mat, "poles");
       mesh.position.copy(m); mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); return mesh; };
-    seg(T(-1.8, -1, 0), T(-1.8, Hh + 4, 0), 1.6, "pole");
+    seg(T(-1.8, -1, 0), T(-1.8, Hh + 4, 0), 2.0, "pole");
     for (const u of [-1.8, LR + 1.8]) {
       const o = u < 0 ? -1.4 : 1.4;
-      seg(T(u, Hh - 8, -8), T(u, Hh + 8, 7), 1.6, "pole");
-      seg(T(u, Hh - 8, 8), T(u, Hh + 8, -7), 1.6, "pole");
+      seg(T(u, Hh - 10, -10), T(u, Hh + 9, 8), 2.2, "pole");
+      seg(T(u, Hh - 10, 10), T(u, Hh + 9, -8), 2.2, "pole");
       seg(T(u + o, Hh - 1, -3), T(u + o, Hh + 3, 3), ROPE, "rope");
       seg(T(u + o, Hh - 1, 3), T(u + o, Hh + 3, -3), ROPE, "rope");
     }
