@@ -37,22 +37,28 @@ const WAGON = (function () {
     cube("bed", "shaft", 214, 272, R(152), R(138), ZM - 4, ZM + 4);
     cube("bed", "post", 264, 278, R(156), R(134), ZM - 5, ZM + 5);
 
-    // ---- the load under a tarp: a rounded heap over the back two thirds, sagging between the ropes
-    const ROPES = [36, 78, 120];
-    { const XA = 14, XB = 150, NU = 200, NV = 70, t = [], HMAX = 70, DW = 25;
-      const P = (iu, iv) => { const u = iu / NU, th = Math.PI * iv / NV, x = XA + (XB - XA) * u;
-        const ends = Math.pow(Math.sin(Math.PI * Math.min(1, Math.min(u, 1 - u) * 5) / 2), 0.6);   // rounded at both ends
-        let d = 1e9; for (const r of ROPES) d = Math.min(d, Math.abs(x - r));
-        const sag = 1 - 0.07 * Math.exp(-Math.pow(d / 4, 2)) - 0.03 * Math.sin(x * 0.21);       // pulled in under the ropes
-        const h = HMAX * ends * (0.92 + 0.08 * Math.sin(x * 0.05 + 1)) * sag;
-        return [x, R(BT) + h * Math.sin(th), ZM + DW * sag * Math.cos(th) * (0.7 + 0.3 * ends)]; };
-      const q = (a, b, c, d) => t.push(...a, ...b, ...c, ...a, ...c, ...d);
-      for (let iu = 0; iu < NU; iu++) for (let iv = 0; iv < NV; iv++) q(P(iu, iv), P(iu, iv + 1), P(iu + 1, iv + 1), P(iu + 1, iv));
+    // ---- the load under a tarp (owner 2026-11-07: "천이 왤케 미묘하지"): the cloth is thrown over real things - crates and
+    // bales of different heights - and takes their shape: a height field drawn over the stack and softened, falling
+    // to the bed between and past them and hanging a hand's breadth over the near side; ropes across it follow it
+    { const STACK = [[16, 58, -44, -8, 50], [52, 100, -42, -6, 60], [62, 92, -32, -16, 70], [98, 148, -44, -8, 42], [104, 132, -36, -18, 52]];
+      const X0 = 10, X1 = 154, NX = 144, Zs = Z0 - 1, Ze = Z1 + 2, NZ = 56;
+      const raw = (x, z) => { let h = 0; for (const [a, b, c, d, hh] of STACK) if (x >= a && x <= b && z >= c && z <= d) h = Math.max(h, hh); return h; };
+      const grid = []; for (let ix = 0; ix <= NX; ix++) { grid.push([]); for (let iz = 0; iz <= NZ; iz++) grid[ix].push(raw(X0 + (X1 - X0) * ix / NX, Zs + (Ze - Zs) * iz / NZ)); }
+      const blur = (g, rx, rz) => g.map((col, ix) => col.map((_, iz) => { let sum = 0, n = 0;
+        for (let dx = -rx; dx <= rx; dx++) for (let dz = -rz; dz <= rz; dz++) { const a = g[ix + dx], v = a && a[iz + dz]; if (v !== undefined) { sum += v; n++; } }
+        return sum / n; }));
+      let H = blur(blur(grid, 4, 3), 4, 3);
+      const zAt = (iz) => Zs + (Ze - Zs) * iz / NZ, xAt = (ix) => X0 + (X1 - X0) * ix / NX;
+      const Pt = (ix, iz) => { const z = zAt(iz); let y = H[ix][iz] * 1.08;
+        if (z > Z1 - 1) y = Math.min(y, 2);                               // the hem lies on the near rail
+        return [xAt(ix), R(BT) + y + 0.3, z]; };
+      const t = [], q = (a, b, c, d) => t.push(...a, ...b, ...c, ...a, ...c, ...d);
+      for (let ix = 0; ix < NX; ix++) for (let iz = 0; iz < NZ; iz++) q(Pt(ix, iz), Pt(ix, iz + 1), Pt(ix + 1, iz + 1), Pt(ix + 1, iz));
       const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(t, 3)); g.computeVertexNormals();
       add(g, "canvas", "load");
-      for (const x of ROPES) { const pts = []; for (let k = 0; k <= 32; k++) { const pp = P(Math.round((x - XA) / (XB - XA) * NU), k * NV / 32);
-          pts.push(new THREE.Vector3(pp[0], pp[1], pp[2]).add(new THREE.Vector3(0, Math.sin(Math.PI * k / 32) * 0.8, Math.cos(Math.PI * k / 32) * 0.8))); }
-        add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 48, 1.3, 5, false), "rope", "load"); } }
+      for (const x of [34, 80, 124]) { const ix = Math.round((x - X0) / (X1 - X0) * NX), pts = [];
+        for (let iz = 0; iz <= NZ; iz += 2) { const [px, py, pz] = Pt(ix, iz); pts.push(new THREE.Vector3(px, py + 1.2, pz)); }
+        add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 60, 1.2, 5, false), "rope", "load"); } }
     // ---- up front: two barrels, a crate with a sack on it
     const barrel = (x, z, h, r) => { const prof = []; for (let k = 0; k <= 10; k++) { const t2 = k / 10; prof.push(new THREE.Vector2(r * (0.86 + 0.14 * Math.sin(Math.PI * t2)), h * t2)); }
       const g = new THREE.LatheGeometry(prof, 16); const m = add(g, "barrel", "load"); m.position.set(x, R(BT), z);
