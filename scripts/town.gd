@@ -77,6 +77,7 @@ var near_door = null
 var kind := "town"
 var lit                       # lit.gd: shade, ambient, lights, hall windows, fog (drawLighting)
 var hx := {}
+var sh_tex := {}                 # baked ground shadows under the pixel3d buildings: "<k>" / "<k>_m" / "<k>_e" (tools/pixel3d)
 var lit_tex := {}                # sun-side versions: "<k>_m" / "<k>_e"                     # pre-scaled (BS) textures, drawn 1:1
 var win_sv: SubViewport         # the hall windows drawn apart (LIT.wc): the heroine cut out of them
 var win_draw: Node2D
@@ -130,6 +131,9 @@ func _ready() -> void:
 	for k in tex.keys():
 		if ResourceLoader.exists("res://assets/town/hx/" + k + ".png"): hx[k] = load("res://assets/town/hx/" + k + ".png")
 	# the sun-side versions (tools/bake_sun_light.py): <k>_m = sun from the left (morning), <k>_e = from the right
+	for f in DirAccess.get_files_at("res://assets/town/shadow"):
+		var sk := f.replace(".import", "").get_basename()
+		if not sh_tex.has(sk): sh_tex[sk] = load("res://assets/town/shadow/" + sk + ".png")
 	for f in DirAccess.get_files_at("res://assets/town/lit"):
 		var lk := f.replace(".import", "").get_basename()
 		if not lit_tex.has(lk): lit_tex[lk] = load("res://assets/town/lit/" + lk + ".png")
@@ -1180,6 +1184,11 @@ func _spr(k: String, x: float, y_bottom: float, sink := 0.0, flip := false, ci: 
 	var lv := sun_side()
 	if lv != "" and lit_tex.has(k + lv): im = lit_tex[k + lv]
 	var y := y_bottom - h + sink * PK * s
+	# the ground shadow the building casts at this hour (owner 2026-11-07: "허공에 뜬거 수정"), drawn under it; its
+	# canvas starts 24 px left of the sprite (the render's margin) and at the sprite's top
+	if not flip and sh_tex.has(k + lv):
+		var st: Texture2D = sh_tex[k + lv]
+		ci.draw_texture_rect(st, Rect2(roundf(x) - 24.0, y, st.get_width(), st.get_height()), false)
 	if flip:
 		ci.draw_set_transform_matrix(xf * Transform2D(0.0, Vector2(-1, 1), 0.0, Vector2(roundf(x) + w, 0)))
 		ci.draw_texture_rect(im, Rect2(0, y, w, h), false)
