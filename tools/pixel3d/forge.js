@@ -106,15 +106,15 @@ const FORGE = (function () {
     const rowsFrom = (r0, r1, h) => { const r = []; for (let y = r0; y < r1; y += h) r.push(y); r.push(r1); return r; };
 
     // ---- the porch's back wall: planks, deep under the roof (it lives in the roof's shade most of the day)
-    box("back wall", "plankDk", 100, 284, 74, 145, -30, -16);
-    for (let x = 101; x < 283; x += 7) box("back wall", "plank", x, Math.min(x + 6, 283), 76, 145, -16, -15.2);
+    box("back wall", "plankDk", 108, 284, 74, 145, -30, -16);
+    for (let x = 109; x < 283; x += 7) box("back wall", "plank", x, Math.min(x + 6, 283), 76, 145, -16, -15.2);
 
     // ---- the forge hearth (owner 2026-11-07: "화덕 형태 좀 다듬기. 래퍼런스 찾아서"), laid out like a smith's masonry
     // forge (FAO, "the blacksmith's forge": a raised hearth about a metre high, the fire on it under a hood that
     // gathers the smoke into the chimney): a waist-high stone hearth with a lip, an open fire bay between two piers
     // under a shallow stone arch, the hood above narrowing in straight slopes to the stack. All of it centred on the
     // stack (x 54.5); a coal hole under the lip.
-    const ZF = 17;                                                                   // in front of the roof's eave: the roof runs behind the stack
+    const ZF = 17;                                                                   // the hearth stands on its own, left of the shed
     const CX = 54.5;
     const hoodL = (r) => 16 + (94 - r) * 19 / 22, hoodR = (r) => 93 - (94 - r) * 19 / 22;   // 16..93 at row 94 -> 35..74 at row 72
     const fspan = (r) => r < 94 ? [hoodL(r), hoodR(r)] : [16, 93];
@@ -175,7 +175,7 @@ const FORGE = (function () {
     // ---- the porch: roof on posts with knee braces over a low stone wall, the door set in a stone wall at the right
     const ZP = 9;                                                                    // posts close under the eave (Z 12)
     for (const [a, b] of [[115, 122], [194, 202], [265, 273]]) box("porch", "timber", a, b, 79, 128, ZP - 4, ZP);
-    box("porch", "timber", 2, 284, 75, 80, ZP - 4, ZP + 0.5);                     // the beam under the eave
+    box("porch", "timber", 104, 284, 75, 80, ZP - 4, ZP + 0.5);                     // the beam under the eave
     for (const [px0, px1] of [[115, 122], [194, 202], [265, 273]]) {             // knee braces, 1:1
       if (px0 > 110) bar("porch", "timber", px0, 96, px0 - 14, 81, 4, ZP - 3.5, ZP - 0.5);
       if (px1 < 280) bar("porch", "timber", px1, 96, px1 + 14, 81, 4, ZP - 3.5, ZP - 0.5);
@@ -228,21 +228,21 @@ const FORGE = (function () {
     const ZE = 12, ZR = -40, RE = 72, RR = 25;
     const ye = Y(RE, ZE), yr = Y(RR, ZR);
     { const tri = [], quad = (a, b, c, d) => tri.push(...a, ...b, ...c, ...a, ...c, ...d), t3 = (a, b, c) => tri.push(...a, ...b, ...c);
-      const e0 = [2, ye, ZE], e1 = [287, ye, ZE], r0 = [25.5, yr, ZR], r1 = [263.5, yr, ZR], b0 = [2, ye, -80], b1 = [287, ye, -80];
+      const e0 = [104, ye, ZE], e1 = [287, ye, ZE], r0 = [127.5, yr, ZR], r1 = [263.5, yr, ZR], b0 = [104, ye, -80], b1 = [287, ye, -80];
       quad(e0, e1, r1, r0); t3(e1, b1, r1); quad(b1, b0, r0, r1); quad(e0, b0, b1, e1); t3(e0, r0, b0);
       const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(tri, 3)); g.computeVertexNormals();
       add(g, "roofBase", "roof"); }
-    box("roof", "fascia", 2, 287, 72, 76, ZE - 6, ZE + 1.5);
-    { const xa = 25.5, xb = 263.5;                                                    // the ridge roll
+    box("roof", "fascia", 104, 287, 72, 76, ZE - 6, ZE + 1.5);
+    { const xa = 127.5, xb = 263.5;                                                    // the ridge roll
       shell("tiles", "tile", (u, v) => { const th = Math.PI * u; return [xa + (xb - xa) * v, yr + 2.6 * Math.sin(th), ZR + 3.0 * Math.cos(th)]; },
             [0, 0.17, 0.33, 0.5, 0.67, 0.83, 1], [0, 1], [0, -2, 0]); }
     { const courseRows = [25, 37, 49, 61, 72];
       const slopeN = new THREE.Vector3(0, ZE - ZR, yr - ye).normalize();
       const onSlope = (x, row) => { const u = (RE - row) / (RE - RR); return new THREE.Vector3(x, ye + u * (yr - ye), ZE + u * (ZR - ZE)); };
-      const hipX = (row) => 287 - (RE - row) * 0.5, hipL = (row) => 2 + (RE - row) * 0.5;   // hipped at both ends
+      const hipX = (row) => 287 - (RE - row) * 0.5, hipL = (row) => 104 + (RE - row) * 0.5;   // hipped at both ends
       for (let c = 0; c < 4; c++) {
         const rt = courseRows[c], rb = courseRows[c + 1] + 1.5, lean = 0.25 * (rb - rt);   // joints nearly upright, as the reference's
-        for (let x = 2 + (c % 2 ? -14 : 0); x < 290; x += 29) {
+        for (let x = 104 + (c % 2 ? -14 : 0); x < 290; x += 29) {
           let xt0 = Math.max(x + 0.8, hipL(rt)), xt1 = x + 28.2, xb0 = Math.max(x + 0.8 + lean, hipL(rb)), xb1 = x + 28.2 + lean;
           xt1 = Math.min(xt1, hipX(rt)); xb1 = Math.min(xb1, hipX(rb));
           if (xt1 - xt0 < 4 || xb1 - xb0 < 4) continue;
@@ -262,10 +262,8 @@ const FORGE = (function () {
       }
     }
 
-    // ---- the left end (owner 2026-11-07: "좌측 지붕 기둥 안 이어진거랑 뒷쪽으로 본건물 지붕 안이어진거 연결"): no
-    // separate lean-to; the main roof runs on behind the stack to its hipped left end, its eave on the beam and a post
-    box("porch", "timber", 12, 18, 79, 113, ZP - 4, ZP);
-    courses("stone wall", [113, 124, 135, 145], () => [6, 28], ZP + 3, { w: 11, gx: 6, gr: 113, ch: 11 });
+    // (the hearth stands apart: owner 2026-11-07, "그냥 대장간이랑 화덕을 분리해서 옆에 둘까" - the shed's roof ends in a
+    // hip at x 104, a gap of open ground between it and the hearth's stack)
 
     return parts;
   }
