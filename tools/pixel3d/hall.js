@@ -12,7 +12,7 @@ const HALL = (function () {
   const Y = (row, z) => B0 + K * z - row;
   const RAMP = { red: 0, wood: 1, ochre: 2, cream: 3, leaf: 4, green: 5, blue: 6, violet: 7, stone: 8, iron: 9 };
   const MAT = {
-    sand:    ["ochre", 5], stone: ["cream", 2], stoneLt: ["cream", 3], plaster: ["cream", 6],
+    sand:    ["ochre", 5], plinth: ["cream", 3], stone: ["cream", 2], stoneLt: ["cream", 3], plaster: ["cream", 6],
     timber:  ["wood", 5],  frame: ["wood", 3], glass: ["ochre", 4], mullion: ["wood", 3],
     roofBase: ["red", 1], tile: ["red", 2], verge: ["red", 2], fascia: ["wood", 1],
     chimney: ["ochre", 1], chimCap: ["ochre", 4], chimTop: ["cream", 4],
@@ -81,7 +81,19 @@ const HALL = (function () {
 
     // ---- ground and plinth
     // (no ground strip: the town draws its own ground under the building)
-    for (let x = 20; x < 416; x += 25) box("plinth", "stone", x, Math.min(x + 24, 416), 266, 282, -4, 5);
+    // the plinth: one course of long pale stones of different lengths (a fixed order, mirrored), rounded on top; under
+    // the gable it stands out in front of the gable wall so it is not lost in its shade
+    { const L = [27, 21, 31, 24, 29, 22, 26, 30];
+      const runs = [[20, 140, 6], [140, 296, 19], [296, 416, 6]];
+      for (const [a, b, zf] of runs) {
+        let x = a, i = a < 200 ? 0 : 3;
+        while (x < b - 2) {
+          const w = Math.min(L[i++ % L.length], b - x);
+          box("plinth", "plinth", x, x + w - 1, 269, 282, -4, zf);
+          x += w;
+        }
+      }
+    }
 
     // ---- the wings: plaster body, timber frame, windows
     box("walls", "plaster", 28, 408, 168, 266, -78, 0);

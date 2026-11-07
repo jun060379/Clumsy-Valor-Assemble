@@ -104,7 +104,7 @@ for (const p of parts) { p.mesh.castShadow = p.mesh.receiveShadow = true; p.mesh
 
 // ---- material patterns ("텍스처"), drawn in code on each solid's own surface: each cell moves one step up or down its
 // own ramp (or, where plaster has fallen off, shows the brick under it); lines and blocks of 2+ cells only, no lone dots
-const PAT = { plaster: 1, timber: 2, door: 3, shutter: 3, stone: 4, stoneLt: 4, chimney: 5, sand: 6 };
+const PAT = { plaster: 1, timber: 2, door: 3, shutter: 3, stone: 4, stoneLt: 4, plinth: 7, chimney: 5, sand: 6 };
 const patShader = `
   uniform int pat, brick; uniform vec3 size; varying vec3 lp, wp;
   float h(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
@@ -144,6 +144,12 @@ const patShader = `
       if (q.y > size.y - 1.0) off = 1.0;                    // the top edge
       else if (q.x > size.x - 1.0 || q.y < 1.0) off = -1.0;  // the joint side and foot
       if ((q.x < 2.0 || q.x > size.x - 2.0) && q.y < 2.0) off = -1.0;
+    } else if (pat == 7 && size.x > 0.0) {                  // plinth stones: lit top edge, rounded top corners, a shaded foot
+      vec2 q = lp.xy + size.xy * 0.5;
+      bool corner = (q.x < 1.0 || q.x > size.x - 1.0) && q.y > size.y - 2.0;
+      if (corner) { ro = 2.0; bo = 1.0; }                   // the round-off reads as the joint's dark
+      else if (q.y > size.y - 2.0) off = 1.0;
+      else if (q.y < 3.0) off = -1.0;
     } else if (pat == 5) {                                  // soot on the chimney's top courses
       if (c.y > 210.0) off = -1.0;
     } else if (pat == 6) {                                  // pebbles: small clumps here and there in the sand
