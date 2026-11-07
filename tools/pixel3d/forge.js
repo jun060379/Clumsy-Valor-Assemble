@@ -265,34 +265,37 @@ const FORGE = (function () {
     // roof's end; C: the left one a front gable, open, its ridge running back into the main roof
     if (ROOFV === "A") tileRoof(2, 287, 72, 25, 12, -40, -80, true, true);
     else {
-      tileRoof(96, 287, 72, 25, 12, -40, -80, true, true);
+      tileRoof(96, 287, 72, 25, 12, -40, -80, ROOFV !== "D", true);   // D: its left end cut square (owner)
       if (ROOFV === "B") tileRoof(2, 106, 87, 52, 13, -34, -80, true, false);
       else if (ROOFV === "D") {
-        // the lean-to: its front edge (the verge) runs from the main roof's top left corner (x 120, row 22) down to the
-        // eave at the far left (x 2, row 86); the plane runs straight back to Z -80 behind the hearth's stack line. Tiles
-        // in courses parallel to the low eave (front to back), each course stepping down the slope
-        const ZL = 13, ZB = -80, P0 = [120, 22], P1 = [2, 86];
+        // the lean-to as the owner drew it (2026-11-07: "우측 건물의 좌측 단편을 직각으로 처리하고. 그 상태에서 좌측 지붕이 우측
+        // 건물의 지붕을 기준으로 빗선으로 내려오는거야 ... 저걸 지붕위로 왜 쳐보내"): it starts at the main roof's top
+        // left corner (x 96, row 25) and comes down in a straight slant to the far left eave (x 2, row 86); the roof
+        // is the band under that line and nothing of it shows above - its plane falls away to the back exactly as
+        // fast as this view lifts what lies behind, so it stays edge-on and only the tiled band reads
+        const ZL = 13, P0 = [96, 25], P1 = [2, 86], BAND = 11;
         const rowAt = (x) => P0[1] + (P1[1] - P0[1]) * (P0[0] - x) / (P0[0] - P1[0]);
-        const yAt = (x) => Y(rowAt(x), ZL);
         { const tri = [], quad = (a, b, c, d) => tri.push(...a, ...b, ...c, ...a, ...c, ...d);
-          const a0 = [P0[0], yAt(P0[0]), ZL], a1 = [P1[0], yAt(P1[0]), ZL], b0 = [P0[0], yAt(P0[0]), ZB], b1 = [P1[0], yAt(P1[0]), ZB];
-          const lo = (p) => [p[0], p[1] - 4, p[2]];
-          quad(a1, a0, b0, b1); quad(lo(a0), lo(a1), lo(b1), lo(b0)); quad(a0, a1, lo(a1), lo(a0)); quad(b1, b0, lo(b0), lo(b1));
-          quad(a1, b1, lo(b1), lo(a1));
+          const pt = (x, dr, z) => [x, Y(rowAt(x) + dr, z), z];           // a point on the band, at depth z, same screen row
+          const zs = [ZL, ZL - 60];
+          for (const [dr0, dr1] of [[2, BAND]]) {
+            const a0 = pt(P0[0], dr0, zs[0]), a1 = pt(P1[0], dr0, zs[0]), b0 = pt(P0[0], dr0, zs[1]), b1 = pt(P1[0], dr0, zs[1]);
+            const c0 = pt(P0[0], dr1, zs[0]), c1 = pt(P1[0], dr1, zs[0]);
+            quad(a1, a0, b0, b1); quad(c0, c1, a1, a0);
+          }
           const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(tri, 3)); g.computeVertexNormals();
           add(g, "roofBase", "roof"); }
-        bar("roof", "fascia", P0[0], P0[1] + 4, P1[0], P1[1] + 4, 4, ZL - 5, ZL + 1.5);   // the verge board under the tile edge
-        const n = 9, step = (P0[0] - P1[0]) / n;
-        for (let i = 0; i < n; i++) {                                                  // courses across the slope
-          const xa = P0[0] - i * step + 0.4, xb = P0[0] - (i + 1) * step - 1.4;          // each overlaps the next one down
-          for (let z0 = ZL + 1, k = 0; z0 > ZB; z0 -= 13, k++) {
-            const z1 = Math.max(ZB, z0 - 12.4);
-            const hh = Math.abs(Math.sin((i + 3) * 9.137 + k * 3.7) * 43758.5453) % 1;
-            const m = hh < 0.1 ? "tileDk" : hh > 0.93 ? "tileLt" : "tile";
-            const lift = (u) => u < 0.2 ? 0.6 + 2.0 * u / 0.2 : u < 0.7 ? 2.6 + 1.6 * (u - 0.2) / 0.5 : 4.2 - 1.6 * (u - 0.7) / 0.3;   // thick at its low edge
-            const F = (u, v) => { const x = xa + (xb - xa) * u; return [x, yAt(x) + lift(u), z0 + (z1 - z0) * v]; };
-            shell("tiles", m, F, [0, 0.2, 0.45, 0.7, 0.85, 1], [0, 0.08, 0.5, 0.92, 1], [0, -2, 0]);
-          }
+        bar("roof", "fascia", P0[0], P0[1] + BAND + 1, P1[0], P1[1] + BAND + 1, 3, ZL - 5, ZL + 1);   // the board under the band
+        // tiles along the slant, as the hall's verge tiles: each one tips up at its top edge and rolls under at its foot
+        const n = 8;
+        for (let i = 0; i < n; i++) {
+          const t0 = i / n + 0.006, t1 = (i + 1) / n - 0.012;
+          const hh = Math.abs(Math.sin((i + 3) * 9.137) * 43758.5453) % 1;
+          const m = hh < 0.15 ? "tileDk" : hh > 0.9 ? "tileLt" : "tile";
+          const pr = (u) => u < 0.55 ? 0.4 + 3.4 * u / 0.55 : 3.8 - 2.6 * (u - 0.55) / 0.45;
+          const F = (u, v) => { const t = t0 + (t1 - t0) * v, x = P0[0] + (P1[0] - P0[0]) * t, row = rowAt(x) + 1 + (BAND - 1) * u;
+            return [x, Y(row, ZL + 2), ZL + 1 + pr(u) + 0.7 * v]; };
+          shell("tiles", m, F, [0, 0.2, 0.4, 0.55, 0.75, 1], [0, 0.5, 1], [0, 0, -2.5]);
         }
       } else {
         // an open front gable: apex x 51 row 34, the verges down to rows 86 at x 0 and 102; tiles laid down each verge,
