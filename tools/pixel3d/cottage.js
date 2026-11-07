@@ -172,30 +172,29 @@ const COTTAGE = (function () {
     const ZG = 16, AX = 65, AR = 22;
     const vU = (x) => AR + 12 + Math.abs(x - AX) * 1.0;
     slab("walls", "plaster", [[18, 80], [114, 80], [114, vU(114)], [AX, AR + 12], [18, vU(18)]], -40, ZG);
-    slab("walls", "mortar2", [[18, 140], [114, 140], [114, 80], [18, 80]], -40, ZG - 1, [archPts(47, 83, 93, 140).slice().reverse()]);
+    slab("walls", "mortar2", [[18, 140], [114, 140], [114, 80], [18, 80]], -40, ZG - 1);
     courses("walls", rowsFrom(80, 140, 7), () => [20, 112], ZG, { w: 16, gx: 20, gr: 80, ch: 7,
-      // cut round the door's arch (radius 25 about x 65, row 111), not a whole block beside it (owner 2026-11-07:
-      // "문 아치 너머?에도 벽돌 넣기")
-      holes: (r0, r1) => { if (r1 < 86) return []; const rr = Math.min(r1, 111), hw = Math.sqrt(Math.max(0, 25.5 * 25.5 - (111 - rr) * (111 - rr)));
-        return [[Math.floor(65 - hw), Math.ceil(65 + hw)]]; } });
+      // the whole wall laid in stone; the door and its arch are set on it (owner 2026-11-07: "아치 유지하고 그냥 벽 전체
+      // 벽돌 넣고 그 위에 문 달라고")
+    });
     for (const [a, b] of [[12, 22], [110, 120]]) box("timber", "timber", a, b, vU((a + b) / 2) - 1, 140, ZG - 2, ZG + 2.5);
     box("timber", "timber", 22, 110, 72, 80, ZG - 2, ZG + 2.5);                      // the beam
     for (const x of [36, 88]) box("timber", "timber", x, x + 8, 68, 82, ZG - 1, ZG + 4);   // corbel blocks at its ends
     box("timber", "timber", 61, 69, AR + 12, 72, ZG - 2, ZG + 2);                      // the king post
     // the door: planks in a round-topped arch of stone, a long iron strap and a handle
     { const outer = archPts(40, 90, 86, 140), inner = archPts(47, 83, 93, 140);
-      slab("door", "arch", outer, ZG - 1, ZG + 1.6, [inner.slice().reverse()]);
+      slab("door", "arch", outer, ZG + 0.5, ZG + 2.6, [inner.slice().reverse()]);
       for (let i = 0; i < 9; i++) { const a0 = Math.PI * (i + 0.06) / 9, a1 = Math.PI * (i + 0.94) / 9, pts = [];   // voussoirs
         for (let t = 0; t <= 3; t++) { const a = a0 + (a1 - a0) * t / 3; pts.push([65 + 25 * Math.cos(a), 111 - 25 * Math.sin(a)]); }
         for (let t = 3; t >= 0; t--) { const a = a0 + (a1 - a0) * t / 3; pts.push([65 + 18 * Math.cos(a), 111 - 18 * Math.sin(a)]); }
-        slab("door", "stoneLt", pts, ZG - 0.6, ZG + 2); }
-      slab("door", "doorGap", inner, ZG - 3, ZG - 2.6);
+        slab("door", "stoneLt", pts, ZG + 0.8, ZG + 3.2); }
+      slab("door", "doorGap", inner, ZG, ZG + 0.2);                                  // the door's back: dark between the planks
       const rad = 18, cx = 65, sp = 111, top = (xx) => sp - Math.sqrt(Math.max(0, rad * rad - (xx - cx) * (xx - cx)));
       for (let x = 47; x < 83; x += 6) { const x1 = Math.min(x + 5, 83), poly = [[x, 140], [x1, 140]];
         for (let s = 0; s <= 4; s++) { const xx = x1 - (x1 - x) * s / 4; poly.push([xx, top(xx) + 1]); }
-        slab("door", "door", poly, ZG - 2.6, ZG - 1.6); }
-      box("door", "ironDk", 50, 80, 118, 120, ZG - 1.6, ZG - 1);
-      const g = new THREE.TorusGeometry(2, 0.7, 6, 12); const m = add(g, "iron", "door"); m.position.set(76, Y(124, ZG - 0.8), ZG - 0.8); }
+        slab("door", "door", poly, ZG + 0.2, ZG + 1.2); }
+      box("door", "ironDk", 50, 80, 118, 120, ZG + 1.2, ZG + 1.8);
+      const g = new THREE.TorusGeometry(2, 0.7, 6, 12); const m = add(g, "iron", "door"); m.position.set(76, Y(124, ZG + 2), ZG + 2); }
     // big corner stones at the foot
     for (const [a, b] of [[8, 26], [104, 124]]) { slab("walls", "stoneLt", [[a, 146], [b, 146], [b, 131], [b - 1, 130], [a + 1, 130], [a, 131]], ZG - 4, ZG + 4);
       box("walls", "plinthHi", a + 1, b - 1, 130, 131, ZG + 3.4, ZG + 4.2); }
