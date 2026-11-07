@@ -55,6 +55,12 @@ input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); }
       <button id="b-1" aria-pressed="false">드러난 자국</button>
       <button id="b-2" aria-pressed="true">매끈</button>
     </div>
+    <div class="row seg" role="group" aria-label="바닥">
+      <label>바닥</label>
+      <button id="g-0" aria-pressed="true">바닥과 그림자</button>
+      <button id="g-1" aria-pressed="false">건물만</button>
+      <button id="g-2" aria-pressed="false">바닥 그림자만</button>
+    </div>
     <div class="row">
       <label for="hour">시간</label>
       <input type="range" id="hour" min="5.5" max="19" step="0.25" value="12">
@@ -207,7 +213,19 @@ cam.projectionMatrix.multiply(new THREE.Matrix4().set(1, 0, KX, 0, 0, 1, -K, 0, 
 cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
 
 const mkRT = () => new THREE.WebGLRenderTarget(RW, H, { magFilter: THREE.NearestFilter, minFilter: THREE.NearestFilter });
-const rtId = mkRT(), rtLit = mkRT(), rtFace = mkRT(), rtNrm = mkRT(), rtDep = mkRT(), rtPat = mkRT();
+const rtId = mkRT(), rtLit = mkRT(), rtFace = mkRT(), rtNrm = mkRT(), rtDep = mkRT(), rtPat = mkRT(), rtGLit = mkRT(), rtGFace = mkRT();
+// the ground the building stands on (owner 2026-11-07: "시간 및 기준 별 바닥에 들어가는 그림자도 고려해서"): a plane at the
+// foot line, from 24 cells behind the walls to 52 in front (the town's ground band round a foot line), taking the
+// building's shadow from the same sun. It is drawn in passes of its own, so the building's own render is untouched;
+// exported alone it is the mask the town's ground shader shades with its own palette.
+const GZ0 = -24, GZ1 = 52;
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(RW, GZ1 - GZ0), new THREE.MeshLambertMaterial({ color: 0xffffff }));
+ground.rotation.x = -Math.PI / 2;
+ground.position.set(X0 + RW / 2, 0, (GZ0 + GZ1) / 2);
+ground.receiveShadow = true; ground.castShadow = false; ground.visible = false;
+scene.add(ground);
+const blackMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide });
+let gview = 0;                                               // 0: ground and its shade, 1: the building alone, 2: the ground's shade alone
 const NP = PALETTE.length;
 const palData = new Uint8Array(8 * NP * 4);
 PALETTE.forEach((row, r) => { for (let s = 0; s < 8; s++) { const c = row[Math.min(s, row.length - 1)]; palData.set([c[0], c[1], c[2], STEPS[r]], (r * 8 + s) * 4); } });
@@ -267,12 +285,12 @@ function twinTex(kind) {
 const shadeTex = twinTex("shade"), sunTex = twinTex("sun"), coreTex = twinTex("core"), lowTex = twinTex("lightLow"), highTex = twinTex("lightHigh");
 
 const comp = new THREE.ShaderMaterial({
-  uniforms: { tPat: { value: rtPat.texture }, tId: { value: rtId.texture }, tLit: { value: rtLit.texture }, tFace: { value: rtFace.texture }, tNrm: { value: rtNrm.texture }, tDep: { value: rtDep.texture },
+  uniforms: { tPat: { value: rtPat.texture }, tId: { value: rtId.texture }, tLit: { value: rtLit.texture }, tFace: { value: rtFace.texture }, tNrm: { value: rtNrm.texture }, tDep: { value: rtDep.texture }, tGL: { value: rtGLit.texture }, tGF: { value: rtGFace.texture }, gview: { value: 0 },
               sunS: { value: new THREE.Vector2(0, 1) }, pal: { value: palTex }, shadeT: { value: shadeTex }, sunT: { value: sunTex }, coreT: { value: coreTex }, lowT: { value: lowTex }, highT: { value: highTex }, lowSun: { value: 0 }, lmax: { value: 1 }, mode: { value: 0 } },
   vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
   fragmentShader: `
     #include <packing>
-    uniform vec2 sunS; uniform float lmax, lowSun; uniform sampler2D lowT, highT; uniform sampler2D tPat, tId, tLit, tFace, tNrm, tDep, pal, shadeT, sunT, coreT; uniform int mode; varying vec2 vUv;
+    uniform vec2 sunS; uniform float lmax, lowSun; uniform sampler2D lowT, highT; uniform sampler2D tPat, tId, tLit, tFace, tNrm, tDep, pal, shadeT, sunT, coreT, tGL, tGF; uniform int mode, gview; varying vec2 vUv;
     const vec2 S = vec2(${RW}.0, ${H}.0);
     vec4 at(sampler2D t, vec2 c) { return texture2D(t, (c + 0.5) / S); }
     float dep(vec2 c) { return unpackRGBAToDepth(at(tDep, c)) * 3999.0; }      // in cells
@@ -315,7 +333,27 @@ const comp = new THREE.ShaderMaterial({
     void main() {
       vec2 c = floor(vUv * S);
       vec4 id = at(tId, c);
-      if (id.b < 0.5 / 255.0) discard;
+      if (id.b < 0.5 / 255.0) {
+        // the ground: lit or in the building's shadow, by the same test as the walls (a lone shaded cell is noise)
+        vec4 g = at(tGL, c);
+        if (g.a < 0.5 || gview == 1) discard;
+        float gl = g.r, gf = at(tGF, c).r;
+        bool gs = gf <= 0.03 || gl < gf * 0.45;
+        if (gs) {
+          int nn = 0;
+          for (int i = 0; i < 4; i++) {
+            vec2 o = i == 0 ? vec2(1.0, 0.0) : i == 1 ? vec2(-1.0, 0.0) : i == 2 ? vec2(0.0, 1.0) : vec2(0.0, -1.0);
+            vec4 q = at(tGL, c + o);
+            if (at(tId, c + o).b >= 0.5 / 255.0 || q.a < 0.5 || q.r < at(tGF, c + o).r * 0.45) nn++;
+          }
+          gs = nn >= 3;
+        }
+        if (gview == 2) { if (!gs) discard; gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
+        float gr = ${RAMP[MAT.sand[0]]}.0, gb = ${MAT.sand[1]}.0;
+        gl_FragColor = vec4(gs ? texture2D(shadeT, vec2((gb - 3.0 + 0.5) / 8.0, (gr + 0.5) / ${NP}.0)).rgb : palc(gr, gb), 1.0);
+        return;
+      }
+      if (gview == 2) discard;                     // the ground's shade alone: no building
       float r = floor(id.r * 255.0 + 0.5) - 1.0, base = floor(id.g * 255.0 + 0.5), mi = floor(id.b * 255.0 + 0.5);
       vec4 pt = at(tPat, c);
       float poff = floor((pt.r - 0.5) * 4.0 + 0.5);
@@ -479,6 +517,13 @@ function render() {
   pass(rtNrm, () => nrmMat);
   pass(rtDep, () => depMat);
   pass(rtPat, p => patMat(p));
+  // the ground's own two passes: the building only blocks (black) and casts; the ground takes the light
+  ground.visible = true;
+  ground.material = litMat;
+  pass(rtGLit, () => blackMat);
+  sun.castShadow = false; pass(rtGFace, () => blackMat); sun.castShadow = true;
+  ground.visible = false;
+  comp.uniforms.gview.value = gview;
   renderer.setRenderTarget(null);
   renderer.setClearColor(0x000000, 0);
   renderer.clear();
@@ -486,6 +531,8 @@ function render() {
   renderer.render(quadScene, quadCam);
 }
 
+for (const g of [0, 1, 2]) document.getElementById("g-" + g).addEventListener("click", () => { gview = g;
+  for (const k of [0, 1, 2]) document.getElementById("g-" + k).setAttribute("aria-pressed", String(k === g)); if (mode !== "ref") render(); });
 const modes = { game: "m-game", ref: "m-ref", flat: "m-flat", light: "m-light", layers: "m-layers" };
 function setMode(m) {
   mode = m;
