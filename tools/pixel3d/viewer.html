@@ -266,7 +266,7 @@ const comp = new THREE.ShaderMaterial({
       }
       if (mi == ${matNames.indexOf("letter") + 1}.0) line = 0;                    // letters are too thin to outline
       float k = base + st;
-      bool quiet = mi == ${matNames.indexOf("chimHi") + 1}.0 || mi == ${matNames.indexOf("chimCrack") + 1}.0 || mi == ${matNames.indexOf("glass") + 1}.0 || mi == ${matNames.indexOf("curtain") + 1}.0 || mi == ${matNames.indexOf("crack") + 1}.0 || mi == ${matNames.indexOf("plinthHi") + 1}.0 || mi == ${matNames.indexOf("plinthLo") + 1}.0 || mi == ${matNames.indexOf("letter") + 1}.0 || mi == ${matNames.indexOf("sign") + 1}.0 || mi == ${matNames.indexOf("signRim") + 1}.0;   // the sign stays crisp
+      bool quiet = mi == ${matNames.indexOf("capLo") + 1}.0 || mi == ${matNames.indexOf("chimHi") + 1}.0 || mi == ${matNames.indexOf("chimCrack") + 1}.0 || mi == ${matNames.indexOf("glass") + 1}.0 || mi == ${matNames.indexOf("curtain") + 1}.0 || mi == ${matNames.indexOf("crack") + 1}.0 || mi == ${matNames.indexOf("plinthHi") + 1}.0 || mi == ${matNames.indexOf("plinthLo") + 1}.0 || mi == ${matNames.indexOf("letter") + 1}.0 || mi == ${matNames.indexOf("sign") + 1}.0 || mi == ${matNames.indexOf("signRim") + 1}.0;   // the sign stays crisp
       bool roofy = quiet || mi == ${matNames.indexOf("tile") + 1}.0 || mi == ${matNames.indexOf("roofBase") + 1}.0;   // tiles keep one clean body
       if (mode == 0 && occ >= 3.0 && !roofy) k -= 1.0;
       bool small = mi == ${matNames.indexOf("glass") + 1}.0 || mi == ${matNames.indexOf("mullion") + 1}.0 || mi == ${matNames.indexOf("frame") + 1}.0 || mi == ${matNames.indexOf("curtain") + 1}.0;   // window parts: too small for lit edges
