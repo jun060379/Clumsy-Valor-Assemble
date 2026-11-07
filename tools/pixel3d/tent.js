@@ -103,9 +103,6 @@ const TENT = (function () {
     // This camera cannot turn a thing sideways, so the prism runs right and a little back (D), which puts the front
     // end facing us with the long side beyond the fold, as the reference draws it.
     const V = (x, y, z) => new THREE.Vector3(x, y, z);
-    const Hh = 86, ZF = 6, D = V(55, 0, -24);                             // ridge height, the front end's plane, the run
-    const A = V(46, Hh, ZF), L = V(13, 0, ZF), M = V(79, 0, ZF);         // the front end: apex, foot corners
-    const B = A.clone().add(D), R = M.clone().add(D), L2 = L.clone().add(D);
     const face = (layer, mat, v, lift = 0, back = 1.2) => {               // a flat panel through its points, lifted along its normal
       const n = new THREE.Vector3().subVectors(v[1], v[0]).cross(new THREE.Vector3().subVectors(v[2], v[0])).normalize();
       if (n.z < 0) n.negate();
@@ -116,19 +113,36 @@ const TENT = (function () {
       const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(t, 3)); g.computeVertexNormals();
       return add(g, mat, layer);
     };
-    face("canvas", "canvas", [A, L, M]);                                 // the front end
-    face("canvas", "canvas", [A, M, R, B]);                              // the near long side
-    face("canvas", "canvas", [A, B, L2, L]);                             // the far long side
-    face("canvas", "canvas", [B, R, L2]);                                // the back end
-    const onEnd = (x, y) => V(x, y, ZF), onSide = (s, t) => M.clone().addScaledVector(A.clone().sub(M), s).addScaledVector(D, t);
-    // the door at the foot of the middle pole: the canvas parted from well up and drawn back either side - an
-    // upturned V, dark inside to the ground, a light fold along each parted edge
-    face("door", "doorGap", [onEnd(46, 64), onEnd(33, 0), onEnd(59, 0)], 0.5);
-    face("door", "canvas", [onEnd(46, 64), onEnd(31, 0), onEnd(33, 0), onEnd(46, 60)], 0.9);
-    face("door", "canvas", [onEnd(46, 64), onEnd(46, 60), onEnd(59, 0), onEnd(61, 0)], 0.9);
-    // the hem along the foot, a shade darker
-    face("canvas", "canvasDk", [onEnd(13, 2), onEnd(79, 2), onEnd(79, 0), onEnd(13, 0)], 0.4);
-    face("canvas", "canvasDk", [onSide(2 / Hh, 0), onSide(2 / Hh, 1), onSide(0, 1), onSide(0, 0)], 0.4);
+    // FORM (owner 2026-11-07: "투시가 안맞네" - a solid turned off the town's axes reads wrong in this oblique view,
+    // where depth only ever goes straight up): both candidates sit square on the axes like every other building.
+    //   "end" - the ridge runs straight back; the front end with its door faces us, the slopes show above it.
+    //   "side" - the ridge runs across, as the reference's level ridge and level foot; the long slope faces us, the
+    //            ends lean out to the pegs (hipped), the door is cut in the slope under the left crossing.
+    const FORM = "side";
+    const Hh = FORM === "end" ? 86 : 80, ZF = 6;
+    let A, B, D, faces, door, dn;
+    const sub = (u, v) => u.clone().sub(v);
+    if (FORM === "end") {
+      D = V(0, 0, -64);
+      A = V(46, Hh, ZF); const L = V(13, 0, ZF), M = V(79, 0, ZF);
+      B = A.clone().add(D); const R = M.clone().add(D), L2 = L.clone().add(D);
+      faces = [[A, L, M], [A, M, R, B], [A, B, L2, L], [B, R, L2]];
+      door = (x, y) => V(x, y, ZF);
+    } else {
+      const zr = -12, w = 26;
+      A = V(46, Hh, zr); B = V(101, Hh, zr); D = sub(B, A);
+      const L = V(13, 0, zr + w), M = V(134, 0, zr + w), L2 = V(13, 0, zr - w), R2 = V(134, 0, zr - w);
+      faces = [[A, L, M, B], [A, B, R2, L2], [A, L2, L], [B, M, R2]];
+      door = (x, y) => V(x, y, zr + w * (1 - y / Hh));                  // a point on the front slope
+    }
+    dn = D.clone().normalize();
+    for (const f of faces) face("canvas", "canvas", f);
+    // the door: the canvas parted from well up and drawn back either side - an upturned V, dark inside to the ground,
+    // a light fold along each parted edge; the middle pole stands in it
+    face("door", "doorGap", [door(46, 64), door(33, 0), door(59, 0)], 0.5);
+    face("door", "canvas", [door(46, 64), door(31, 0), door(33, 0), door(46, 60)], 0.9);
+    face("door", "canvas", [door(46, 64), door(46, 60), door(59, 0), door(61, 0)], 0.9);
+    const ZP = FORM === "end" ? ZF + 1.6 : null;
 
     // ---- the poles and lines: the middle pole down the front end, short crossed poles over each end of the ridge, the
     // ridge pole between them; one rope for every line - the lashings, a guy line from each crossing out along the
@@ -137,8 +151,8 @@ const TENT = (function () {
     const seg = (a, b, r, mat) => { const m = a.clone().add(b).multiplyScalar(0.5);
       const g = new THREE.CylinderGeometry(r, r, a.distanceTo(b), 10); const mesh = add(g, mat, "poles");
       mesh.position.copy(m); mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); return mesh; };
-    seg(V(46, -1, ZF + 1.6), V(46, Hh + 4, ZF + 1.6), 1.6, "pole");
-    const dn = D.clone().normalize();
+    if (FORM === "end") seg(V(46, -1, ZP), V(46, Hh + 4, ZP), 1.6, "pole");
+    else seg(door(46, -1).add(V(0, 0, 1)), door(46, 62).add(V(0, 0, 1)), 1.6, "pole");   // seen through the doorway
     for (const C of [A, B]) {
       const c = C.clone().add(V(0, 1, 1.6));
       seg(c.clone().add(V(-7, -8, 0)), c.clone().add(V(6, 7, 0)), 1.6, "pole");
