@@ -222,7 +222,7 @@ const FORGE = (function () {
     const ZE = 12, ZR = -40, RE = 72, RR = 25;
     const ye = Y(RE, ZE), yr = Y(RR, ZR);
     { const tri = [], quad = (a, b, c, d) => tri.push(...a, ...b, ...c, ...a, ...c, ...d), t3 = (a, b, c) => tri.push(...a, ...b, ...c);
-      const e0 = [60, ye, ZE], e1 = [287, ye, ZE], r0 = [60, yr, ZR], r1 = [263.5, yr, ZR], b0 = [60, ye, -80], b1 = [287, ye, -80];
+      const e0 = [74, ye, ZE], e1 = [287, ye, ZE], r0 = [74, yr, ZR], r1 = [263.5, yr, ZR], b0 = [74, ye, -80], b1 = [287, ye, -80];   // ends at the stack's side (no roof body standing in front of the stack)
       quad(e0, e1, r1, r0); t3(e1, b1, r1); quad(b1, b0, r0, r1); quad(e0, b0, b1, e1); quad(e0, r0, b0, b0);
       const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(tri, 3)); g.computeVertexNormals();
       add(g, "roofBase", "roof"); }
@@ -256,18 +256,21 @@ const FORGE = (function () {
       }
     }
 
-    // ---- the lean-to at the left: a short roof down from the chimney over a post and a stone foot
-    // (back as it was: owner 2026-11-07, "그 지붕이랑 화덕 형태 지붕 잇기 전으로 돌려봐")
-    const ZL = 10;
-    box("lean-to", "timber", 12, 17, 80, 113, ZL - 6, ZL - 2);
+    // ---- the lean-to at the left (owner 2026-11-07: the post must reach it, and it must run on into the main roof -
+    // "둘 다"): a shallow roof from under the main roof's eave, passing behind the stack, down to the left over a post
+    // and a stone foot. Its upper end (x 74, row 70) tucks under the main eave (row 72); it lies flush behind the stack's
+    // face, so only the part left of the stack shows.
+    const ZL = 1, LA = [74, 70], LB = [2, 92];
+    const lRow = (x) => LA[1] + (LB[1] - LA[1]) * (LA[0] - x) / (LA[0] - LB[0]);
+    box("lean-to", "timber", 12, 17, Math.floor(lRow(17)) + 2, 113, ZL - 6, ZL - 2);       // the post up to the roof's underside
     courses("lean-to", [113, 124, 135, 145], () => [6, 28], ZL - 2, { w: 11, gx: 6, gr: 113, ch: 11 });
-    bar("lean-to", "roofBase", 35, 56, 2, 80, 7, ZL - 8, ZL);
-    bar("lean-to", "fascia", 35, 61, 2, 85, 3, ZL - 7, ZL + 0.5);
-    for (let i = 0, n = 4; i < n; i++) {                                           // tiles down the short slope
-      const t0 = i / n + 0.01, t1 = (i + 1) / n - 0.02;
-      const F = (u, v) => { const t = t0 + (t1 - t0) * v, x = 35 + (2 - 35) * t, row = 52 + (78 - 52) * t + 6 * u;
-        return [x, Y(row, ZL), ZL + 0.5 + (u < 0.5 ? 2.6 * u / 0.5 : 2.6 - 2.0 * (u - 0.5) / 0.5)]; };
-      shell("lean-to", i === 2 ? "tileDk" : "tile", F, [0, 0.25, 0.5, 0.75, 1], [0, 1], [0, 0, -2.5]);
+    bar("lean-to", "roofBase", LA[0], LA[1], LB[0], LB[1], 6, ZL - 8, ZL);
+    bar("lean-to", "fascia", LA[0], LA[1] + 4, LB[0], LB[1] + 4, 3, ZL - 7, ZL + 0.5);
+    for (let i = 0, n = 6; i < n; i++) {                                           // tiles down the slope
+      const t0 = i / n + 0.008, t1 = (i + 1) / n - 0.015;
+      const F = (u, v) => { const t = t0 + (t1 - t0) * v, x = LA[0] + (LB[0] - LA[0]) * t, row = lRow(x) - 3 + 5 * u;
+        return [x, Y(row, ZL), ZL + 0.5 + (u < 0.5 ? 2.2 * u / 0.5 : 2.2 - 1.8 * (u - 0.5) / 0.5)]; };
+      shell("lean-to", i === 4 ? "tileDk" : "tile", F, [0, 0.25, 0.5, 0.75, 1], [0, 1], [0, 0, -2.5]);
     }
 
     return parts;
