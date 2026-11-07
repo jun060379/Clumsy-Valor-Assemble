@@ -208,6 +208,10 @@ sun.shadow.normalBias = 1.0;
 const center = new THREE.Vector3(W / 2, 110, -30);
 sun.target.position.copy(center);
 scene.add(sun, sun.target);
+// the night's warm lights (owner 2026-11-08: "빛은 넣어야지"): the town's lamps and fires near this solid, placed by
+// tools/pixel3d/night_lights.py (HALL.NIGHT_LIGHTS: [x, y, z, reach, strength] in the module's units); their own pass
+const warmLights = (HALL.NIGHT_LIGHTS || []).map(([x, y, z, reach, a]) => {
+  const l = new THREE.PointLight(0xffffff, Math.PI * 0.9 * a, reach, 0)   // no fall-off but the reach window: N.L x strength; l.position.set(x, y, z); l.visible = false; scene.add(l); return l; });
 // the town's sun (lit.gd sun3): left at dawn, right at dusk; behind the town early and late, in front at noon
 // night (owner 2026-11-08: the night looks from the solid itself, not guessed from the drawing): past 19:30 the light is
 // the moon, high behind the town on the right, cool and dim - the lit side one step down in the shade's cool colours,
@@ -230,6 +234,7 @@ cam.projectionMatrix.multiply(new THREE.Matrix4().set(1, 0, KX, 0, 0, 1, -K, 0, 
 cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
 
 const mkRT = () => new THREE.WebGLRenderTarget(CW, CH, { magFilter: THREE.NearestFilter, minFilter: THREE.NearestFilter });
+const rtWarm = mkRT();
 const rtId = mkRT(), rtLit = mkRT(), rtFace = mkRT(), rtNrm = mkRT(), rtDep = mkRT(), rtPat = mkRT(), rtGLit = mkRT(), rtGFace = mkRT();
 // the ground the building stands on (owner 2026-11-07: "시간 및 기준 별 바닥에 들어가는 그림자도 고려해서"): a plane at the
 // foot line, from 24 cells behind the walls to 52 in front (the town's ground band round a foot line), taking the
@@ -304,12 +309,12 @@ function twinTex(kind) {
 const shadeTex = twinTex("shade"), sunTex = twinTex("sun"), coreTex = twinTex("core"), lowTex = twinTex("lightLow"), highTex = twinTex("lightHigh");
 
 const comp = new THREE.ShaderMaterial({
-  uniforms: { tPat: { value: rtPat.texture }, tId: { value: rtId.texture }, tLit: { value: rtLit.texture }, tFace: { value: rtFace.texture }, tNrm: { value: rtNrm.texture }, tDep: { value: rtDep.texture }, tGL: { value: rtGLit.texture }, tGF: { value: rtGFace.texture }, gview: { value: 0 },
+  uniforms: { tPat: { value: rtPat.texture }, tId: { value: rtId.texture }, tLit: { value: rtLit.texture }, tFace: { value: rtFace.texture }, tNrm: { value: rtNrm.texture }, tDep: { value: rtDep.texture }, tGL: { value: rtGLit.texture }, tGF: { value: rtGFace.texture }, tWarm: { value: rtWarm.texture }, gview: { value: 0 },
               sunS: { value: new THREE.Vector2(0, 1) }, pal: { value: palTex }, shadeT: { value: shadeTex }, sunT: { value: sunTex }, coreT: { value: coreTex }, lowT: { value: lowTex }, highT: { value: highTex }, lowSun: { value: 0 }, lmax: { value: 1 }, mode: { value: 0 }, night: { value: 0 } },
   vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
   fragmentShader: `
     #include <packing>
-    uniform vec2 sunS; uniform float lmax, lowSun, night; uniform sampler2D lowT, highT; uniform sampler2D tPat, tId, tLit, tFace, tNrm, tDep, pal, shadeT, sunT, coreT, tGL, tGF; uniform int mode, gview; varying vec2 vUv;
+    uniform vec2 sunS; uniform float lmax, lowSun, night; uniform sampler2D lowT, highT; uniform sampler2D tWarm, tPat, tId, tLit, tFace, tNrm, tDep, pal, shadeT, sunT, coreT, tGL, tGF; uniform int mode, gview; varying vec2 vUv;
     const vec2 S = vec2(${CW}.0, ${CH}.0);
     vec4 at(sampler2D t, vec2 c) { return texture2D(t, (c + 0.5) / S); }
     #define METALQ (${matNames.some(n => n.startsWith("metal")) ? matNames.map((n, i) => n.startsWith("metal") ? `abs(mi - ${i + 1}.0) < 0.5` : "").filter(Boolean).join(" || ") : "false"})
@@ -515,6 +520,12 @@ const comp = new THREE.ShaderMaterial({
           float kn = (shadow || aoed) ? k - 1.0 : k - 1.0;
           col = texture2D(shadeT, vec2((clamp(kn, 0.0, nN - 1.0) + 0.5) / 8.0, (r + 0.5) / ${NP}.0)).rgb;
         }
+        // a lamp or a fire near: its side takes the warm light, in two steps (the near ring brighter)
+        float wl = at(tWarm, c).r;
+        if (wl > 0.18 && line != 1) {
+          float kw = wl > 0.5 ? base : base - 1.0;
+          col = texture2D(lowT, vec2((clamp(kw, 0.0, nN - 1.0) + 0.5) / 8.0, (r + 0.5) / ${NP}.0)).rgb;
+        } else if (wl > 0.18 && line == 1) col = palc(r == 0.0 ? 0.0 : 1.0, 1.0);
       }
       if (mode == 2) col = vec3(st == 1.0 ? 0.95 : st == 0.0 ? 0.7 : st == -1.0 ? 0.45 : 0.22) * (occ >= 3.0 ? 0.75 : 1.0) + (hi == 1 ? 0.15 : 0.0);
       gl_FragColor = vec4(col, 1.0);
@@ -569,6 +580,11 @@ function render() {
   pass(rtNrm, () => nrmMat);
   pass(rtDep, () => depMat);
   pass(rtPat, p => patMat(p));
+  if (isNight(h) && warmLights.length) {          // the warm lights alone: no sun, no shadow
+    const sv = sun.visible; sun.visible = false; warmLights.forEach(l => l.visible = true);
+    pass(rtWarm, () => litMat);
+    sun.visible = sv; warmLights.forEach(l => l.visible = false);
+  } else { renderer.setRenderTarget(rtWarm); renderer.setClearColor(0x000000, 0); renderer.clear(); }
   // the ground's own two passes: the building only blocks (black) and casts; the ground takes the light
   ground.visible = true;
   ground.material = litMat;
