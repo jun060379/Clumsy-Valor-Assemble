@@ -214,18 +214,52 @@ const palData = new Uint8Array(8 * NP * 4);
 PALETTE.forEach((row, r) => { for (let s = 0; s < 8; s++) { const c = row[Math.min(s, row.length - 1)]; palData.set([c[0], c[1], c[2], STEPS[r]], (r * 8 + s) * 4); } });
 const palTex = new THREE.DataTexture(palData, 8, NP, THREE.RGBAFormat);
 palTex.magFilter = palTex.minFilter = THREE.NearestFilter; palTex.needsUpdate = true;
+// light and shade move hue and saturation too, not only value (owner 2026-11-07; LIGHT.md: light warm and rich, shade
+// cool and dull, sky-tinted). Each palette colour gets a shade twin and a sunlit twin, both picked from the palette
+// itself (no colour outside it) at about the same lightness: a fixed table per (ramp, step), never per cell, so it
+// cannot speckle.
+const ALL = [];
+PALETTE.forEach((row, r) => { if (r === RAMP.leaf || r === RAMP.green) return;      // never tint toward foliage
+  row.slice(0, STEPS[r]).forEach(c => ALL.push(c)); });
+const lum = (c) => 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+function twin(c, kind) {
+  const L = lum(c);
+  let t;
+  if (kind === "shade") {            // dull it by a third, then lean it toward the sky
+    t = c.map(v => v + (L - v) * 0.2);
+    t = [t[0] - 8, t[1] - 2, t[2] + 12];
+  } else {                           // richer and warmer
+    t = c.map(v => v + (v - L) * 0.2);
+    t = [t[0] + 8, t[1] + 3, t[2] - 8];
+  }
+  let best = c, bd = 1e9;
+  for (const p of ALL) {
+    const dl = lum(p) - L;
+    if (Math.abs(dl) > 18) continue;                 // keep the lightness: the step already set it
+    if ((p[0] - c[0]) ** 2 + (p[1] - c[1]) ** 2 + (p[2] - c[2]) ** 2 > 50 * 50) continue;   // a near relation only, never a jump to another material
+    const d = (p[0] - t[0]) ** 2 + (p[1] - t[1]) ** 2 + (p[2] - t[2]) ** 2 + 4 * dl * dl;
+    if (d < bd) { bd = d; best = p; }
+  }
+  return best;
+}
+function twinTex(kind) {
+  const d = new Uint8Array(8 * NP * 4);
+  PALETTE.forEach((row, r) => { for (let s = 0; s < 8; s++) { const c = twin(row[Math.min(s, row.length - 1)], kind); d.set([c[0], c[1], c[2], 255], (r * 8 + s) * 4); } });
+  const t = new THREE.DataTexture(d, 8, NP, THREE.RGBAFormat); t.magFilter = t.minFilter = THREE.NearestFilter; t.needsUpdate = true; return t;
+}
+const shadeTex = twinTex("shade"), sunTex = twinTex("sun");
 
 const comp = new THREE.ShaderMaterial({
   uniforms: { tPat: { value: rtPat.texture }, tId: { value: rtId.texture }, tLit: { value: rtLit.texture }, tNrm: { value: rtNrm.texture }, tDep: { value: rtDep.texture },
-              pal: { value: palTex }, mode: { value: 0 } },
+              pal: { value: palTex }, shadeT: { value: shadeTex }, sunT: { value: sunTex }, mode: { value: 0 } },
   vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
   fragmentShader: `
     #include <packing>
-    uniform sampler2D tPat, tId, tLit, tNrm, tDep, pal; uniform int mode; varying vec2 vUv;
+    uniform sampler2D tPat, tId, tLit, tNrm, tDep, pal, shadeT, sunT; uniform int mode; varying vec2 vUv;
     const vec2 S = vec2(${RW}.0, ${H}.0);
     vec4 at(sampler2D t, vec2 c) { return texture2D(t, (c + 0.5) / S); }
     float dep(vec2 c) { return unpackRGBAToDepth(at(tDep, c)) * 3999.0; }      // in cells
-    float stepOf(float L) { return L > 0.7 ? 1.0 : L > 0.3 ? 0.0 : L > 0.05 ? -1.0 : -2.0; }
+    float stepOf(float L) { return L > 0.7 ? 1.0 : L > 0.3 ? 0.0 : L > 0.05 ? -1.0 : -3.0; }   // cast shade three steps down: more contrast
     vec3 palc(float r, float k) {
       float n = texture2D(pal, vec2(0.5 / 8.0, (r + 0.5) / ${NP}.0)).a * 255.0;
       return texture2D(pal, vec2((clamp(k, 0.0, n - 1.0) + 0.5) / 8.0, (r + 0.5) / ${NP}.0)).rgb;
@@ -280,12 +314,19 @@ const comp = new THREE.ShaderMaterial({
       float k = base + st;
       bool quiet = mi == ${matNames.indexOf("capLo") + 1}.0 || mi == ${matNames.indexOf("chimHi") + 1}.0 || mi == ${matNames.indexOf("chimCrack") + 1}.0 || mi == ${matNames.indexOf("glass") + 1}.0 || mi == ${matNames.indexOf("curtain") + 1}.0 || mi == ${matNames.indexOf("crack") + 1}.0 || mi == ${matNames.indexOf("plinthHi") + 1}.0 || mi == ${matNames.indexOf("plinthLo") + 1}.0 || mi == ${matNames.indexOf("letter") + 1}.0 || mi == ${matNames.indexOf("sign") + 1}.0 || mi == ${matNames.indexOf("signRim") + 1}.0;   // the sign stays crisp
       bool roofy = quiet || mi == ${matNames.indexOf("tile") + 1}.0 || mi == ${matNames.indexOf("roofBase") + 1}.0;   // tiles keep one clean body
-      if (mode == 0 && occ >= 3.0 && !roofy) k -= 1.0;
+      bool aoed = mode == 0 && occ >= 3.0 && !roofy;
+      if (aoed) k -= 1.0;
       bool small = mi == ${matNames.indexOf("glass") + 1}.0 || mi == ${matNames.indexOf("mullion") + 1}.0 || mi == ${matNames.indexOf("frame") + 1}.0 || mi == ${matNames.indexOf("curtain") + 1}.0;   // window parts: too small for lit edges
       if (mode == 0 && hi == 1 && line == 0 && !roofy && !small) k += 1.0;
       if (mode == 0 && line == 0) k += poff;
       if (line == 1) k = base - 4.0; else if (line == 2) k = base + st - 2.0;
       vec3 col = palc(r, max(k, 0.0));
+      if (mode == 0 && line == 0) {
+        float n = texture2D(pal, vec2(0.5 / 8.0, (r + 0.5) / ${NP}.0)).a * 255.0;
+        vec2 tc = vec2((clamp(max(k, 0.0), 0.0, n - 1.0) + 0.5) / 8.0, (r + 0.5) / ${NP}.0);
+        if (st < 0.0 || aoed) col = texture2D(shadeT, tc).rgb;          // shade: cooler, duller
+        else if (st > 0.0) col = texture2D(sunT, tc).rgb;              // full sun: warmer, richer
+      }
       // the outline: the dark of the warm ramps (the reference draws stone, plaster and wood alike in dark brown,
       // the roofs in their own deepest red)
       if (line == 1) col = sil ? palc(1.0, 0.0) : r == 0.0 ? palc(0.0, 0.0) : palc(1.0, 1.0);   // the silhouette darkest
