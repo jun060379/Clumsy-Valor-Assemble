@@ -6,7 +6,7 @@
 // on row r has world Y = B0 + K*z - r. B0 = 145, the foot line; the canvas runs 14 rows lower for the ground in front.
 
 const FORGE = (function () {
-  const W = 287, H = 169, B0 = 145, K = 0.25, TOP = 10;   // TOP: rows of sky above row 0 (the chimney cap recedes up)
+  const W = 287, H = 175, B0 = 145, K = 0.25, TOP = 16;   // TOP: rows of sky above row 0 (the chimney cap recedes up)
   const Y = (row, z) => B0 + K * z - row;
   const RAMP = { red: 0, wood: 1, ochre: 2, cream: 3, leaf: 4, green: 5, blue: 6, violet: 7, stone: 8, iron: 9 };
   const MAT = {
@@ -110,7 +110,7 @@ const FORGE = (function () {
     for (let x = 101; x < 283; x += 7) box("back wall", "plank", x, Math.min(x + 6, 283), 76, 145, -16, -15.2);
 
     // ---- the furnace: a wide stone body under the chimney, its shoulders stepping in to the stack
-    const ZF = -28;                                                                  // pushed back under the joined roof (owner 2026-11-07)
+    const ZF = -16;                                                                  // set back under the joined roof, its mouth still in plain view (owner 2026-11-07)
     const fspan = (r) => r < 72 ? [35, 74] : r < 86 ? [35 - (r - 72) * 0.8, 74 + (r - 72) * 1.0] : r < 104 ? [24, 88 + (r - 86) * 0.6] : [19, 100];
     // the fire mouth: an arch in the furnace, the hearth sill under it, the ash pit below
     const mouth = archPts(46, 88, 92, 122);
@@ -150,21 +150,20 @@ const FORGE = (function () {
     for (let x = 56; x < 84; x += 7) box("furnace", "brick", x, Math.min(x + 6, 84), 127, 131, ZF - 1.5, ZF);
 
     // ---- the chimney stack, a little narrower, with a capstone course
-    const ZC = -32;                                                                  // the stack stands back with the hearth, up through the roof
+    const ZC = -20;                                                                  // the stack stands back with the hearth, up through the roof, tall above it
     // the stack and the furnace are one bond (owner 2026-11-07: "굴뚝이랑 화덕은 동렬 형태로" = 돌 줄을 맞춤): the same
     // stone, the same grid, the courses running on from the stack down into the furnace
     // the stack is shallow (12 deep): in this view a top recedes up K rows per cell, so a deep stack would show a tall
     // pale top face; the reference shows the top as a thin band
-    slab("chimney", "mortar2", [[35, 72], [74, 72], [74, 16], [35, 16]], ZC - 12, ZC - 1);
-    courses("chimney", rowsFrom(16, 72, 7), () => [35, 74], ZC, { w: 14, gx: 35, gr: 16 });
+    slab("chimney", "mortar2", [[35, 72], [74, 72], [74, 2], [35, 2]], ZC - 12, ZC - 1);
+    courses("chimney", rowsFrom(2, 72, 7), () => [35, 74], ZC, { w: 14, gx: 35, gr: 16 });
     // the top (owner 2026-11-07: "굴뚝 윗부분 형태 다듬고" / "굴뚝형태 해결"): a corbel course standing out a cell,
     // a capstone a cell wider again with rounded corners, and the flue's low crown on it, set back
-    slab("chimney", "stone", [[33, 16], [33, 12], [34, 11], [75, 11], [76, 12], [76, 16]], ZC - 13, ZC + 1);
-    box("chimney", "plinthHi", 34, 75, 11, 12, ZC + 0.4, ZC + 1.2);
-    slab("chimney", "stone", [[31, 11], [31, 9], [33, 7], [76, 7], [78, 9], [78, 11]], ZC - 14, ZC + 2);
-    box("chimney", "plinthHi", 33, 76, 7, 8, ZC + 1.4, ZC + 2.2);
-    slab("chimney", "stone", [[42, 7], [42, 5], [43, 4], [66, 4], [67, 5], [67, 7]], ZC - 10, ZC - 3);    // the flue's crown
-    box("chimney", "soot", 45, 64, 3.6, 4, ZC - 9, ZC - 4);
+    slab("chimney", "stone", [[33, 2], [33, -2], [34, -3], [75, -3], [76, -2], [76, 2]], ZC - 13, ZC + 1);
+    box("chimney", "plinthHi", 34, 75, -3, -2, ZC + 0.4, ZC + 1.2);
+    slab("chimney", "stone", [[31, -3], [31, -5], [33, -7], [76, -7], [78, -5], [78, -3]], ZC - 14, ZC + 2);
+    box("chimney", "plinthHi", 33, 76, -7, -6, ZC + 1.4, ZC + 2.2);
+    slab("chimney", "stone", [[42, -7], [42, -8], [43, -9], [66, -9], [67, -8], [67, -7]], ZC - 10, ZC - 3);    // the flue's crown
 
     // ---- the porch: roof on posts with knee braces over a low stone wall, the door set in a stone wall at the right
     const ZP = 9;                                                                    // posts close under the eave (Z 12)
@@ -263,19 +262,16 @@ const FORGE = (function () {
     box("porch", "timber", 4, 11, 79, 128, ZP - 4, ZP);
     bar("porch", "timber", 11, 96, 25, 81, 4, ZP - 3.5, ZP - 0.5);
     courses("stone wall", [128, 136, 145], () => [0, 16], ZP + 3, { w: 8, gx: 0, gr: 128, ch: 8 });
-    box("work", "timber", 30, 54, 132, 145, 0, 8);                                     // the anvil's block
-    box("work", "iron", 35, 49, 129, 132, 1, 7);                                       // the anvil: waist, face, horn
-    box("work", "iron", 37, 47, 126, 129, 2, 6);
-    box("work", "iron", 30, 54, 122, 126, 0.5, 7.5);
-    { const g = new THREE.ConeGeometry(2, 8, 10); const m = add(g, "iron", "work"); m.rotation.z = Math.PI / 2; m.position.set(26, Y(124, 4), 4); }
-    { const g = new THREE.CylinderGeometry(8, 7.5, 14, 16); const m = add(g, "plank", "work"); m.position.set(70, Y(138, 2), 2);   // the quench tub
-      for (const r of [133, 143]) { const gg = new THREE.CylinderGeometry(8.3, 8.3, 1.4, 16); const mm = add(gg, "ironDk", "work"); mm.position.set(70, Y(r, 2), 2); } }
-    slab("work", "soot", [[84, 145], [104, 145], [100, 139], [94, 136], [88, 139]], -14, -6);   // coal heaped by the hearth
-    for (const x of [16, 40]) box("work", "timber", x, x + 3, 100, 145, -24, -21);       // a tool rack at the back
-    box("work", "timber", 14, 45, 100, 103, -24, -21);
-    for (const x of [21, 33]) { bar("work", "iron", x, 103, x - 2, 120, 1.4, -21, -19.6); bar("work", "iron", x + 2, 103, x + 4, 120, 1.4, -21, -19.6); }
-    bar("work", "plank", 27, 103, 27, 116, 1.6, -21, -19.6);
-    box("work", "iron", 24, 31, 115, 118, -21, -19);
+    // the mouth stays clear (x 46..88): the anvil on its block to its left, the quench tub to its right
+    box("work", "timber", 16, 40, 132, 145, 2, 10);                                    // the anvil's block
+    box("work", "iron", 21, 35, 129, 132, 3, 9);                                       // the anvil: waist, face, horn
+    box("work", "iron", 23, 33, 126, 129, 4, 8);
+    box("work", "iron", 16, 40, 122, 126, 2.5, 9.5);
+    { const g = new THREE.ConeGeometry(2, 8, 10); const m = add(g, "iron", "work"); m.rotation.z = -Math.PI / 2; m.position.set(44, Y(124, 6), 6); }
+    bar("work", "plank", 12, 145, 16, 126, 1.6, 4, 6);                                 // a hammer leaning on the block
+    box("work", "iron", 13, 20, 123, 127, 3, 7);
+    { const g = new THREE.CylinderGeometry(6.5, 6, 12, 16); const m = add(g, "plank", "work"); m.position.set(97, Y(139, 4), 4);   // the quench tub
+      for (const r of [135, 143]) { const gg = new THREE.CylinderGeometry(6.8, 6.8, 1.4, 16); const mm = add(gg, "ironDk", "work"); mm.position.set(97, Y(r, 4), 4); } }
 
     return parts;
   }
