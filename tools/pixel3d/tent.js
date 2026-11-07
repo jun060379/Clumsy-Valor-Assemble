@@ -10,7 +10,7 @@
 // build.py tentL sets MIRROR.
 const TENT = (function () {
   const MIRROR = false;
-  const W = 150, H = 140, B0 = 95, K = 0.25, TOP = 24;
+  const W = 166, H = 140, B0 = 95, K = 0.25, TOP = 24;
   const Y = (row, z) => B0 + K * z - row;
   const RAMP = { red: 0, wood: 1, ochre: 2, cream: 3, leaf: 4, green: 5, blue: 6, violet: 7, stone: 8, iron: 9 };
   const MAT = {
@@ -122,7 +122,7 @@ const TENT = (function () {
     // frame - u along the ridge, v across it (toward its front-right side), y up - with both ends at right angles to
     // the ridge, then turned ANG about the vertical so the front end faces left-front and the ridge runs right and
     // back. Nothing sheared: every point goes through the same turn.
-    const ANG = 65 * Math.PI / 180, LR = 70, HW = 46, Hh = 82, CX = 64, CZ = 4;
+    const ANG = 65 * Math.PI / 180, LR = 70, HW = 46, Hh = 82, CX = 66, CZ = 4;
     const co = Math.cos(ANG), si = Math.sin(ANG);
     const T = (u, y, v) => V(CX + u * co + v * si, y, CZ - u * si + v * co);
     const A = T(0, Hh, 0), B = T(LR, Hh, 0);
@@ -158,7 +158,8 @@ const TENT = (function () {
     // front one standing where the reference has its lone stake
     const PEG = (p) => { seg(p.clone().add(V(0, -1, 0)), p.clone().add(V(0, 10, 0)), 2.2, "peg");
       seg(p.clone().add(V(-2.2, 7.5, 0)), p.clone().add(V(2.2, 7.5, 0)), ROPE, "rope"); };
-    for (const [u0, u1, vv] of [[-1.8, -20, 50], [LR + 1.8, LR + 12, 48]]) for (const sgn of [-1, 1]) {
+    const OFF = 14;                                                   // every peg the same way out from its foot corner
+    for (const [u0, u1] of [[-1.8, -OFF], [LR + 1.8, LR + OFF]]) for (const sgn of [-1, 1]) { const vv = HW + OFF;
       const pg = T(u1, 0, sgn * vv); PEG(pg);
       seg(T(u0, Hh + 2, 0), pg.clone().add(V(0, 7.5, 0)), ROPE, "rope");
     }
