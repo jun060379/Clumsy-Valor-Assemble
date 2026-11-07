@@ -22,8 +22,12 @@ func _initialize() -> void:
 	if args.has("noui"):                 # hide every UI layer and the hero (to see the scenery)
 		for c in arena.get_children():
 			if c is CanvasLayer and c.layer > 0: c.visible = false
-		arena.player.visible = false
+		if not args.has("hero"): arena.player.visible = false
 	var L = arena.level
+	for a in args:                       # foot=N: the pixel3d buildings' base N px below the stand line (preview)
+		if String(a).begins_with("foot="):
+			L.FOOT = float(String(a).substr(5))
+			L.queue_redraw()
 	for a in args:                       # at=X[,Y]: stand there and shoot every other frame for 2 s (h=HOUR sets the time)
 		if String(a).begins_with("h="): arena.tod_h = float(String(a).substr(2))
 		if String(a).begins_with("w="): arena.weather = String(a).substr(2)

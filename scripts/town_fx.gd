@@ -134,7 +134,7 @@ func _init(tn) -> void:
 	glow.draw.connect(_draw_glow)
 	town.add_child(glow)
 	emis = Node2D.new()
-	emis.z_index = 10
+	emis.z_index = -4          # the hearth fire sits in the forge: over the building (-5), under the people (owner 2026-11-08)
 	emis.z_as_relative = false
 	emis.draw.connect(func(): _draw_furnace(emis))
 	town.add_child(emis)

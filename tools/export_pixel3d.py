@@ -24,11 +24,15 @@ for spec in sys.argv[2:]:
     pad.crop((12, 0, 12 + W, ch)).resize((W * 2, ch * 2), Image.NEAREST).save(f"assets/town/{dst}/{key}{suf}.png")
     m = np.array(Image.open(f"{S}/{n}_code_bM_{h}.png").convert("RGBA"))[:, :, 3] > 0
     b = np.array(im)[:, :, 3] > 0
-    foot = np.zeros_like(m)
+    # contact shade under the base (3 cells, fading), over the ground mask (cool shade colour, never black)
+    out = np.zeros(m.shape + (4,), np.uint8)
+    out[m & ~b] = (38, 70, 76, 110)
     for c in range(b.shape[1]):
       rows = np.where(b[:, c])[0]
-      if len(rows): r = rows[-1]; foot[r + 1:r + 3, c] = True
-    sh = (m | foot) & ~b
-    out = np.zeros(sh.shape + (4,), np.uint8); out[sh] = (38, 70, 76, 110)
-    Image.fromarray(out).resize((sh.shape[1] * 2, sh.shape[0] * 2), Image.NEAREST).save(f"assets/town/shadow/{key}{suf}.png")
+      if not len(rows): continue
+      r = rows[-1]
+      for i, al in enumerate((150, 100, 55)):
+        if r + 1 + i < b.shape[0] and not b[r + 1 + i, c]:
+          out[r + 1 + i, c] = (38, 70, 76, max(al, int(out[r + 1 + i, c, 3])))
+    Image.fromarray(out).resize((m.shape[1] * 2, m.shape[0] * 2), Image.NEAREST).save(f"assets/town/shadow/{key}{suf}.png")
   print(key, "size", W * 2, ch * 2, "top_px", top * 2, "ext_px", (ch - top - Hh) * 2, "gap_cells", top + Hh - 1 - last)

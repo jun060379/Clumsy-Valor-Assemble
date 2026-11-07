@@ -15,8 +15,8 @@ const HDOOR := 3024.0         # town.gd HDOOR
 ## two walkable routes: "top" (streets, terrace) and "bot" (the lower walkway); they meet at both ends
 const JUNC := [1750.0, 6650.0]
 const POI := [[450.0, "top", "store"], [1050.0, "top", "yard"], [1640.0, "top", "lamp"], [HDOOR - 120.0, "top", "hall"], [HDOOR + 260.0, "top", "hall"], [4300.0, "top", "camp"],
-	[5060.0, "top", "wagon"], [5780.0, "top", "barn"], [HDOOR - 60.0, "bot", "fountain"], [HDOOR + 70.0, "bot", "fountain"], [HDOOR - 230.0, "bot", "bench"], [2660.0, "bot", "board"],
-	[4650.0, "bot", "lower"], [5550.0, "bot", "lower"], [6880.0, "bot", "bath"], [7190.0, "bot", "well"], [7640.0, "bot", "forge"], [8040.0, "bot", "kiln"], [8300.0, "bot", "river"], [8950.0, "bot", "tree"]]
+	[5060.0, "top", "wagon"], [5380.0, "top", "well"], [5860.0, "top", "barn"], [HDOOR - 60.0, "bot", "fountain"], [HDOOR + 70.0, "bot", "fountain"], [HDOOR - 230.0, "bot", "bench"], [2660.0, "bot", "board"],
+	[4650.0, "bot", "lower"], [5550.0, "bot", "lower"], [6880.0, "bot", "bath"], [7545.0, "bot", "forge"], [8023.0, "bot", "kiln"], [8300.0, "bot", "river"], [8950.0, "bot", "tree"]]
 const FAV := {"estelle": {"yard": 4.0, "forge": 3.0, "store": 2.0, "lamp": 1.0, "hall": 2.0, "camp": 1.0},
 	"aida": {"barn": 4.0, "wagon": 3.0, "well": 3.0, "kiln": 1.0, "board": 1.0, "tree": 1.0},
 	"luce": {"fountain": 4.0, "bench": 2.0, "river": 3.0, "tree": 3.0, "bath": 1.0, "hall": 1.0},

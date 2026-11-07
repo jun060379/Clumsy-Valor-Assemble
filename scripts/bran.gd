@@ -76,10 +76,10 @@ var strolls := 0              # strolls begun (tests)
 func _init(tn) -> void:
 	town = tn
 	arena = tn.arena
-	# the anvil where the prototype puts it (BM('g_anvil', 7790, LOWF)); his spot: the hammer head lands on its face
+	# the anvil where the prototype puts it (BM('g_anvil', 7695, LOWF)); his spot: the hammer head lands on its face
 	var aw: float = town.tex["g_anvil"].get_width()
-	var ax := 7790.0 + aw / 2.0
-	anvil_left = roundf(ax + (7790.0 - ax) * town.BS)
+	var ax := 7695.0 + aw / 2.0
+	anvil_left = roundf(ax + (7695.0 - ax) * town.BS)
 	x = anvil_left + roundf(ANV_FACE * ANV_S) - HX
 	home = x
 	y = town.LOWF

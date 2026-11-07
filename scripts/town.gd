@@ -84,8 +84,12 @@ var hx := {}
 const P3D := {"g_hall": [0.0, 0.0], "g_forge": [32.0, 14.0], "g_barn": [20.0, 14.0], "g_store": [20.0, 16.0],
 	"g_tentR": [48.0, 24.0], "g_tentL": [48.0, 24.0], "g_kiln": [16.0, 26.0], "q_fountain": [12.0, 14.0],
 	"g_cottage": [20.0, 14.0], "g_well": [16.0, 14.0]}
+## where the base of a pixel3d building meets the ground plane, px below the stand line (the P3D set-downs above are
+## for 14); the plane's back edge is RAISE above the stand line (owner 2026-11-08: buildings behind the people, on the plane)
+var FOOT := 14.0
 func setdown(k: String) -> float:
-	return float(P3D[k][1]) if P3D.has(k) else 0.0
+	if k == "g_hall": return 0.0          # the hall stands on its own plinth on the terrace paving
+	return float(P3D[k][1]) - 14.0 + FOOT if P3D.has(k) else 0.0
 var sh_tex := {}                 # baked ground shadows under the pixel3d buildings: "<k>" / "<k>_m" / "<k>_e" (tools/pixel3d)
 var lit_tex := {}                # sun-side versions: "<k>_m" / "<k>_e"                     # pre-scaled (BS) textures, drawn 1:1
 var win_sv: SubViewport         # the hall windows drawn apart (LIT.wc): the heroine cut out of them
@@ -275,8 +279,8 @@ func _layout() -> void:
 	# [sprite, left x, surface y, sink, door dx|null, name, target, flip]
 	bld = [["g_store", 300.0, G, 0, 160.0, "창고", ""], ["g_yard", 820.0, G, 0, 378.0, "훈련장", "arena"],
 		["g_tentR", 4120.0, G, 2, null, "", "", true], ["g_ring", 4350.0, G, 4, null], ["g_tentR", 4490.0, G, 2, null],
-		["g_wagon", 4820.0, G, 0, 287.0, "출격 마차", "dungeon"], ["g_barn", 5520.0, G, 0, 230.0, "헛간", ""],
-		["g_cottage", 6624.0, LOWF, 0, 140.0, "목욕집", ""], ["g_well", 7031.0, LOWF, 0, null], ["g_forge", 7364.0, LOWF, 0, 373.0, "대장간", "forge"], ["g_anvil", 7790.0, LOWF, 0, null], ["g_kiln", 7900.0, LOWF, 0, 113.0, "숯가마", ""]]
+		["g_wagon", 4820.0, G, 0, 287.0, "출격 마차", "dungeon"], ["g_well", 5281.0, G, 0, null], ["g_barn", 5600.0, G, 0, 230.0, "헛간", ""],
+		["g_cottage", 6629.0, LOWF, 0, 140.0, "목욕집", ""], ["g_forge", 7269.0, LOWF, 0, 373.0, "대장간", "forge"], ["g_anvil", 7695.0, LOWF, 0, null], ["g_kiln", 7883.0, LOWF, 0, 113.0, "숯가마", ""]]
 	doors = []
 	for b in bld:
 		if b.size() > 4 and b[4] != null:
@@ -290,7 +294,7 @@ func _layout() -> void:
 		var ax: float = b[1] + b[4] if b.size() > 4 and b[4] != null else ((b[1] + w if b.size() > 7 and b[7] else b[1]) if k == "g_tentR" else b[1] + w / 2.0)
 		b[1] = ax - (ax - b[1]) * BS
 	deco_back = [["f_oak", -110.0, G, 7, false, 1.0], ["f_young", 735.0, G, 4.5, true, 1.6], ["f_bush1", 250.0, G, 0, false, 0.8], ["f_grass1", 770.0, G, 0, false, 0.6],
-		["f_round", 1560.0, G, 4.5, true, 1.3], ["f_bush2", 1740.0, G, 0, false, 0.8], ["f_bush1", 4040.0, G, 0, true, 0.8], ["f_tall", 5330.0, G, 4.5, false, 1.4], ["f_grass1", 6040.0, G, 0, true, 0.6],
+		["f_round", 1560.0, G, 4.5, true, 1.3], ["f_bush2", 1740.0, G, 0, false, 0.8], ["f_bush1", 4040.0, G, 0, true, 0.8], ["f_tall", 5440.0, G, 4.5, false, 1.4], ["f_grass1", 6040.0, G, 0, true, 0.6],
 		["f_grass2", 8620.0, LOWF, 0, false, 0.6], ["f_bush3", 8620.0, LOWF, 0, false, 0.8], ["f_bigtree", 8609.0, LOWF, 0, false, 2.2], ["f_bush1", 9250.0, LOWF, 0, true, 0.8]]
 	for d in deco_back:
 		if BIGK.has(d[0]):
@@ -307,7 +311,7 @@ func _layout() -> void:
 		["q_barrelM", HX2 + 470.0, TTOP], ["q_barrelS", HX2 + 522.0, TTOP], ["q_crateL", HX2 + 120.0, TTOP],
 		["q_board", 2600.0, LOWF], ["q_bench", HDOOR - 230.0, LOWF], ["q_bench", HDOOR + 84.0, LOWF, true], ["q_planter", HDOOR - 320.0, LOWF], ["q_planter", HDOOR + 238.0, LOWF, true],
 		["q_pot", HDOOR - 140.0, LOWF], ["q_pot", HDOOR + 112.0, LOWF], ["q_barrelL", 3560.0, LOWF], ["q_barrelM", 3616.0, LOWF], ["q_crateL", 4400.0, LOWF], ["q_crateS", 4464.0, LOWF],
-		["q_barrelL", 5000.0, LOWF], ["q_crateL", 5700.0, LOWF], ["q_barrelS", 5764.0, LOWF], ["q_barrelM", 8150.0, LOWF], ["q_crateS", 8200.0, LOWF]]
+		["q_barrelL", 5000.0, LOWF], ["q_crateL", 5700.0, LOWF], ["q_barrelS", 5764.0, LOWF], ["q_barrelM", 8180.0, LOWF], ["q_crateS", 8235.0, LOWF]]
 	# stones on the ground (owner 2026-11-06), cut from the map scene, 2-px grid: [piece, x, surface y]
 	# only on level ground: a flat-bottomed stone on the slope's bend sat on it like a lid (owner 2026-11-07)
 	rocks = [["f2_pebble", 1534.0, G + 9.0], ["f2_pebble", 5420.0, G + 12.0], ["f2_rock", 6080.0, G - 4.0],
@@ -317,7 +321,7 @@ func _layout() -> void:
 	STONE.append([HDOOR - 420.0, HDOOR + 420.0])               # the hall's forecourt / the plaza under it: paved
 	for b in bld:
 		if b[0] == "g_yard": CLEAR.append([b[1] - 20.0, b[1] + tex["g_yard"].get_width() + 20.0])   # the whole training yard
-	CLEAR.append([7400.0, 7780.0])                             # the forge yard
+	CLEAR.append([7305.0, 7685.0])                             # the forge yard
 	# the slopes are grass (owner 2026-11-06: everywhere but the paths made dirt on purpose is grass, slopes too)
 	CLEAR.append([6720.0, 6880.0])                             # the bath house door
 	CLEAR.sort_custom(func(p, q): return p[0] < q[0])
@@ -636,7 +640,7 @@ func light_sources() -> Array:
 			var bu: Array = LIT.BULBS[i]
 			L.append({"k": "bulb", "x": s[0] + (s[1] - s[0]) * bu[0], "y": yy - 18.0 + bu[1], "r": 60.0, "a": 0.8 + 0.2 * sin(t * 3.0 + i * 1.7), "c": Color8(255, 214, 140)})
 	L.append({"k": "fire", "x": 4350.0 + 27.0 * PK, "y": G - 30.0, "gy": G, "r": 230.0, "a": LIT.fl(t, 9) * 1.1, "c": Color8(255, 150, 70)})
-	var fp := bm("g_forge", 7443.0, LOWF - 52.0)        # the forge: a contained glow in the mouth, not a sun
+	var fp := bm("g_forge", 7348.0, LOWF - 52.0)        # the forge: a contained glow in the mouth, not a sun
 	L.append({"k": "fire", "x": fp.x, "y": fp.y, "gy": LOWF, "r": 170.0, "a": LIT.fl(t, 4) * 0.5, "c": Color8(255, 140, 60)})
 	L.append({"k": "soft", "x": HDOOR, "y": LOWF - 80.0 * BS, "r": 200.0, "a": 0.7, "c": Color8(200, 230, 255)})
 	# the warm glow at the door you stand by, as big as its building

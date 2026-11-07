@@ -218,8 +218,8 @@ func step(dt: float) -> void:
 	if lk == "hall" and L.has_method("fire_xs"):
 		for x in L.fire_xs(): fv = maxf(fv, _ear(P, x + 120.0, L.G, 560.0))
 	elif lk == "town":
-		fv = maxf(_ear(P, 4350.0 + 27.0 * L.PK, L.G, 520.0), _ear(P, 7443.0, L.LOWF, 420.0))
-		var hv := _ear(P, 7443.0, L.LOWF, 600.0)
+		fv = maxf(_ear(P, 4350.0 + 27.0 * L.PK, L.G, 520.0), _ear(P, 7348.0, L.LOWF, 420.0))
+		var hv := _ear(P, 7348.0, L.LOWF, 600.0)
 		if hv > 0.02 and _due("hammer", 1500.0, dt):
 			play(tone_stream(880.0, 860.0, 0.35, "triangle"), 0.05 * hv * m)
 			play(tone_stream(1760.0, 1700.0, 0.25, "sine"), 0.025 * hv * m)
