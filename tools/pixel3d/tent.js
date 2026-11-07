@@ -137,12 +137,12 @@ const TENT = (function () {
     { const g = new THREE.CylinderGeometry(2.6, 2.8, 20, 8); const m = add(g, "pole", "poles"); m.position.set(84, Y(84, 22), 22); m.rotation.z = -0.08; }
     // one rope for every line on the tent: the guy line runs from the front crossing, where it is tied with the
     // lashing, down to the head of the stake and wraps it
-    const ROPE = 1.7, V = (x, r, z) => new THREE.Vector3(...P(x, r, z));
+    const ROPE = 0.8, V = (x, r, z) => new THREE.Vector3(...P(x, r, z));
     seg(V(47, 8, 5), V(84, 75, 23), ROPE, "rope");
     seg(V(81.5, 76, 23), V(86.5, 76, 23), ROPE, "rope");
     // ---- the poles: the middle pole down the front end, the crossed poles at the ridge's ends with their outer legs
     // splayed down to pegs, the ridge pole between the crossings
-    bar("poles", "pole", 46, 4, 46, 89, 3, 9, 11.5);
+    bar("poles", "pole", 46, 4, 46, 93, 3, 9, 11.5);
     for (const [x, z] of [[46, 2], [101, -42]]) {
       bar("poles", "pole", x - 6, 0, x + 5, 16, 4, z - 1.5, z + 2);
       bar("poles", "pole", x + 6, 0, x - 5, 16, 4, z - 1.5, z + 2);
