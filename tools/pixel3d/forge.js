@@ -247,8 +247,13 @@ const FORGE = (function () {
         const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(tri, 3)); g.computeVertexNormals();
         add(g, "roofBase", "roof");
         if (kL !== 0.5) {   // a long hip: its face is a roof face of its own, tiled red, and it takes the light (see hipFace)
-          const g2 = new THREE.BufferGeometry(); g2.setAttribute("position", new THREE.Float32BufferAttribute([...e0, ...r0, ...b0], 3)); g2.computeVertexNormals();
-          add(g2, "hipFace", "roof"); } }
+          // its upper edge raised to the tiles' surface (they stand ~3 cells proud of the roof body): no notch at the
+          // apex or along the hip where the two meet (owner 2026-11-07: "몇 픽셀 정도로 상단 잘 안이어졌는데 잘 좀 잇고")
+          const sN = new THREE.Vector3(0, ze - zr, yr - ye).normalize(), lift = (p) => [p[0], p[1] + sN.y * 3.4, p[2] + sN.z * 3.4];
+          const g2 = new THREE.BufferGeometry(); g2.setAttribute("position", new THREE.Float32BufferAttribute([...lift(e0), ...lift(r0), ...b0], 3)); g2.computeVertexNormals();
+          add(g2, "hipFace", "roof");
+          const cap = new THREE.SphereGeometry(2.8, 10, 8); const cm = add(cap, "tile", "tiles"); cm.position.set(xl + 0.5, yr + 0.6, zr + 2.5);   // the apex closed by a round cap
+        } }
       box("roof", "fascia", x0, x1, re, re + 4, ze - 6, ze + 1.5);
       if (xr - xl > 2) shell("tiles", "tile", (u, v) => { const th = Math.PI * u; return [xl + (xr - xl) * v, yr + 2.6 * Math.sin(th), zr + 3.0 * Math.cos(th)]; },
             [0, 0.17, 0.33, 0.5, 0.67, 0.83, 1], [0, 1], [0, -2, 0]);
@@ -259,7 +264,8 @@ const FORGE = (function () {
       for (let c = 0; c < nC; c++) {
         const rt = rr + c * ch, rb = rr + (c + 1) * ch + 1.5, lean = 0.25 * (rb - rt);
         for (let x = x0 + (c % 2 ? -14 : 0); x < x1 + 3; x += 29) {
-          let xt0 = Math.max(x + 0.8, hL(rt)), xt1 = x + 28.2, xb0 = Math.max(x + 0.8 + lean, hL(rb)), xb1 = x + 28.2 + lean;
+          const tuck = kL !== 0.5 ? 2.5 : 0;   // under a long hip the tiles run a little in under its raised face: no dark wedge
+          let xt0 = Math.max(x + 0.8, hL(rt) - tuck), xt1 = x + 28.2, xb0 = Math.max(x + 0.8 + lean, hL(rb) - tuck), xb1 = x + 28.2 + lean;
           xt1 = Math.min(xt1, hR(rt)); xb1 = Math.min(xb1, hR(rb));
           if (xt1 - xt0 < 4 || xb1 - xb0 < 4) continue;
           const hh = Math.abs(Math.sin((x + 7) * 12.9898 + c * 78.233) * 43758.5453) % 1, dz = hh > 0.85 ? 0.9 : hh < 0.12 ? -0.6 : 0.0;
