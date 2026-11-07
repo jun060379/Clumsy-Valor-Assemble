@@ -80,30 +80,25 @@ const FORGE = (function () {
     // course shifted half a stone; the same small rounding on every corner; a lit top edge. Over a mortar bed that
     // leaves the openings (`skip`) open; `span(row)` gives the wall's [x0, x1] on a row (sloped or curved outlines).
     function courses(layer, rows, span, zf, opts = {}) {
-      const { w = 14, skip = () => false, gx = 35, gr = 16, ch = 7 } = opts;   // the bond's grid: x origin, first row, course height
+      // `holes(r0, r1)`: the [x0, x1] spans a course leaves open (an arch, a pit); stones are cut at them, not dropped
+      const { w = 14, holes = () => [], gx = 35, gr = 16, ch = 7 } = opts;
+      const minus = (a, b, H) => { let segs = [[a, b]];
+        for (const [h0, h1] of H) segs = segs.flatMap(([s0, s1]) => h1 <= s0 || h0 >= s1 ? [[s0, s1]] : [[s0, Math.min(s1, h0 - 1)], [Math.max(s0, h1 + 1), s1]].filter(([u, v]) => v - u >= 1));
+        return segs; };
       for (let i = 0; i < rows.length - 1; i++) {
         const r0 = rows[i], r1 = rows[i + 1] - 1;
-        const [a, b] = span(r0 + (r1 - r0) / 2);
+        const [a, b] = span(r0 + (r1 - r0) / 2).map(Math.round);
         if (b - a < 3) continue;
-        let m0 = null;
-        for (let xx = a; xx <= b; xx++) {
-          const open = xx === b || skip(xx, xx + 1, r0, r1);
-          if (!open && m0 === null) m0 = xx;
-          if (open && m0 !== null) { box(layer, "mortar2", m0, xx, r0, r1 + 1, zf - 6, zf - 0.8); m0 = null; }
-        }
+        const H = holes(r0, r1);
+        for (const [m0, m1] of minus(a, b, H)) box(layer, "mortar2", m0, m1, r0, r1 + 1, zf - 6, zf - 0.8);
         const par = Math.floor((r0 - gr) / ch + 0.01) % 2 !== 0;
         let x00 = gx - (par ? Math.floor(w / 2) : 0);
-        x00 -= Math.ceil((x00 - a) / w) * w;                                     // the first joint on the grid at or left of a
+        x00 -= Math.ceil((x00 - a) / w) * w;
         for (let x = x00; x < b - 2; x += w) {
-          const x0 = Math.max(x, a), x1 = Math.min(x + w - 2, b);
-          if (x1 - x0 < 3 || skip(x0, x1, r0, r1)) continue;
-          const h = rnd();
-          const m = h < 0.05 ? "stoneLt" : h > 0.96 ? "stoneGr" : "stone";       // rarely a stone of another shade
-          slab(layer, m, [[x0, r1 - 1], [x0 + 1, r1], [x1 - 1, r1], [x1, r1 - 1], [x1, r0 + 1], [x1 - 1, r0], [x0 + 1, r0], [x0, r0 + 1]], zf - 1.4, zf);
-          box(layer, "plinthHi", x0 + 1, x1 - 1, r0, r0 + 1, zf - 0.5, zf + 0.15);      // the lit top edge
-          if (rnd() < 0.05 && x1 - x0 > 10) {                                          // rarely a crack
-            const sx = x0 + 3 + rnd() * (x1 - x0 - 6);
-            bar(layer, "crack", sx, r0 + 1, sx + 2, r0 + 4, 1, zf - 0.3, zf + 0.2);
+          for (const [x0, x1] of minus(Math.max(x, a), Math.min(x + w - 2, b), H)) {
+            if (x1 - x0 < 4) continue;                                             // no slivers: the mortar shows there
+            slab(layer, "stone", [[x0, r1 - 1], [x0 + 1, r1], [x1 - 1, r1], [x1, r1 - 1], [x1, r0 + 1], [x1 - 1, r0], [x0 + 1, r0], [x0, r0 + 1]], zf - 1.4, zf);
+            box(layer, "plinthHi", x0 + 1, x1 - 1, r0, r0 + 1, zf - 0.5, zf + 0.15);    // the lit top edge
           }
         }
       }
@@ -115,7 +110,7 @@ const FORGE = (function () {
     for (let x = 101; x < 283; x += 7) box("back wall", "plank", x, Math.min(x + 6, 283), 76, 145, -16, -15.2);
 
     // ---- the furnace: a wide stone body under the chimney, its shoulders stepping in to the stack
-    const ZF = 6;
+    const ZF = 17;                                                                   // in front of the roof's eave: the roof runs behind the stack
     const fspan = (r) => r < 72 ? [35, 74] : r < 86 ? [35 - (r - 72) * 0.8, 74 + (r - 72) * 1.0] : r < 104 ? [24, 88 + (r - 86) * 0.6] : [19, 100];
     // the fire mouth: an arch in the furnace, the hearth sill under it, the ash pit below
     const mouth = archPts(46, 88, 92, 122);
@@ -123,7 +118,15 @@ const FORGE = (function () {
          [mouth.slice().reverse(), [[57, 145], [57, 131], [83, 131], [83, 145]].reverse()]);
     const inMouth = (x0, x1, r0, r1) => x1 > 44 && x0 < 90 && r1 > 90 && r0 < 123;
     const pit = (x0, x1, r0, r1) => x1 > 56 && x0 < 84 && r1 > 131;
-    courses("furnace", rowsFrom(72, 145, 7), fspan, ZF, { w: 14, gx: 35, gr: 16, skip: (a, b, c, d) => inMouth(a, b, c, d) || pit(a, b, c, d) });
+    // the courses are cut round the voussoir ring (radius 27 about x 67, row 113), the jambs, the sill and the pit
+    const fHoles = (r0, r1) => {
+      const H = [], rr = Math.min(Math.max(113, r0), r1);
+      if (r1 >= 86 && r0 <= 113) { const hw = Math.sqrt(Math.max(0, 27 * 27 - (113 - rr) * (113 - rr))); H.push([67 - hw, 67 + hw]); }
+      if (r1 > 113 && r0 < 122) H.push([40, 94]);
+      if (r1 >= 122 && r0 < 127) H.push([38, 96]);
+      if (r1 >= 127) H.push([56, 84]);
+      return H.map(([a, b]) => [Math.floor(a), Math.ceil(b)]); };
+    courses("furnace", rowsFrom(72, 145, 7), fspan, ZF, { w: 14, gx: 35, gr: 16, holes: fHoles });
     // the voussoirs round the mouth
     { const cx = 67, sp = 113, ri = 21, ro = 27, n = 7;
       slab("furnace", "mortar2", archPts(40, 94, 86, 122), ZF - 2, ZF + 0.5, [mouth.slice().reverse()]);
@@ -147,36 +150,36 @@ const FORGE = (function () {
     for (let x = 56; x < 84; x += 7) box("furnace", "brick", x, Math.min(x + 6, 84), 127, 131, ZF - 1.5, ZF);
 
     // ---- the chimney stack, a little narrower, with a capstone course
-    const ZC = 2;
+    const ZC = 17;
     // the stack and the furnace are one bond (owner 2026-11-07: "굴뚝이랑 화덕은 동렬 형태로" = 돌 줄을 맞춤): the same
     // stone, the same grid, the courses running on from the stack down into the furnace
-    slab("chimney", "mortar2", [[35, 72], [74, 72], [74, 16], [35, 16]], -26, ZC - 1);
+    // the stack is shallow (12 deep): in this view a top recedes up K rows per cell, so a deep stack would show a tall
+    // pale top face; the reference shows the top as a thin band
+    slab("chimney", "mortar2", [[35, 72], [74, 72], [74, 16], [35, 16]], ZC - 12, ZC - 1);
     courses("chimney", rowsFrom(16, 72, 7), () => [35, 74], ZC, { w: 14, gx: 35, gr: 16 });
-    // the top (owner 2026-11-07: "굴뚝 윗부분 형태 다듬고"): a corbel course standing out a little, a capstone wider
-    // still with its corners rounded and a lit top edge, and the crown of the flue on it, set back
-    slab("chimney", "stone", [[33, 15], [33, 11], [34, 10], [75, 10], [76, 11], [76, 15]], -22, ZC + 1.2);
-    box("chimney", "plinthHi", 34, 75, 10, 11, ZC + 0.6, ZC + 1.4);
-    box("chimney", "mortar2", 33, 76, 15, 16, -22, ZC + 0.6);
-    slab("chimney", "stoneLt", [[31, 10], [31, 7], [33, 5], [76, 5], [78, 7], [78, 10]], -24, ZC + 2.4);
-    box("chimney", "plinthHi", 33, 76, 5, 6, ZC + 1.8, ZC + 2.6);
-    box("chimney", "mortar2", 31, 78, 9.5, 10, -24, ZC + 2);
-    slab("chimney", "stone", [[38, 5], [38, 2], [39, 1], [70, 1], [71, 2], [71, 5]], -18, ZC - 2);    // the flue's crown, set back
-    box("chimney", "plinthHi", 39, 70, 1, 2, ZC - 2.6, ZC - 1.8);
+    // the top (owner 2026-11-07: "굴뚝 윗부분 형태 다듬고" / "굴뚝형태 해결"): a corbel course standing out a cell,
+    // a capstone a cell wider again with rounded corners, and the flue's low crown on it, set back
+    slab("chimney", "stone", [[33, 16], [33, 12], [34, 11], [75, 11], [76, 12], [76, 16]], ZC - 13, ZC + 1);
+    box("chimney", "plinthHi", 34, 75, 11, 12, ZC + 0.4, ZC + 1.2);
+    slab("chimney", "stone", [[31, 11], [31, 9], [33, 7], [76, 7], [78, 9], [78, 11]], ZC - 14, ZC + 2);
+    box("chimney", "plinthHi", 33, 76, 7, 8, ZC + 1.4, ZC + 2.2);
+    slab("chimney", "stone", [[42, 7], [42, 5], [43, 4], [66, 4], [67, 5], [67, 7]], ZC - 10, ZC - 3);    // the flue's crown
+    box("chimney", "soot", 45, 64, 3.6, 4, ZC - 9, ZC - 4);
 
     // ---- the porch: roof on posts with knee braces over a low stone wall, the door set in a stone wall at the right
     const ZP = 9;                                                                    // posts close under the eave (Z 12)
     for (const [a, b] of [[115, 122], [194, 202], [265, 273]]) box("porch", "timber", a, b, 79, 128, ZP - 4, ZP);
-    box("porch", "timber", 100, 284, 75, 80, ZP - 4, ZP + 0.5);                     // the beam under the eave
+    box("porch", "timber", 2, 284, 75, 80, ZP - 4, ZP + 0.5);                     // the beam under the eave
     for (const [px0, px1] of [[115, 122], [194, 202], [265, 273]]) {             // knee braces, 1:1
       if (px0 > 110) bar("porch", "timber", px0, 96, px0 - 14, 81, 4, ZP - 3.5, ZP - 0.5);
       if (px1 < 280) bar("porch", "timber", px1, 96, px1 + 14, 81, 4, ZP - 3.5, ZP - 0.5);
     }
     // stone feet under the posts: two or three big blocks each
-    courses("stone wall", [115, 125, 135, 145], () => [107, 128], ZP + 3, { w: 11 });
-    courses("stone wall", [128, 136, 145], () => [259, 280], ZP + 3, { w: 11 });
+    courses("stone wall", [115, 125, 135, 145], () => [107, 128], ZP + 3, { w: 11, gx: 107, gr: 115, ch: 10 });
+    courses("stone wall", [128, 136, 145], () => [259, 280], ZP + 3, { w: 11, gx: 259, gr: 128, ch: 8 });
     // the low wall between: smaller stones, three courses
-    courses("stone wall", [118, 127, 136, 145], () => [128, 194], ZP, { w: 16 });
-    courses("stone wall", [128, 136, 145], () => [194, 204], ZP + 2, { w: 11 });
+    courses("stone wall", [118, 127, 136, 145], () => [128, 194], ZP, { w: 16, gx: 128, gr: 118, ch: 9 });
+    courses("stone wall", [128, 136, 145], () => [194, 204], ZP + 2, { w: 11, gx: 194, gr: 128, ch: 8 });
 
     // ---- on the back wall: hanging tools, a window with a board under it
     box("tools", "ironDk", 129, 151, 88, 89.6, -15, -13.5);                          // the rail
@@ -219,22 +222,22 @@ const FORGE = (function () {
     const ZE = 12, ZR = -40, RE = 72, RR = 25;
     const ye = Y(RE, ZE), yr = Y(RR, ZR);
     { const tri = [], quad = (a, b, c, d) => tri.push(...a, ...b, ...c, ...a, ...c, ...d), t3 = (a, b, c) => tri.push(...a, ...b, ...c);
-      const e0 = [60, ye, ZE], e1 = [287, ye, ZE], r0 = [60, yr, ZR], r1 = [263.5, yr, ZR], b0 = [60, ye, -80], b1 = [287, ye, -80];
-      quad(e0, e1, r1, r0); t3(e1, b1, r1); quad(b1, b0, r0, r1); quad(e0, b0, b1, e1); quad(e0, r0, b0, b0);
+      const e0 = [2, ye, ZE], e1 = [287, ye, ZE], r0 = [25.5, yr, ZR], r1 = [263.5, yr, ZR], b0 = [2, ye, -80], b1 = [287, ye, -80];
+      quad(e0, e1, r1, r0); t3(e1, b1, r1); quad(b1, b0, r0, r1); quad(e0, b0, b1, e1); t3(e0, r0, b0);
       const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(tri, 3)); g.computeVertexNormals();
       add(g, "roofBase", "roof"); }
-    box("roof", "fascia", 74, 287, 72, 76, ZE - 6, ZE + 1.5);
-    { const xa = 74, xb = 263.5;                                                    // the ridge roll
+    box("roof", "fascia", 2, 287, 72, 76, ZE - 6, ZE + 1.5);
+    { const xa = 25.5, xb = 263.5;                                                    // the ridge roll
       shell("tiles", "tile", (u, v) => { const th = Math.PI * u; return [xa + (xb - xa) * v, yr + 2.6 * Math.sin(th), ZR + 3.0 * Math.cos(th)]; },
             [0, 0.17, 0.33, 0.5, 0.67, 0.83, 1], [0, 1], [0, -2, 0]); }
     { const courseRows = [25, 37, 49, 61, 72];
       const slopeN = new THREE.Vector3(0, ZE - ZR, yr - ye).normalize();
       const onSlope = (x, row) => { const u = (RE - row) / (RE - RR); return new THREE.Vector3(x, ye + u * (yr - ye), ZE + u * (ZR - ZE)); };
-      const hipX = (row) => 287 - (RE - row) * 0.5;
+      const hipX = (row) => 287 - (RE - row) * 0.5, hipL = (row) => 2 + (RE - row) * 0.5;   // hipped at both ends
       for (let c = 0; c < 4; c++) {
         const rt = courseRows[c], rb = courseRows[c + 1] + 1.5, lean = 0.25 * (rb - rt);   // joints nearly upright, as the reference's
-        for (let x = 74 + (c % 2 ? -14 : 0); x < 290; x += 29) {
-          let xt0 = Math.max(x + 0.8, 74), xt1 = x + 28.2, xb0 = Math.max(x + 0.8 + lean, 74), xb1 = x + 28.2 + lean;
+        for (let x = 2 + (c % 2 ? -14 : 0); x < 290; x += 29) {
+          let xt0 = Math.max(x + 0.8, hipL(rt)), xt1 = x + 28.2, xb0 = Math.max(x + 0.8 + lean, hipL(rb)), xb1 = x + 28.2 + lean;
           xt1 = Math.min(xt1, hipX(rt)); xb1 = Math.min(xb1, hipX(rb));
           if (xt1 - xt0 < 4 || xb1 - xb0 < 4) continue;
           const hh = Math.abs(Math.sin((x + 7) * 12.9898 + c * 78.233) * 43758.5453) % 1, dz = hh > 0.85 ? 0.9 : hh < 0.12 ? -0.6 : 0.0;
@@ -253,18 +256,10 @@ const FORGE = (function () {
       }
     }
 
-    // ---- the lean-to at the left: a short roof down from the chimney over a post and a stone foot
-    const ZL = 10;
-    box("lean-to", "timber", 12, 17, 80, 113, ZL - 6, ZL - 2);
-    courses("lean-to", [113, 124, 135, 145], () => [6, 28], ZL - 2, { w: 11 });
-    bar("lean-to", "roofBase", 35, 56, 2, 80, 7, ZL - 8, ZL);
-    bar("lean-to", "fascia", 35, 61, 2, 85, 3, ZL - 7, ZL + 0.5);
-    for (let i = 0, n = 4; i < n; i++) {                                           // tiles down the short slope
-      const t0 = i / n + 0.01, t1 = (i + 1) / n - 0.02;
-      const F = (u, v) => { const t = t0 + (t1 - t0) * v, x = 35 + (2 - 35) * t, row = 52 + (78 - 52) * t + 6 * u;
-        return [x, Y(row, ZL), ZL + 0.5 + (u < 0.5 ? 2.6 * u / 0.5 : 2.6 - 2.0 * (u - 0.5) / 0.5)]; };
-      shell("lean-to", i === 2 ? "tileDk" : "tile", F, [0, 0.25, 0.5, 0.75, 1], [0, 1], [0, 0, -2.5]);
-    }
+    // ---- the left end (owner 2026-11-07: "좌측 지붕 기둥 안 이어진거랑 뒷쪽으로 본건물 지붕 안이어진거 연결"): no
+    // separate lean-to; the main roof runs on behind the stack to its hipped left end, its eave on the beam and a post
+    box("porch", "timber", 12, 18, 79, 113, ZP - 4, ZP);
+    courses("stone wall", [113, 124, 135, 145], () => [6, 28], ZP + 3, { w: 11, gx: 6, gr: 113, ch: 11 });
 
     return parts;
   }
