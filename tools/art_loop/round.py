@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Art loop, one round (owner 2026-11-06, "[5 루프]"). Procedure: docs/ART_LOOP.md.
 
-  python3 tools/art_loop/round.py snap  WORK FILE.png [FILE.png ...] [--ref REF.png ...] [--note "..."]
+  python3 tools/art_loop/round.py snap  WORK FILE.png [FILE.png ...] [--owner] [--note "..."] [--ref REF.png ...]
+      (--owner: a round the owner asked for after the cap)
       -> docs/work/WORK/rounds/NN/  (copies of the candidates, metrics.json, compare.png = candidates beside the
          reference sprites at the same scale on the town ground colour). NN = next free round number.
   python3 tools/art_loop/round.py score WORK NN AI_A FIT_A AI_B FIT_B
@@ -63,7 +64,9 @@ def snap(work, args):
     d = rdir(work)
     os.makedirs(d, exist_ok=True)
     n = 1 + max([int(os.path.basename(p)) for p in glob.glob(os.path.join(d, "[0-9][0-9]"))] or [0])
-    if n > MAX_ROUNDS:
+    owner = "--owner" in args          # the owner asked for this round himself: past the cap, recorded as such
+    args = [x for x in args if x != "--owner"]
+    if n > MAX_ROUNDS and not owner:
         print(f"STOP: round cap {MAX_ROUNDS} reached -- show the owner the best round (status)"); sys.exit(3)
     od = os.path.join(d, "%02d" % n)
     os.makedirs(od)

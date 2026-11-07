@@ -1,0 +1,47 @@
+{
+ "round": 7,
+ "date": "2026-11-07",
+ "note": "owner-asked round: lit/shadow only with cool-dull shadows, outlines lit as edge-on faces in sun colour, uneven plaster edge band, 09:00 sun",
+ "files": [
+  "r7_hall.png"
+ ],
+ "refs": [
+  "assets/town/hx/g_cottage.png",
+  "assets/town/hx/g_store.png",
+  "assets/town/hx/g_well.png"
+ ],
+ "metrics": {
+  "files": {
+   "/home/claude/clumsy-valor-assemble/docs/work/pixel3d-hall/rounds/07/r7_hall.png": {
+    "orphans": 0,
+    "speckle": 0,
+    "outline_gaps": 0,
+    "thick_line": 113,
+    "semi_alpha": 0,
+    "colours": 42,
+    "off_palette": 11,
+    "size": "832x562"
+   }
+  },
+  "total": {
+   "orphans": 0,
+   "speckle": 0,
+   "outline_gaps": 0,
+   "thick_line": 113,
+   "semi_alpha": 0,
+   "off_palette": 11
+  }
+ },
+ "faults": 124,
+ "scores": {
+  "A": {
+   "ai": 6.0,
+   "fit": 4.0
+  },
+  "B": {
+   "ai": 5.0,
+   "fit": 4.0
+  },
+  "mean": 4.75
+ }
+}
