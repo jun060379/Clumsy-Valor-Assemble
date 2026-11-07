@@ -15,10 +15,10 @@ const HALL = (function () {
     sand:    ["ochre", 5], plinth: ["cream", 3], mortar2: ["wood", 2], crack: ["cream", 1], plinthHi: ["cream", 5], plinthLo: ["cream", 1], stone: ["cream", 2], stoneLt: ["cream", 3], plaster: ["cream", 6],
     timber:  ["wood", 5],  frame: ["wood", 3], glass: ["ochre", 4], mullion: ["wood", 3],
     roofBase: ["red", 1], tile: ["red", 2], verge: ["red", 2], fascia: ["wood", 1],
-    chimney: ["ochre", 1], chimCap: ["ochre", 4], chimTop: ["cream", 4],
+    chimney: ["ochre", 1], chimCap: ["wood", 5], chimTop: ["cream", 5],
     door:    ["wood", 3], doorGap: ["wood", 1], iron: ["iron", 2], sign: ["wood", 4], signRim: ["wood", 2],
     letter:  ["cream", 7], shield: ["cream", 3], finial: ["wood", 4], ball: ["ochre", 6],
-    glassHi: ["cream", 7], mortar: ["ochre", 0], nail: ["iron", 1], shutter: ["wood", 3],
+    glassHi: ["cream", 7], chimHi: ["ochre", 3], chimCrack: ["ochre", 0], mortar: ["ochre", 0], nail: ["iron", 1], shutter: ["wood", 3],
     curtain: ["cream", 7], planter: ["wood", 3], leaves: ["leaf", 4], flower: ["violet", 5],
   };
   // the layers (the 3D view pulls them apart in this order, back to front)
@@ -217,11 +217,33 @@ const HALL = (function () {
         }
       }
       // chimney behind the ridge-side of the slope
-      box("chimneys", "mortar", fx(108), fx(139), 58, 150, -52, -38.6);
-      for (let r = 58, c = 0; r < 100; r += 5, c++)                       // brick courses, 4 rows and a mortar line
-        for (let x = 108 + (c % 2 ? -5 : 0); x < 139; x += 10) box("chimneys", "chimney", fx(Math.max(108, x)), fx(Math.min(139, x + 9)), r, r + 4, -52, -38);
-      box("chimneys", "chimCap", fx(side ? 142 : 105), fx(side ? 105 : 142), 50, 58, -54, -36).position.x = side ? mirror(123.5) : 123.5;
-      box("chimneys", "chimTop", fx(side ? 139 : 111), fx(side ? 111 : 139), 46, 50, -50, -40).position.x = side ? mirror(125) : 125;
+      // the chimney, laid like the plinth (owner 2026-11-07: "굴뚝도"): a mortar core, stone courses of varied blocks
+      // with rounded corners, lit tops, shaded feet, a crack here and there, soot near the top (pattern pass); a cap
+      // slab with chamfered ends and a lighter crown. Mirrored stone order per side, fixed seed.
+      { let seed = 41;
+        const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+        const X = (a, b) => side ? [mirror(b), mirror(a)] : [a, b];
+        box("chimneys", "mortar2", ...X(108, 139), 58, 150, -52, -38.6);
+        for (let r = 58, c = 0; r < 110; r += 6, c++) {
+          let x = 108 - (c % 2 ? 5 : 0);
+          while (x < 139) {
+            const w = 8 + Math.floor(rnd() * 6);
+            const xa = Math.max(108, x), xb = Math.min(139, x + w - 1);
+            if (xb - xa >= 3) {
+              const [p, q] = X(xa, xb);
+              const pts = [[p, r + 4], [p + 1, r + 5], [q - 1, r + 5], [q, r + 4], [q, r + 1], [q - 1, r], [p + 1, r], [p, r + 1]];
+              slab("chimneys", "chimney", pts, -52, -38);
+              box("chimneys", "chimHi", p + 1, q - 1, r, r + 1, -38.5, -37.85);
+              if (rnd() < 0.25 && q - p > 7) { const sx = p + 3 + rnd() * (q - p - 6); bar("chimneys", "chimCrack", sx, r + 1, sx + 1, r + 4, 1, -38.3, -37.8); }
+            }
+            x += w;
+          }
+        }
+        const [ca, cb] = X(105, 142), [ta, tb] = X(110, 137);
+        slab("chimneys", "chimCap", [[ca, 58], [cb, 58], [cb, 52], [cb - 2, 50], [ca + 2, 50], [ca, 52]], -54, -36);
+        box("chimneys", "chimHi", ca + 2, cb - 2, 50, 51, -36.5, -35.85);
+        slab("chimneys", "chimTop", [[ta, 50], [tb, 50], [tb, 47], [tb - 2, 45], [ta + 2, 45], [ta, 47]], -50, -40);
+      }
     }
 
     // ---- the gable (front at Z 8)
