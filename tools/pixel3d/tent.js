@@ -132,12 +132,12 @@ const TENT = (function () {
     tri("canvas", "canvasDk", [S(100, 87), S(131, 87), S(131, 89), S(100, 89)], 0.4);
     // a stake by the door, its guy line run up to the fold where the end turns into the side
     const seg = (a, b, r, mat) => { const m = a.clone().add(b).multiplyScalar(0.5);
-      const g = new THREE.CylinderGeometry(r, r, a.distanceTo(b), 6); const mesh = add(g, mat, "poles");
+      const g = new THREE.CylinderGeometry(r, r, a.distanceTo(b), 10); const mesh = add(g, mat, "poles");
       mesh.position.copy(m); mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); };
     { const g = new THREE.CylinderGeometry(2.6, 2.8, 20, 8); const m = add(g, "pole", "poles"); m.position.set(84, Y(84, 22), 22); m.rotation.z = -0.08; }
     // one rope for every line on the tent: the guy line runs from the front crossing, where it is tied with the
     // lashing, down to the head of the stake and wraps it
-    const ROPE = 1.0, V = (x, r, z) => new THREE.Vector3(...P(x, r, z));
+    const ROPE = 1.7, V = (x, r, z) => new THREE.Vector3(...P(x, r, z));
     seg(V(47, 8, 5), V(84, 75, 23), ROPE, "rope");
     seg(V(81.5, 76, 23), V(86.5, 76, 23), ROPE, "rope");
     // ---- the poles: the middle pole down the front end, the crossed poles at the ridge's ends with their outer legs
