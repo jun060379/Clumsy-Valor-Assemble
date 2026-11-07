@@ -97,7 +97,9 @@ const BRIDGE = (function () {
     const ZF = 0, ZK = -40;                                          // the deck's front and back edges
 
     // ---- the abutments: dressed stone in courses at each bank, the stringers resting on their tops
-    for (const [a, b] of [[0, 44], [273, 317]]) {
+    // the river runs from 38 to 279 in this sprite (town.gd: drawn at RIV0 - 38, the river 240 wide): the abutments stand
+    // on the banks only (owner 2026-11-07: "고치든 물 간격을 넓히든 해보자")
+    for (const [a, b] of [[0, 38], [279, 317]]) {
       box("stone", "mortar2", a, b, 32, 55, ZK - 4, ZF - 1);
       courses("stone", rowsFrom(32, 55, 7.7), () => [a, b], ZF + 2, { w: 15, gx: a + 2, gr: 32, ch: 7.7 });
     }
