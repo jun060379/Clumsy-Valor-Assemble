@@ -157,8 +157,8 @@ const HALL = (function () {
       for (let c = 0; c < 5; c++) {
         const rt = courses[c], rb = courses[c + 1] + 1.5;               // each course hangs 1.5 rows over the next
         const lean = 0.5 * (rb - rt);                                   // joints at 1:2, like the hip
-        for (let x = (c % 2 ? -11 : 0) + 4; x < 218; x += 22) {
-          let xt0 = x + 0.8, xt1 = x + 21.2, xb0 = xt0 - lean, xb1 = xt1 - lean;
+        for (let x = (c % 2 ? -13 : 0) + 4; x < 218; x += 26) {          // big tiles: fewer, chunkier
+          let xt0 = x + 0.8, xt1 = x + 25.2, xb0 = xt0 - lean, xb1 = xt1 - lean;
           const ht = hipX(rt), hb = hipX(rb);
           if (xt1 <= ht && xb1 <= hb) continue;
           xt0 = Math.max(xt0, ht); xb0 = Math.max(xb0, hb); // tiles stop where the gable covers them (its wall below the verge, the verge above): no tile pokes through
