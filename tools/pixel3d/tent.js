@@ -149,8 +149,8 @@ const TENT = (function () {
       seg(V(x - 3.5, 6.5, z + 2.5), V(x + 3.5, 9.5, z + 2.5), ROPE, "rope");      // the lashing: the same rope,
       seg(V(x - 3.5, 9.5, z + 2.5), V(x + 3.5, 6.5, z + 2.5), ROPE, "rope");      // crossed over the crossing
     }
-    bar("poles", "pole", 42, 4, 8, 90, 3.2, 9, 11.5);                                  // the front frame's outer leg
-    bar("poles", "pole", 105, 4, 140, 90, 3.2, -40, -37.5);                            // the back frame's outer leg
+    seg(V(44, 8, 6), V(8, 87, 10), ROPE, "rope");                                     // the guy lines out from the crossings
+    seg(V(103, 8, -38), V(140, 87, -38), ROPE, "rope");                               // to the pegs either side
     for (const [x, z] of [[8, 10], [140, -38]]) box("poles", "peg", x - 3, x + 3, 86, 93, z - 2, z + 2);
     { const a = new THREE.Vector3(...P(46, 9, -1)), b = new THREE.Vector3(...P(101, 9, -45)), m = a.clone().add(b).multiplyScalar(0.5);
       const g = new THREE.CylinderGeometry(1.3, 1.3, a.distanceTo(b), 6); const mesh = add(g, "pole", "poles");
