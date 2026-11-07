@@ -6,7 +6,7 @@
 // on row r has world Y = B0 + K*z - r. B0 = 145, the foot line; the canvas runs 14 rows lower for the ground in front.
 
 const FORGE = (function () {
-  const W = 287, H = 175, B0 = 145, K = 0.25, TOP = 16;   // TOP: rows of sky above row 0 (the chimney cap recedes up)
+  const W = 287, H = 175, B0 = 145, K = 0.12, TOP = 16;   // TOP: rows of sky above row 0 (the chimney cap recedes up)
   const Y = (row, z) => B0 + K * z - row;
   const RAMP = { red: 0, wood: 1, ochre: 2, cream: 3, leaf: 4, green: 5, blue: 6, violet: 7, stone: 8, iron: 9 };
   const MAT = {

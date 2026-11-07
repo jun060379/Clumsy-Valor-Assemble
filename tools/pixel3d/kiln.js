@@ -6,7 +6,7 @@
 // World units: x right, y up from the ground (y = 0), z toward the viewer.
 
 const KILN = (function () {
-  const W = 158, H = 118, B0 = 88, K = 0.25, TOP = 8;
+  const W = 158, H = 118, B0 = 88, K = 0.12, TOP = 8;
   const Y = (row, z) => B0 + K * z - row;
   const RAMP = { red: 0, wood: 1, ochre: 2, cream: 3, leaf: 4, green: 5, blue: 6, violet: 7, stone: 8, iron: 9 };
   const MAT = {

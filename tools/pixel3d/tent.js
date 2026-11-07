@@ -10,7 +10,7 @@
 // build.py tentL sets MIRROR.
 const TENT = (function () {
   const MIRROR = false;
-  const W = 166, H = 140, B0 = 95, K = 0.25, TOP = 24;
+  const W = 166, H = 140, B0 = 95, K = 0.12, TOP = 24;
   const Y = (row, z) => B0 + K * z - row;
   const RAMP = { red: 0, wood: 1, ochre: 2, cream: 3, leaf: 4, green: 5, blue: 6, violet: 7, stone: 8, iron: 9 };
   const MAT = {

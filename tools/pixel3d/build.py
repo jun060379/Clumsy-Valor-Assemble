@@ -10,7 +10,7 @@ MIRRORED = {"tentL": "tent"}                  # the same solid reflected, lit by
 js = open(f"tools/pixel3d/{MIRRORED.get(NAME, NAME)}.js").read()
 if NAME in MIRRORED: js = js.replace("const MIRROR = false;", "const MIRROR = true;")
 if NAME != "hall": js += f"\nconst HALL = {MIRRORED.get(NAME, NAME).upper()};\n"   # the viewer reads the building as HALL
-REFN = {"forge2": "g_forge", "forge3": "g_forge", "tent": "g_tentR", "tentL": "g_tentR", "kilnk": "g_kiln"}.get(NAME, "g_" + NAME)
+REFN = {"forge2": "g_forge", "forge3": "g_forge", "tent": "g_tentR", "tentL": "g_tentR"}.get(NAME, "g_" + NAME)
 src = Image.open(f"assets/town/hx/{REFN}.png").convert("RGBA")
 if NAME in MIRRORED: src = src.transpose(Image.FLIP_LEFT_RIGHT)
 ref = src.resize((src.width // 2, src.height // 2), Image.NEAREST)

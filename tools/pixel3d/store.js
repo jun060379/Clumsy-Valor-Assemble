@@ -5,7 +5,7 @@
 // Coordinates as hall.js (x column, rows down from the top, Z toward the viewer, B0 = the foot line).
 
 const STORE = (function () {
-  const W = 216, H = 158, B0 = 134, K = 0.25, TOP = 10;
+  const W = 216, H = 158, B0 = 134, K = 0.12, TOP = 10;
   const Y = (row, z) => B0 + K * z - row;
   const RAMP = { red: 0, wood: 1, ochre: 2, cream: 3, leaf: 4, green: 5, blue: 6, violet: 7, stone: 8, iron: 9 };
   const MAT = {

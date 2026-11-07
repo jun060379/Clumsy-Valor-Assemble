@@ -8,7 +8,7 @@
 // Materials: [ramp, base step] of the palette; the light moves a cell up or down its own ramp, never across.
 
 const HALL = (function () {
-  const W = 436, H = 296, B0 = 282, K = 0.25;
+  const W = 436, H = 296, B0 = 282, K = 0.12;
   const Y = (row, z) => B0 + K * z - row;
   const RAMP = { red: 0, wood: 1, ochre: 2, cream: 3, leaf: 4, green: 5, blue: 6, violet: 7, stone: 8, iron: 9 };
   const MAT = {
