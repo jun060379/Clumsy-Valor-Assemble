@@ -217,23 +217,7 @@ const HALL = (function () {
         }
       }
       // chimney behind the ridge-side of the slope
-      // the chimney (owner 2026-11-07: the block-by-block one "구려"): one solid body like the reference, a few
-      // faint stone joints only, rounded top corners; a brown cap with chamfered ends and a pale crown. Fixed layout.
-      { const X = (a, b) => side ? [mirror(b), mirror(a)] : [a, b];
-        const [p0, p1] = X(108, 139);
-        slab("chimneys", "chimney", [[p0, 150], [p1, 150], [p1, 59], [p1 - 1, 58], [p0 + 1, 58], [p0, 59]], -52, -38);
-        box("chimneys", "chimHi", p0 + 1, p1 - 1, 58, 59, -38.5, -37.85);               // the lit top of the body
-        // three faint joints, broken, never full width
-        for (const [a, b, r] of [[111, 124, 66], [118, 136, 73], [110, 129, 80]]) {
-          const [q0, q1] = X(a, b);
-          box("chimneys", "chimCrack", q0, q1, r, r + 1, -38.3, -37.85);
-        }
-        const [ca, cb] = X(105, 142), [ta, tb] = X(110, 137);
-        slab("chimneys", "chimCap", [[ca, 58], [cb, 58], [cb, 52], [cb - 2, 50], [ca + 2, 50], [ca, 52]], -54, -36);
-        box("chimneys", "chimHi", ca + 2, cb - 2, 50, 51, -36.5, -35.85);
-        box("chimneys", "capLo", ca + 1, cb - 1, 56, 57, -36.5, -35.85);                   // the cap's shaded underside
-        slab("chimneys", "chimTop", [[ta, 50], [tb, 50], [tb, 47], [tb - 2, 45], [ta + 2, 45], [ta, 47]], -50, -40);
-      }
+      // (no chimneys: owner 2026-11-07, "걍 굴뚝 떼버리자")
     }
 
     // ---- the gable (front at Z 8)
