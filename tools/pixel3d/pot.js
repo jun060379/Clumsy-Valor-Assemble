@@ -30,7 +30,7 @@ const POT = (function () {
     // ---- the plant: a bushy mound of leafy clumps over the rim
     for (let i = 0; i < 60; i++) {
       const a = rnd() * Math.PI * 2, d = rnd(), x = CX + Math.cos(a) * d * 25, z = CZ + Math.sin(a) * d * 12 + 3;
-      const y = 25 + (1 - d * d) * 17 + rnd() * 5, r = 3 + rnd() * 3;
+      const y = 32 + (1 - d * d) * 13 + rnd() * 5, r = 3 + rnd() * 3;
       const g = new THREE.IcosahedronGeometry(r, 0); const m = add(g, rnd() < 0.35 ? "decoLeafDk" : "decoLeaf", "leaves");
       m.position.set(x, y, z); m.rotation.set(rnd() * 3, rnd() * 3, 0); m.scale.set(1.1, 0.75, 1);
     }
@@ -45,6 +45,12 @@ const POT = (function () {
         m.position.set(x0 + (x1 - x0) * t + (t < 0.6 ? -2 : 2), 30 + (top - 30) * t, CZ + 2); m.scale.set(1.4, 0.6, 0.8); m.rotation.z = t < 0.6 ? 0.5 : -0.5; }
     }
     for (const x of [20, 40]) stem(V(x + (x < 30 ? 3 : -3), 28, CZ + 6), V(x, 40, CZ + 9));
+    // the bundle (owner 2026-11-07: "줄기 다발이 있어야할듯"): the stalks rise together out of the soil, gathered at
+    // the middle, and fan out into the bush - the bush lifted clear of the rim so the bundle shows under it
+    for (let i = 0; i < 9; i++) {
+      const a = -1.2 + 2.4 * i / 8, base = V(30 + a * 2.2, 25.5, CZ + 2 + (i % 3) * 2);
+      stem(base, V(30 + Math.sin(a) * 22, 36 + Math.cos(a) * 4, CZ + 1 + (i % 3) * 3));
+    }
     // ---- the flowers: two big pink heads at the front, peach buds standing up out of the top
     const head = (cx, cy, cz, n, rr, mats) => { for (let i = 0; i < n; i++) { const a = rnd() * Math.PI * 2, d = rnd() * rr;
       const g = new THREE.IcosahedronGeometry(2.6 + rnd() * 1.2, 0); const m = add(g, mats[rnd() < 0.3 ? 1 : 0], "flowers");
