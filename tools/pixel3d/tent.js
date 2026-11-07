@@ -124,8 +124,13 @@ const TENT = (function () {
     tri("canvas", "canvasDk", [A, B, [101, 10, -60], [46, 10, -48]]); // the far slope, behind the ridge (seen only as its top edge)
     // the door: a dark slit down the door end beside the front pole, its flap folded back
     const E = onFace(A, L, F);
-    tri("door", "doorGap", [E(45, 34), E(28, 89), E(45, 89)], 0.4);
-    tri("door", "canvasDk", [E(45, 50), E(37, 89), E(45, 89)], 0.8);
+    // the door (owner 2026-11-07: "문이 뭔지 모르시나?"): the end's canvas parted down the middle from near the top and
+    // tied back - an opening shaped like an upturned V, the dark of the inside showing to the ground, each half of the
+    // canvas folded back on itself and lashed at the side, a cord across where it is tied
+    tri("door", "doorGap", [E(36, 30), E(25, 89), E(45, 89)], 0.4);              // the opening
+    tri("door", "canvasDk", [E(36, 30), E(31, 62), E(25, 89), E(20, 89)], 0.8);    // the left half folded back
+    tri("door", "canvasDk", [E(36, 30), E(41, 62), E(45, 89), E(45, 60)], 0.8);    // the right half folded back against the pole
+    for (const [x0, x1] of [[23, 32], [40, 46]]) tri("door", "rope", [E(x0, 62), E(x1, 62), E(x1, 64), E(x0, 64)], 1.1);   // the ties
     // a seam of shade down the long side where the canvas folds over the far end's pole
     // ---- the poles: the front pole down the door end's edge, crossed poles at both ridge ends, the ridge pole
     bar("poles", "pole", 46, 6, 46, 89, 3, 10, 12.5);
