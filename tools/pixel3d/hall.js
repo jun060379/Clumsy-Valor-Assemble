@@ -151,10 +151,7 @@ const HALL = (function () {
       box("windows", "stoneLt", x0 - 2, x1 + 2, r1, r1 + 3, z, z + 3);   // the sill
       // not every window alike: some have curtains drawn, some a flower box (a fixed order, not random)
       const v = [0, 2, 1, 0, 0, 1, 2, 0, 1, 0, 0, 2, 0, 1][winN++ % 14];
-      if (v === 1) {
-        box("windows", "curtain", x0 + 3, cx - 1, mid + 1, r1 - 2, z, z + 0.4);
-        box("windows", "curtain", cx + 1, x1 - 3, mid + 1, r1 - 2, z, z + 0.4);
-      } else if (v === 2) {
+      if (v === 2) {                                         // (no curtains: owner 2026-11-07, they read as beige blocks)
         box("windows", "planter", x0 - 1, x1 + 1, r1 + 3, r1 + 8, z, z + 5);
         const top = [];
         for (let i = 0; i <= 8; i++) { const xx = x0 - 1 + (x1 - x0 + 2) * i / 8; top.push([xx, r1 + 3 - (i % 2 ? 7 : 5)]); }
