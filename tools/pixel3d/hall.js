@@ -12,7 +12,7 @@ const HALL = (function () {
   const Y = (row, z) => B0 + K * z - row;
   const RAMP = { red: 0, wood: 1, ochre: 2, cream: 3, leaf: 4, green: 5, blue: 6, violet: 7, stone: 8, iron: 9 };
   const MAT = {
-    sand:    ["ochre", 5], plinth: ["cream", 3], stone: ["cream", 2], stoneLt: ["cream", 3], plaster: ["cream", 6],
+    sand:    ["ochre", 5], plinth: ["cream", 3], mortar2: ["wood", 2], crack: ["cream", 1], plinthHi: ["cream", 5], plinthLo: ["cream", 1], stone: ["cream", 2], stoneLt: ["cream", 3], plaster: ["cream", 6],
     timber:  ["wood", 5],  frame: ["wood", 3], glass: ["ochre", 4], mullion: ["wood", 3],
     roofBase: ["red", 1], tile: ["red", 2], verge: ["red", 2], fascia: ["wood", 1],
     chimney: ["ochre", 1], chimCap: ["ochre", 4], chimTop: ["cream", 4],
@@ -81,15 +81,38 @@ const HALL = (function () {
 
     // ---- ground and plinth
     // (no ground strip: the town draws its own ground under the building)
-    // the plinth: one course of long pale stones of different lengths (a fixed order, mirrored), rounded on top; under
-    // the gable it stands out in front of the gable wall so it is not lost in its shade
-    { const L = [27, 21, 31, 24, 29, 22, 26, 30];
+    // the plinth: a dry-stone base (owner 2026-11-07: not cut up, not all alike, not plain boxes, with texture). A
+    // continuous mortar bed behind; stones in two staggered courses with now and then one tall stone, each a little
+    // different (chamfered corners, a bump on top), some with a crack. A fixed seed: the same wall every time.
+    { let seed = 7;
+      const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
       const runs = [[20, 140, 6], [140, 296, 19], [296, 416, 6]];
       for (const [a, b, zf] of runs) {
-        let x = a, i = a < 200 ? 0 : 3;
-        while (x < b - 2) {
-          const w = Math.min(L[i++ % L.length], b - x);
-          box("plinth", "plinth", x, x + w - 1, 269, 282, -4, zf);
+        box("plinth", "mortar2", a, b, 268, 282, -4, zf - 0.8);
+        const stone = (x0, x1, r0, r1) => {
+          const c = 2 + Math.floor(rnd() * 2), c2 = 2 + Math.floor(rnd() * 2), bump = rnd() < 0.5 ? 1 : 0;
+          const mx = (x0 + x1) / 2 + (rnd() - 0.5) * (x1 - x0) * 0.4;
+          // rounded on top (2-3 cell chamfers), softer at the foot, the top edge not quite straight
+          const pts = [[x0, r1 - 1], [x0 + 1, r1], [x1 - 1, r1], [x1, r1 - 1], [x1, r0 + c2], [x1 - 1, r0 + 1], [x1 - c2, r0],
+                       [mx + 3, r0], [mx, r0 - bump], [mx - 3, r0], [x0 + c, r0], [x0 + 1, r0 + 1], [x0, r0 + c]];
+          slab("plinth", "plinth", pts, zf - 1.2, zf);
+          box("plinth", "plinthHi", x0 + c, x1 - c2, r0 + 1, r0 + 2, zf - 0.5, zf + 0.15);   // the lit top
+          box("plinth", "plinthLo", x0 + 2, x1 - 2, r1 - 2, r1 - 1, zf - 0.5, zf + 0.15);     // the shaded foot
+          if (rnd() < 0.45 && x1 - x0 > 12) {                // a crack: two short strokes from the top edge
+            const sx = x0 + 4 + rnd() * (x1 - x0 - 8), sr = r0 + 2, dx = rnd() < 0.5 ? -1 : 1;
+            bar("plinth", "crack", sx, sr, sx + dx * 2, sr + 3, 1, zf - 0.3, zf + 0.2);
+            bar("plinth", "crack", sx + dx * 2, sr + 3, sx + dx * 2, sr + 6, 1, zf - 0.3, zf + 0.2);
+          }
+          if (rnd() < 0.6 && x1 - x0 > 10) {                 // a pit or two in the stone's face (2-cell dashes, not dots)
+            const px = x0 + 3 + rnd() * (x1 - x0 - 7), pr = r0 + 5 + Math.floor(rnd() * 4);
+            box("plinth", "crack", px, px + 2, pr, pr + 1, zf - 0.3, zf + 0.2);
+          }
+        };
+        let x = a;
+        while (x < b - 4) {
+          const w = Math.min(b - x, 15 + Math.floor(rnd() * 16));
+          const dr = Math.floor(rnd() * 2);                   // heights differ by a row
+          stone(x, x + w - 1, 268 + dr, 281);
           x += w;
         }
       }
