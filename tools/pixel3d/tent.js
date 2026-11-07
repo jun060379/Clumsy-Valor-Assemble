@@ -93,68 +93,65 @@ const TENT = (function () {
         }
       }
     }
-    // ---- the form (owner 2026-11-07: "텐트라는 형태에 대해 이해를 해봐야함"). A ridge tent: an A-frame of two crossed
-    // poles at each end, a ridge pole between their crossings, the canvas thrown over the ridge and pegged down along
-    // both long sides; each end a canvas triangle, the door in the front one, held up by a pole down its middle. The
-    // reference sees it from the front and a little to the left: the FRONT END is the big triangle facing us (its pole
-    // down the middle, the door opening at the pole's foot), the ridge runs away to the back crossing at the top right,
-    // and beyond the fold from the front apex down to the right the long side shows, going back to the far end's leg.
-    const P = (x, r, z) => [x, Y(r, z), z];
-    const A = [46, 10, 0], B = [101, 10, -44];                        // the ridge's ends: the front crossing, the back crossing
-    const L = [13, 89, 8], M = [100, 89, 8], R = [131, 89, -36];      // the foot: front end's corners, the long side's far corner
-    const tri = (layer, mat, pts, lift = 0) => {                      // a flat face through its points, lifted along its normal
-      const v = pts.map(p => new THREE.Vector3(...P(...p)));
+    // ---- the form, built as a real solid (owner 2026-11-07: "3d 기준 형태 자체가 텐트가 아니니까 그림자가 이상해지잖아").
+    // World units: x right, y up from the ground (y = 0), z toward the viewer. A ridge tent: a canvas prism whose
+    // cross-section is the front end triangle, run back along the ridge; the ridge level, the foot flat on the ground.
+    // This camera cannot turn a thing sideways, so the prism runs right and a little back (D), which puts the front
+    // end facing us with the long side beyond the fold, as the reference draws it.
+    const V = (x, y, z) => new THREE.Vector3(x, y, z);
+    const Hh = 86, ZF = 6, D = V(55, 0, -24);                             // ridge height, the front end's plane, the run
+    const A = V(46, Hh, ZF), L = V(13, 0, ZF), M = V(79, 0, ZF);         // the front end: apex, foot corners
+    const B = A.clone().add(D), R = M.clone().add(D), L2 = L.clone().add(D);
+    const face = (layer, mat, v, lift = 0, back = 1.2) => {               // a flat panel through its points, lifted along its normal
       const n = new THREE.Vector3().subVectors(v[1], v[0]).cross(new THREE.Vector3().subVectors(v[2], v[0])).normalize();
       if (n.z < 0) n.negate();
-      const w = v.map(p => p.clone().addScaledVector(n, lift)), b = v.map(p => p.clone().addScaledVector(n, lift - 1.2));
+      const w = v.map(p => p.clone().addScaledVector(n, lift)), b = v.map(p => p.clone().addScaledVector(n, lift - back));
       const t = [], q = (a, c, d) => t.push(a.x, a.y, a.z, c.x, c.y, c.z, d.x, d.y, d.z);
-      for (let i = 1; i < w.length - 1; i++) { q(w[0], w[i], w[i + 1]); q(b[0], b[i + 1], b[i]); }
-      for (let i = 0; i < w.length; i++) { const j = (i + 1) % w.length; q(w[i], b[i], b[j]); q(w[i], b[j], w[j]); }
+      for (let k = 1; k < w.length - 1; k++) { q(w[0], w[k], w[k + 1]); q(b[0], b[k + 1], b[k]); }
+      for (let k = 0; k < w.length; k++) { const m = (k + 1) % w.length; q(w[k], b[k], b[m]); q(w[k], b[m], w[m]); }
       const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(t, 3)); g.computeVertexNormals();
       return add(g, mat, layer);
     };
-    const onFace = (p0, p1, p2) => { const [x0, r0, z0] = p0, [x1, r1, z1] = p1, [x2, r2, z2] = p2;
-      const d = (x1 - x0) * (r2 - r0) - (x2 - x0) * (r1 - r0);
-      const a = ((z1 - z0) * (r2 - r0) - (z2 - z0) * (r1 - r0)) / d, b = ((x1 - x0) * (z2 - z0) - (x2 - x0) * (z1 - z0)) / d;
-      return (x, r) => [x, r, z0 + a * (x - x0) + b * (r - r0)]; };
-    tri("canvas", "canvas", [A, L, M]);                               // the front end
-    tri("canvas", "canvas", [A, M, R, B]);                            // the long side, running back
-    tri("canvas", "canvasDk", [A, B, [101, 10, -84], [46, 10, -40]]); // the far slope, behind the ridge
-    const E = onFace(A, L, M), S = onFace(A, M, R);
-    tri("canvas", "canvasDk", [S(47, 12), S(52, 12), S(103, 88), S(98, 88)], 0.3);   // the fold where the end turns into the side
-    // the door at the foot of the middle pole: the canvas parted from halfway up and drawn back either side - an
-    // upturned V, the inside dark to the ground, a light fold along each parted edge
-    tri("door", "doorGap", [E(46, 26), E(33, 89), E(59, 89)], 0.5);
-    tri("door", "canvas", [E(46, 26), E(31, 89), E(33, 89), E(46, 30)], 0.9);
-    tri("door", "canvas", [E(46, 26), E(46, 30), E(59, 89), E(61, 89)], 0.9);
+    face("canvas", "canvas", [A, L, M]);                                 // the front end
+    face("canvas", "canvas", [A, M, R, B]);                              // the near long side
+    face("canvas", "canvas", [A, B, L2, L]);                             // the far long side
+    face("canvas", "canvas", [B, R, L2]);                                // the back end
+    const onEnd = (x, y) => V(x, y, ZF), onSide = (s, t) => M.clone().addScaledVector(A.clone().sub(M), s).addScaledVector(D, t);
+    // the door at the foot of the middle pole: the canvas parted from well up and drawn back either side - an
+    // upturned V, dark inside to the ground, a light fold along each parted edge
+    face("door", "doorGap", [onEnd(46, 64), onEnd(33, 0), onEnd(59, 0)], 0.5);
+    face("door", "canvas", [onEnd(46, 64), onEnd(31, 0), onEnd(33, 0), onEnd(46, 60)], 0.9);
+    face("door", "canvas", [onEnd(46, 64), onEnd(46, 60), onEnd(59, 0), onEnd(61, 0)], 0.9);
     // the hem along the foot, a shade darker
-    tri("canvas", "canvasDk", [E(13, 87), E(100, 87), E(100, 89), E(13, 89)], 0.4);
-    tri("canvas", "canvasDk", [S(100, 87), S(131, 87), S(131, 89), S(100, 89)], 0.4);
-    // a stake by the door, its guy line run up to the fold where the end turns into the side
+    face("canvas", "canvasDk", [onEnd(13, 2), onEnd(79, 2), onEnd(79, 0), onEnd(13, 0)], 0.4);
+    face("canvas", "canvasDk", [onSide(2 / Hh, 0), onSide(2 / Hh, 1), onSide(0, 1), onSide(0, 0)], 0.4);
+
+    // ---- the poles and lines: the middle pole down the front end, short crossed poles over each end of the ridge, the
+    // ridge pole between them; one rope for every line - the lashings, a guy line from each crossing out along the
+    // ridge to a peg, and one from the front crossing down to the stake by the door
+    const ROPE = 0.8;
     const seg = (a, b, r, mat) => { const m = a.clone().add(b).multiplyScalar(0.5);
       const g = new THREE.CylinderGeometry(r, r, a.distanceTo(b), 10); const mesh = add(g, mat, "poles");
-      mesh.position.copy(m); mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); };
-    { const g = new THREE.CylinderGeometry(2.6, 2.8, 20, 8); const m = add(g, "pole", "poles"); m.position.set(84, Y(84, 22), 22); m.rotation.z = -0.08; }
-    // one rope for every line on the tent: the guy line runs from the front crossing, where it is tied with the
-    // lashing, down to the head of the stake and wraps it
-    const ROPE = 0.8, V = (x, r, z) => new THREE.Vector3(...P(x, r, z));
-    seg(V(47, 8, 5), V(84, 75, 23), ROPE, "rope");
-    seg(V(81.5, 76, 23), V(86.5, 76, 23), ROPE, "rope");
-    // ---- the poles: the middle pole down the front end, the crossed poles at the ridge's ends with their outer legs
-    // splayed down to pegs, the ridge pole between the crossings
-    bar("poles", "pole", 46, 4, 46, 93, 3, 9, 11.5);
-    for (const [x, z] of [[46, 2], [101, -42]]) {
-      bar("poles", "pole", x - 6, 0, x + 5, 16, 4, z - 1.5, z + 2);
-      bar("poles", "pole", x + 6, 0, x - 5, 16, 4, z - 1.5, z + 2);
-      seg(V(x - 3.5, 6.5, z + 2.5), V(x + 3.5, 9.5, z + 2.5), ROPE, "rope");      // the lashing: the same rope,
-      seg(V(x - 3.5, 9.5, z + 2.5), V(x + 3.5, 6.5, z + 2.5), ROPE, "rope");      // crossed over the crossing
+      mesh.position.copy(m); mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); return mesh; };
+    seg(V(46, -1, ZF + 1.6), V(46, Hh + 4, ZF + 1.6), 1.6, "pole");
+    const dn = D.clone().normalize();
+    for (const C of [A, B]) {
+      const c = C.clone().add(V(0, 1, 1.6));
+      seg(c.clone().add(V(-7, -8, 0)), c.clone().add(V(6, 7, 0)), 1.6, "pole");
+      seg(c.clone().add(V(7, -8, 0)), c.clone().add(V(-6, 7, 0)), 1.6, "pole");
+      seg(c.clone().add(V(-3, -2, 1.4)), c.clone().add(V(3, 2, 1.4)), ROPE, "rope");
+      seg(c.clone().add(V(-3, 2, 1.4)), c.clone().add(V(3, -2, 1.4)), ROPE, "rope");
     }
-    seg(V(44, 8, 6), V(8, 87, 10), ROPE, "rope");                                     // the guy lines out from the crossings
-    seg(V(103, 8, -38), V(140, 87, -38), ROPE, "rope");                               // to the pegs either side
-    for (const [x, z] of [[8, 10], [140, -38]]) box("poles", "peg", x - 3, x + 3, 86, 93, z - 2, z + 2);
-    { const a = new THREE.Vector3(...P(46, 9, -1)), b = new THREE.Vector3(...P(101, 9, -45)), m = a.clone().add(b).multiplyScalar(0.5);
-      const g = new THREE.CylinderGeometry(1.3, 1.3, a.distanceTo(b), 6); const mesh = add(g, "pole", "poles");
-      mesh.position.copy(m); mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); }
+    seg(A.clone().add(V(0, 1.5, 0)), B.clone().add(V(0, 1.5, 0)), 1.3, "pole");
+    const pegF = A.clone().addScaledVector(dn, -42).setY(0), pegB = B.clone().addScaledVector(dn, 42).setY(0);
+    for (const [C, p] of [[A, pegF], [B, pegB]]) {
+      seg(C.clone().add(V(0, 2, 1.6)), p.clone().add(V(0, 3, 0)), ROPE, "rope");
+      seg(p.clone().add(V(0, -1, 0)), p.clone().add(V(0, 6, 0)), 2.6, "peg");
+    }
+    const stake = V(84, 0, 24);
+    seg(stake.clone().add(V(0, -1, 0)), stake.clone().add(V(0, 18, 0)), 2.6, "pole");
+    seg(A.clone().add(V(0, 2, 1.6)), stake.clone().add(V(0, 17, 0)), ROPE, "rope");
+    seg(stake.clone().add(V(-2.6, 16, 0)), stake.clone().add(V(2.6, 16, 0)), ROPE, "rope");
 
     return parts;
   }
