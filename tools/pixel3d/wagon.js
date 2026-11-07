@@ -10,7 +10,7 @@ const WAGON = (function () {
   const RAMP = { red: 0, wood: 1, ochre: 2, cream: 3, leaf: 4, green: 5, blue: 6, violet: 7, stone: 8, iron: 9 };
   const MAT = {
     sand: ["ochre", 5],
-    canvas: ["cream", 6], hoop: ["ochre", 3], inside: ["wood", 1],
+    canvas: ["cream", 6], hoop: ["ochre", 4], inside: ["wood", 1],
     plank: ["wood", 5], post: ["wood", 4], rim: ["wood", 5], tyre: ["wood", 3], hub: ["wood", 3], spoke: ["wood", 4], shaft: ["wood", 5],
   };
   const LAYERS = ["ground", "bed", "bonnet", "wheels"];
@@ -35,19 +35,22 @@ const WAGON = (function () {
     // off and flaring out past the bed, as a bonnet does
     { const HO = [22, 90, 148, 212], XA = 4, XB = 232, NU = 90, NV = 20, t = [];
       const hgt = (x) => { let d = 1e9; for (const h of HO) d = Math.min(d, Math.abs(x - h));
-        const sag = 1 - 0.07 * Math.pow(Math.sin(Math.min(d, 30) / 30 * Math.PI / 2), 2);
-        const e = Math.min(x - XA, XB - x), end = e < 18 ? Math.sqrt(Math.max(0, 1 - Math.pow((18 - e) / 18, 2))) : 1;
-        return [96 * sag * (0.35 + 0.65 * end), 25.5 * (0.85 + 0.15 * end)]; };
+        const k = Math.pow(Math.sin(Math.min(d, 30) / 30 * Math.PI / 2), 2);     // 0 at a hoop, 1 midway between
+        const e = Math.min(x - XA, XB - x), end = e < 20 ? Math.sqrt(Math.max(0, 1 - Math.pow((20 - e) / 20, 2))) : 1;
+        // (owner 2026-11-07: "좀 더 재현성 높게") the cloth sags down AND in between the hoops, so the folds read
+        return [96 * (1 - 0.08 * k) * (0.3 + 0.7 * end), 23.5 * (1 - 0.14 * k) * (0.85 + 0.15 * end)]; };
       const P = (iu, iv) => { const x = XA + (XB - XA) * iu / NU, th = Math.PI * iv / NV, [h, w] = hgt(x);
         return [x, R(100) + h * Math.sin(th), ZM + w * Math.cos(th)]; };
       const q = (a, b, c, d) => t.push(...a, ...b, ...c, ...a, ...c, ...d);
       for (let iu = 0; iu < NU; iu++) for (let iv = 0; iv < NV; iv++) q(P(iu, iv), P(iu, iv + 1), P(iu + 1, iv + 1), P(iu + 1, iv));
       const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(t, 3)); g.computeVertexNormals();
       add(g, "canvas", "bonnet"); }
-    for (const x of [22, 90, 148, 212]) { const g = new THREE.TorusGeometry(1, 0.045, 5, 24, Math.PI); const m = add(g, "hoop", "bonnet");
-      m.rotation.y = Math.PI / 2; m.scale.set(26, 97, 26); m.position.set(x, R(100), ZM); }
+    for (const x of [22, 90, 148, 212]) { const g = new THREE.TorusGeometry(1, 0.1, 5, 24, Math.PI); const m = add(g, "hoop", "bonnet");
+      m.rotation.y = Math.PI / 2; m.scale.set(24.5, 97.5, 24.5); m.position.set(x, R(100), ZM); }
     { const g = new THREE.CircleGeometry(1, 24, 0, Math.PI); const m = add(g, "inside", "bonnet");            // the dark of the open front
-      m.rotation.y = Math.PI / 2; m.scale.set(20, 30, 1); m.position.set(229, R(100), ZM); }
+      m.rotation.y = Math.PI / 2; m.scale.set(18, 25, 1); m.position.set(230.5, R(100), ZM); }
+    { const g = new THREE.TorusGeometry(1, 0.1, 5, 24, Math.PI); const m = add(g, "canvas", "bonnet");          // the cloth's lip round it
+      m.rotation.y = Math.PI / 2; m.scale.set(19, 30, 19); m.position.set(231, R(100), ZM); }
 
     // ---- the wheels: an iron-shod rim, eight spokes, a hub; big at the back, smaller at the front
     const wheel = (cx, cyRow, r, z) => {
@@ -60,6 +63,18 @@ const WAGON = (function () {
     };
     wheel(60, 172, 46, Z1 + 6);
     wheel(181, 176, 42, Z1 + 6);
+    wheel(60, 172, 46, Z0 - 6);                                       // the far side's pair (they show once turned)
+    wheel(181, 176, 42, Z0 - 6);
+
+    // (owner 2026-11-07: "좀 더 재현성 높게") the reference sees the wagon a little from its front end - the bonnet's
+    // round and its open mouth show. The whole wagon turned TURN about the vertical through its middle, front end
+    // toward us: a real turn, so it still shades and casts true.
+    const TURN = -18 * Math.PI / 180;
+    const rot = new THREE.Matrix4().makeTranslation(140, 0, ZM).multiply(new THREE.Matrix4().makeRotationY(TURN)).multiply(new THREE.Matrix4().makeTranslation(-140, 0, -ZM));
+    for (const p of parts) { const m = p.mesh; m.updateMatrix();
+      const g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry; g.applyMatrix4(m.matrix); g.applyMatrix4(rot);
+      g.deleteAttribute("normal"); g.computeVertexNormals();
+      m.geometry = g; m.position.set(0, 0, 0); m.rotation.set(0, 0, 0); m.quaternion.identity(); m.scale.set(1, 1, 1); m.updateMatrix(); }
     return parts;
   }
   return { W, H, B0, K, TOP, Y, RAMP, MAT, LAYERS, build };
