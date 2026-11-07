@@ -221,21 +221,27 @@ const ALL = [];
 PALETTE.forEach((row, r) => { if (r === RAMP.leaf || r === RAMP.green) return;      // never tint toward foliage
   row.slice(0, STEPS[r]).forEach(c => ALL.push(c)); });
 const lum = (c) => 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+const hsv = (c) => { const [r, g, b] = c.map(v => v / 255), mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let h = 0; if (d > 0) h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [(h * 60 + 360) % 360, mx > 0 ? d / mx : 0, mx]; };
+const hue = (c) => hsv(c)[0], sat = (c) => hsv(c)[1];
+const hueDist = (a, b) => { const d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; };
 function twin(c, kind) {
   const L = lum(c);
   let t;
   if (kind === "shade") {            // dull it by a third, then lean it toward the sky
-    t = c.map(v => v + (L - v) * 0.2);
-    t = [t[0] - 8, t[1] - 2, t[2] + 12];
+    t = c.map(v => v + (L - v) * 0.25);
+    t = [t[0] - 12, t[1] - 3, t[2] + 16];
   } else {                           // richer and warmer
-    t = c.map(v => v + (v - L) * 0.2);
-    t = [t[0] + 8, t[1] + 3, t[2] - 8];
+    t = c.map(v => v + (v - L) * 0.3);
+    t = [t[0] + 12, t[1] + 4, t[2] - 12];
   }
   let best = c, bd = 1e9;
   for (const p of ALL) {
     const dl = lum(p) - L;
     if (Math.abs(dl) > 18) continue;                 // keep the lightness: the step already set it
     if ((p[0] - c[0]) ** 2 + (p[1] - c[1]) ** 2 + (p[2] - c[2]) ** 2 > 50 * 50) continue;   // a near relation only, never a jump to another material
+    if (sat(c) > 0.18 && (sat(p) < 0.12 || hueDist(hue(p), hue(c)) > 28)) continue;   // a red stays a red (cooler), never turns grey
     const d = (p[0] - t[0]) ** 2 + (p[1] - t[1]) ** 2 + (p[2] - t[2]) ** 2 + 4 * dl * dl;
     if (d < bd) { bd = d; best = p; }
   }
@@ -250,11 +256,11 @@ const shadeTex = twinTex("shade"), sunTex = twinTex("sun");
 
 const comp = new THREE.ShaderMaterial({
   uniforms: { tPat: { value: rtPat.texture }, tId: { value: rtId.texture }, tLit: { value: rtLit.texture }, tFace: { value: rtFace.texture }, tNrm: { value: rtNrm.texture }, tDep: { value: rtDep.texture },
-              pal: { value: palTex }, shadeT: { value: shadeTex }, sunT: { value: sunTex }, mode: { value: 0 } },
+              sunS: { value: new THREE.Vector2(0, 1) }, pal: { value: palTex }, shadeT: { value: shadeTex }, sunT: { value: sunTex }, mode: { value: 0 } },
   vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
   fragmentShader: `
     #include <packing>
-    uniform sampler2D tPat, tId, tLit, tFace, tNrm, tDep, pal, shadeT, sunT; uniform int mode; varying vec2 vUv;
+    uniform vec2 sunS; uniform sampler2D tPat, tId, tLit, tFace, tNrm, tDep, pal, shadeT, sunT; uniform int mode; varying vec2 vUv;
     const vec2 S = vec2(${RW}.0, ${H}.0);
     vec4 at(sampler2D t, vec2 c) { return texture2D(t, (c + 0.5) / S); }
     float dep(vec2 c) { return unpackRGBAToDepth(at(tDep, c)) * 3999.0; }      // in cells
@@ -262,6 +268,14 @@ const comp = new THREE.ShaderMaterial({
     vec3 palc(float r, float k) {
       float n = texture2D(pal, vec2(0.5 / 8.0, (r + 0.5) / ${NP}.0)).a * 255.0;
       return texture2D(pal, vec2((clamp(k, 0.0, n - 1.0) + 0.5) / 8.0, (r + 0.5) / ${NP}.0)).rgb;
+    }
+    // a step in depth or the silhouette between this cell and its neighbour at o (this cell the nearer side)
+    bool shAt(vec2 c) { float l = at(tLit, c).r, f = at(tFace, c).r; return f > 0.2 && l < f * 0.45; }
+    bool edgeTo(vec2 c, vec2 o, float d) {
+      if (at(tId, c + o).b < 0.5 / 255.0) return true;
+      float ex = d;
+      if (at(tId, c - o).b >= 0.5 / 255.0) ex = d + (d - dep(c - o));
+      return dep(c + o) > ex + 1.0;
     }
     void main() {
       vec2 c = floor(vUv * S);
@@ -277,7 +291,14 @@ const comp = new THREE.ShaderMaterial({
       // occlusion) is cool, dull and deep.
       float L = at(tLit, c).r, Lf = at(tFace, c).r;
       bool castSh = Lf > 0.2 && L < Lf * 0.45;     // grazing faces never count as shaded: no acne specks
-      float st = Lf > 0.7 ? 1.0 : Lf > 0.04 ? 0.0 : -1.0;          // only faces fully turned away step down
+      if (castSh) {                                // and a shadow one cell thin is shadow-map noise, not a shadow
+        int nn = 0;
+        if (shAt(c + vec2(1, 0))) nn++; if (shAt(c - vec2(1, 0))) nn++; if (shAt(c + vec2(0, 1))) nn++; if (shAt(c - vec2(0, 1))) nn++;
+        castSh = nn >= 3;
+      }
+      // facing, by the angle to the sun, in four steps (strong contrast); the colour follows: sunlit warm and rich,
+      // turned-away a little cooler, cast shade cool and dull and deepest
+      float st = Lf > 0.72 ? 1.0 : Lf > 0.4 ? 0.0 : Lf > 0.12 ? -1.0 : -2.0;
       if (castSh) st = min(st, 0.0) - 2.0;
       if (mode == 1) st = 0.0;
       float d = dep(c);
@@ -330,12 +351,25 @@ const comp = new THREE.ShaderMaterial({
       if (mode == 0 && line == 0) {
         float n = texture2D(pal, vec2(0.5 / 8.0, (r + 0.5) / ${NP}.0)).a * 255.0;
         vec2 tc = vec2((clamp(max(k, 0.0), 0.0, n - 1.0) + 0.5) / 8.0, (r + 0.5) / ${NP}.0);
-        if (castSh || aoed) col = texture2D(shadeT, tc).rgb;              // cast shade: cooler, duller
+        if (castSh || aoed || st <= -2.0) col = texture2D(shadeT, tc).rgb;   // cast shade / turned away: cooler, duller
         else if (st > 0.0) col = texture2D(sunT, tc).rgb;              // full sun: warmer, richer
       }
       // the outline: the dark of the warm ramps (the reference draws stone, plaster and wood alike in dark brown,
       // the roofs in their own deepest red)
       if (line == 1) col = sil ? palc(1.0, 0.0) : r == 0.0 ? palc(0.0, 0.0) : palc(1.0, 1.0);   // the silhouette darkest
+      // rim light (owner 2026-11-07): where a volume's edge faces the sun, its outline turns into a bright line of
+      // its own colour, two steps up and sun-warm; the edges turned away keep the dark outline
+      if (mode == 0 && line == 1 && !castSh && Lf > 0.12 && !quiet) {
+        vec2 ox = vec2(sunS.x > 0.3 ? 1.0 : sunS.x < -0.3 ? -1.0 : 0.0, 0.0), oy = vec2(0.0, sunS.y > 0.25 ? 1.0 : 0.0);
+        bool tileish = mi == ${matNames.indexOf("tile") + 1}.0 || mi == ${matNames.indexOf("tileDk") + 1}.0 || mi == ${matNames.indexOf("tileLt") + 1}.0;
+        // tiles: only the roof's own silhouette catches the rim (their joints would break it into dashes)
+        bool rim = tileish ? ((ox.x != 0.0 && at(tId, c + ox).b < 0.5 / 255.0) || (oy.y != 0.0 && at(tId, c + oy).b < 0.5 / 255.0))
+                           : ((ox.x != 0.0 && edgeTo(c, ox, d)) || (oy.y != 0.0 && edgeTo(c, oy, d)));
+        if (rim) {
+          float n = texture2D(pal, vec2(0.5 / 8.0, (r + 0.5) / ${NP}.0)).a * 255.0;
+          col = texture2D(sunT, vec2((clamp(base + 2.0, 0.0, n - 1.0) + 0.5) / 8.0, (r + 0.5) / ${NP}.0)).rgb;
+        }
+      }
       if (mode == 2) col = vec3(st == 1.0 ? 0.95 : st == 0.0 ? 0.7 : st == -1.0 ? 0.45 : 0.22) * (occ >= 3.0 ? 0.75 : 1.0) + (hi == 1 ? 0.15 : 0.0);
       gl_FragColor = vec4(col, 1.0);
     }`,
@@ -361,6 +395,7 @@ function render() {
   const h = parseFloat(hourEl.value), hh = Math.floor(h), mm = Math.round((h - hh) * 60);
   document.getElementById("hour-v").textContent = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
   sun.position.copy(center).addScaledVector(sunDir(h), 1500);
+  { const d = sunDir(h); comp.uniforms.sunS.value.set(d.x, d.y + 0.25 * d.z); }
   if (mode === "layers") {
     const rc = stage.getBoundingClientRect();
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));

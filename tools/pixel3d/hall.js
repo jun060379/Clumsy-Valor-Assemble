@@ -347,19 +347,21 @@ const HALL = (function () {
     for (const s of [-1, 1]) {
       const xe = 218 + s * 112, re = 28 + 112;
       bar("verge", "roofBase", 218, 28 + 6, xe, re + 6, 12, ZV0, ZV1 - 1);                // the board under the tiles
-      bar("verge", "fascia", 218, 28 + 14, xe, re + 14, 4, ZV0 - 1, ZV1 - 0.5);
-      // the verge: a run of rolled tiles down the slope, each one round across the band (it bulges toward the
-      // viewer in the middle) and lifting a little toward its lower end where it laps the next
-      for (let i = 0, n = 13; i < n; i++) {
-        const t0 = i / n, t1 = (i + 1) / n - 0.012;
+      bar("verge", "fascia", 218, 28 + 15, xe, re + 15, 5, ZV0 - 1, ZV1 - 0.5);            // the dark barge board under the tiles
+      // the verge tiles (owner 2026-11-07: the front of the roof was the problem): big tiles laid down the slope like
+      // the wing tiles, each with a joint; across the band the upper part tips up to the sky (lit) and the lower part
+      // rolls down and under (in shade), and each tile's lower end laps the next
+      for (let i = 0, n = 10; i < n; i++) {
+        const t0 = i / n + 0.004, t1 = (i + 1) / n - 0.012;
         const hh = Math.abs(Math.sin((i + 3) * 9.137 + s * 3.3) * 43758.5453) % 1;
-        const m = hh < 0.25 ? "tileDk" : hh > 0.85 ? "tileLt" : "tile";
+        const m = hh < 0.15 ? "tileDk" : hh > 0.92 ? "tileLt" : "tile";
+        const pr = (u) => u < 0.55 ? 0.4 + 3.4 * u / 0.55 : 3.8 - 2.6 * (u - 0.55) / 0.45;
         const F = (u, v) => {
-          const t = t0 + (t1 - t0) * v, x = 218 + (xe - 218) * t, row = 28 + (re - 28) * t + 2 + 11 * u;
-          const z = ZV1 - 1 + 3.2 * Math.sin(Math.PI * u) + 0.9 * v;
-          return [x, Y(row, ZV1) + K * (z - ZV1) * 0, z];
+          const t = t0 + (t1 - t0) * v, x = 218 + (xe - 218) * t, row = 28 + (re - 28) * t + 1 + 13 * u;
+          const z = ZV1 - 1 + pr(u) + 0.7 * v;
+          return [x, Y(row, ZV1), z];
         };
-        shell("verge", m, F, [0, 0.2, 0.4, 0.6, 0.8, 1], [0, 0.5, 1], [0, 0, -2]);
+        shell("verge", m, F, [0, 0.2, 0.4, 0.55, 0.75, 1], [0, 0.5, 1], [0, 0, -2.5]);
       }
       // the gable roof behind the verge: rows of tiles down the slope back to the main ridge, each row rounded
       // across its width so the rows read as rolls, not stripes
@@ -368,7 +370,7 @@ const HALL = (function () {
         const z1 = Math.max(-40, z0 - 8.4);
         const hh = Math.abs(Math.sin((k + 5) * 7.77 + s * 1.9) * 43758.5453) % 1;
         const m = hh < 0.25 ? "tileDk" : hh > 0.85 ? "tileLt" : "tile";
-        const F = (u, v) => [218 + (xe - 218) * v, ya + (yb - ya) * v - 1 + 1.6 * Math.sin(Math.PI * u), z0 + (z1 - z0) * u];
+        const F = (u, v) => [218 + (xe - 218) * v, ya + (yb - ya) * v - 1 + 0.9 * u, z0 + (z1 - z0) * u];   // each row tips its front edge up
         shell("verge", m, F, [0, 0.25, 0.5, 0.75, 1], [0, 0.25, 0.5, 0.75, 1], [0, -3, 0]);
       }
     }
