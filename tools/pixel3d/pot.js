@@ -10,7 +10,7 @@ const POT = (function () {
   const MAT = {
     sand: ["ochre", 5],
     clay: ["red", 4], clayRim: ["red", 5], soil: ["wood", 1],
-    decoLeaf: ["leaf", 3], decoLeafDk: ["leaf", 2], decoBloom: ["violet", 5], decoBloomLt: ["red", 7], decoBud: ["ochre", 3],
+    decoLeaf: ["leaf", 3], decoLeafDk: ["leaf", 2], decoStem: ["leaf", 4], decoBloom: ["violet", 5], decoBloomLt: ["red", 7], decoBud: ["ochre", 3],
   };
   const LAYERS = ["ground", "pot", "leaves", "flowers"];
 
@@ -34,10 +34,17 @@ const POT = (function () {
       const g = new THREE.IcosahedronGeometry(r, 0); const m = add(g, rnd() < 0.35 ? "decoLeafDk" : "decoLeaf", "leaves");
       m.position.set(x, y, z); m.rotation.set(rnd() * 3, rnd() * 3, 0); m.scale.set(1.1, 0.75, 1);
     }
-    // ---- the bud stalks: long leaves standing up out of the bush, each carrying a bud at its tip
-    for (const [x0, x1, top] of [[22, 14, 52], [38, 46, 52], [30, 30, 59]]) for (let k = 0; k < 4; k++) {
-      const t = k / 3, g = new THREE.IcosahedronGeometry(2.6, 0); const m = add(g, k % 2 ? "decoLeafDk" : "decoLeaf", "leaves");
-      m.position.set(x0 + (x1 - x0) * t, 42 + (top - 42) * t, CZ + 2); m.scale.set(0.8, 1.6, 0.8); }
+    // ---- the stems (owner 2026-11-07: "꽂줄기가 없음"): a stalk from down in the bush to every head and bud, a
+    // leaf or two along the taller ones
+    const stem = (a, b) => { const g = new THREE.CylinderGeometry(1.1, 1.3, a.distanceTo(b), 6); const m = add(g, "decoStem", "leaves");
+      m.position.copy(a.clone().add(b).multiplyScalar(0.5)); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); };
+    const V = (x, y, z) => new THREE.Vector3(x, y, z);
+    for (const [x0, x1, top] of [[24, 14, 53], [36, 46, 53], [30, 30, 60]]) {
+      stem(V(x0, 30, CZ + 2), V(x1, top, CZ + 2));
+      for (const t of [0.45, 0.7]) { const g = new THREE.IcosahedronGeometry(2.8, 0); const m = add(g, "decoLeaf", "leaves");
+        m.position.set(x0 + (x1 - x0) * t + (t < 0.6 ? -2 : 2), 30 + (top - 30) * t, CZ + 2); m.scale.set(1.4, 0.6, 0.8); m.rotation.z = t < 0.6 ? 0.5 : -0.5; }
+    }
+    for (const x of [20, 40]) stem(V(x + (x < 30 ? 3 : -3), 28, CZ + 6), V(x, 40, CZ + 9));
     // ---- the flowers: two big pink heads at the front, peach buds standing up out of the top
     const head = (cx, cy, cz, n, rr, mats) => { for (let i = 0; i < n; i++) { const a = rnd() * Math.PI * 2, d = rnd() * rr;
       const g = new THREE.IcosahedronGeometry(2.6 + rnd() * 1.2, 0); const m = add(g, mats[rnd() < 0.3 ? 1 : 0], "flowers");
