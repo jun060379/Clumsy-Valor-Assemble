@@ -6,7 +6,7 @@
 // Coordinates as hall.js (x column, rows down from the top, Z toward the viewer, B0 = the foot line).
 
 const TENT = (function () {
-  const W = 210, H = 150, B0 = 95, K = 0.25, TOP = 36;
+  const W = 150, H = 125, B0 = 95, K = 0.25, TOP = 16;
   const Y = (row, z) => B0 + K * z - row;
   const RAMP = { red: 0, wood: 1, ochre: 2, cream: 3, leaf: 4, green: 5, blue: 6, violet: 7, stone: 8, iron: 9 };
   const MAT = {
@@ -93,45 +93,54 @@ const TENT = (function () {
         }
       }
     }
-    const AX = 74, AR = 18, BR = 90, HW = 58, ZF = 10, ZB = -90, D = (ZF - ZB) * K;   // D: how many rows the back end stands higher
-    const yA = Y(AR, ZF), yB = Y(BR, ZF);
-    // ---- the two slopes: canvas from the ridge down to the foot, running back from the front end to the back end,
-    // sagging a little between the poles
-    for (const s of [-1, 1]) {
-      shell("canvas", "canvas", (u, v) => { const z = ZF + (ZB - ZF) * v, sag = 1.6 * Math.sin(Math.PI * u) * (0.6 + 0.4 * Math.sin(Math.PI * v));
-        const x = AX + s * HW * u, y = yA + (yB - yA) * u;
-        return [x - s * sag * 0.6, y - sag, z]; },
-        [0, 0.15, 0.3, 0.5, 0.7, 0.85, 1], [0, 0.25, 0.5, 0.75, 1], [0, -1.2, 0]);
+    // ---- the form, read off the reference (owner 2026-11-07: "형태에 대한 제대로된 이해가 없나?"): a ridge tent seen from
+    // its front left. Its door end is the triangle at the left (the front pole down its right edge, the door slit in
+    // it); the long side runs from that pole to the right, its ridge a level line between the two crossed poles; the
+    // far end shows at the right as a narrower triangle. The foot is one level line. Each face is a plane of its own
+    // (the end facing front left, the side front and up, the far end right and up), so the one sun shades them apart.
+    // Points as (column, row, Z); a face's points take their world height from their row at their own depth.
+    const P = (x, r, z) => [x, Y(r, z), z];
+    const A = [46, 10, -18], B = [101, 10, -30];                      // the ridge ends (front pole, far pole)
+    const L = [13, 89, -14], F = [46, 89, 10], M = [110, 89, 4], R = [131, 89, -22];   // the foot
+    const tri = (layer, mat, pts, lift = 0) => {                      // a flat face through 3 or 4 points, lifted along its normal
+      const v = pts.map(p => new THREE.Vector3(...P(...p)));
+      const n = new THREE.Vector3().subVectors(v[1], v[0]).cross(new THREE.Vector3().subVectors(v[2], v[0])).normalize();
+      if (n.z < 0) n.negate();
+      const w = v.map(p => p.clone().addScaledVector(n, lift)), b = v.map(p => p.clone().addScaledVector(n, lift - 1.2));
+      const t = [], q = (a, c, d) => t.push(a.x, a.y, a.z, c.x, c.y, c.z, d.x, d.y, d.z);
+      for (let i = 1; i < w.length - 1; i++) { q(w[0], w[i], w[i + 1]); q(b[0], b[i + 1], b[i]); }
+      for (let i = 0; i < w.length; i++) { const j = (i + 1) % w.length; q(w[i], b[i], b[j]); q(w[i], b[j], w[j]); }
+      const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(t, 3)); g.computeVertexNormals();
+      return add(g, mat, layer);
+    };
+    // a point on a face at (x, row): its Z from the face's plane in (column, row) terms
+    const onFace = (p0, p1, p2) => { const [x0, r0, z0] = p0, [x1, r1, z1] = p1, [x2, r2, z2] = p2;
+      const d = (x1 - x0) * (r2 - r0) - (x2 - x0) * (r1 - r0);
+      const a = ((z1 - z0) * (r2 - r0) - (z2 - z0) * (r1 - r0)) / d, b = ((x1 - x0) * (z2 - z0) - (x2 - x0) * (z1 - z0)) / d;
+      return (x, r) => [x, r, z0 + a * (x - x0) + b * (r - r0)]; };
+    tri("canvas", "canvas", [A, L, F]);                               // the door end
+    tri("canvas", "canvas", [A, F, M, B]);                            // the long side
+    tri("canvas", "canvas", [B, M, R]);                               // the far end
+    tri("canvas", "canvasDk", [A, B, [101, 10, -60], [46, 10, -48]]); // the far slope, behind the ridge (seen only as its top edge)
+    // the door: a dark slit down the door end beside the front pole, its flap folded back
+    const E = onFace(A, L, F);
+    tri("door", "doorGap", [E(45, 34), E(28, 89), E(45, 89)], 0.4);
+    tri("door", "canvasDk", [E(45, 50), E(37, 89), E(45, 89)], 0.8);
+    // a seam of shade down the long side where the canvas folds over the far end's pole
+    // ---- the poles: the front pole down the door end's edge, crossed poles at both ridge ends, the ridge pole
+    bar("poles", "pole", 46, 6, 46, 89, 3, 10, 12.5);
+    for (const [x, z] of [[46, 12], [101, -26]]) {
+      bar("poles", "pole", x - 6, 0, x + 5, 16, 4, z - 1.5, z + 2);           // the short legs of the cross, lashed
+      bar("poles", "pole", x + 6, 0, x - 5, 16, 4, z - 1.5, z + 2);
+      box("poles", "rope", x - 3, x + 3, 6, 9, z + 1.5, z + 2.5);
     }
-    // ---- the front end: a canvas triangle, the door slit left of the middle, its flap folded back
-    slab("canvas", "canvas", [[AX - HW, BR], [AX + HW, BR], [AX, AR]], ZF - 1.2, ZF - 0.2);
-    slab("door", "doorGap", [[AX - 30, BR], [AX - 4, BR], [AX - 4, AR + 10]], ZF - 0.2, ZF + 0.1);
-    slab("door", "canvasDk", [[AX - 14, BR], [AX - 4, BR], [AX - 4, AR + 22]], ZF + 0.1, ZF + 0.8);   // the flap, tied back
-    box("door", "rope", AX - 13, AX - 6, 66, 68, ZF + 0.8, ZF + 1.4);                   // its tie
-    box("door", "canvasDk", AX - 2, AX + 26, BR - 2, BR, ZF - 0.2, ZF + 1.2);             // the hem's shade along the foot (its fold)
-    // ---- the poles: crossed at each apex, the ridge pole between
-    for (const [dr, z] of [[0, ZF + 1.5], [-D, ZB + 1.5]]) {
-      bar("poles", "pole", AX - 9, AR - 12 + dr, AX + 6, AR + 10 + dr, 3, z - 1.5, z + 1.5);
-      bar("poles", "pole", AX + 9, AR - 12 + dr, AX - 6, AR + 10 + dr, 3, z - 1.5, z + 1.5);
-      for (const sx of [-1, 1]) {                                                     // guy ropes from the cross down to pegs
-        bar("ropes", "rope", AX + sx * 7, AR - 9 + dr, AX + sx * (HW + 14), BR + 1 + dr, 1.3, z - 1, z);
-        box("ropes", "peg", AX + sx * (HW + 14) - 2, AX + sx * (HW + 14) + 2, BR - 3 + dr, BR + 3 + dr, z - 2, z + 1);
-      }
-    }
-    { const g = new THREE.BoxGeometry(2.4, 2.4, ZF - ZB); const m = add(g, "pole", "poles"); m.position.set(AX, yA + 1.4, (ZF + ZB) / 2); }
-
-    // ---- turned as the reference stands (owner 2026-11-07: "이게 뭐고 원본처럼해"): the door end to the front left, the
-    // long right slope to the front. Built end-on above, then turned about the upright through its middle, set on the
-    // ground (its floor at y 0) and slid to the canvas's left edge
-    { const rot = new THREE.Matrix4().makeRotationY(-35 * Math.PI / 180), cz = (ZF + ZB) / 2;
-      const toO = new THREE.Matrix4().makeTranslation(-AX, 0, -cz), back = new THREE.Matrix4().makeTranslation(AX, 0, cz);
-      const bb = new THREE.Box3();
-      for (const p of parts) { const m = p.mesh; m.updateMatrix(); m.geometry = m.geometry.clone(); m.geometry.applyMatrix4(m.matrix);
-        m.position.set(0, 0, 0); m.rotation.set(0, 0, 0); m.scale.set(1, 1, 1);
-        m.geometry.applyMatrix4(toO); m.geometry.applyMatrix4(rot); m.geometry.applyMatrix4(back);
-        m.geometry.computeBoundingBox(); bb.union(m.geometry.boundingBox); }
-      const fit = new THREE.Matrix4().makeTranslation(4 - bb.min.x, -yB, 24 - bb.max.z);   // its nearest corner on the ground band's front part
-      for (const p of parts) p.mesh.geometry.applyMatrix4(fit); }
+    { const a = new THREE.Vector3(...P(46, 9, -16)), b = new THREE.Vector3(...P(101, 9, -28)), m = a.clone().add(b).multiplyScalar(0.5);
+      const g = new THREE.CylinderGeometry(1.3, 1.3, a.distanceTo(b), 6); const mesh = add(g, "pole", "poles");
+      mesh.position.copy(m); mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); }
+    // ---- the crossed poles' outer legs run on down to the ground either side (the reference's long poles), staked
+    bar("poles", "pole", 42, 4, 8, 90, 3.2, 11, 13.5);
+    bar("poles", "pole", 105, 4, 140, 90, 3.2, -27, -24.5);
+    for (const [x, z] of [[8, 12], [140, -26]]) box("poles", "peg", x - 3, x + 3, 86, 93, z - 2, z + 2);
 
     return parts;
   }
