@@ -5,7 +5,11 @@
 // crossed poles at both apexes, guy ropes to pegs. The town sways it row by row (town_fx.gd draw_tent).
 // Coordinates as hall.js (x column, rows down from the top, Z toward the viewer, B0 = the foot line).
 
+// The town stands two of these, one facing the other way (scripts/town.gd flips the second). A flipped sprite would
+// carry its morning light on the wrong side, so the other one is its own mirrored solid lit by the same sun:
+// build.py tentL sets MIRROR.
 const TENT = (function () {
+  const MIRROR = false;
   const W = 150, H = 125, B0 = 95, K = 0.25, TOP = 16;
   const Y = (row, z) => B0 + K * z - row;
   const RAMP = { red: 0, wood: 1, ochre: 2, cream: 3, leaf: 4, green: 5, blue: 6, violet: 7, stone: 8, iron: 9 };
@@ -153,6 +157,18 @@ const TENT = (function () {
     seg(A.clone().add(V(0, 2, 1.6)), stake.clone().add(V(0, 17, 0)), ROPE, "rope");
     seg(stake.clone().add(V(-2.6, 16, 0)), stake.clone().add(V(2.6, 16, 0)), ROPE, "rope");
 
+    if (MIRROR) {                                                    // reflect every part across the middle, keep faces outward
+      const flip = new THREE.Matrix4().makeTranslation(W, 0, 0).multiply(new THREE.Matrix4().makeScale(-1, 1, 1));
+      for (const p of parts) {
+        const m = p.mesh; m.updateMatrix();
+        let g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry;
+        g.applyMatrix4(m.matrix); g.applyMatrix4(flip);
+        const a = g.attributes.position.array;
+        for (let i = 0; i < a.length; i += 9) for (let k = 0; k < 3; k++) { const t = a[i + 3 + k]; a[i + 3 + k] = a[i + 6 + k]; a[i + 6 + k] = t; }
+        g.deleteAttribute("normal"); g.deleteAttribute("uv"); g.computeVertexNormals();
+        m.geometry = g; m.position.set(0, 0, 0); m.rotation.set(0, 0, 0); m.quaternion.identity(); m.scale.set(1, 1, 1); m.updateMatrix();
+      }
+    }
     return parts;
   }
   return { W, H, B0, K, TOP, Y, RAMP, MAT, LAYERS, build };

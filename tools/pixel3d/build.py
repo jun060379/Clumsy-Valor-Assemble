@@ -6,10 +6,13 @@ from PIL import Image
 NAME = sys.argv[2] if len(sys.argv) > 2 else "hall"
 P = np.array(Image.open("assets/town/palette.png").convert("RGB")).tolist()
 steps = json.load(open("assets/town/palette.json"))["steps"]
-js = open(f"tools/pixel3d/{NAME}.js").read()
-if NAME != "hall": js += f"\nconst HALL = {NAME.upper()};\n"   # the viewer reads the building as HALL
-REFN = {"forge2": "g_forge", "forge3": "g_forge", "tent": "g_tentR"}.get(NAME, "g_" + NAME)
+MIRRORED = {"tentL": "tent"}                  # the same solid reflected, lit by the same sun (not a flipped sprite)
+js = open(f"tools/pixel3d/{MIRRORED.get(NAME, NAME)}.js").read()
+if NAME in MIRRORED: js = js.replace("const MIRROR = false;", "const MIRROR = true;")
+if NAME != "hall": js += f"\nconst HALL = {MIRRORED.get(NAME, NAME).upper()};\n"   # the viewer reads the building as HALL
+REFN = {"forge2": "g_forge", "forge3": "g_forge", "tent": "g_tentR", "tentL": "g_tentR"}.get(NAME, "g_" + NAME)
 src = Image.open(f"assets/town/hx/{REFN}.png").convert("RGBA")
+if NAME in MIRRORED: src = src.transpose(Image.FLIP_LEFT_RIGHT)
 ref = src.resize((src.width // 2, src.height // 2), Image.NEAREST)
 b = io.BytesIO(); ref.save(b, "PNG", optimize=True)
 html = open("tools/pixel3d/viewer.html").read()
