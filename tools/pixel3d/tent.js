@@ -93,16 +93,16 @@ const TENT = (function () {
         }
       }
     }
-    // ---- the form, read off the reference (owner 2026-11-07: "형태에 대한 제대로된 이해가 없나?"): a ridge tent seen from
-    // its front left. Its door end is the triangle at the left (the front pole down its right edge, the door slit in
-    // it); the long side runs from that pole to the right, its ridge a level line between the two crossed poles; the
-    // far end shows at the right as a narrower triangle. The foot is one level line. Each face is a plane of its own
-    // (the end facing front left, the side front and up, the far end right and up), so the one sun shades them apart.
-    // Points as (column, row, Z); a face's points take their world height from their row at their own depth.
+    // ---- the form (owner 2026-11-07: "텐트라는 형태에 대해 이해를 해봐야함"). A ridge tent: an A-frame of two crossed
+    // poles at each end, a ridge pole between their crossings, the canvas thrown over the ridge and pegged down along
+    // both long sides; each end a canvas triangle, the door in the front one, held up by a pole down its middle. The
+    // reference sees it from the front and a little to the left: the FRONT END is the big triangle facing us (its pole
+    // down the middle, the door opening at the pole's foot), the ridge runs away to the back crossing at the top right,
+    // and beyond the fold from the front apex down to the right the long side shows, going back to the far end's leg.
     const P = (x, r, z) => [x, Y(r, z), z];
-    const A = [46, 10, -18], B = [101, 10, -30];                      // the ridge ends (front pole, far pole)
-    const L = [13, 89, -14], F = [46, 89, 10], M = [110, 89, 4], R = [131, 89, -22];   // the foot
-    const tri = (layer, mat, pts, lift = 0) => {                      // a flat face through 3 or 4 points, lifted along its normal
+    const A = [46, 10, 0], B = [101, 10, -44];                        // the ridge's ends: the front crossing, the back crossing
+    const L = [13, 89, 8], M = [100, 89, 8], R = [131, 89, -36];      // the foot: front end's corners, the long side's far corner
+    const tri = (layer, mat, pts, lift = 0) => {                      // a flat face through its points, lifted along its normal
       const v = pts.map(p => new THREE.Vector3(...P(...p)));
       const n = new THREE.Vector3().subVectors(v[1], v[0]).cross(new THREE.Vector3().subVectors(v[2], v[0])).normalize();
       if (n.z < 0) n.negate();
@@ -113,41 +113,39 @@ const TENT = (function () {
       const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(t, 3)); g.computeVertexNormals();
       return add(g, mat, layer);
     };
-    // a point on a face at (x, row): its Z from the face's plane in (column, row) terms
     const onFace = (p0, p1, p2) => { const [x0, r0, z0] = p0, [x1, r1, z1] = p1, [x2, r2, z2] = p2;
       const d = (x1 - x0) * (r2 - r0) - (x2 - x0) * (r1 - r0);
       const a = ((z1 - z0) * (r2 - r0) - (z2 - z0) * (r1 - r0)) / d, b = ((x1 - x0) * (z2 - z0) - (x2 - x0) * (z1 - z0)) / d;
       return (x, r) => [x, r, z0 + a * (x - x0) + b * (r - r0)]; };
-    tri("canvas", "canvas", [A, L, F]);                               // the door end
-    tri("canvas", "canvas", [A, F, M, B]);                            // the long side
-    tri("canvas", "canvas", [B, M, R]);                               // the far end
-    tri("canvas", "canvasDk", [A, B, [101, 10, -60], [46, 10, -48]]); // the far slope, behind the ridge (seen only as its top edge)
-    // the door: a dark slit down the door end beside the front pole, its flap folded back
-    const E = onFace(A, L, F);
-    // the door, as the reference has it (owner 2026-11-07: "문이 뭔지 모르시나?"): the front pole stands in the middle of
-    // the doorway; the canvas is parted either side of it from two fifths of the way up and drawn back, so the opening
-    // is an upturned V around the pole, the dark of the inside showing to the ground, a light fold along each edge
-    const S = onFace(A, F, M);
-    tri("door", "doorGap", [E(45, 40), E(30, 89), E(45, 89)], 0.5);              // left of the pole (on the end)
-    tri("door", "doorGap", [S(47, 40), S(47, 89), S(62, 89)], 0.5);              // right of the pole (on the side)
-    tri("door", "canvas", [E(45, 40), E(28, 89), E(30, 89), E(45, 44)], 0.9);    // the folds along the edges
-    tri("door", "canvas", [S(47, 40), S(47, 44), S(62, 89), S(64, 89)], 0.9);
-    // a stake driven in by the door, as in the reference
+    tri("canvas", "canvas", [A, L, M]);                               // the front end
+    tri("canvas", "canvas", [A, M, R, B]);                            // the long side, running back
+    tri("canvas", "canvasDk", [A, B, [101, 10, -84], [46, 10, -40]]); // the far slope, behind the ridge
+    const E = onFace(A, L, M), S = onFace(A, M, R);
+    tri("canvas", "canvasDk", [S(47, 12), S(52, 12), S(103, 88), S(98, 88)], 0.3);   // the fold where the end turns into the side
+    // the door at the foot of the middle pole: the canvas parted from halfway up and drawn back either side - an
+    // upturned V, the inside dark to the ground, a light fold along each parted edge
+    tri("door", "doorGap", [E(46, 46), E(33, 89), E(59, 89)], 0.5);
+    tri("door", "canvas", [E(46, 46), E(31, 89), E(33, 89), E(46, 50)], 0.9);
+    tri("door", "canvas", [E(46, 46), E(46, 50), E(59, 89), E(61, 89)], 0.9);
+    // the hem along the foot, a shade darker
+    tri("canvas", "canvasDk", [E(13, 87), E(100, 87), E(100, 89), E(13, 89)], 0.4);
+    tri("canvas", "canvasDk", [S(100, 87), S(131, 87), S(131, 89), S(100, 89)], 0.4);
+    // a stake by the door
     { const g = new THREE.CylinderGeometry(2.6, 2.8, 20, 8); const m = add(g, "pole", "poles"); m.position.set(76, Y(84, 16), 16); m.rotation.z = -0.08; }
-    // ---- the poles: the front pole down the door end's edge, crossed poles at both ridge ends, the ridge pole
-    bar("poles", "pole", 46, 6, 46, 89, 3, 10, 12.5);
-    for (const [x, z] of [[46, 12], [101, -26]]) {
-      bar("poles", "pole", x - 6, 0, x + 5, 16, 4, z - 1.5, z + 2);           // the short legs of the cross, lashed
+    // ---- the poles: the middle pole down the front end, the crossed poles at the ridge's ends with their outer legs
+    // splayed down to pegs, the ridge pole between the crossings
+    bar("poles", "pole", 46, 4, 46, 89, 3, 9, 11.5);
+    for (const [x, z] of [[46, 2], [101, -42]]) {
+      bar("poles", "pole", x - 6, 0, x + 5, 16, 4, z - 1.5, z + 2);
       bar("poles", "pole", x + 6, 0, x - 5, 16, 4, z - 1.5, z + 2);
       box("poles", "rope", x - 3, x + 3, 6, 9, z + 1.5, z + 2.5);
     }
-    { const a = new THREE.Vector3(...P(46, 9, -16)), b = new THREE.Vector3(...P(101, 9, -28)), m = a.clone().add(b).multiplyScalar(0.5);
+    bar("poles", "pole", 42, 4, 8, 90, 3.2, 9, 11.5);                                  // the front frame's outer leg
+    bar("poles", "pole", 105, 4, 140, 90, 3.2, -40, -37.5);                            // the back frame's outer leg
+    for (const [x, z] of [[8, 10], [140, -38]]) box("poles", "peg", x - 3, x + 3, 86, 93, z - 2, z + 2);
+    { const a = new THREE.Vector3(...P(46, 9, -1)), b = new THREE.Vector3(...P(101, 9, -45)), m = a.clone().add(b).multiplyScalar(0.5);
       const g = new THREE.CylinderGeometry(1.3, 1.3, a.distanceTo(b), 6); const mesh = add(g, "pole", "poles");
       mesh.position.copy(m); mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); }
-    // ---- the crossed poles' outer legs run on down to the ground either side (the reference's long poles), staked
-    bar("poles", "pole", 42, 4, 8, 90, 3.2, 11, 13.5);
-    bar("poles", "pole", 105, 4, 140, 90, 3.2, -27, -24.5);
-    for (const [x, z] of [[8, 12], [140, -26]]) box("poles", "peg", x - 3, x + 3, 86, 93, z - 2, z + 2);
 
     return parts;
   }
