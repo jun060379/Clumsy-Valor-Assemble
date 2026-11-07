@@ -1,6 +1,8 @@
-// The footbridge built in code (owner 2026-11-07: 작은 소품). The reference sprite (assets/town/q_bridge.png, 317 x 55,
-// one cell per pixel) is only the guide. A plank deck on a thick edge beam, a post-and-rail fence along each side, the
-// deck carried on squared legs with a raking brace either side of each.
+// The footbridge built in code (owner 2026-11-07: "다리는 래퍼런스 다른 거 기반으로 다시 만들어야겠는데" -> 돌 교대
+// 나무다리). The old sprite (assets/town/q_bridge.png, 317 x 55, one cell per pixel) only gives the size. A timber beam
+// bridge: a stone abutment of dressed courses at each bank, two heavy stringers spanning between them, the deck planks
+// laid across the stringers with their ends showing along the edge, a post-and-two-rail fence on each side bolted to
+// the outside of its stringer.
 // Coordinates as hall.js (x column, rows down from the top, Z toward the viewer, B0 = the foot line).
 
 const BRIDGE = (function () {
@@ -9,9 +11,10 @@ const BRIDGE = (function () {
   const RAMP = { red: 0, wood: 1, ochre: 2, cream: 3, leaf: 4, green: 5, blue: 6, violet: 7, stone: 8, iron: 9 };
   const MAT = {
     sand: ["ochre", 5],
-    post: ["wood", 4], rail: ["wood", 5], beam: ["wood", 6], deck: ["wood", 5], deckGap: ["wood", 2], leg: ["wood", 4],
+    stone: ["cream", 2], plinthHi: ["cream", 4], mortar2: ["stone", 5],
+    stringer: ["wood", 4], plank: ["wood", 6], plankDk: ["wood", 5], post: ["wood", 4], rail: ["wood", 5], bolt: ["iron", 2],
   };
-  const LAYERS = ["ground", "deck", "fence", "legs"];
+  const LAYERS = ["ground", "stone", "deck", "fence"];
 
   function build(THREE) {
     const parts = [];
@@ -37,19 +40,77 @@ const BRIDGE = (function () {
       m.position.z = z0;
       return m;
     }
-    const ZF = 0, ZK = -40;                                          // the deck's front and back edges
-    box("deck", "beam", 0, 317, 22, 38, ZF - 6, ZF);                  // the front edge beam
-    box("deck", "beam", 0, 317, 22, 38, ZK, ZK + 6);                  // the back one
-    box("deck", "deck", 0, 317, 22, 24, ZK + 6, ZF - 6);              // the deck between them
-    for (let x = 12; x < 317; x += 12) box("deck", "deckGap", x, x + 1, 21.8, 22.2, ZK + 6, ZF - 6);   // its board joints
-    for (const z of [ZF, ZK + 4]) {                                   // a fence along each side
-      for (const x of [10, 66, 124, 186, 242, 296]) box("fence", "post", x, x + 10, 0, 24, z - 4, z);
-      box("fence", "rail", 14, 302, 4, 13, z - 3, z - 1);
+    function archPts(x0, x1, r0, r1, n = 20) {
+      const rad = (x1 - x0) / 2, cx = (x0 + x1) / 2, spring = r0 + rad;
+      const p = [[x0, r1], [x1, r1], [x1, spring]];
+      for (let i = 1; i < n; i++) { const a = Math.PI * i / n; p.push([cx + rad * Math.cos(a), spring - rad * Math.sin(a)]); }
+      p.push([x0, spring]);
+      return p;
     }
-    for (const [a, b] of [[10, 20], [104, 118], [200, 214], [290, 304]]) {   // the legs and their braces
-      box("legs", "leg", a, b, 38, 55, ZF - 8, ZF - 2);
-      bar("legs", "leg", a - 14, 39, a, 50, 6, ZF - 7, ZF - 3);
-      bar("legs", "leg", b + 14, 39, b, 50, 6, ZF - 7, ZF - 3);
+    function shell(layer, mat, F, us, vs, D) {
+      const P = us.map(u => vs.map(v => F(u, v)));
+      const tri = [], quad = (a, b, c, d) => tri.push(...a, ...b, ...c, ...a, ...c, ...d);
+      const dn = (p) => [p[0] + D[0], p[1] + D[1], p[2] + D[2]];
+      for (let i = 0; i < us.length - 1; i++) for (let j = 0; j < vs.length - 1; j++) quad(P[i][j], P[i + 1][j], P[i + 1][j + 1], P[i][j + 1]);
+      for (let i = 0; i < us.length - 1; i++) { quad(dn(P[i][0]), dn(P[i + 1][0]), P[i + 1][0], P[i][0]);
+        const L = vs.length - 1; quad(P[i][L], P[i + 1][L], dn(P[i + 1][L]), dn(P[i][L])); }
+      for (let j = 0; j < vs.length - 1; j++) { quad(P[0][j], P[0][j + 1], dn(P[0][j + 1]), dn(P[0][j]));
+        const L = us.length - 1; quad(dn(P[L][j]), dn(P[L][j + 1]), P[L][j + 1], P[L][j]); }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.Float32BufferAttribute(tri, 3));
+      g.computeVertexNormals();
+      return add(g, mat, layer);
+    }
+    let seed = 11;
+    const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+
+    // dressed stone laid in courses (owner 2026-11-07: "벽돌이 과하게 들쭉날쭉한듯. 역시나 래퍼런스 찾아서 재구성"; the
+    // pixel-art rule, SLYNYRD Pixelblog 45: one brick size per wall, a 1-cell joint, a regular running bond, only now
+    // and then a discoloured or cracked one). Every stone in a wall the same width `w` and the course height, each
+    // course shifted half a stone; the same small rounding on every corner; a lit top edge. Over a mortar bed that
+    // leaves the openings (`skip`) open; `span(row)` gives the wall's [x0, x1] on a row (sloped or curved outlines).
+    function courses(layer, rows, span, zf, opts = {}) {
+      // `holes(r0, r1)`: the [x0, x1] spans a course leaves open (an arch, a pit); stones are cut at them, not dropped
+      const { w = 14, holes = () => [], gx = 35, gr = 16, ch = 7 } = opts;
+      const minus = (a, b, H) => { let segs = [[a, b]];
+        for (const [h0, h1] of H) segs = segs.flatMap(([s0, s1]) => h1 <= s0 || h0 >= s1 ? [[s0, s1]] : [[s0, Math.min(s1, h0 - 1)], [Math.max(s0, h1 + 1), s1]].filter(([u, v]) => v - u >= 1));
+        return segs; };
+      for (let i = 0; i < rows.length - 1; i++) {
+        const r0 = rows[i], r1 = rows[i + 1] - 1;
+        const [a, b] = span(r0 + (r1 - r0) / 2).map(Math.round);
+        if (b - a < 3) continue;
+        const H = holes(r0, r1);
+        for (const [m0, m1] of minus(a, b, H)) box(layer, "mortar2", m0, m1, r0, r1 + 1, zf - 6, zf - 0.8);
+        const par = Math.floor((r0 - gr) / ch + 0.01) % 2 !== 0;
+        let x00 = gx - (par ? Math.floor(w / 2) : 0);
+        x00 -= Math.ceil((x00 - a) / w) * w;
+        for (let x = x00; x < b - 2; x += w) {
+          for (const [x0, x1] of minus(Math.max(x, a), Math.min(x + w - 2, b), H)) {
+            if (x1 - x0 < 4) continue;                                             // no slivers: the mortar shows there
+            slab(layer, "stone", [[x0, r1 - 1], [x0 + 1, r1], [x1 - 1, r1], [x1, r1 - 1], [x1, r0 + 1], [x1 - 1, r0], [x0 + 1, r0], [x0, r0 + 1]], zf - 1.4, zf);
+            box(layer, "plinthHi", x0 + 1, x1 - 1, r0, r0 + 1, zf - 0.5, zf + 0.15);    // the lit top edge
+          }
+        }
+      }
+    }
+    const rowsFrom = (r0, r1, h) => { const r = []; for (let y = r0; y < r1; y += h) r.push(y); r.push(r1); return r; };
+    const ZF = 0, ZK = -40;                                          // the deck's front and back edges
+
+    // ---- the abutments: dressed stone in courses at each bank, the stringers resting on their tops
+    for (const [a, b] of [[0, 44], [273, 317]]) {
+      box("stone", "mortar2", a, b, 32, 55, ZK - 4, ZF - 1);
+      courses("stone", rowsFrom(32, 55, 7.7), () => [a, b], ZF + 2, { w: 15, gx: a + 2, gr: 32, ch: 7.7 });
+    }
+    // ---- the stringers: two heavy beams bank to bank, the planks across them, ends showing at the edge
+    for (const z of [ZF - 1, ZK + 4]) box("deck", "stringer", 6, 311, 24, 33, z - 5, z);
+    box("deck", "plank", 4, 313, 19, 24, ZK - 1, ZF + 0.6);           // the deck planks, their ends flush along the edge,
+    for (let x = 16; x < 313; x += 12) box("deck", "plankDk", x, x + 1, 19.5, 24, ZF + 0.6, ZF + 0.8);   // a joint between
+    // ---- the fences: posts bolted to the outside of each stringer, a handrail and a mid rail
+    for (const z of [ZF + 4, ZK - 1]) {
+      for (const x of [8, 66, 124, 186, 244, 302]) { box("fence", "post", x, x + 7, 0, 32, z - 3, z);
+        box("fence", "bolt", x + 2, x + 5, 27, 29, z, z + 0.5); }
+      box("fence", "rail", 8, 309, 2, 7, z - 2.5, z + 1.2);
+      box("fence", "rail", 8, 309, 11, 15, z - 2.5, z + 0.8);
     }
 
     return parts;
