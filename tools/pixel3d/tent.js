@@ -124,14 +124,18 @@ const TENT = (function () {
     tri("canvas", "canvasDk", [S(47, 12), S(52, 12), S(103, 88), S(98, 88)], 0.3);   // the fold where the end turns into the side
     // the door at the foot of the middle pole: the canvas parted from halfway up and drawn back either side - an
     // upturned V, the inside dark to the ground, a light fold along each parted edge
-    tri("door", "doorGap", [E(46, 46), E(33, 89), E(59, 89)], 0.5);
-    tri("door", "canvas", [E(46, 46), E(31, 89), E(33, 89), E(46, 50)], 0.9);
-    tri("door", "canvas", [E(46, 46), E(46, 50), E(59, 89), E(61, 89)], 0.9);
+    tri("door", "doorGap", [E(46, 26), E(33, 89), E(59, 89)], 0.5);
+    tri("door", "canvas", [E(46, 26), E(31, 89), E(33, 89), E(46, 30)], 0.9);
+    tri("door", "canvas", [E(46, 26), E(46, 30), E(59, 89), E(61, 89)], 0.9);
     // the hem along the foot, a shade darker
     tri("canvas", "canvasDk", [E(13, 87), E(100, 87), E(100, 89), E(13, 89)], 0.4);
     tri("canvas", "canvasDk", [S(100, 87), S(131, 87), S(131, 89), S(100, 89)], 0.4);
-    // a stake by the door
-    { const g = new THREE.CylinderGeometry(2.6, 2.8, 20, 8); const m = add(g, "pole", "poles"); m.position.set(76, Y(84, 16), 16); m.rotation.z = -0.08; }
+    // a stake by the door, its guy line run up to the fold where the end turns into the side
+    const seg = (a, b, r, mat) => { const m = a.clone().add(b).multiplyScalar(0.5);
+      const g = new THREE.CylinderGeometry(r, r, a.distanceTo(b), 6); const mesh = add(g, mat, "poles");
+      mesh.position.copy(m); mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); };
+    { const g = new THREE.CylinderGeometry(2.6, 2.8, 20, 8); const m = add(g, "pole", "poles"); m.position.set(84, Y(84, 22), 22); m.rotation.z = -0.08; }
+    { const f = S(70, 46); seg(new THREE.Vector3(...P(...f)).add(new THREE.Vector3(0, 0, 1)), new THREE.Vector3(...P(84, 76, 22)), 0.7, "rope"); }
     // ---- the poles: the middle pole down the front end, the crossed poles at the ridge's ends with their outer legs
     // splayed down to pegs, the ridge pole between the crossings
     bar("poles", "pole", 46, 4, 46, 89, 3, 9, 11.5);
