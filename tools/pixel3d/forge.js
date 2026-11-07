@@ -182,7 +182,10 @@ const FORGE = (function () {
     // stone feet under the posts: two or three big blocks each
     // the low wall: one height all along the front, joined from the far left to the door and again past it (owner
     // 2026-11-07: "하단 담장 높이 통합 및 잇고"); the posts stand on it
-    for (const [a, b] of [[0, 207], [252, 281]]) courses("stone wall", [124, 131, 138, 145], () => [a, b], ZP + 1, { w: 16, gx: 0, gr: 124, ch: 7 });
+    // the left workspace stays open (owner 2026-11-07: "좌측은 이으면 안되지"): the wall runs only along the building,
+    // from under the run-on of its roof to the door and past it; the left corner post stands on a pier of the same height
+    for (const [a, b] of [[88, 207], [252, 281]]) courses("stone wall", [124, 131, 138, 145], () => [a, b], ZP + 1, { w: 16, gx: 0, gr: 124, ch: 7 });
+    courses("stone wall", [124, 131, 138, 145], () => [0, 16], ZP + 1, { w: 16, gx: 0, gr: 124, ch: 7 });
     // the low wall between: smaller stones, three courses
     // (the separate low wall and post feet: replaced by the one wall above)
 
@@ -335,13 +338,13 @@ const FORGE = (function () {
       box("porch", "timber", 99, 115, 114, 118, ZP - 3.5, ZP - 0.5);                 // a rail across to the building's post
     }
     // the mouth stays clear (x 46..88): the anvil on its block to its left, the quench tub to its right
-    box("work", "timber", 16, 40, 132, 145, -8, 0);                                    // the anvil's block
-    box("work", "iron", 21, 35, 129, 132, -7, -1);                                       // the anvil: waist, face, horn
-    box("work", "iron", 23, 33, 126, 129, -6, -2);
-    box("work", "iron", 16, 40, 122, 126, -7.5, -0.5);
-    { const g = new THREE.ConeGeometry(2, 8, 10); const m = add(g, "iron", "work"); m.rotation.z = -Math.PI / 2; m.position.set(44, Y(124, -4), -4); }
-    bar("work", "plank", 12, 145, 16, 126, 1.6, -6, -4);                                 // a hammer leaning on the block
-    box("work", "iron", 13, 20, 123, 127, -7, -3);
+    box("work", "timber", 22, 46, 132, 145, 2, 10);                                    // the anvil's block
+    box("work", "iron", 27, 41, 129, 132, 3, 9);                                       // the anvil: waist, face, horn
+    box("work", "iron", 29, 39, 126, 129, 4, 8);
+    box("work", "iron", 22, 46, 122, 126, 2.5, 9.5);
+    { const g = new THREE.ConeGeometry(2, 8, 10); const m = add(g, "iron", "work"); m.rotation.z = -Math.PI / 2; m.position.set(50, Y(124, 6), 6); }
+    bar("work", "plank", 18, 145, 22, 126, 1.6, 4, 6);                                 // a hammer leaning on the block
+    box("work", "iron", 19, 26, 123, 127, 3, 7);
     if (ROOFV !== "D") { const g = new THREE.CylinderGeometry(6.5, 6, 12, 16); const m = add(g, "plank", "work"); m.position.set(97, Y(139, 4), 4);   // the quench tub
       for (const r of [135, 143]) { const gg = new THREE.CylinderGeometry(6.8, 6.8, 1.4, 16); const mm = add(gg, "ironDk", "work"); mm.position.set(97, Y(r, 4), 4); } }
 
