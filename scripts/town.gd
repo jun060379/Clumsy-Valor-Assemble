@@ -1383,6 +1383,29 @@ func _front_shear(x0: float, x1: float, f: Callable) -> void:
 
 
 # ---------- living sprites ----------
+## The leaf wave is played by the wind, not looped (owner 2026-11-07: "항상 반복하는 게 아니라 속도와 유동성을 고려하여
+## 바람에 의한 것을 강조"): a tree rests (sheet frame 23: every ball home) until the grass's gust wave (the same field
+## as shaders/grass_blades.gdshader) reaches it; then, likelier the stronger the wind, its crown runs ONE wave (frames
+## 0..23), faster in a strong gust, and a strong gust chains a second. Calm air: few, slow waves; a gust: quick ones.
+var tree_wave := {}               # tree key -> [frame (float), playing, waves left]
+func _tree_wave(key: String, cx: float) -> int:
+	var st: Array = tree_wave.get(key, [23.0, false, 0])
+	var t: float = life.now() / 1000.0
+	var g := sin(cx * 0.0065 - t * 2.4) * 0.6 + sin(cx * 0.017 - t * 3.1 + 2.0) * 0.4
+	var gw: float = maxf(0.0, g - 0.35) * (0.6 + life.gust)
+	var dt := get_process_delta_time()
+	if not st[1]:
+		if gw > 0.12 and randf() < dt * (0.6 + 4.0 * minf(life.gust, 1.2)):
+			st = [0.0, true, 2 if life.gust > 1.2 else 1]
+	else:
+		st[0] += dt * 10.0 * (0.7 + 0.9 * minf(life.gust, 1.6))
+		if st[0] >= 24.0:
+			st[2] -= 1
+			if st[2] > 0: st[0] -= 24.0
+			else: st = [23.0, false, 0]
+	tree_wave[key] = st
+	return mini(int(st[0]), 23)
+
 ## tree: the trunk stays, the canopy bends as one soft mass in 2 px rows (the top moves most)
 func _tree(k: String, x: float, y_bottom: float, sink: float, flip: bool, amp: float, ph: float, vr: Rect2) -> void:
 	if tex.has(k + "_sway"):
@@ -1392,8 +1415,7 @@ func _tree(k: String, x: float, y_bottom: float, sink: float, flip: bool, amp: f
 		var fh := float(sw.get_height() / 4)
 		x = roundf(x)
 		if x > vr.end.x or x + fw < vr.position.x or y_bottom - fh > vr.end.y or y_bottom < vr.position.y: return
-		sway_t[k + str(x)] = sway_t.get(k + str(x), ph * 7.0) + get_process_delta_time() * (1.0 + life.gust * 1.5) / 0.1
-		var fi: int = int(sway_t[k + str(x)]) % 24
+		var fi: int = _tree_wave(k + str(x), x + fw / 2.0)
 		draw_set_transform(Vector2(x + (fw if flip else 0.0), y_bottom), 0.0, Vector2(-1.0 if flip else 1.0, 1.0))
 		draw_texture_rect_region(sw, Rect2(0, -fh + sink * PK, fw, fh), Rect2((fi % 6) * fw, (fi / 6) * fh, fw, fh))
 		draw_set_transform(Vector2.ZERO)
