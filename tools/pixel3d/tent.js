@@ -135,14 +135,19 @@ const TENT = (function () {
       const g = new THREE.CylinderGeometry(r, r, a.distanceTo(b), 6); const mesh = add(g, mat, "poles");
       mesh.position.copy(m); mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); };
     { const g = new THREE.CylinderGeometry(2.6, 2.8, 20, 8); const m = add(g, "pole", "poles"); m.position.set(84, Y(84, 22), 22); m.rotation.z = -0.08; }
-    { const f = S(70, 46); seg(new THREE.Vector3(...P(...f)).add(new THREE.Vector3(0, 0, 1)), new THREE.Vector3(...P(84, 76, 22)), 0.7, "rope"); }
+    // one rope for every line on the tent: the guy line runs from the front crossing, where it is tied with the
+    // lashing, down to the head of the stake and wraps it
+    const ROPE = 1.0, V = (x, r, z) => new THREE.Vector3(...P(x, r, z));
+    seg(V(47, 8, 5), V(84, 75, 23), ROPE, "rope");
+    seg(V(81.5, 76, 23), V(86.5, 76, 23), ROPE, "rope");
     // ---- the poles: the middle pole down the front end, the crossed poles at the ridge's ends with their outer legs
     // splayed down to pegs, the ridge pole between the crossings
     bar("poles", "pole", 46, 4, 46, 89, 3, 9, 11.5);
     for (const [x, z] of [[46, 2], [101, -42]]) {
       bar("poles", "pole", x - 6, 0, x + 5, 16, 4, z - 1.5, z + 2);
       bar("poles", "pole", x + 6, 0, x - 5, 16, 4, z - 1.5, z + 2);
-      box("poles", "rope", x - 3, x + 3, 6, 9, z + 1.5, z + 2.5);
+      seg(V(x - 3.5, 6.5, z + 2.5), V(x + 3.5, 9.5, z + 2.5), ROPE, "rope");      // the lashing: the same rope,
+      seg(V(x - 3.5, 9.5, z + 2.5), V(x + 3.5, 6.5, z + 2.5), ROPE, "rope");      // crossed over the crossing
     }
     bar("poles", "pole", 42, 4, 8, 90, 3.2, 9, 11.5);                                  // the front frame's outer leg
     bar("poles", "pole", 105, 4, 140, 90, 3.2, -40, -37.5);                            // the back frame's outer leg
