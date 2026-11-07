@@ -137,12 +137,9 @@ const FORGE = (function () {
       for (const [x0, x1] of [[40, 46], [88, 94]]) { box("furnace", "stone", x0, x1, 113, 122, ZF - 1.2, ZF + 1.4); }
     }
     // inside the mouth: sooty back, the fire on its bed of embers (its own light)
-    slab("fire", "soot", mouth, -14, -12);
-    slab("fire", "fireDeep", [[48, 122], [86, 122], [86, 112], [80, 104], [72, 99], [62, 99], [54, 104], [48, 112]], -12, -11);
-    slab("fire", "fireRed", [[50, 122], [84, 122], [83, 112], [79, 107], [76, 111], [73, 103], [69, 108], [66, 101], [62, 108], [58, 105], [55, 112], [51, 113]], -11, -10);
-    slab("fire", "fireOr", [[53, 122], [81, 122], [79, 115], [76, 113], [73, 108], [70, 113], [66, 107], [63, 113], [59, 111], [56, 116]], -10, -9);
-    slab("fire", "fireHot", [[57, 122], [77, 122], [75, 118], [71, 114], [67, 117], [64, 113], [61, 118]], -9, -8);
-    for (const [x, r] of [[52, 121], [60, 120], [70, 121], [79, 120]]) box("fire", "ember", x, x + 3, r, r + 1, -8, -7);
+    slab("furnace", "soot", mouth, -14, -12);
+    // (no fire drawn here: owner 2026-11-07, "불 텍스쳐는 뺄거지? 나중에 fx로 충당하고?" - the flames come later as
+    // an effect laid in the mouth, centre x 67, floor row 122)
     // the hearth sill: a long stone ledge standing out under the mouth
     box("furnace", "stoneLt", 38, 96, 122, 125, ZF - 2, ZF + 6);
     box("furnace", "plinthLo", 38, 96, 125, 126, ZF - 2, ZF + 5.5);
