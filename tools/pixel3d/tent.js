@@ -158,7 +158,7 @@ const TENT = (function () {
     // front one standing where the reference has its lone stake
     const PEG = (p) => { seg(p.clone().add(V(0, -1, 0)), p.clone().add(V(0, 10, 0)), 2.2, "peg");
       seg(p.clone().add(V(-2.2, 7.5, 0)), p.clone().add(V(2.2, 7.5, 0)), ROPE, "rope"); };
-    const OFF = 14;                                                   // every peg the same way out from its foot corner
+    const OFF = 9;                                                    // every peg the same way out from its foot corner
     for (const [u0, u1] of [[-1.8, -OFF], [LR + 1.8, LR + OFF]]) for (const sgn of [-1, 1]) { const vv = HW + OFF;
       const pg = T(u1, 0, sgn * vv); PEG(pg);
       seg(T(u0, Hh + 2, 0), pg.clone().add(V(0, 7.5, 0)), ROPE, "rope");
