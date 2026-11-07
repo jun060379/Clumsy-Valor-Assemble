@@ -2,8 +2,8 @@
 // (assets/town/hx/q_fountain.png, 282 x 204, at half size = 141 x 102 cells) is only the guide. A sandstone basin -
 // a long front wall with a coping round its top, two blind arches either side of a middle pilaster, a plinth along
 // its foot, a pedestal with a rounded cap at each end - and in it a small shrine tower: a plinth, two piers, two
-// cantilevered ledges, a niche arch with the spout in it, a cornice and a pyramid cap. The water falls from the
-// spout between the piers into the basin.
+// cantilevered ledges, a niche arch with the spout in it, a cornice and a pyramid cap. The water (pool, fall,
+// spread) is left to an effect.
 // Coordinates as hall.js (x column, rows down from the top, Z toward the viewer, B0 = the foot line).
 
 const FOUNTAIN = (function () {
@@ -67,7 +67,6 @@ const FOUNTAIN = (function () {
     box("basin", "stone", 20, 120, 72, 102, ZF - 4, ZF);             // the front wall
     box("basin", "stone", 20, 120, 72, 102, ZK, ZK + 4);             // the back wall
     for (const [a, b] of [[20, 24], [116, 120]]) box("basin", "stone", a, b, 72, 102, ZK, ZF);
-    box("water", "water", 24, 116, 72, 73, ZK + 4, ZF - 4);           // the pool
     box("basin", "stoneLt", 18, 122, 66, 72, ZF - 6, ZF + 2);        // the coping, front,
     box("basin", "stoneLt", 18, 122, 66, 72, ZK - 2, ZK + 6);        // back,
     for (const [a, b] of [[18, 26], [114, 122]]) box("basin", "stoneLt", a, b, 66, 72, ZK - 2, ZF + 2);   // and sides
@@ -110,10 +109,8 @@ const FOUNTAIN = (function () {
     { const g = new THREE.ConeGeometry(14.1, 12, 4); const m = add(g, "stoneLt", "tower");   // the pyramid cap
       m.rotation.y = Math.PI / 4; m.position.set(70, Y(8, ZT - 11), ZT - 11); }
 
-    // ---- the water: out of the spout, down between the piers, spreading over the plinth into the pool
-    box("water", "waterLt", 66, 74, 34, 60, ZT - 3, ZT - 1);
-    slab("water", "water", [[64, 60], [76, 60], [84, 66], [56, 66]], ZT - 1, ZT + 3.2);
-    box("water", "waterLt", 58, 82, 65, 66, ZT + 3.2, ZT + 3.6);
+    // the water - the pool, the fall from the spout, the spread over the plinth - is not built here: it moves, so it
+    // comes as an effect over the sprite (owner 2026-11-07: "물 빼고 fx로 넣어도 되나?")
 
     return parts;
   }
