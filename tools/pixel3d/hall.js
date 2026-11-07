@@ -293,9 +293,32 @@ const HALL = (function () {
     }
 
     // steps, three treads stepping out toward the viewer
-    box("steps", "stoneLt", 182, 254, 262, 268, -10, 22);
-    box("steps", "stoneLt", 176, 260, 268, 274, -10, 28);
-    box("steps", "stoneLt", 170, 266, 274, 280, -10, 34);
+    // the steps: three treads, each laid of a few stones like the plinth (owner 2026-11-07: "계단도 다른 돌처럼"):
+    // a mortar bed, slabs of different lengths with rounded front corners, a lit nose, a shaded foot, now and then a
+    // crack or a pit. Fixed seed.
+    { let seed = 23;
+      const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+      for (const [x0s, x1s, r0, r1, zf] of [[182, 254, 262, 268, 22], [176, 260, 268, 274, 28], [170, 266, 274, 280, 34]]) {
+        box("steps", "mortar2", x0s, x1s, r0, r1, -10, zf - 0.6);
+        let x = x0s;
+        while (x < x1s - 4) {
+          const w = Math.min(x1s - x, 16 + Math.floor(rnd() * 14));
+          const xa = x, xb = x + w - 1, c = 1 + Math.floor(rnd() * 2), c2 = 1 + Math.floor(rnd() * 2);
+          const pts = [[xa, r1 - 1], [xa + 1, r1], [xb - 1, r1], [xb, r1 - 1], [xb, r0 + c2], [xb - c2, r0], [xa + c, r0], [xa, r0 + c]];
+          slab("steps", "plinth", pts, -10, zf);
+          box("steps", "plinthHi", xa + c, xb - c2, r0, r0 + 1, zf - 0.5, zf + 0.15);       // the lit nose
+          box("steps", "plinthLo", xa + 1, xb - 1, r1 - 1, r1, zf - 0.5, zf + 0.15);        // the shaded foot
+          if (rnd() < 0.4 && w > 14) {
+            const sx = xa + 4 + rnd() * (w - 9), dx = rnd() < 0.5 ? -1 : 1;
+            bar("steps", "crack", sx, r0 + 1, sx + dx * 2, r0 + 3, 1, zf - 0.3, zf + 0.2);
+          } else if (rnd() < 0.5 && w > 10) {
+            const px = xa + 3 + rnd() * (w - 7);
+            box("steps", "crack", px, px + 2, r0 + 3, r0 + 4, zf - 0.3, zf + 0.2);
+          }
+          x += w;
+        }
+      }
+    }
 
     // the verges: two thick boards from the apex, an eave board under each, and the short gable roof behind them
     const ZV0 = 14, ZV1 = 22;
