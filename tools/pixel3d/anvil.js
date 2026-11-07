@@ -21,16 +21,8 @@ const ANVIL = (function () {
       m.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); return m; };
 
     // ---- the block: a squared length of trunk, the grain in shallow grooves up its face
-    // (owner 2026-11-07: "결 사이사이 빛 들어오는 연출 가능하나?") The grain is cut INTO the face: the front is a skin of
-    // strips 1.5 deep standing on the trunk, parted by real grooves, so each groove has two walls - the one turned to
-    // the sun catches it (a lit edge, left in the morning, right in the afternoon), the other falls into shade.
-    const GD = 1.5;
-    cube("block", "block", 5, 40, 0, 19, -24, -GD);
-    const GR = [[9, 3, 17], [13.5, 1, 18], [18, 5, 15], [22.5, 1, 16], [27, 2, 18], [31, 4, 17], [35, 1, 14]];   // x, from, to
-    { let x = 5;
-      for (const [gx] of GR) { cube("block", "block", x, gx, 0, 19, -GD, 0); x = gx + 1; }
-      cube("block", "block", x, 40, 0, 19, -GD, 0);
-      for (const [gx, y0, y1] of GR) { cube("block", "block", gx, gx + 1, 0, y0, -GD, 0); cube("block", "block", gx, gx + 1, y1, 19, -GD, 0); } }
+    cube("block", "block", 5, 40, 0, 19, -24, 0);
+    for (const x of [13, 21, 30, 36]) cube("block", "grain", x, x + 1, 1, 18, -0.4, 0.3);
     cube("block", "blockTop", 6, 39, 18.6, 19.2, -23, -1);                          // the sawn top
 
     // ---- the anvil: feet, waist, face with its heel step, the horn
@@ -53,8 +45,11 @@ const ANVIL = (function () {
     cube("anvil", "hole", 32, 34.5, 35.2, 35.6, -14, -11.5);                          // the hardy hole
     { const g = new THREE.CylinderGeometry(0.9, 0.9, 0.5, 8); const m = add(g, "hole", "anvil"); m.position.set(36.5, 35.4, -12); }
 
-    cube("block", "grain", 19.5, 21, 12, 19.2, -GD - 0.6, 0.4);                       // the check, wider at the top
-    cube("block", "grain", 20, 20.8, 7, 12, -GD - 0.6, 0.4);
+    const groove = (x, y0, y1, w = 0.9) => cube("block", "grain", x, x + w, y0, y1, -0.4, 0.3);
+    for (const [x, y0, y1] of [[9, 3, 12], [9.6, 12, 17], [14, 1, 9], [13.4, 9, 18], [18, 5, 15], [23, 1, 7], [22.4, 7, 16],
+      [27, 2, 18], [31, 4, 11], [31.6, 11, 17], [35, 1, 14]]) groove(x, y0, y1);
+    cube("block", "grain", 19.5, 21, 12, 19.2, -0.6, 0.4);                            // the check, wider at the top
+    cube("block", "grain", 20, 20.8, 7, 12, -0.6, 0.4);
     cube("block", "grain", 28.5, 31, 7.5, 9, -0.4, 0.3);                               // a knot
     for (const x0 of [5, 38.6]) cube("block", "bark", x0, x0 + 1.4, 0, 19, -24.4, 0.4);   // bark left on the corners
     return parts;
