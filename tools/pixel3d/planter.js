@@ -27,6 +27,8 @@ const PLANTER = (function () {
     // ---- the box: upright planks, a rim round the top, soil inside
     const Z0 = -20, Z1 = 0;
     for (let i = 0; i < 7; i++) { const x = 9 + i * 76 / 7; cube("box", i % 2 ? "plankDk" : "plank", x, x + 76 / 7 - 0.6, 0, 22, Z0, Z1 + (i % 2 ? 0 : 0.5)); }
+    cube("box", "plankDk", 9.3, 84.7, 0, 22, Z0 + 0.6, Z1 - 0.6);         // the box's body behind the planks: the joints
+                                                                      // between them are dark wood, not holes through it
     cube("box", "rim", 6, 88, 22, 29, Z0 - 2, Z1 + 2);
     cube("box", "soil", 9, 85, 28, 29.3, Z0 + 1, Z1 - 1);
 
