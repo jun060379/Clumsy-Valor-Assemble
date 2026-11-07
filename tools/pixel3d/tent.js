@@ -6,7 +6,7 @@
 // Coordinates as hall.js (x column, rows down from the top, Z toward the viewer, B0 = the foot line).
 
 const TENT = (function () {
-  const W = 148, H = 133, B0 = 95, K = 0.25, TOP = 24;
+  const W = 210, H = 150, B0 = 95, K = 0.25, TOP = 36;
   const Y = (row, z) => B0 + K * z - row;
   const RAMP = { red: 0, wood: 1, ochre: 2, cream: 3, leaf: 4, green: 5, blue: 6, violet: 7, stone: 8, iron: 9 };
   const MAT = {
@@ -119,6 +119,19 @@ const TENT = (function () {
       }
     }
     { const g = new THREE.BoxGeometry(2.4, 2.4, ZF - ZB); const m = add(g, "pole", "poles"); m.position.set(AX, yA + 1.4, (ZF + ZB) / 2); }
+
+    // ---- turned as the reference stands (owner 2026-11-07: "이게 뭐고 원본처럼해"): the door end to the front left, the
+    // long right slope to the front. Built end-on above, then turned about the upright through its middle, set on the
+    // ground (its floor at y 0) and slid to the canvas's left edge
+    { const rot = new THREE.Matrix4().makeRotationY(-35 * Math.PI / 180), cz = (ZF + ZB) / 2;
+      const toO = new THREE.Matrix4().makeTranslation(-AX, 0, -cz), back = new THREE.Matrix4().makeTranslation(AX, 0, cz);
+      const bb = new THREE.Box3();
+      for (const p of parts) { const m = p.mesh; m.updateMatrix(); m.geometry = m.geometry.clone(); m.geometry.applyMatrix4(m.matrix);
+        m.position.set(0, 0, 0); m.rotation.set(0, 0, 0); m.scale.set(1, 1, 1);
+        m.geometry.applyMatrix4(toO); m.geometry.applyMatrix4(rot); m.geometry.applyMatrix4(back);
+        m.geometry.computeBoundingBox(); bb.union(m.geometry.boundingBox); }
+      const fit = new THREE.Matrix4().makeTranslation(4 - bb.min.x, -yB, 24 - bb.max.z);   // its nearest corner on the ground band's front part
+      for (const p of parts) p.mesh.geometry.applyMatrix4(fit); }
 
     return parts;
   }
