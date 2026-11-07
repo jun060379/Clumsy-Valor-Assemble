@@ -551,9 +551,7 @@ func draw_tent(ci: CanvasItem, b: Array) -> void:
 	if lv != "" and town.lit_tex.has(k + lv): im = town.lit_tex[k + lv]
 	var x := roundf(b[1])
 	var y0: float = b[2] - h + b[3] * town.PK * s + town.setdown(k)
-	if town.sh_tex.has(k + lv):
-		var st: Texture2D = town.sh_tex[k + lv]
-		ci.draw_texture_rect(st, Rect2(x - 24.0, y0, st.get_width(), st.get_height()), false)
+	if town.sh_tex.has(k): town.sh_place(k, x, y0, ci)
 	var vr: Rect2 = arena.view_rect().grow(40.0)
 	if x > vr.end.x or x + w < vr.position.x: return
 	var t := Time.get_ticks_msec() / 1000.0

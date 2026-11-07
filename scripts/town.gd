@@ -98,7 +98,18 @@ var FOOT := 0.0
 func setdown(k: String) -> float:
 	if k == "g_hall": return 8.0          # the hall on its own plinth on the terrace paving, a little forward (owner 2026-11-08)
 	return float(P3D[k][1]) - 14.0 + FOOT if P3D.has(k) else 0.0
-var sh_tex := {}                 # baked ground shadows under the pixel3d buildings: "<k>" / "<k>_m" / "<k>_e" (tools/pixel3d)
+var sh_tex := {}
+## the pixel3d ground shadows (shadow/) are baked into the ground light maps (tools/bake_ground_light.py, from
+## tests/dump_light_layout.gd), shaded there on the palette - not laid over as a translucent colour
+const SH_IN_MAP := true
+var sh_log = null                    # dump_light_layout: {key@x: [shadow key, canvas x, canvas y]} of what was drawn
+func sh_place(k: String, x: float, y: float, ci: CanvasItem) -> void:
+	if sh_log != null: sh_log[k + "@" + str(roundf(x))] = [k, roundf(x) - 24.0, y]
+	if SH_IN_MAP: return
+	var lv := sun_side()
+	if sh_tex.has(k + lv):
+		var st: Texture2D = sh_tex[k + lv]
+		ci.draw_texture_rect(st, Rect2(roundf(x) - 24.0, y, st.get_width(), st.get_height()), false)                 # baked ground shadows under the pixel3d buildings: "<k>" / "<k>_m" / "<k>_e" (tools/pixel3d)
 var lit_tex := {}                # sun-side versions: "<k>_m" / "<k>_e"                     # pre-scaled (BS) textures, drawn 1:1
 var win_sv: SubViewport         # the hall windows drawn apart (LIT.wc): the heroine cut out of them
 var win_draw: Node2D
@@ -202,6 +213,7 @@ func _ready() -> void:
 		ground_mat.set_shader_parameter("pal_lut", load("res://assets/town/light/pal_lut.png"))
 		ground_mat.set_shader_parameter("pal_fx", load("res://assets/town/light/pal_fx.png"))
 		for t in ["d", "m", "e", "n"]: gmaps[t] = load("res://assets/town/light/ground_" + t + ".png")
+		ground_mat.set_shader_parameter("gmap_cell", Vector2(2.0, 2.0))     # tools/bake_ground_light.py CX, CY
 		ground_node.material = ground_mat
 	blade_mat = ShaderMaterial.new()
 	blade_mat.shader = preload("res://shaders/grass_blades.gdshader")
@@ -1257,9 +1269,7 @@ func _spr(k: String, x: float, y_bottom: float, sink := 0.0, flip := false, ci: 
 	var y := y_bottom - h + sink * PK * s + setdown(k)
 	# the ground shadow the building casts at this hour (owner 2026-11-07: "허공에 뜬거 수정"), drawn under it; its
 	# canvas starts 24 px left of the sprite (the render's margin) and at the sprite's top
-	if not flip and sh_tex.has(k + lv):
-		var st: Texture2D = sh_tex[k + lv]
-		ci.draw_texture_rect(st, Rect2(roundf(x) - 24.0, y, st.get_width(), st.get_height()), false)
+	if not flip and sh_tex.has(k): sh_place(k, x, y, ci)
 	if flip:
 		ci.draw_set_transform_matrix(xf * Transform2D(0.0, Vector2(-1, 1), 0.0, Vector2(roundf(x) + w, 0)))
 		ci.draw_texture_rect(im, Rect2(0, y, w, h), false)
@@ -1582,9 +1592,7 @@ func _lamp(x: float, surf: float, vr: Rect2, ci: CanvasItem = null) -> void:
 	x = roundf(x)
 	if x > vr.end.x or x + base.get_width() < vr.position.x: return
 	var y := roundf(surf - base.get_height() + setdown("q_lamp_base"))
-	if sh_tex.has("q_lamp_base" + lv):
-		var st: Texture2D = sh_tex["q_lamp_base" + lv]
-		ci.draw_texture_rect(st, Rect2(x - 24.0, y, st.get_width(), st.get_height()), false)
+	if sh_tex.has("q_lamp_base"): sh_place("q_lamp_base", x, y, ci)
 	ci.draw_texture(base, Vector2(x, y))
 	var t := Time.get_ticks_msec() / 1000.0
 	var bh := float(ban.get_height())

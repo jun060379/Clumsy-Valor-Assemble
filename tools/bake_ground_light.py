@@ -3,10 +3,9 @@
 그늘이 남게하고"), on the map palette. Baked, swapped by the hour like the sprites (bake_light2):
   assets/town/light/ground_{d,m,e,n}.png   world-space maps, one texel = 4 x 2 px, x from 0, y from Y0:
         R = shade (0..1), G = sun on the ground (0..1), B = warm light from lamps / fires / windows (0..1)
-      d  noon: a short contact shade under everything standing on the ground
-      m  morning, sun from the left: each building, tree, prop and lamp throws its shade to the right along the
-         plane, as long as it is tall, fading off; the ground on its sunny side catches a little extra sun
-      e  evening, sun from the right: the same to the left, longer
+      d / m / e  noon / morning / evening: the pixel3d sprites' own ground shadows (rendered with the same sun,
+         assets/town/shadow, placed where the town draws them: tests/dump_light_layout.gd); the trees, bushes and
+         rocks a contact shade and, morning and evening, a shade thrown along the plane as long as they are tall
       n  night: contact shade only; pools of warm light round every lamp, fire, lit window and string bulb, wider
          across the plane than up and down it
   assets/town/light/pal_lut.png   colour -> palette index (32 levels per channel; x = r*32 + g, y = b)
@@ -28,8 +27,8 @@ src = open(os.path.join(ROOT, "tools/bake_light2.py")).read().replace("\nmain()\
 exec(compile(src, "bake_light2", "exec"))           # palette, ramps, shade(), snap()
 sys.argv = _argv
 
-CX, CY, Y0, Y1 = 4.0, 2.0, 120.0, 820.0
-RAISE = 12.0
+CX, CY, Y0, Y1 = 2.0, 2.0, 120.0, 820.0       # town.gd sets the shader's gmap_cell to (CX, CY)
+RAISE = 42.0                                    # town.gd RAISE: the plane behind the stand line (16 px in front)
 
 
 def pal_tables():
@@ -62,16 +61,8 @@ def maps(L):
     W = int(L["W"] / CX) + 1; H = int((Y1 - Y0) / CY) + 1
     xs = (np.arange(W) + 0.5) * CX; ys = Y0 + (np.arange(H) + 0.5) * CY
     X, Y = np.meshgrid(xs, ys)
-    # buildings by name: a fence or a wagon lets light through, a house does not
-    nb = len(L["bld"]) + 1
-    objs = []
-    for b, o in zip(L["bld"], L["obj"][:len(L["bld"])]):
-        kind = {"g_yard": "fence", "g_ring": "prop", "g_wagon2": "wagon", "g_tentR": "tent"}.get(b[0], "bld")
-        objs.append([kind] + o[1:])
-    objs.append(L["obj"][len(L["bld"])])
-    objs += L["obj"][nb:]
-    def band(yf):                 # the plane round a foot line: behind it (RAISE) and in front of it
-        return np.clip(1.0 - np.maximum((yf - RAISE - 4.0) - Y, Y - (yf + 26.0)) / 6.0, 0, 1) * ((Y > yf - RAISE - 10) & (Y < yf + 32))
+    def band(yf):                 # the plane round a foot line: RAISE behind it, 16 px in front
+        return np.clip(1.0 - np.maximum((yf - RAISE) - Y, Y - (yf + 16.0)) / 6.0, 0, 1) * ((Y > yf - RAISE - 6) & (Y < yf + 22))
     def contact(o, k):
         kind, x0, x1, yf, h = o
         w = x1 - x0; inset = w * 0.08
@@ -81,24 +72,33 @@ def maps(L):
     def cast(o, side, length_k, k):
         kind, x0, x1, yf, h = o
         Lh = h * length_k
-        if side > 0:
-            t = (X - (x1 - (x1 - x0) * 0.25)) / max(Lh, 1.0)
-        else:
-            t = ((x0 + (x1 - x0) * 0.25) - X) / max(Lh, 1.0)
+        t = ((X - (x1 - (x1 - x0) * 0.25)) if side > 0 else ((x0 + (x1 - x0) * 0.25) - X)) / max(Lh, 1.0)
         f = np.clip(1.0 - t, 0, 1) * (t > 0)
         inside = (X >= x0) & (X <= x1)
-        solid = {"bld": 0.9, "tent": 0.8, "tree": 0.7, "wagon": 0.5, "bush": 0.5, "prop": 0.6, "fence": 0.15, "lamp": 0.1}
-        f = np.maximum(f, inside * solid.get(kind, 0.5))
+        f = np.maximum(f, inside * {"tree": 0.7, "bush": 0.5, "prop": 0.6}.get(kind, 0.5))
         return f * band(yf) * k
     def sunny(o, side, k):
         kind, x0, x1, yf, h = o
         t = ((x0 - X) if side > 0 else (X - x1)) / max(h * 0.4, 1.0)
         return np.clip(1.0 - t, 0, 1) * (t > 0) * band(yf) * k
-    weight = {"bld": 1.0, "tent": 0.85, "tree": 0.75, "bush": 0.55, "prop": 0.6, "wagon": 0.6, "fence": 0.35, "lamp": 0.3}
+    # the pixel3d sprites' own ground shadows, rendered with the same sun (assets/town/shadow), where the town drew them
+    def p3d(suf):
+        S = np.zeros_like(X)
+        for k, cx, cy in L["p3d"]:
+            f = os.path.join(ROOT, f"assets/town/shadow/{k}{suf}.png")
+            if not os.path.exists(f): continue
+            a = np.array(Image.open(f).convert("RGBA"))[::2, ::2, 3].astype(float) / 150.0
+            gx, gy = int(round(cx / CX)), int(round((cy - Y0) / CY))
+            h, w = a.shape
+            x0, y0 = max(0, gx), max(0, gy); x1, y1 = min(W, gx + w), min(H, gy + h)
+            if x1 <= x0 or y1 <= y0: continue
+            S[y0:y1, x0:x1] = np.maximum(S[y0:y1, x0:x1], np.clip(a[y0 - gy:y1 - gy, x0 - gx:x1 - gx], 0, 1))
+        return S
+    weight = {"tree": 0.75, "bush": 0.55, "prop": 0.6}
     out = {}
-    for tag in "dmen":
-        S = np.zeros_like(X); Su = np.zeros_like(X); Wm = np.zeros_like(X)
-        for o in objs:
+    for tag, suf in (("d", ""), ("m", "_m"), ("e", "_e"), ("n", "")):
+        S = p3d(suf); Su = np.zeros_like(X); Wm = np.zeros_like(X)
+        for o in L["obj"]:
             k = weight.get(o[0], 0.6)
             S = np.maximum(S, contact(o, 0.75 * k))
             if tag == "m":
@@ -115,7 +115,7 @@ def maps(L):
         Su = np.where(S > 0.15, 0, Su)
         img = np.stack([S, Su, np.clip(Wm, 0, 1), np.ones_like(S)], -1)
         Image.fromarray((np.clip(img, 0, 1) * 255).astype(np.uint8)).save(os.path.join(ROOT, f"assets/town/light/ground_{tag}.png"))
-    print("ground maps", W, "x", H)
+    print("ground maps", W, "x", H, "with", len(L["p3d"]), "pixel3d shadows")
 
 
 os.makedirs(os.path.join(ROOT, "assets/town/light"), exist_ok=True)
