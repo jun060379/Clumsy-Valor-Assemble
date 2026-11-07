@@ -12,13 +12,14 @@ const HALL = (function () {
   const Y = (row, z) => B0 + K * z - row;
   const RAMP = { red: 0, wood: 1, ochre: 2, cream: 3, leaf: 4, green: 5, blue: 6, violet: 7, stone: 8, iron: 9 };
   const MAT = {
-    sand:    ["ochre", 5], stone: ["cream", 2], stoneLt: ["cream", 3], plaster: ["cream", 5],
+    sand:    ["ochre", 5], stone: ["cream", 2], stoneLt: ["cream", 3], plaster: ["cream", 6],
     timber:  ["wood", 5],  frame: ["wood", 3], glass: ["ochre", 4], mullion: ["wood", 3],
     roofBase: ["red", 1], tile: ["red", 2], verge: ["red", 2], fascia: ["wood", 1],
     chimney: ["ochre", 1], chimCap: ["ochre", 4], chimTop: ["cream", 4],
     door:    ["wood", 3], doorGap: ["wood", 1], iron: ["iron", 2], sign: ["wood", 4], signRim: ["wood", 2],
     letter:  ["cream", 7], shield: ["cream", 3], finial: ["wood", 4], ball: ["ochre", 6],
     glassHi: ["cream", 7], mortar: ["ochre", 0], nail: ["iron", 1], shutter: ["wood", 3],
+    curtain: ["cream", 7], planter: ["wood", 3], leaves: ["leaf", 4], flower: ["violet", 5],
   };
   // the layers (the 3D view pulls them apart in this order, back to front)
   const LAYERS = ["ground", "plinth", "walls", "timber", "windows", "roof", "tiles", "chimneys", "gable", "gable timber",
@@ -26,6 +27,7 @@ const HALL = (function () {
 
   function build(THREE) {
     const parts = [];   // {mesh, mat, layer}
+    let winN = 0;       // windows built so far (picks each window's variant)
     const add = (geo, mat, layer) => { const m = new THREE.Mesh(geo); parts.push({ mesh: m, mat, layer }); return m; };
 
     // an axis-aligned box: x0..x1, front face on rows r0..r1 at depth z1, back at z0
@@ -114,6 +116,18 @@ const HALL = (function () {
       box("windows", "glassHi", x0 + 4, x0 + 6, mid + 2, mid + 3, z, z + 0.5);           // the sky caught in a pane
       box("windows", "glassHi", x0 + 4, x0 + 5, mid + 3, mid + 5, z, z + 0.5);
       box("windows", "stoneLt", x0 - 2, x1 + 2, r1, r1 + 3, z, z + 3);   // the sill
+      // not every window alike: some have curtains drawn, some a flower box (a fixed order, not random)
+      const v = [0, 2, 1, 0, 0, 1, 2, 0, 1, 0, 0, 2, 0, 1][winN++ % 14];
+      if (v === 1) {
+        box("windows", "curtain", x0 + 3, cx - 1, mid + 1, r1 - 2, z, z + 0.4);
+        box("windows", "curtain", cx + 1, x1 - 3, mid + 1, r1 - 2, z, z + 0.4);
+      } else if (v === 2) {
+        box("windows", "planter", x0 - 1, x1 + 1, r1 + 3, r1 + 8, z, z + 5);
+        const top = [];
+        for (let i = 0; i <= 8; i++) { const xx = x0 - 1 + (x1 - x0 + 2) * i / 8; top.push([xx, r1 + 3 - (i % 2 ? 7 : 5)]); }
+        slab("windows", "leaves", [[x1 + 1, r1 + 3.5], [x0 - 1, r1 + 3.5], ...top], z + 2, z + 4.6);
+        for (const [fx0, fr] of [[x0 + 1, r1 - 3], [cx - 2, r1 - 4], [x1 - 4, r1 - 2]]) box("windows", "flower", fx0, fx0 + 3, fr, fr + 2, z + 4.6, z + 5.4);
+      }
     }
 
     // ---- the wing roofs (hips): eave row 166 at Z 12, ridge row 81 at Z -40, back eave at Z -92
