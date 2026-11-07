@@ -79,7 +79,13 @@ var lit                       # lit.gd: shade, ambient, lights, hall windows, fo
 var hx := {}
 ## the pixel3d buildings stand ON the floor (owner 2026-11-07: "밑바닥 기준을 바닥 면적으로 삼아야지"): set down this many
 ## px so the front of the footprint lies inside the ground band, not on its back edge
-const SETDOWN := {"g_cottage": 14.0, "g_well": 12.0}
+## P3D[k] = [the sky rows above the reference's row 0 in px (FX anchored on the old sprite add it), set-down px]
+## (tools/export_pixel3d.py prints both; the set-down also covers the rows the render reaches below the reference)
+const P3D := {"g_hall": [0.0, 0.0], "g_forge": [32.0, 14.0], "g_barn": [20.0, 14.0], "g_store": [20.0, 16.0],
+	"g_tentR": [48.0, 24.0], "g_tentL": [48.0, 24.0], "g_kiln": [16.0, 26.0], "q_fountain": [12.0, 14.0],
+	"g_cottage": [20.0, 14.0], "g_well": [16.0, 14.0]}
+func setdown(k: String) -> float:
+	return float(P3D[k][1]) if P3D.has(k) else 0.0
 var sh_tex := {}                 # baked ground shadows under the pixel3d buildings: "<k>" / "<k>_m" / "<k>_e" (tools/pixel3d)
 var lit_tex := {}                # sun-side versions: "<k>_m" / "<k>_e"                     # pre-scaled (BS) textures, drawn 1:1
 var win_sv: SubViewport         # the hall windows drawn apart (LIT.wc): the heroine cut out of them
@@ -133,6 +139,7 @@ func _ready() -> void:
 	# pixels the same size as the characters'. tex[] keeps the originals for layout, climb tops and shadows
 	for k in tex.keys():
 		if ResourceLoader.exists("res://assets/town/hx/" + k + ".png"): hx[k] = load("res://assets/town/hx/" + k + ".png")
+	hx["g_tentL"] = load("res://assets/town/hx/g_tentL.png")    # the pixel3d tent built mirrored (not a flipped sprite)
 	# the sun-side versions (tools/bake_sun_light.py): <k>_m = sun from the left (morning), <k>_e = from the right
 	for f in DirAccess.get_files_at("res://assets/town/shadow"):
 		var sk := f.replace(".import", "").get_basename()
@@ -269,7 +276,7 @@ func _layout() -> void:
 	bld = [["g_store", 300.0, G, 0, 160.0, "창고", ""], ["g_yard", 820.0, G, 0, 378.0, "훈련장", "arena"],
 		["g_tentR", 4120.0, G, 2, null, "", "", true], ["g_ring", 4350.0, G, 4, null], ["g_tentR", 4490.0, G, 2, null],
 		["g_wagon", 4820.0, G, 0, 287.0, "출격 마차", "dungeon"], ["g_barn", 5520.0, G, 0, 230.0, "헛간", ""],
-		["g_cottage", 6730.0, LOWF, 0, 140.0, "목욕집", ""], ["g_well", 7100.0, LOWF, 0, null], ["g_forge", 7350.0, LOWF, 0, 373.0, "대장간", "forge"], ["g_anvil", 7790.0, LOWF, 0, null], ["g_kiln", 7900.0, LOWF, 0, 113.0, "숯가마", ""]]
+		["g_cottage", 6624.0, LOWF, 0, 140.0, "목욕집", ""], ["g_well", 7031.0, LOWF, 0, null], ["g_forge", 7364.0, LOWF, 0, 373.0, "대장간", "forge"], ["g_anvil", 7790.0, LOWF, 0, null], ["g_kiln", 7900.0, LOWF, 0, 113.0, "숯가마", ""]]
 	doors = []
 	for b in bld:
 		if b.size() > 4 and b[4] != null:
@@ -300,7 +307,7 @@ func _layout() -> void:
 		["q_barrelM", HX2 + 470.0, TTOP], ["q_barrelS", HX2 + 522.0, TTOP], ["q_crateL", HX2 + 120.0, TTOP],
 		["q_board", 2600.0, LOWF], ["q_bench", HDOOR - 230.0, LOWF], ["q_bench", HDOOR + 84.0, LOWF, true], ["q_planter", HDOOR - 320.0, LOWF], ["q_planter", HDOOR + 238.0, LOWF, true],
 		["q_pot", HDOOR - 140.0, LOWF], ["q_pot", HDOOR + 112.0, LOWF], ["q_barrelL", 3560.0, LOWF], ["q_barrelM", 3616.0, LOWF], ["q_crateL", 4400.0, LOWF], ["q_crateS", 4464.0, LOWF],
-		["q_barrelL", 5000.0, LOWF], ["q_crateL", 5700.0, LOWF], ["q_barrelS", 5764.0, LOWF], ["q_crateS", 6650.0, LOWF], ["q_barrelM", 8150.0, LOWF]]
+		["q_barrelL", 5000.0, LOWF], ["q_crateL", 5700.0, LOWF], ["q_barrelS", 5764.0, LOWF], ["q_barrelM", 8150.0, LOWF], ["q_crateS", 8200.0, LOWF]]
 	# stones on the ground (owner 2026-11-06), cut from the map scene, 2-px grid: [piece, x, surface y]
 	# only on level ground: a flat-bottomed stone on the slope's bend sat on it like a lid (owner 2026-11-07)
 	rocks = [["f2_pebble", 1534.0, G + 9.0], ["f2_pebble", 5420.0, G + 12.0], ["f2_rock", 6080.0, G - 4.0],
@@ -373,7 +380,7 @@ func _build_tex() -> void:
 ## first opaque row of every column, median-filtered over 13 columns (drops thin spikes: finials, poles)
 func _top_profile(k: String) -> Dictionary:
 	if prof_cache.has(k): return prof_cache[k]
-	var img: Image = tex[k].get_image()
+	var img: Image = (hx[k] if P3D.has(k) and hx.has(k) else tex[k]).get_image()     # the pixel3d art's own outline
 	if img.is_compressed(): img.decompress()
 	img.convert(Image.FORMAT_RGBA8)
 	var w := img.get_width()
@@ -424,6 +431,10 @@ func _add_climb(k: String, x: float, y_bottom: float, sink: float, flip: bool) -
 	if not tex.has(k): return
 	var P0 := _top_profile(k)
 	var s := ks(k)
+	if P3D.has(k) and hx.has(k):           # drawn 1:1 from hx, set down (as _spr)
+		y_bottom += sink * PK * s + setdown(k)
+		sink = 0.0
+		s = 1.0
 	var pw: int = P0["w"]
 	var ph: int = P0["h"]
 	var top: PackedInt32Array = P0["top"]
@@ -596,6 +607,9 @@ func lantern_at(x: float, surf: float) -> Vector2:
 # ---------- lights (lightSources, drawLighting: lit.gd / shade.gd) ----------
 ## the hall windows' glow: up from 18:40, down by 06:20
 func hall_win() -> float:
+	# PLACEHOLDER: the lit-window overlay (g_hall_win, HALL_WIN) fits the old hall art; off until it is redrawn for the
+	# pixel3d hall
+	if P3D.has("g_hall"): return 0.0
 	var hh := fposmod(arena.tod_h, 24.0)
 	return clampf((hh - 18.7) / 0.9, 0.0, 1.0) if hh >= 12.0 else clampf((6.3 - hh) / 0.7, 0.0, 1.0)
 
@@ -693,9 +707,13 @@ func shade_occluders() -> Array:
 	for b in bld:
 		var k: String = b[0]
 		if k == "g_ring" or k == "g_anvil": continue
+		if P3D.has(k) and hx.has(k):
+			# the pixel3d art's own silhouette (clouds pass over it); no sun volume: its ground shadow is baked (shadow/)
+			o.append([hx[k], b[1], b[2] + b[3] * PK * BS + setdown(k), 0.0, b.size() > 7 and b[7], 1.0, false, true])
+			continue
 		var tx: Texture2D = tex["g_wagon2"] if k == "g_wagon" and tex.has("g_wagon2") else tex[k]
 		o.append([tx, b[1], b[2], b[3], b.size() > 7 and b[7], ks(k), false])
-	o.append([tex["g_hall"], HXB, TTOP, 1.0, false, BS, false])
+	o.append([hx["g_hall"], HXB, TTOP + PK * BS + setdown("g_hall"), 0.0, false, 1.0, false, true])
 	for d in deco_back:
 		if d[0].contains("tree"): o.append([tex[d[0]], d[1], d[2], d[3], d[4], ks(d[0]), true])
 	return o
@@ -1186,7 +1204,7 @@ func _spr(k: String, x: float, y_bottom: float, sink := 0.0, flip := false, ci: 
 		h = im.get_height()
 	var lv := sun_side()
 	if lv != "" and lit_tex.has(k + lv): im = lit_tex[k + lv]
-	var y := y_bottom - h + sink * PK * s + float(SETDOWN.get(k, 0.0))
+	var y := y_bottom - h + sink * PK * s + setdown(k)
 	# the ground shadow the building casts at this hour (owner 2026-11-07: "허공에 뜬거 수정"), drawn under it; its
 	# canvas starts 24 px left of the sprite (the render's margin) and at the sprite's top
 	if not flip and sh_tex.has(k + lv):

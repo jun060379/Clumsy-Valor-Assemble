@@ -146,6 +146,7 @@ func _draw_sun() -> void:
 		var u := dir / n
 		var col := Color(0, 0, 0, 0.34 * sun)
 		for o in level.shade_occluders():
+			if o.size() > 7 and o[7]: continue          # its ground shadow is baked
 			var b := box(o)
 			if b.end.x + 400.0 < vx0 or b.position.x - 50.0 > vx1: continue
 			var yb: float = o[2]

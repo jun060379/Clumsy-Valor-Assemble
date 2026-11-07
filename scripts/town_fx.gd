@@ -170,7 +170,8 @@ func origin(k: String):
 		if b[0] != k: continue
 		var t: Texture2D = town.hx.get(k, town.tex[k])
 		var h: float = t.get_height() if town.hx.has(k) else t.get_height() * town.ks(k)
-		return Vector2(roundf(b[1]), b[2] - h + b[3] * town.PK * town.ks(k))
+		var p3: Array = town.P3D.get(k, [0.0, 0.0])
+		return Vector2(roundf(b[1]), b[2] - h + b[3] * town.PK * town.ks(k) + p3[0] + p3[1])
 	return null
 
 func _every(id: String, ms: float, dt: float) -> int:
@@ -298,6 +299,7 @@ func _rim_map(k: String):
 	return rim_tex[k]
 
 func _rim_spr(k: String, x: float, y_bottom: float, sink: float, flip: bool) -> void:
+	if town.P3D.has(k): return          # the rim maps fit the old art; the pixel3d sprites carry their own rim
 	var m = _rim_map(k)
 	if m == null: return
 	var s: float = town.ks(k)
@@ -536,13 +538,22 @@ func draw_leaf(ci: CanvasItem, f: Dictionary, a: float) -> void:
 ## the pegged hem stay put), more in a gust
 func draw_tent(ci: CanvasItem, b: Array) -> void:
 	var k: String = b[0]
-	var im: Texture2D = town.hx.get(k, town.tex[k])
-	var s: float = town.ks(k)
+	var flip: bool = b.size() > 7 and b[7]
+	# the pixel3d tent has its own mirrored build (lit by the same sun), drawn as it is
+	if flip and town.hx.has("g_tentL"):
+		k = "g_tentL"
+		flip = false
+	var im: Texture2D = town.hx.get(k, town.tex.get(k))
+	var s: float = town.ks(b[0])
 	var w: float = im.get_width() * (1.0 if town.hx.has(k) else s)
 	var h: float = im.get_height() * (1.0 if town.hx.has(k) else s)
+	var lv: String = town.sun_side()
+	if lv != "" and town.lit_tex.has(k + lv): im = town.lit_tex[k + lv]
 	var x := roundf(b[1])
-	var y0: float = b[2] - h + b[3] * town.PK * s
-	var flip: bool = b.size() > 7 and b[7]
+	var y0: float = b[2] - h + b[3] * town.PK * s + town.setdown(k)
+	if town.sh_tex.has(k + lv):
+		var st: Texture2D = town.sh_tex[k + lv]
+		ci.draw_texture_rect(st, Rect2(x - 24.0, y0, st.get_width(), st.get_height()), false)
 	var vr: Rect2 = arena.view_rect().grow(40.0)
 	if x > vr.end.x or x + w < vr.position.x: return
 	var t := Time.get_ticks_msec() / 1000.0
