@@ -20,6 +20,7 @@ const FORGE = (function () {
     glass: ["cream", 6], mullion: ["wood", 3], sill: ["wood", 4],
     iron: ["iron", 3], ironDk: ["iron", 1],
     coal: ["stone", 6], coalHi: ["stone", 7],                                       // read as dark lumps once the hole's shade takes them down
+    hipFace: ["red", 2],
     roofBase: ["red", 0], tile: ["red", 2], tileDk: ["red", 1], tileLt: ["red", 3], fascia: ["wood", 1],
     // the fire: its own light, never shaded (owner's light sources: 불, 용광로)
     fireDeep: ["red", 1], fireRed: ["red", 3], fireOr: ["ochre", 3], fireHot: ["cream", 6], ember: ["red", 4],
@@ -242,9 +243,12 @@ const FORGE = (function () {
       const xl = hipL0 ? x0 + (re - rr) * kL : x0, xr = hipR0 ? x1 - run : x1;
       { const tri = [], quad = (a, b, c, d) => tri.push(...a, ...b, ...c, ...a, ...c, ...d), t3 = (a, b, c) => tri.push(...a, ...b, ...c);
         const e0 = [x0, ye, ze], e1 = [x1, ye, ze], r0 = [xl, yr, zr], r1 = [xr, yr, zr], b0 = [x0, ye, zb], b1 = [x1, ye, zb];
-        quad(e0, e1, r1, r0); t3(e1, b1, r1); quad(b1, b0, r0, r1); quad(e0, b0, b1, e1); t3(e0, r0, b0);
+        quad(e0, e1, r1, r0); t3(e1, b1, r1); quad(b1, b0, r0, r1); quad(e0, b0, b1, e1); if (kL === 0.5) t3(e0, r0, b0);
         const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(tri, 3)); g.computeVertexNormals();
-        add(g, "roofBase", "roof"); }
+        add(g, "roofBase", "roof");
+        if (kL !== 0.5) {   // a long hip: its face is a roof face of its own, tiled red, and it takes the light (see hipFace)
+          const g2 = new THREE.BufferGeometry(); g2.setAttribute("position", new THREE.Float32BufferAttribute([...e0, ...r0, ...b0], 3)); g2.computeVertexNormals();
+          add(g2, "hipFace", "roof"); } }
       box("roof", "fascia", x0, x1, re, re + 4, ze - 6, ze + 1.5);
       if (xr - xl > 2) shell("tiles", "tile", (u, v) => { const th = Math.PI * u; return [xl + (xr - xl) * v, yr + 2.6 * Math.sin(th), zr + 3.0 * Math.cos(th)]; },
             [0, 0.17, 0.33, 0.5, 0.67, 0.83, 1], [0, 1], [0, -2, 0]);

@@ -443,6 +443,14 @@ const comp = new THREE.ShaderMaterial({
         float n = texture2D(pal, vec2(0.5 / 8.0, (r + 0.5) / ${NP}.0)).a * 255.0;
         vec2 tc = vec2((clamp(max(k, 0.0), 0.0, n - 1.0) + 0.5) / 8.0, (r + 0.5) / ${NP}.0);
         if (shadow || aoed) col = texture2D(shadeT, tc).rgb;              // shadow only: cooler, duller, deeper
+        // a hip face (owner 2026-11-07: "왼쪽 삼각형은 빛에 따라 림라이트 왕창"): turned to the sun it lights up hard in
+        // the sun's colour, two steps up when it faces the sun squarely, one when obliquely; turned away it is shadow
+        if (${matNames.indexOf("hipFace") + 1}.0 > 0.5 && mi == ${matNames.indexOf("hipFace") + 1}.0 && !shadow) {
+          float nH = texture2D(pal, vec2(0.5 / 8.0, (r + 0.5) / ${NP}.0)).a * 255.0;
+          float up = Lf > 0.7 ? 3.0 : Lf > 0.45 ? 2.0 : Lf > 0.2 ? 1.0 : 0.0;
+          vec2 uvH = vec2((clamp(k + up, 0.0, nH - 1.0) + 0.5) / 8.0, (r + 0.5) / ${NP}.0);
+          if (up > 0.0) col = lowSun > 0.5 ? texture2D(lowT, uvH).rgb : texture2D(highT, uvH).rgb;
+        }
       }
       // the outline: the dark of the warm ramps (the reference draws stone, plaster and wood alike in dark brown,
       // the roofs in their own deepest red)
