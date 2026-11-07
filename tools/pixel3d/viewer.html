@@ -238,6 +238,12 @@ function twin(c, kind) {
   } else if (kind === "core") {      // the turning edge: richer, a touch warmer-red
     t = c.map(v => v + (v - L) * 0.35);
     t = [t[0] + 6, t[1] - 2, t[2] - 6];
+  } else if (kind === "lightLow") {  // the colour of a low sun (morning, evening): deep orange-gold
+    t = c.map(v => v + (v - L) * 0.3);
+    t = [t[0] + 26, t[1] + 6, t[2] - 30];
+  } else if (kind === "lightHigh") { // the colour of a high sun (midday): pale warm yellow
+    t = c.map(v => v + (L - v) * 0.15);
+    t = [t[0] + 14, t[1] + 12, t[2] - 14];
   } else {                           // sunlit: warmer, a little paler
     t = c.map(v => v + (L - v) * 0.1);
     t = [t[0] + 12, t[1] + 6, t[2] - 10];
@@ -258,15 +264,15 @@ function twinTex(kind) {
   PALETTE.forEach((row, r) => { for (let s = 0; s < 8; s++) { const c = twin(row[Math.min(s, row.length - 1)], kind); d.set([c[0], c[1], c[2], 255], (r * 8 + s) * 4); } });
   const t = new THREE.DataTexture(d, 8, NP, THREE.RGBAFormat); t.magFilter = t.minFilter = THREE.NearestFilter; t.needsUpdate = true; return t;
 }
-const shadeTex = twinTex("shade"), sunTex = twinTex("sun"), coreTex = twinTex("core");
+const shadeTex = twinTex("shade"), sunTex = twinTex("sun"), coreTex = twinTex("core"), lowTex = twinTex("lightLow"), highTex = twinTex("lightHigh");
 
 const comp = new THREE.ShaderMaterial({
   uniforms: { tPat: { value: rtPat.texture }, tId: { value: rtId.texture }, tLit: { value: rtLit.texture }, tFace: { value: rtFace.texture }, tNrm: { value: rtNrm.texture }, tDep: { value: rtDep.texture },
-              sunS: { value: new THREE.Vector2(0, 1) }, pal: { value: palTex }, shadeT: { value: shadeTex }, sunT: { value: sunTex }, coreT: { value: coreTex }, lmax: { value: 1 }, mode: { value: 0 } },
+              sunS: { value: new THREE.Vector2(0, 1) }, pal: { value: palTex }, shadeT: { value: shadeTex }, sunT: { value: sunTex }, coreT: { value: coreTex }, lowT: { value: lowTex }, highT: { value: highTex }, lowSun: { value: 0 }, lmax: { value: 1 }, mode: { value: 0 } },
   vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
   fragmentShader: `
     #include <packing>
-    uniform vec2 sunS; uniform float lmax; uniform sampler2D tPat, tId, tLit, tFace, tNrm, tDep, pal, shadeT, sunT, coreT; uniform int mode; varying vec2 vUv;
+    uniform vec2 sunS; uniform float lmax, lowSun; uniform sampler2D lowT, highT; uniform sampler2D tPat, tId, tLit, tFace, tNrm, tDep, pal, shadeT, sunT, coreT; uniform int mode; varying vec2 vUv;
     const vec2 S = vec2(${RW}.0, ${H}.0);
     vec4 at(sampler2D t, vec2 c) { return texture2D(t, (c + 0.5) / S); }
     float dep(vec2 c) { return unpackRGBAToDepth(at(tDep, c)) * 3999.0; }      // in cells
@@ -389,6 +395,35 @@ const comp = new THREE.ShaderMaterial({
       // not the dark brown; the silhouette and the shadow side keep the dark line
       if (mode == 0 && line == 1 && !sil && !shadow && dot(lo, sunS) > 0.3)
         col = texture2D(shadeT, vec2((clamp(base - 2.0, 0.0, 7.0) + 0.5) / 8.0, (r + 0.5) / ${NP}.0)).rgb;
+      // rim light, the way 3D pixel-art renderers do it (t3ssel8r and the pixelizer tools copying him): the dark
+      // outline stays where it is, and the one cell just inside it, on the side the sun comes from, lights up two
+      // steps, sun-warm; only on lit cells, so it follows the light around the building through the day
+      if (mode == 0 && line == 0 && !shadow && !aoed && mi != ${matNames.indexOf("letter") + 1}.0 && mi != ${matNames.indexOf("glass") + 1}.0) {
+        vec2 ox = vec2(sunS.x > 0.3 ? 1.0 : sunS.x < -0.3 ? -1.0 : 0.0, 0.0), oy = vec2(0.0, sunS.y > 0.25 ? 1.0 : 0.0);
+        bool inner = false;
+        bool tileish = mi == ${matNames.indexOf("tile") + 1}.0 || mi == ${matNames.indexOf("tileDk") + 1}.0 || mi == ${matNames.indexOf("tileLt") + 1}.0 || mi == ${matNames.indexOf("verge") + 1}.0;
+        if (tileish) {   // tiles: only along the roof's own silhouette (each tile lit on its own reads as stripes)
+          if (ox.x != 0.0 && at(tId, c + ox * 2.0).b < 0.5 / 255.0) inner = true;
+          if (oy.y != 0.0 && at(tId, c + oy * 2.0).b < 0.5 / 255.0) inner = true;
+        } else {
+        if (ox.x != 0.0 && abs(at(tId, c + ox).b - id.b) < 0.5 / 255.0 && regionEdge(c + ox, ox, dep(c + ox), id.b)) inner = true;
+        if (oy.y != 0.0 && abs(at(tId, c + oy).b - id.b) < 0.5 / 255.0 && regionEdge(c + oy, oy, dep(c + oy), id.b)) inner = true;
+        }
+        if (inner) {
+          float n = texture2D(pal, vec2(0.5 / 8.0, (r + 0.5) / ${NP}.0)).a * 255.0;
+          // strong light where the light strikes (owner 2026-11-07: "빛이 강하게 들어오는 곳에 강한 빛을 깔아달라는
+          //거야...빛 색상에 맞게"): three steps up (the ramp's top when that is not clearly brighter), in the sun's
+          // own colour for the hour: orange-gold low in the morning and evening, pale warm yellow at midday
+          float kr = n - 1.0;   // the brightest of its own ramp
+          vec2 uv = vec2((kr + 0.5) / 8.0, (r + 0.5) / ${NP}.0);
+          vec3 rc = lowSun > 0.5 ? texture2D(lowT, uv).rgb : texture2D(highT, uv).rgb;
+          if (dot(rc - col, vec3(0.3, 0.59, 0.11)) < 0.14) {
+            uv.x = (n - 1.0 + 0.5) / 8.0;
+            rc = lowSun > 0.5 ? texture2D(lowT, uv).rgb : texture2D(highT, uv).rgb;
+          }
+          col = rc;
+        }
+      }
       if (mode == 2) col = vec3(st == 1.0 ? 0.95 : st == 0.0 ? 0.7 : st == -1.0 ? 0.45 : 0.22) * (occ >= 3.0 ? 0.75 : 1.0) + (hi == 1 ? 0.15 : 0.0);
       gl_FragColor = vec4(col, 1.0);
     }`,
@@ -414,7 +449,7 @@ function render() {
   const h = parseFloat(hourEl.value), hh = Math.floor(h), mm = Math.round((h - hh) * 60);
   document.getElementById("hour-v").textContent = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
   sun.position.copy(center).addScaledVector(sunDir(h), 1500);
-  { const d = sunDir(h); comp.uniforms.sunS.value.set(d.x, d.y + 0.25 * d.z);
+  { const d = sunDir(h); comp.uniforms.sunS.value.set(d.x, d.y + 0.25 * d.z); comp.uniforms.lowSun.value = d.y < 0.8 ? 1 : 0;
     // the best-lit face this hour: front wall, roof slopes, hips, gable verges (the building's own planes)
     const N = [[0, 0, 1], [0, 0.57, 0.82], [-0.82, 0.57, 0], [0.82, 0.57, 0], [-0.7, 0.7, 0.15], [0.7, 0.7, 0.15], [0, 1, 0]];
     comp.uniforms.lmax.value = Math.max(...N.map(n => { const l = Math.hypot(...n); return (n[0] * d.x + n[1] * d.y + n[2] * d.z) / l; })); }
