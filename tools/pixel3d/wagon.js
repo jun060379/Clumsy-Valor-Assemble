@@ -5,16 +5,17 @@
 // toward the viewer.
 
 const WAGON = (function () {
-  const W = 280, H = 224, B0 = 218, K = 0.12, TOP = 4;
+  const W = 280, H = 236, B0 = 218, K = 0.12, TOP = 16;
   const Y = (row, z) => B0 + K * z - row;
   const RAMP = { red: 0, wood: 1, ochre: 2, cream: 3, leaf: 4, green: 5, blue: 6, violet: 7, stone: 8, iron: 9 };
   const MAT = {
     sand: ["ochre", 5],
     canvas: ["cream", 5], rope: ["ochre", 3], barrel: ["wood", 5], barrelTop: ["wood", 6], hoopIron: ["iron", 3],
     crate: ["wood", 6], crateDk: ["wood", 4], sack: ["ochre", 5],
+    roofBase: ["red", 0], tile: ["red", 2], tileDk: ["red", 1], tileLt: ["red", 3], fascia: ["wood", 1], gable: ["wood", 5],
     plank: ["wood", 5], post: ["wood", 4], rim: ["wood", 6], rail: ["wood", 6], cap: ["iron", 3], rivet: ["iron", 2], tyre: ["wood", 3], hub: ["wood", 3], spoke: ["wood", 4], shaft: ["wood", 5],
   };
-  const LAYERS = ["ground", "bed", "load", "wheels"];
+  const LAYERS = ["ground", "bed", "load", "roof", "wheels"];
 
   function build(THREE) {
     const parts = [];
@@ -37,28 +38,39 @@ const WAGON = (function () {
     cube("bed", "shaft", 214, 272, R(152), R(138), ZM - 4, ZM + 4);
     cube("bed", "post", 264, 278, R(156), R(134), ZM - 5, ZM + 5);
 
-    // ---- the load under a tarp (owner 2026-11-07: "천이 왤케 미묘하지"): the cloth is thrown over real things - crates and
-    // bales of different heights - and takes their shape: a height field drawn over the stack and softened, falling
-    // to the bed between and past them and hanging a hand's breadth over the near side; ropes across it follow it
-    { const STACK = [[16, 58, -44, -8, 50], [52, 100, -42, -6, 60], [62, 92, -32, -16, 70], [98, 148, -44, -8, 42], [104, 132, -36, -18, 52]];
-      const X0 = 10, X1 = 154, NX = 144, Zs = Z0 - 1, Ze = Z1 + 2, NZ = 56;
-      const raw = (x, z) => { let h = 0; for (const [a, b, c, d, hh] of STACK) if (x >= a && x <= b && z >= c && z <= d) h = Math.max(h, hh); return h; };
-      const grid = []; for (let ix = 0; ix <= NX; ix++) { grid.push([]); for (let iz = 0; iz <= NZ; iz++) grid[ix].push(raw(X0 + (X1 - X0) * ix / NX, Zs + (Ze - Zs) * iz / NZ)); }
-      const blur = (g, rx, rz) => g.map((col, ix) => col.map((_, iz) => { let sum = 0, n = 0;
-        for (let dx = -rx; dx <= rx; dx++) for (let dz = -rz; dz <= rz; dz++) { const a = g[ix + dx], v = a && a[iz + dz]; if (v !== undefined) { sum += v; n++; } }
-        return sum / n; }));
-      let H = blur(blur(grid, 4, 3), 4, 3);
-      const zAt = (iz) => Zs + (Ze - Zs) * iz / NZ, xAt = (ix) => X0 + (X1 - X0) * ix / NX;
-      const Pt = (ix, iz) => { const z = zAt(iz); let y = H[ix][iz] * 1.08;
-        if (z > Z1 - 1) y = Math.min(y, 2);                               // the hem lies on the near rail
-        return [xAt(ix), R(BT) + y + 0.3, z]; };
-      const t = [], q = (a, b, c, d) => t.push(...a, ...b, ...c, ...a, ...c, ...d);
-      for (let ix = 0; ix < NX; ix++) for (let iz = 0; iz < NZ; iz++) q(Pt(ix, iz), Pt(ix, iz + 1), Pt(ix + 1, iz + 1), Pt(ix + 1, iz));
-      const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(t, 3)); g.computeVertexNormals();
-      add(g, "canvas", "load");
-      for (const x of [34, 80, 124]) { const ix = Math.round((x - X0) / (X1 - X0) * NX), pts = [];
-        for (let iz = 0; iz <= NZ; iz += 2) { const [px, py, pz] = Pt(ix, iz); pts.push(new THREE.Vector3(px, py + 1.2, pz)); }
-        add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 60, 1.2, 5, false), "rope", "load"); } }
+    // (owner 2026-11-07: "아 씁. 걍 천을 빼고 지붕으로 덮을까") no tarp: the load stands open - crates and bales stacked
+    // at the back - under a roof on four corner posts, a gable of red tiles along the cart like the town's roofs
+    for (const [a, b, c, d, hh] of [[16, 58, -44, -8, 40], [52, 100, -42, -6, 48], [62, 92, -32, -16, 66], [98, 148, -44, -8, 36], [104, 132, -36, -18, 52]]) {
+      cube("load", "crate", a + 0.6, b - 0.6, R(BT), R(BT) + hh, c, d);
+      cube("load", "crateDk", a + 0.6, b - 0.6, R(BT) + hh / 2 - 1.5, R(BT) + hh / 2 + 1.5, d, d + 0.6);   // a batten across
+      for (const x of [a + 2.5, b - 5]) cube("load", "crateDk", x, x + 2.5, R(BT), R(BT) + hh, d, d + 0.6); }
+    { const RX0 = 4, RX1 = 232, EAVE = R(BT) + 92, RIDGE = R(BT) + 118, ZE = 36;
+      for (const x of [12, 220]) for (const z of [Z1 - 3, Z0 + 3]) cube("roof", "post", x - 3, x + 3, R(BT), EAVE, z - 3, z + 3);   // corner posts
+      for (const z of [Z1 - 3, Z0 + 3]) cube("roof", "post", 9, 223, EAVE - 6, EAVE, z - 3, z + 3);                                 // plates
+      // the two slopes: a board deck, tiles laid on it in courses
+      for (const sgn of [1, -1]) {
+        const e = new THREE.Vector3(0, EAVE, ZM + sgn * ZE), r = new THREE.Vector3(0, RIDGE, ZM);
+        const slope = r.clone().sub(e), len = slope.length(), n = new THREE.Vector3(0, slope.z * -sgn, 0).add(new THREE.Vector3(0, 0, 0));
+        const nrm = new THREE.Vector3(0, -slope.z, slope.y).normalize().multiplyScalar(sgn < 0 ? -1 : 1); if (nrm.y < 0) nrm.negate();
+        const at = (x, t, off) => new THREE.Vector3(x, e.y + slope.y * t, e.z + slope.z * t).addScaledVector(nrm, off);
+        const quad = (mat, pts) => { const tt = [], q = (a, b, c, d) => tt.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z, a.x, a.y, a.z, c.x, c.y, c.z, d.x, d.y, d.z);
+          q(...pts); q(pts[3], pts[2], pts[1], pts[0]);
+          const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(tt, 3)); g.computeVertexNormals(); add(g, mat, "roof"); };
+        quad("roofBase", [at(RX0, 0, 0), at(RX1, 0, 0), at(RX1, 1, 0), at(RX0, 1, 0)]);
+        const NC = 4;
+        for (let c = 0; c < NC; c++) for (let x = RX0 + (c % 2 ? -14 : 0), k = 0; x < RX1; x += 28, k++) {
+          const x0 = Math.max(x + 0.8, RX0), x1 = Math.min(x + 27.2, RX1); if (x1 - x0 < 4) continue;
+          const t0 = c / NC, t1 = Math.min(1, (c + 1) / NC + 0.06), hh = Math.abs(Math.sin((x + 7) * 12.9 + c * 78.2) * 43758.5) % 1;
+          const mat = hh < 0.12 ? "tileDk" : hh > 0.92 ? "tileLt" : "tile";
+          quad(mat, [at(x0, t0, 2.6), at(x1, t0, 2.6), at(x1, t1, 0.8), at(x0, t1, 0.8)]);
+          quad(mat, [at(x0, t0, 0.2), at(x1, t0, 0.2), at(x1, t0, 2.6), at(x0, t0, 2.6)]); }
+        cube("roof", "fascia", RX0, RX1, EAVE - 2.5, EAVE + 1.5, e.z - (sgn > 0 ? 0 : 2), e.z + (sgn > 0 ? 2 : 0));
+      }
+      // the gable ends: boards closing the triangle under each end of the roof
+      for (const x of [RX0 + 6, RX1 - 6]) { const sh = new THREE.Shape([new THREE.Vector2(ZM - ZE + 6, EAVE), new THREE.Vector2(ZM + ZE - 6, EAVE), new THREE.Vector2(ZM, RIDGE - 4)]);
+        const g = new THREE.ExtrudeGeometry(sh, { depth: 2, bevelEnabled: false }); const m = add(g, "gable", "roof"); m.rotation.y = -Math.PI / 2; m.position.x = x; }
+      { const g = new THREE.CylinderGeometry(3.2, 3.2, RX1 - RX0, 10); const m = add(g, "tile", "roof"); m.rotation.z = Math.PI / 2; m.position.set((RX0 + RX1) / 2, RIDGE + 1.5, ZM); }   // the ridge roll
+    }
     // ---- up front: two barrels, a crate with a sack on it
     const barrel = (x, z, h, r) => { const prof = []; for (let k = 0; k <= 10; k++) { const t2 = k / 10; prof.push(new THREE.Vector2(r * (0.86 + 0.14 * Math.sin(Math.PI * t2)), h * t2)); }
       const g = new THREE.LatheGeometry(prof, 16); const m = add(g, "barrel", "load"); m.position.set(x, R(BT), z);
