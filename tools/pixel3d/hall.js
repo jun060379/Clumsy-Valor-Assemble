@@ -325,12 +325,29 @@ const HALL = (function () {
       const xe = 218 + s * 112, re = 28 + 112;
       bar("verge", "verge", 218, 28 + 6, xe, re + 6, 12, ZV0, ZV1);
       bar("verge", "fascia", 218, 28 + 14, xe, re + 14, 4, ZV0 - 1, ZV1 - 0.5);
-      // the gable roof slope behind the verge
-      const a = [218, Y(28, ZV1), ZV0], b = [xe, Y(re, ZV1), ZV0];
-      const q = s < 0
-        ? [a, b, [b[0], b[1], -40], [a[0], a[1], -40], [a[0], a[1] - 6, ZV0], [b[0], b[1] - 6, ZV0], [b[0], b[1] - 6, -40], [a[0], a[1] - 6, -40]]
-        : [b, a, [a[0], a[1], -40], [b[0], b[1], -40], [b[0], b[1] - 6, ZV0], [a[0], a[1] - 6, ZV0], [a[0], a[1] - 6, -40], [b[0], b[1] - 6, -40]];
-      hexa("verge", "tile", q);
+      // the verge band itself: a lit top lip and the tile joints crossing it every few cells (short strokes, not a chain)
+      bar("verge", "tileLt", 218 + s * 2, 28 + 3, xe, re + 1, 2, ZV1 - 0.5, ZV1 + 0.2);
+      for (let i = 1, n = 14; i < n; i++) {
+        const t = i / n, px = 218 + (xe - 218) * t, pr = 28 + (re - 28) * t;
+        bar("verge", "roofBase", px, pr + 3, px + s * 3, pr + 10, 2, ZV1 - 0.5, ZV1 + 0.4);
+      }
+      // the gable roof behind the verge (owner 2026-11-07: "윗지붕도 너무 매끈"): laid in rows of tiles running down
+      // the slope, back to the main ridge; each row its own piece with a joint, its front edge lifted so it catches
+      // the light, rows a shade apart now and then
+      hexa("verge", "roofBase", (() => { const a = [218, Y(28, ZV1) - 1, ZV0], b = [xe, Y(re, ZV1) - 1, ZV0];
+        return s < 0 ? [a, b, [b[0], b[1], -40], [a[0], a[1], -40], [a[0], a[1] - 6, ZV0], [b[0], b[1] - 6, ZV0], [b[0], b[1] - 6, -40], [a[0], a[1] - 6, -40]]
+                     : [b, a, [a[0], a[1], -40], [b[0], b[1], -40], [b[0], b[1] - 6, ZV0], [a[0], a[1] - 6, ZV0], [a[0], a[1] - 6, -40], [b[0], b[1] - 6, -40]]; })());
+      for (let k = 0, z0 = ZV0; z0 > -40; k++, z0 -= 9) {
+        const z1 = Math.max(-40, z0 - 8);
+        const hh = Math.abs(Math.sin((k + 5) * 7.77 + s * 1.9) * 43758.5453) % 1;
+        const m = hh < 0.25 ? "tileDk" : hh > 0.85 ? "tileLt" : "tile";
+        const ya = Y(28, ZV1), yb = Y(re, ZV1);
+        const top = (x, y, z, lift) => [x, y + lift, z];
+        const A0 = top(218, ya, z0, 0.9), B0 = top(xe, yb, z0, 0.9), A1 = top(218, ya, z1, 0), B1 = top(xe, yb, z1, 0);
+        const dn = (p) => [p[0], p[1] - 3, p[2]];
+        const q = s < 0 ? [A0, B0, B1, A1, dn(A0), dn(B0), dn(B1), dn(A1)] : [B0, A0, A1, B1, dn(B0), dn(A0), dn(A1), dn(B1)];
+        hexa("verge", m, q);
+      }
     }
     // the finial on the apex
     { const g = new THREE.CylinderGeometry(1.6, 1.6, 26, 8); const m = add(g, "finial", "finial"); m.position.set(218, Y(18, 18), 18); }
