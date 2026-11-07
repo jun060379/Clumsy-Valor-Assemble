@@ -178,9 +178,7 @@ const COTTAGE = (function () {
       // 벽돌 넣고 그 위에 문 달라고")
     });
     for (const [a, b] of [[12, 22], [110, 120]]) box("timber", "timber", a, b, vU((a + b) / 2) - 1, 140, ZG - 2, ZG + 2.5);
-    box("timber", "timber", 22, 110, 72, 80, ZG - 2, ZG + 2.5);                      // the beam
-    for (const x of [36, 88]) box("timber", "timber", x, x + 8, 68, 82, ZG - 1, ZG + 4);   // corbel blocks at its ends
-    box("timber", "timber", 61, 69, AR + 12, 72, ZG - 2, ZG + 2);                      // the king post
+    // (no beam and king post over the door - the ㅗ of timber: owner 2026-11-07, "문 위 나무 ㅗ 모양 된거 그냥 빼기")
     // the door: planks in a round-topped arch of stone, a long iron strap and a handle
     { const outer = archPts(40, 90, 86, 140), inner = archPts(47, 83, 93, 140);
       slab("door", "arch", outer, ZG + 0.5, ZG + 2.6, [inner.slice().reverse()]);
