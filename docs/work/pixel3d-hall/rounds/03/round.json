@@ -1,0 +1,47 @@
+{
+ "round": 3,
+ "date": "2026-11-07",
+ "note": "dark-brown outlines (roof: deepest red), oblique also to the west so the sun side faces show, letters not outlined",
+ "files": [
+  "r3_hall.png"
+ ],
+ "refs": [
+  "assets/town/hx/g_cottage.png",
+  "assets/town/hx/g_store.png",
+  "assets/town/hx/g_well.png"
+ ],
+ "metrics": {
+  "files": {
+   "/home/claude/clumsy-valor-assemble/docs/work/pixel3d-hall/rounds/03/r3_hall.png": {
+    "orphans": 0,
+    "speckle": 0,
+    "outline_gaps": 0,
+    "thick_line": 791,
+    "semi_alpha": 0,
+    "colours": 30,
+    "off_palette": 3,
+    "size": "864x562"
+   }
+  },
+  "total": {
+   "orphans": 0,
+   "speckle": 0,
+   "outline_gaps": 0,
+   "thick_line": 791,
+   "semi_alpha": 0,
+   "off_palette": 3
+  }
+ },
+ "faults": 794,
+ "scores": {
+  "A": {
+   "ai": 6.0,
+   "fit": 4.0
+  },
+  "B": {
+   "ai": 6.0,
+   "fit": 5.0
+  },
+  "mean": 5.25
+ }
+}

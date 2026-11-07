@@ -14,11 +14,11 @@ const HALL = (function () {
   const MAT = {
     sand:    ["ochre", 5], stone: ["cream", 2], stoneLt: ["cream", 3], plaster: ["cream", 5],
     timber:  ["wood", 5],  frame: ["wood", 3], glass: ["ochre", 4], mullion: ["wood", 3],
-    roofBase: ["red", 0], tile: ["red", 3], verge: ["red", 3], fascia: ["wood", 2],
+    roofBase: ["red", 0], tile: ["red", 2], verge: ["red", 2], fascia: ["wood", 1],
     chimney: ["ochre", 1], chimCap: ["ochre", 4], chimTop: ["cream", 4],
     door:    ["wood", 3], doorGap: ["wood", 1], iron: ["iron", 2], sign: ["wood", 4], signRim: ["wood", 2],
     letter:  ["cream", 7], shield: ["cream", 3], finial: ["wood", 4], ball: ["ochre", 6],
-    glassHi: ["cream", 7], mortar: ["ochre", 0], nail: ["iron", 1],
+    glassHi: ["cream", 7], mortar: ["ochre", 0], nail: ["iron", 1], shutter: ["wood", 3],
   };
   // the layers (the 3D view pulls them apart in this order, back to front)
   const LAYERS = ["ground", "plinth", "walls", "timber", "windows", "roof", "tiles", "chimneys", "gable", "gable timber",
@@ -78,8 +78,7 @@ const HALL = (function () {
     const mirror = (x) => W - x;
 
     // ---- ground and plinth
-    { const g = new THREE.PlaneGeometry(W, 54); g.rotateX(-Math.PI / 2);
-      const m = add(g, "sand", "ground"); m.position.set(W / 2, 0, 4 + 27); }
+    // (no ground strip: the town draws its own ground under the building)
     for (let x = 20; x < 416; x += 25) box("plinth", "stone", x, Math.min(x + 24, 416), 266, 282, -4, 5);
 
     // ---- the wings: plaster body, timber frame, windows
@@ -99,6 +98,8 @@ const HALL = (function () {
         bar("timber", "timber", fx(a), 230, fx(c), 211, 4, -2, 1.2);
         bar("timber", "timber", fx(b), 230, fx(c), 211, 4, -2, 1.2);
         for (const [r0, r1] of [[179, 204], [225, 250]]) window_(fx(c) - 11, fx(c) + 11, r0, r1, 0);
+        // the ground-floor windows of the wings have shutters, swung open against the wall
+        for (const [sx0, sx1] of [[fx(c) - 17, fx(c) - 12], [fx(c) + 12, fx(c) + 17]]) box("windows", "shutter", sx0, sx1, 231, 250, 0, 1.2);
       }
     }
     function window_(x0, x1, r0, r1, z) {
@@ -248,11 +249,8 @@ const HALL = (function () {
     const ZV0 = 14, ZV1 = 22;
     for (const s of [-1, 1]) {
       const xe = 218 + s * 112, re = 28 + 112 * 1.07;
-      for (let t = 0; t < 1; t += 0.085) {                                   // the verge tiles, one after another
-        const t1 = Math.min(1, t + 0.078);
-        bar("verge", "verge", 218 + (xe - 218) * t, 34 + (re - 28) * t, 218 + (xe - 218) * t1, 34 + (re - 28) * t1, 12, ZV0, ZV1);
-      }
-      bar("verge", "fascia", 218, 28 + 13, xe, re + 13, 3, ZV0 - 1, ZV1 - 1);
+      bar("verge", "verge", 218, 28 + 6, xe, re + 6, 12, ZV0, ZV1);
+      bar("verge", "fascia", 218, 28 + 14, xe, re + 14, 4, ZV0 - 1, ZV1 - 0.5);
       // the gable roof slope behind the verge
       const a = [218, Y(28, ZV1), ZV0], b = [xe, Y(re, ZV1), ZV0];
       const q = s < 0
