@@ -124,14 +124,16 @@ const TENT = (function () {
     tri("canvas", "canvasDk", [A, B, [101, 10, -60], [46, 10, -48]]); // the far slope, behind the ridge (seen only as its top edge)
     // the door: a dark slit down the door end beside the front pole, its flap folded back
     const E = onFace(A, L, F);
-    // the door (owner 2026-11-07: "문이 뭔지 모르시나?"): the end's canvas parted down the middle from near the top and
-    // tied back - an opening shaped like an upturned V, the dark of the inside showing to the ground, each half of the
-    // canvas folded back on itself and lashed at the side, a cord across where it is tied
-    tri("door", "doorGap", [E(36, 30), E(25, 89), E(45, 89)], 0.4);              // the opening
-    tri("door", "canvasDk", [E(36, 30), E(31, 62), E(25, 89), E(20, 89)], 0.8);    // the left half folded back
-    tri("door", "canvasDk", [E(36, 30), E(41, 62), E(45, 89), E(45, 60)], 0.8);    // the right half folded back against the pole
-    for (const [x0, x1] of [[23, 32], [40, 46]]) tri("door", "rope", [E(x0, 62), E(x1, 62), E(x1, 64), E(x0, 64)], 1.1);   // the ties
-    // a seam of shade down the long side where the canvas folds over the far end's pole
+    // the door, as the reference has it (owner 2026-11-07: "문이 뭔지 모르시나?"): the front pole stands in the middle of
+    // the doorway; the canvas is parted either side of it from two fifths of the way up and drawn back, so the opening
+    // is an upturned V around the pole, the dark of the inside showing to the ground, a light fold along each edge
+    const S = onFace(A, F, M);
+    tri("door", "doorGap", [E(45, 40), E(30, 89), E(45, 89)], 0.5);              // left of the pole (on the end)
+    tri("door", "doorGap", [S(47, 40), S(47, 89), S(62, 89)], 0.5);              // right of the pole (on the side)
+    tri("door", "canvas", [E(45, 40), E(28, 89), E(30, 89), E(45, 44)], 0.9);    // the folds along the edges
+    tri("door", "canvas", [S(47, 40), S(47, 44), S(62, 89), S(64, 89)], 0.9);
+    // a stake driven in by the door, as in the reference
+    { const g = new THREE.CylinderGeometry(2.6, 2.8, 20, 8); const m = add(g, "pole", "poles"); m.position.set(76, Y(84, 16), 16); m.rotation.z = -0.08; }
     // ---- the poles: the front pole down the door end's edge, crossed poles at both ridge ends, the ridge pole
     bar("poles", "pole", 46, 6, 46, 89, 3, 10, 12.5);
     for (const [x, z] of [[46, 12], [101, -26]]) {
