@@ -10,7 +10,7 @@ const ANVIL = (function () {
   const MAT = {
     sand: ["ochre", 5],
     block: ["wood", 5], grain: ["wood", 3], blockTop: ["wood", 6],
-    iron: ["iron", 4], face: ["iron", 5], ironDk: ["iron", 3],
+    iron: ["iron", 4], face: ["iron", 5], hole: ["iron", 1], bark: ["wood", 2],
   };
   const LAYERS = ["ground", "block", "anvil"];
 
@@ -31,11 +31,27 @@ const ANVIL = (function () {
     // point at the left; the steel face a separate plate on top
     const ZA0 = -19, ZA1 = -5;
     const prof = [[1.5, 33.6], [9, 33.2], [12, 34], [40, 34], [43, 34], [43, 30.5], [40, 29.5], [35.5, 27.5], [33.5, 25],
-      [34, 22.5], [37.5, 21], [38, 19], [7, 19], [7.5, 21], [11, 22.5], [12.5, 25], [11.5, 27.5], [8, 29.8], [4, 31.6]];
+      [34, 22.5], [37.5, 21], [38, 19], [29, 19], [27.5, 20.6], [22.5, 21.2], [17.5, 20.6], [16, 19], [7, 19], [7.5, 21], [11, 22.5], [12.5, 25], [11.5, 27.5], [8, 29.8], [4, 31.6]];
     { const sh = new THREE.Shape(prof.map(([x, y]) => new THREE.Vector2(x, y)));
       const g = new THREE.ExtrudeGeometry(sh, { depth: ZA1 - ZA0, bevelEnabled: false, curveSegments: 8 });
       const m = add(g, "iron", "anvil"); m.position.z = ZA0; }
     cube("anvil", "face", 12, 40, 34, 35.4, ZA0 + 0.5, ZA1 - 0.5);                   // the steel face
+    // ---- the texture (owner 2026-11-07: "요건 살짝 텍스쳐감 끌어올리자"), carried by shape, never by speckle:
+    // on the anvil the table - a step down between face and horn - the hardy hole and pritchel hole in the face, a
+    // worn lighter lip along the face's front edge, the feet parted by an arch; on the block the grain as grooves of
+    // uneven length that wander a little, a check (a dry crack) down from the top, a knot, bark left on the corners,
+    // and the end grain's rings on the sawn top
+    cube("anvil", "iron", 9.5, 12.5, 33.2, 34.3, ZA0 + 1.5, ZA1 - 1.5);                // the table, a step below the face
+    cube("anvil", "hole", 32, 34.5, 35.2, 35.6, -14, -11.5);                          // the hardy hole
+    { const g = new THREE.CylinderGeometry(0.9, 0.9, 0.5, 8); const m = add(g, "hole", "anvil"); m.position.set(36.5, 35.4, -12); }
+
+    const groove = (x, y0, y1, w = 0.9) => cube("block", "grain", x, x + w, y0, y1, -0.4, 0.3);
+    for (const [x, y0, y1] of [[9, 3, 12], [9.6, 12, 17], [14, 1, 9], [13.4, 9, 18], [18, 5, 15], [23, 1, 7], [22.4, 7, 16],
+      [27, 2, 18], [31, 4, 11], [31.6, 11, 17], [35, 1, 14]]) groove(x, y0, y1);
+    cube("block", "grain", 19.5, 21, 12, 19.2, -0.6, 0.4);                            // the check, wider at the top
+    cube("block", "grain", 20, 20.8, 7, 12, -0.6, 0.4);
+    cube("block", "grain", 28.5, 31, 7.5, 9, -0.4, 0.3);                               // a knot
+    for (const x0 of [5, 38.6]) cube("block", "bark", x0, x0 + 1.4, 0, 19, -24.4, 0.4);   // bark left on the corners
     return parts;
   }
   return { W, H, B0, K, TOP, Y, RAMP, MAT, LAYERS, build };
