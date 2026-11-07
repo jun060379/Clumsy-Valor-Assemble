@@ -109,45 +109,51 @@ const FORGE = (function () {
     box("back wall", "plankDk", 100, 284, 74, 145, -30, -16);
     for (let x = 101; x < 283; x += 7) box("back wall", "plank", x, Math.min(x + 6, 283), 76, 145, -16, -15.2);
 
-    // ---- the furnace: a wide stone body under the chimney, its shoulders stepping in to the stack
+    // ---- the forge hearth (owner 2026-11-07: "화덕 형태 좀 다듬기. 래퍼런스 찾아서"), laid out like a smith's masonry
+    // forge (FAO, "the blacksmith's forge": a raised hearth about a metre high, the fire on it under a hood that
+    // gathers the smoke into the chimney): a waist-high stone hearth with a lip, an open fire bay between two piers
+    // under a shallow stone arch, the hood above narrowing in straight slopes to the stack. All of it centred on the
+    // stack (x 54.5); a coal hole under the lip.
     const ZF = 17;                                                                   // in front of the roof's eave: the roof runs behind the stack
-    const fspan = (r) => r < 72 ? [35, 74] : r < 86 ? [35 - (r - 72) * 0.8, 74 + (r - 72) * 1.0] : r < 104 ? [24, 88 + (r - 86) * 0.6] : [19, 100];
-    // the fire mouth: an arch in the furnace, the hearth sill under it, the ash pit below
-    const mouth = archPts(46, 88, 92, 122);
-    slab("furnace", "mortar2", [[19, 145], [19, 104], [24, 104], [24, 86], [35, 72], [74, 72], [88, 86], [99, 104], [100, 145]], -30, ZF - 7,
-         [mouth.slice().reverse(), [[57, 145], [57, 131], [83, 131], [83, 145]].reverse()]);
-    const inMouth = (x0, x1, r0, r1) => x1 > 44 && x0 < 90 && r1 > 90 && r0 < 123;
-    const pit = (x0, x1, r0, r1) => x1 > 56 && x0 < 84 && r1 > 131;
-    // the courses are cut round the voussoir ring (radius 27 about x 67, row 113), the jambs, the sill and the pit
+    const CX = 54.5;
+    const hoodL = (r) => 16 + (94 - r) * 19 / 22, hoodR = (r) => 93 - (94 - r) * 19 / 22;   // 16..93 at row 94 -> 35..74 at row 72
+    const fspan = (r) => r < 94 ? [hoodL(r), hoodR(r)] : [16, 93];
+    // the arch over the bay: a segment of a circle (centre row 140), springing at row 100 from the piers' inner faces
+    const AR = 140, RI = Math.hypot(CX - 26, AR - 100), RO = RI + 6;
+    const arcPts = (rad, a0, a1, n) => { const p = []; for (let t = 0; t <= n; t++) { const a = a0 + (a1 - a0) * t / n; p.push([CX + rad * Math.cos(a), AR - rad * Math.sin(a)]); } return p; };
+    const aL = Math.atan2(AR - 100, 26 - CX), aR = Math.atan2(AR - 100, 83 - CX);   // the springing angles
+    const bay = [[26, 118], [83, 118], ...arcPts(RI, aR, aL, 16)];
+    slab("furnace", "mortar2", [[16, 145], [16, 94], [35, 72], [74, 72], [93, 94], [93, 145]], -30, ZF - 7,
+         [bay.slice().reverse(), [[42, 145], [42, 130], [67, 130], [67, 145]].reverse()]);
     const fHoles = (r0, r1) => {
-      const H = [], rr = Math.min(Math.max(113, r0), r1);
-      if (r1 >= 86 && r0 <= 113) { const hw = Math.sqrt(Math.max(0, 27 * 27 - (113 - rr) * (113 - rr))); H.push([67 - hw, 67 + hw]); }
-      if (r1 > 113 && r0 < 122) H.push([40, 94]);
-      if (r1 >= 122 && r0 < 127) H.push([38, 96]);
-      if (r1 >= 127) H.push([56, 84]);
+      const H = [];
+      if (r1 >= 86 && r0 < 100) { const rr = Math.min(r1, 100), hw = Math.sqrt(Math.max(0, RO * RO - (AR - rr) * (AR - rr))); H.push([CX - hw, CX + hw]); }
+      if (r1 >= 100 && r0 < 118) H.push([26, 83]);
+      if (r1 >= 117 && r0 < 123) H.push([14, 95]);                                 // the lip
+      if (r1 >= 126) H.push([42, 67]);                                             // the coal hole and its lintel
       return H.map(([a, b]) => [Math.floor(a), Math.ceil(b)]); };
     courses("furnace", rowsFrom(72, 145, 7), fspan, ZF, { w: 14, gx: 35, gr: 16, holes: fHoles });
-    // the voussoirs round the mouth
-    { const cx = 67, sp = 113, ri = 21, ro = 27, n = 7;
-      slab("furnace", "mortar2", archPts(40, 94, 86, 122), ZF - 2, ZF + 0.5, [mouth.slice().reverse()]);
+    // the hood's sloped edges: a weathering stone along each slope, catching the light
+    bar("furnace", "stone", 16, 94, 35, 72, 3, ZF - 1.5, ZF + 1);
+    bar("furnace", "stone", 93, 94, 74, 72, 3, ZF - 1.5, ZF + 1);
+    // the arch: nine voussoirs, the key in the middle a little proud
+    { const n = 9;
+      slab("furnace", "mortar2", [...arcPts(RO + 0.5, aL, aR, 16), ...arcPts(RI, aR, aL, 16)], ZF - 2, ZF + 0.5);
       for (let i = 0; i < n; i++) {
-        const a0 = Math.PI * (i + 0.08) / n, a1 = Math.PI * (i + 0.92) / n, pts = [];
-        for (let t = 0; t <= 4; t++) { const a = a0 + (a1 - a0) * t / 4; pts.push([cx + ro * Math.cos(a), sp - ro * Math.sin(a)]); }
-        for (let t = 4; t >= 0; t--) { const a = a0 + (a1 - a0) * t / 4; pts.push([cx + ri * Math.cos(a), sp - ri * Math.sin(a)]); }
-        slab("furnace", i === 3 ? "stoneLt" : "stone", pts, ZF - 1.2, ZF + 1.4);
+        const a0 = aL + (aR - aL) * (i + 0.08) / n, a1 = aL + (aR - aL) * (i + 0.92) / n;
+        slab("furnace", "stone", [...arcPts(RO, a0, a1, 3), ...arcPts(RI, a1, a0, 3)], ZF - 1.2, ZF + (i === 4 ? 2.2 : 1.4));
       }
-      for (const [x0, x1] of [[40, 46], [88, 94]]) { box("furnace", "stone", x0, x1, 113, 122, ZF - 1.2, ZF + 1.4); }
     }
-    // inside the mouth: sooty back, the fire on its bed of embers (its own light)
-    slab("furnace", "soot", mouth, -14, -12);
-    // (no fire drawn here: owner 2026-11-07, "불 텍스쳐는 뺄거지? 나중에 fx로 충당하고?" - the flames come later as
-    // an effect laid in the mouth, centre x 67, floor row 122)
-    // the hearth sill: a long stone ledge standing out under the mouth
-    box("furnace", "stoneLt", 38, 96, 122, 125, ZF - 2, ZF + 6);
-    box("furnace", "plinthLo", 38, 96, 125, 126, ZF - 2, ZF + 5.5);
-    // the ash pit: a dark low opening under the sill with a brick lintel
-    box("furnace", "soot", 57, 83, 131, 145, -8, -6);
-    for (let x = 56; x < 84; x += 7) box("furnace", "brick", x, Math.min(x + 6, 84), 127, 131, ZF - 1.5, ZF);
+    // inside the bay: the sooty back of the hood and the fire bed on the hearth (the fire comes later as an effect -
+    // owner 2026-11-07, "불 텍스쳐는 뺄거지? 나중에 fx로 충당하고?" - on the bed, centre x 54.5, row 118)
+    slab("furnace", "soot", bay, -14, -12);
+    box("furnace", "soot", 26, 83, 116, 118, -12, ZF - 3);                           // the fire bed (its top recedes)
+    // the hearth lip: a long stone slab standing out over the hearth
+    box("furnace", "stone", 14, 95, 118, 122, ZF - 3, ZF + 4);
+    box("furnace", "plinthHi", 15, 94, 118, 119, ZF + 3.4, ZF + 4.2);
+    // the coal hole under the lip, a brick lintel over it
+    box("furnace", "soot", 42, 67, 130, 145, -8, -6);
+    for (let x = 41; x < 68; x += 7) box("furnace", "brick", x, Math.min(x + 6, 68), 126, 130, ZF - 1.5, ZF);
 
     // ---- the chimney stack, a little narrower, with a capstone course
     const ZC = 17;
