@@ -1,7 +1,6 @@
 // The training yard's fence built in code (owner 2026-11-07: 작은 소품). The reference sprite (assets/town/g_yard.png,
 // 706 x 136, one cell per pixel) is only the guide. A post-and-three-rail fence, square posts with rounded caps, a pair
-// of taller posts carrying an arch-topped double gate of planks with iron straps and ring pulls, and a straw training
-// dummy at each end: a post with a cross arm, a bound straw body with a red sash, splayed feet.
+// of taller posts carrying an arch-topped double gate of planks with iron straps and ring pulls. (The reference's straw dummies at the ends are left out.)
 // Built as a real solid: world units, x right, y up from the ground (y = 0; a ref row r stands at y = 136 - r), z
 // toward the viewer.
 
@@ -61,8 +60,7 @@ const YARD = (function () {
         m.rotation.x = Math.PI / 2; m.position.set(bx, R(r), -2); }
       seg(V(bx - side * 9, R(40), 6), V(bx + side * 4, R(104), 7), 2.6, "sash", "dummies");
     };
-    dummy(84, 1);
-    dummy(612, -1);
+    // (owner 2026-11-07: "양옆에 있는 허수아비 빼자") the dummies are left out
     return parts;
   }
   return { W, H, B0, K, TOP, Y, RAMP, MAT, LAYERS, build };
