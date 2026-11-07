@@ -148,8 +148,6 @@ const HALL = (function () {
       const cx = (x0 + x1) / 2, mid = Math.round((r0 + 3 + (x1 - x0) / 2 + r1 - 2) / 2);
       box("windows", "mullion", cx - 1, cx + 1, r0 + 3, r1 - 2, z, z + 0.9);
       box("windows", "mullion", x0 + 3, x1 - 3, mid - 1, mid + 1, z, z + 0.9);
-      box("windows", "glassHi", x0 + 4, x0 + 6, mid + 2, mid + 3, z, z + 0.5);           // the sky caught in a pane
-      box("windows", "glassHi", x0 + 4, x0 + 5, mid + 3, mid + 5, z, z + 0.5);
       box("windows", "stoneLt", x0 - 2, x1 + 2, r1, r1 + 3, z, z + 3);   // the sill
       // not every window alike: some have curtains drawn, some a flower box (a fixed order, not random)
       const v = [0, 2, 1, 0, 0, 1, 2, 0, 1, 0, 0, 2, 0, 1][winN++ % 14];
@@ -264,9 +262,11 @@ const HALL = (function () {
     }
     for (const r of [228, 252]) { box("door", "iron", 201, 216, r, r + 2, ZG, ZG + 1.4); box("door", "iron", 220, 235, r, r + 2, ZG, ZG + 1.4); }
     // the stone surround: arch voussoirs (wedges with joints between) and jamb blocks
+    // the mortar bed behind the surround (the stones sit in it, the joints between them read dark, not as wall)
+    slab("door", "mortar2", archPts(192, 244, 207, 264), ZG, ZG + 1.8, [archPts(198, 238, 213, 264).slice().reverse()]);
     { const cx = 218, sp = 233, ri = 20, ro = 25, n = 7;
       for (let i = 0; i < n; i++) {
-        const a0 = Math.PI * (i + 0.06) / n, a1 = Math.PI * (i + 0.94) / n, pts = [];
+        const a0 = Math.PI * (i + 0.1) / n, a1 = Math.PI * (i + 0.9) / n, pts = [];
         for (let t = 0; t <= 4; t++) { const a = a0 + (a1 - a0) * t / 4; pts.push([cx + ro * Math.cos(a), sp - ro * Math.sin(a)]); }
         for (let t = 4; t >= 0; t--) { const a = a0 + (a1 - a0) * t / 4; pts.push([cx + ri * Math.cos(a), sp - ri * Math.sin(a)]); }
         slab("door", "stone", pts, ZG, ZG + 2.4);
