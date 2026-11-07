@@ -327,7 +327,7 @@ const FORGE = (function () {
     bar("porch", "timber", 11, LT + 17, 25, LT + 2, 4, ZP - 3.5, ZP - 0.5);
     if (ROOFV === "D") {
       box("porch", "timber", 92, 99, 74, 124, ZP - 4, ZP);   // under the main roof's run-on now                           // the post under the lean-to's upper end
-      box("porch", "timber", 99, 115, 114, 118, ZP - 3.5, ZP - 0.5);                 // a rail across to the building's post
+      // (no rail across to the building's post: owner 2026-11-07, "요것도 떼고")
     }
     // the mouth stays clear (x 46..88): the anvil on its block to its left, the quench tub to its right
     box("work", "timber", 22, 46, 132, 145, 2, 10);                                    // the anvil's block
