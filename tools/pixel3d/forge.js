@@ -19,6 +19,7 @@ const FORGE = (function () {
     timber: ["wood", 6], plank: ["wood", 5], plankDk: ["wood", 4], frame: ["wood", 5], door: ["wood", 6], doorGap: ["wood", 2],
     glass: ["cream", 6], mullion: ["wood", 3], sill: ["wood", 4],
     iron: ["iron", 3], ironDk: ["iron", 1],
+    coal: ["stone", 6], coalHi: ["stone", 7],                                       // read as dark lumps once the hole's shade takes them down
     roofBase: ["red", 0], tile: ["red", 2], tileDk: ["red", 1], tileLt: ["red", 3], fascia: ["wood", 1],
     // the fire: its own light, never shaded (owner's light sources: 불, 용광로)
     fireDeep: ["red", 1], fireRed: ["red", 3], fireOr: ["ochre", 3], fireHot: ["cream", 6], ember: ["red", 4],
@@ -152,6 +153,15 @@ const FORGE = (function () {
     box("furnace", "plinthLo", 38, 96, 125, 126, ZF - 2, ZF + 5.5);
     // the ash pit: a dark low opening under the sill with a brick lintel
     box("furnace", "soot", 57, 83, 131, 145, ZF - 14, ZF - 12);
+    // coal heaped in the hole under the hearth (owner 2026-11-07: "석탄더미"): a low mound, lumps on its slope, each lump's
+    // top catching a little light
+    slab("furnace", "coal", [[58, 145], [82, 145], [80, 141], [75, 137], [68, 135], [62, 137], [59, 141]], ZF - 12, ZF - 4);
+    { let sd = 5; const r = () => { sd = (sd * 16807) % 2147483647; return (sd - 1) / 2147483646; };
+      for (const [cx, cr] of [[62, 140], [69, 136], [76, 139], [66, 142], [73, 142]]) {
+        const w = 5 + Math.floor(r() * 2), h = 3, x0 = cx - w / 2, z = ZF - 2.5 + r() * 1.5;   // lumps standing out of the mound's face
+        slab("furnace", "coal", [[x0, cr + h], [x0 + w, cr + h], [x0 + w, cr + 1], [x0 + w - 1, cr], [x0 + 1, cr], [x0, cr + 1]], z - 2, z);
+        box("furnace", "coalHi", x0 + 1, x0 + w - 1, cr, cr + 1, z - 0.5, z + 0.2);
+      } }
     for (let x = 56; x < 84; x += 7) box("furnace", "brick", x, Math.min(x + 6, 84), 127, 131, ZF - 1.5, ZF);
 
     // ---- the chimney stack, a little narrower, with a capstone course
