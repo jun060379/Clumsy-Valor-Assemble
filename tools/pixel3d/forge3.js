@@ -22,6 +22,7 @@ const FORGE3 = (function () {
   };
   const LAYERS = ["ground", "walls", "timber", "windows", "door", "forge", "chimney", "roof", "tiles", "verge", "sign", "props"];
 
+  let ROT = false;                                                      // the wing turned to run back (owner's question)
   function build(THREE) {
     const parts = [];
     const add = (geo, mat, layer) => { const m = new THREE.Mesh(geo); parts.push({ mesh: m, mat, layer }); return m; };
@@ -178,7 +179,7 @@ const FORGE3 = (function () {
     }
 
     // ---- the right wing: plaster in a timber frame, two windows, under a long slate roof
-    const ZR = 2;
+    const ZR = 2, w0 = parts.length;
     slab("walls", "plaster", [[168, 136], [278, 136], [278, 80], [168, 80]], -30, ZR,
          [[[188, 98], [208, 98], [208, 118], [188, 118]].reverse(), [[[238, 98], [258, 98], [258, 118], [238, 118]]][0].reverse()]);
     for (const [a, b] of [[168, 174], [218, 224], [272, 278]]) box("timber", "timber", a, b, 80, 136, ZR - 2, ZR + 2);
@@ -194,6 +195,7 @@ const FORGE3 = (function () {
     }
     slateRoof("roof", 122, 284, 78, 30, 16, -34, 17, 6);
     box("roof", "ridge", 122, 284, 26, 31, -38, -30);
+    const w1 = parts.length;
 
     // ---- the forge in the chimney's foot: a stone block, an arched fire mouth, a hearth ledge; the hood narrows into
     // the stack, which runs up past the ridge (the fire comes later as an effect, centre x 140, row 128)
@@ -227,6 +229,7 @@ const FORGE3 = (function () {
     box("forge", "plinthHi", 113, 167, 130, 131, ZF + 4.4, ZF + 5.2);
 
     // ---- the signs: a scrolled iron bracket and a board at the right, a lantern on a bracket at the left
+    const s0 = parts.length;
     box("sign", "ironDk", 270, 294, 62, 64, ZR, ZR + 2);
     bar("sign", "ironDk", 276, 76, 292, 64, 1.6, ZR, ZR + 2);
     { const g = new THREE.TorusGeometry(4, 0.8, 6, 16, Math.PI * 1.5); const m = add(g, "ironDk", "sign"); m.position.set(282, Y(60, ZR + 1), ZR + 1); }
@@ -235,6 +238,7 @@ const FORGE3 = (function () {
     bar("sign", "signMark", 279, 87, 291, 73, 1.6, ZR + 2, ZR + 2.6);                   // crossed swords
     bar("sign", "signMark", 291, 87, 279, 73, 1.6, ZR + 2, ZR + 2.6);
     box("sign", "signMark", 283, 287, 79, 81, ZR + 2.2, ZR + 2.8);
+    const s1 = parts.length;
     box("sign", "ironDk", 8, 24, 84, 86, ZG - 2, ZG);                                   // the lantern's bracket
     box("sign", "ironDk", 10, 11, 86, 91, ZG - 2, ZG - 1);
     box("sign", "iron", 6, 15, 91, 93, ZG - 4, ZG + 1);
@@ -248,6 +252,19 @@ const FORGE3 = (function () {
     slab("props", "shield", [[174, 120], [188, 120], [188, 131], [181, 138], [174, 131]], ZF + 6, ZF + 7);
     box("props", "signMark", 180, 182, 122, 134, ZF + 7, ZF + 7.6);
 
+    // ---- the wing turned a quarter (owner 2026-11-07: "오른 쪽에 있는 집을 90도 돌려서 뒤편을 향하게 배치할 수
+    // 있나?"): the wing and its sign, built as above, turned 90 degrees about the vertical so its length runs away from
+    // the street, then set back so its new front (its old right end) stands on the old front line, its left side
+    // against the forge
+    if (ROT) {
+      const rot = new THREE.Matrix4().makeRotationY(Math.PI / 2);
+      const ms = parts.slice(w0, w1).concat(parts.slice(s0, s1)).map(p => p.mesh);
+      for (const m of ms) { m.updateMatrix(); m.geometry = m.geometry.clone(); m.geometry.applyMatrix4(m.matrix); m.position.set(0, 0, 0); m.rotation.set(0, 0, 0); m.scale.set(1, 1, 1);
+                            m.geometry.applyMatrix4(rot); }
+      const bb = new THREE.Box3(); for (const m of ms) { m.geometry.computeBoundingBox(); bb.union(m.geometry.boundingBox); }
+      const shift = new THREE.Matrix4().makeTranslation(168 - bb.min.x, -bb.min.y, 18 - bb.max.z);   // its floor on the ground (y 0)
+      for (const m of ms) m.geometry.applyMatrix4(shift);
+    }
     return parts;
   }
   return { W, H, B0, K, TOP, Y, RAMP, MAT, LAYERS, build };
