@@ -71,7 +71,7 @@ def bake(name):
             sel = canopy[y]
             if not sel.any(): continue
             b = band[y]
-            d = 0 if b == 0 else lean[(f - (0 if b == 2 else 2)) % NF]
+            d = 0 if b == 0 else lean[f]          # one rigid lean, no lag between bands (the lag read as wobble)
             xs = np.nonzero(sel)[0]
             nx = np.clip(xs + d, 0, w - 1)
             keep = ~tm[y, nx] | (d == 0)
