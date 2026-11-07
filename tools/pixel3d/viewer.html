@@ -229,12 +229,18 @@ const hueDist = (a, b) => { const d = Math.abs(a - b) % 360; return d > 180 ? 36
 function twin(c, kind) {
   const L = lum(c);
   let t;
-  if (kind === "shade") {            // dull it by a third, then lean it toward the sky
-    t = c.map(v => v + (L - v) * 0.25);
-    t = [t[0] - 12, t[1] - 3, t[2] + 16];
-  } else {                           // richer and warmer
-    t = c.map(v => v + (v - L) * 0.3);
-    t = [t[0] + 12, t[1] + 4, t[2] - 12];
+  // colour theory (owner 2026-11-07, "실제 색이론"): under a warm sun the lit side warms and pales a little toward
+  // the light's own colour (highlights lose saturation); the turning edge (the core of the shadow's start) is the
+  // most saturated band; the shadow side takes the cool of the sky (the complement of the sun) and loses saturation
+  if (kind === "shade") {            // shadow: cooler and duller
+    t = c.map(v => v + (L - v) * 0.3);
+    t = [t[0] - 12, t[1] - 3, t[2] + 18];
+  } else if (kind === "core") {      // the turning edge: richer, a touch warmer-red
+    t = c.map(v => v + (v - L) * 0.35);
+    t = [t[0] + 6, t[1] - 2, t[2] - 6];
+  } else {                           // sunlit: warmer, a little paler
+    t = c.map(v => v + (L - v) * 0.1);
+    t = [t[0] + 12, t[1] + 6, t[2] - 10];
   }
   let best = c, bd = 1e9;
   for (const p of ALL) {
@@ -252,15 +258,15 @@ function twinTex(kind) {
   PALETTE.forEach((row, r) => { for (let s = 0; s < 8; s++) { const c = twin(row[Math.min(s, row.length - 1)], kind); d.set([c[0], c[1], c[2], 255], (r * 8 + s) * 4); } });
   const t = new THREE.DataTexture(d, 8, NP, THREE.RGBAFormat); t.magFilter = t.minFilter = THREE.NearestFilter; t.needsUpdate = true; return t;
 }
-const shadeTex = twinTex("shade"), sunTex = twinTex("sun");
+const shadeTex = twinTex("shade"), sunTex = twinTex("sun"), coreTex = twinTex("core");
 
 const comp = new THREE.ShaderMaterial({
   uniforms: { tPat: { value: rtPat.texture }, tId: { value: rtId.texture }, tLit: { value: rtLit.texture }, tFace: { value: rtFace.texture }, tNrm: { value: rtNrm.texture }, tDep: { value: rtDep.texture },
-              sunS: { value: new THREE.Vector2(0, 1) }, pal: { value: palTex }, shadeT: { value: shadeTex }, sunT: { value: sunTex }, mode: { value: 0 } },
+              sunS: { value: new THREE.Vector2(0, 1) }, pal: { value: palTex }, shadeT: { value: shadeTex }, sunT: { value: sunTex }, coreT: { value: coreTex }, lmax: { value: 1 }, mode: { value: 0 } },
   vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
   fragmentShader: `
     #include <packing>
-    uniform vec2 sunS; uniform sampler2D tPat, tId, tLit, tFace, tNrm, tDep, pal, shadeT, sunT; uniform int mode; varying vec2 vUv;
+    uniform vec2 sunS; uniform float lmax; uniform sampler2D tPat, tId, tLit, tFace, tNrm, tDep, pal, shadeT, sunT, coreT; uniform int mode; varying vec2 vUv;
     const vec2 S = vec2(${RW}.0, ${H}.0);
     vec4 at(sampler2D t, vec2 c) { return texture2D(t, (c + 0.5) / S); }
     float dep(vec2 c) { return unpackRGBAToDepth(at(tDep, c)) * 3999.0; }      // in cells
@@ -271,6 +277,20 @@ const comp = new THREE.ShaderMaterial({
     }
     // a step in depth or the silhouette between this cell and its neighbour at o (this cell the nearer side)
     bool shAt(vec2 c) { float l = at(tLit, c).r, f = at(tFace, c).r; return f > 0.2 && l < f * 0.45; }
+    // the edge of this cell's region toward o: the neighbour is empty, another material, or a step back in depth;
+    // and it is not in front of this cell (then this edge is hidden, not lit)
+    bool regionEdge(vec2 c, vec2 o, float d, float idb) {
+      vec4 n = at(tId, c + o);
+      if (n.b < 0.5 / 255.0) return true;
+      float nd = dep(c + o);
+      if (nd < d - 0.6) return false;
+      if (abs(n.b - idb) > 0.5 / 255.0) return true;
+      // same material: an edge only where the surface steps back (a slope continuing smoothly is no edge)
+      float ex = d;
+      vec4 m = at(tId, c - o);
+      if (abs(m.b - idb) < 0.5 / 255.0) ex = d + max(d - dep(c - o), 0.0);
+      return nd > ex + 1.0;
+    }
     bool edgeTo(vec2 c, vec2 o, float d) {
       if (at(tId, c + o).b < 0.5 / 255.0) return true;
       float ex = d;
@@ -298,7 +318,11 @@ const comp = new THREE.ShaderMaterial({
       }
       // facing, by the angle to the sun, in four steps (strong contrast); the colour follows: sunlit warm and rich,
       // turned-away a little cooler, cast shade cool and dull and deepest
-      float st = Lf > 0.72 ? 1.0 : Lf > 0.4 ? 0.0 : Lf > 0.12 ? -1.0 : -2.0;
+      // facing is read against the best-lit face of the building at this hour (owner 2026-11-07: at 15:15 -> 15:30 the
+      // whole roof stepped at once): the face turned most to the sun stays the lit one all day, the others rank below
+      // it; a step only changes when the faces swap order, not when the sun merely sinks
+      float Ln = Lf / max(lmax, 0.05);
+      float st = Ln > 0.88 ? 1.0 : Ln > 0.55 ? 0.0 : Ln > 0.25 ? -1.0 : -2.0;
       if (castSh) st = min(st, 0.0) - 2.0;
       if (mode == 1) st = 0.0;
       float d = dep(c);
@@ -351,23 +375,28 @@ const comp = new THREE.ShaderMaterial({
       if (mode == 0 && line == 0) {
         float n = texture2D(pal, vec2(0.5 / 8.0, (r + 0.5) / ${NP}.0)).a * 255.0;
         vec2 tc = vec2((clamp(max(k, 0.0), 0.0, n - 1.0) + 0.5) / 8.0, (r + 0.5) / ${NP}.0);
-        if (castSh || aoed || st <= -2.0) col = texture2D(shadeT, tc).rgb;   // cast shade / turned away: cooler, duller
-        else if (st > 0.0) col = texture2D(sunT, tc).rgb;              // full sun: warmer, richer
+        if (castSh || aoed || st <= -2.0) col = texture2D(shadeT, tc).rgb;   // shadow: cooler, duller
+        else if (st < 0.0) col = texture2D(coreT, tc).rgb;              // turning edge: richest
+        else if (st > 0.0) col = texture2D(sunT, tc).rgb;              // sunlit: warmer, paler
       }
       // the outline: the dark of the warm ramps (the reference draws stone, plaster and wood alike in dark brown,
       // the roofs in their own deepest red)
       if (line == 1) col = sil ? palc(1.0, 0.0) : r == 0.0 ? palc(0.0, 0.0) : palc(1.0, 1.0);   // the silhouette darkest
       // rim light (owner 2026-11-07): where a volume's edge faces the sun, its outline turns into a bright line of
       // its own colour, two steps up and sun-warm; the edges turned away keep the dark outline
-      if (mode == 0 && line == 1 && !castSh && Lf > 0.12 && !quiet) {
+      if (mode == 0 && !castSh && Lf > 0.12 && !quiet) {
         vec2 ox = vec2(sunS.x > 0.3 ? 1.0 : sunS.x < -0.3 ? -1.0 : 0.0, 0.0), oy = vec2(0.0, sunS.y > 0.25 ? 1.0 : 0.0);
         bool tileish = mi == ${matNames.indexOf("tile") + 1}.0 || mi == ${matNames.indexOf("tileDk") + 1}.0 || mi == ${matNames.indexOf("tileLt") + 1}.0;
         // tiles: only the roof's own silhouette catches the rim (their joints would break it into dashes)
         bool rim = tileish ? ((ox.x != 0.0 && at(tId, c + ox).b < 0.5 / 255.0) || (oy.y != 0.0 && at(tId, c + oy).b < 0.5 / 255.0))
-                           : ((ox.x != 0.0 && edgeTo(c, ox, d)) || (oy.y != 0.0 && edgeTo(c, oy, d)));
+                           : ((ox.x != 0.0 && regionEdge(c, ox, d, id.b)) || (oy.y != 0.0 && regionEdge(c, oy, d, id.b)));
         if (rim) {
           float n = texture2D(pal, vec2(0.5 / 8.0, (r + 0.5) / ${NP}.0)).a * 255.0;
-          col = texture2D(sunT, vec2((clamp(base + 2.0, 0.0, n - 1.0) + 0.5) / 8.0, (r + 0.5) / ${NP}.0)).rgb;
+          // three steps up the ramp; when that is still not clearly brighter than the cell (dark ramps), the ramp's top
+          float kr = clamp(base + 3.0, 0.0, n - 1.0);
+          vec3 rc = texture2D(sunT, vec2((kr + 0.5) / 8.0, (r + 0.5) / ${NP}.0)).rgb;
+          if (dot(rc - col, vec3(0.3, 0.59, 0.11)) < 0.16) rc = texture2D(sunT, vec2((n - 1.0 + 0.5) / 8.0, (r + 0.5) / ${NP}.0)).rgb;
+          col = rc;
         }
       }
       if (mode == 2) col = vec3(st == 1.0 ? 0.95 : st == 0.0 ? 0.7 : st == -1.0 ? 0.45 : 0.22) * (occ >= 3.0 ? 0.75 : 1.0) + (hi == 1 ? 0.15 : 0.0);
@@ -395,7 +424,10 @@ function render() {
   const h = parseFloat(hourEl.value), hh = Math.floor(h), mm = Math.round((h - hh) * 60);
   document.getElementById("hour-v").textContent = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
   sun.position.copy(center).addScaledVector(sunDir(h), 1500);
-  { const d = sunDir(h); comp.uniforms.sunS.value.set(d.x, d.y + 0.25 * d.z); }
+  { const d = sunDir(h); comp.uniforms.sunS.value.set(d.x, d.y + 0.25 * d.z);
+    // the best-lit face this hour: front wall, roof slopes, hips, gable verges (the building's own planes)
+    const N = [[0, 0, 1], [0, 0.57, 0.82], [-0.82, 0.57, 0], [0.82, 0.57, 0], [-0.7, 0.7, 0.15], [0.7, 0.7, 0.15], [0, 1, 0]];
+    comp.uniforms.lmax.value = Math.max(...N.map(n => { const l = Math.hypot(...n); return (n[0] * d.x + n[1] * d.y + n[2] * d.z) / l; })); }
   if (mode === "layers") {
     const rc = stage.getBoundingClientRect();
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
