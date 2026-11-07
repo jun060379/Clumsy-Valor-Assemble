@@ -13,6 +13,9 @@ js = open(f"tools/pixel3d/{BASE}.js").read()
 if NAME in MIRRORED: js = js.replace("const MIRROR = false;", "const MIRROR = true;")
 if NAME in SIZED: js = js.replace('const SIZE = "L";', f'const SIZE = "{NAME[-1]}";')
 if NAME != "hall": js += f"\nconst HALL = {BASE.upper()};\n"   # the viewer reads the building as HALL
+# the props (modelled one unit per game px) render on the town's 2-px grid: two units a cell (owner 2026-11-08)
+PROPS = {"bench", "board", "bridge", "lamp", "planter", "pot", "ring", "lights", "yard", "wagon", "barrel", "crate"}
+if BASE in PROPS: js += "\nHALL.CELL = 2;\n"
 REFN = {"forge2": "g_forge", "forge3": "g_forge", "tent": "g_tentR", "tentL": "g_tentR", "fountain": "q_fountain", "bench": "q_bench", "benchL": "q_bench", "board": "q_board", "bridge": "q_bridge", "lamp": "q_lamp", "planter": "q_planter", "planterL": "q_planter", "pot": "q_pot", "ring": "g_ring", "lights": "q_lights", "yard": "g_yard", "wagon": "g_wagon2", "barrelL": "q_barrelL", "barrelM": "q_barrelM", "barrelS": "q_barrelS", "crateL": "q_crateL", "crateS": "q_crateS"}.get(NAME, "g_" + NAME)
 import os
 # the big buildings' references are drawn at twice the cell (assets/town/hx, halved here); the props are drawn at

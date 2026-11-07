@@ -89,8 +89,8 @@ const WAGON = (function () {
     const wheel = (cx, cyRow, r, z) => {
       const cy = R(cyRow);
       { const g = new THREE.TorusGeometry(r - 5, 5.6, 6, 32); const m = add(g, "rim", "wheels"); m.position.set(cx, cy, z); }
-      { const g = new THREE.TorusGeometry(r - 11, 1.2, 5, 32); const m = add(g, "tyre", "wheels"); m.position.set(cx, cy, z + 3); }
-      { const g = new THREE.TorusGeometry(r - 0.5, 1.3, 5, 32); const m = add(g, "tyre", "wheels"); m.position.set(cx, cy, z - 0.5); }
+      { const g = new THREE.TorusGeometry(r - 11, 1.9, 5, 32); const m = add(g, "tyre", "wheels"); m.position.set(cx, cy, z + 3); }
+      { const g = new THREE.TorusGeometry(r - 1, 2.0, 5, 32); const m = add(g, "tyre", "wheels"); m.position.set(cx, cy, z - 0.5); }
       for (let i = 0; i < 4; i++) { const a = i / 4 * Math.PI; const m = cube("wheels", "spoke", -3.4, 3.4, -(r - 8), r - 8, -2, 2);
         m.position.set(cx, cy, z); m.rotation.z = a; }
       cube("wheels", "hub", cx - 9, cx + 9, cy - 9, cy + 9, z - 4, z + 5);                      // the hub, squared

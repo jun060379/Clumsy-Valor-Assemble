@@ -18,7 +18,7 @@ const LIGHTS = (function () {
     const Z = -4, y0 = 56, y1 = 53, ymid = 31;                       // the ends and the low point of the sag
     const wireY = (x) => { const t = x / W; return y0 + (y1 - y0) * t - 4 * (((y0 + y1) / 2) - ymid) * t * (1 - t); };
     const pts = []; for (let x = -2; x <= W + 2; x += 8) pts.push(V(x, wireY(x), Z));
-    add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 80, 1.0, 5, false), "wire", "wire");
+    add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 80, 1.6, 5, false), "wire", "wire");
     [26, 86, 142, 198, 256, 312, 372].forEach((x, i) => {
       const yw = wireY(x);
       { const g = new THREE.CylinderGeometry(2.6, 3.2, 6, 8); const m = add(g, "socket", "bulbs"); m.position.set(x, yw - 3.5, Z); }

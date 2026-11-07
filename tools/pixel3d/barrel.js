@@ -20,15 +20,16 @@ const BARREL = (function () {
     const rAt = (t) => R * (0.82 + 0.18 * Math.sin(Math.PI * t));   // the bulge
     const prof = (dr) => { const p = []; for (let k = 0; k <= 16; k++) { const t = k / 16; p.push(new THREE.Vector2(rAt(t) + dr, HT * t)); } return p; };
     { const g = new THREE.LatheGeometry(prof(-0.8), 32); const m = add(g, "gap", "barrel"); m.position.set(CX, 0, CZ); }   // dark under the staves
-    const N = 10, gap = 0.028;
+    // on the town's 2-px grid (CELL 2, owner 2026-11-08): every line at least one cell (2 units) and on a cell edge
+    const N = 10, gap = 2.2 / R;
     for (let i = 0; i < N; i++) { const a0 = i / N * Math.PI * 2 + gap / 2, len = Math.PI * 2 / N - gap;
       const g = new THREE.LatheGeometry(prof(0), 4, a0, len); const m = add(g, i % 4 === 1 ? "staveLt" : "stave", "barrel"); m.position.set(CX, 0, CZ); }
-    // the hoops (owner 2026-11-07: "통 테 금속으로"): flat iron bands round the staves, a bright worn edge along the top
-    // of each, a dark one under it - metal, not wood
-    const BH = Math.max(4, Math.round(HT * 0.085));                     // the band's height, as the reference's
-    for (const t of [0.09, 0.3, 0.7, 0.91]) { const r = rAt(t) + 1.4, y = HT * t;
-      { const g = new THREE.CylinderGeometry(r, r, BH, 40, 1, false); const m = add(g, "metalHoop", "barrel"); m.position.set(CX, y, CZ); }
-      { const g = new THREE.CylinderGeometry(r - 1.2, r - 1.2, BH + 0.6, 40, 1, false); const m = add(g, "hoopDk", "barrel"); m.position.set(CX, y, CZ); } }
+    // the hoops (owner 2026-11-07: "통 테 금속으로"): flat iron bands round the staves - 2 cells of metal over a dark
+    // cell (metal, not wood)
+    const ev = (v) => Math.round(v / 2) * 2;
+    for (const t of [0.09, 0.3, 0.7, 0.91]) { const r = rAt(t) + 1.6, y = ev(HT * t);
+      { const g = new THREE.CylinderGeometry(r, r, 4, 40, 1, false); const m = add(g, "metalHoop", "barrel"); m.position.set(CX, y + 2, CZ); }
+      { const g = new THREE.CylinderGeometry(r - 0.4, r - 0.4, 2, 40, 1, false); const m = add(g, "hoopDk", "barrel"); m.position.set(CX, y - 1, CZ); } }
     { const g = new THREE.CircleGeometry(rAt(1) - 2.5, 24); const m = add(g, "head", "barrel"); m.rotation.x = -Math.PI / 2; m.position.set(CX, HT - 1.5, CZ); }
     return parts;
   }

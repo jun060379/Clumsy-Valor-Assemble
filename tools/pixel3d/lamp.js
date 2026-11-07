@@ -35,9 +35,9 @@ const LAMP = (function () {
     // ---- the arm: out from under the top collar, over a curl, hooking down to the lantern
     const tube = (pts, r, mat, layer) => { const c = new THREE.CatmullRomCurve3(pts);
       return add(new THREE.TubeGeometry(c, 40, r, 6, false), mat, layer); };
-    tube([V(26, yr(44), PZ), V(48, yr(39), PZ), V(72, yr(38), PZ), V(90, yr(41), PZ), V(94, yr(47), PZ), V(87, yr(52), PZ), V(86, yr(60), PZ)], 1.7, "iron", "post");
-    tube([V(26, yr(66), PZ), V(34, yr(52), PZ), V(48, yr(48), PZ), V(64, yr(44), PZ)], 1.3, "iron", "post");   // the brace
-    { const g = new THREE.TorusGeometry(6, 1.3, 6, 18, Math.PI * 1.6); const m = add(g, "iron", "post");       // the curl
+    tube([V(26, yr(44), PZ), V(48, yr(39), PZ), V(72, yr(38), PZ), V(90, yr(41), PZ), V(94, yr(47), PZ), V(87, yr(52), PZ), V(86, yr(60), PZ)], 2.2, "iron", "post");   // thick enough for the 2-px grid (CELL 2)
+    tube([V(26, yr(66), PZ), V(34, yr(52), PZ), V(48, yr(48), PZ), V(64, yr(44), PZ)], 1.9, "iron", "post");   // the brace
+    { const g = new THREE.TorusGeometry(6, 1.9, 6, 18, Math.PI * 1.6); const m = add(g, "iron", "post");       // the curl
       m.position.set(43, yr(61), PZ); m.rotation.z = 0.6; }
 
     // ---- the lantern: a pyramid hood with a knob, four glazed sides in a frame, a short tapered bottom
@@ -47,7 +47,7 @@ const LAMP = (function () {
     { const g = new THREE.BoxGeometry(22, 26, 22); const m = add(g, "fireGlass", "lantern"); m.position.set(LX, yr(87), LZ); }
     for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {                       // the frame's corner posts
       const g = new THREE.BoxGeometry(3, 28, 3); const m = add(g, "iron", "lantern"); m.position.set(LX + sx * 11, yr(87), LZ + sz * 11); }
-    for (const sx of [-1, 1]) { const g = new THREE.BoxGeometry(1.6, 26, 1.6); const m = add(g, "iron", "lantern");   // the glazing bars
+    for (const sx of [-1, 1]) { const g = new THREE.BoxGeometry(2.4, 26, 1.6); const m = add(g, "iron", "lantern");   // the glazing bars
       m.position.set(LX + sx * 3.5, yr(87), LZ + 11.2); }
     { const g = new THREE.BoxGeometry(26, 3, 26); const m = add(g, "ironLt", "lantern"); m.position.set(LX, yr(73), LZ); }
     { const g = new THREE.BoxGeometry(26, 3, 26); const m = add(g, "iron", "lantern"); m.position.set(LX, yr(101), LZ); }
