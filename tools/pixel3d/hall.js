@@ -145,7 +145,7 @@ const HALL = (function () {
       slab("windows", "frame", outer, z, z + 1.6, [inner.slice().reverse()]);
       slab("windows", "glass", inner, z, z + 0.3);
       box("windows", "frame", x0 + 3, x1 - 3, r1 - 2, r1, z, z + 1.6);
-      const cx = (x0 + x1) / 2, mid = Math.round((r0 + 3 + (x1 - x0) / 2 + r1 - 2) / 2);
+      const cx = (x0 + x1) / 2, mid = Math.round(r0 + 3 + (x1 - x0 - 6) / 2 + 1);   // the transom at the arch's spring: two even panes, no sliver
       box("windows", "mullion", cx - 1, cx + 1, r0 + 3, r1 - 2, z, z + 0.9);
       box("windows", "mullion", x0 + 3, x1 - 3, mid - 1, mid + 1, z, z + 0.9);
       box("windows", "stoneLt", x0 - 2, x1 + 2, r1, r1 + 3, z, z + 3);   // the sill
