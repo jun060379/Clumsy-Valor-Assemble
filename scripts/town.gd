@@ -86,7 +86,7 @@ const P3D := {"g_hall": [0.0, 0.0], "g_forge": [32.0, 14.0], "g_barn": [20.0, 14
 	"g_cottage": [20.0, 14.0], "g_well": [16.0, 14.0]}
 ## where the base of a pixel3d building meets the ground plane, px below the stand line (the P3D set-downs above are
 ## for 14); the plane's back edge is RAISE above the stand line (owner 2026-11-08: buildings behind the people, on the plane)
-var FOOT := 14.0
+var FOOT := 0.0
 func setdown(k: String) -> float:
 	if k == "g_hall": return 0.0          # the hall stands on its own plinth on the terrace paving
 	return float(P3D[k][1]) - 14.0 + FOOT if P3D.has(k) else 0.0
@@ -1035,13 +1035,16 @@ func _shear(t: Texture2D, x0: float, x1: float, f: Callable, clip_h := -1.0) -> 
 		_stone_caps(a, b, f)
 
 ## ---------- ground plane (tools/make_town_ground2.py) ----------
-const RAISE := 12.0             # rows of the plane showing behind the stand line
+var RAISE := 12.0               # rows of the plane showing behind the stand line (+ DEEP)
+## extra depth of the plane behind the stand line (owner 2026-11-08: "지면 깊이를 더 늘려도 되긴할듯"; preview: ?deep20 / ?deep28):
+## the plane rows of the ground tiles are stretched back by this many rows
+var DEEP := 0
 # trodden paths (owner 2026-11-06: a lot of it is walked -- worn dirt before every door and gate, the camp, the barn)
 var CLEAR := [[300.0, 700.0], [4080.0, 4960.0], [5440.0, 6100.0]]
 var g2 := {}
 var g2green := {}
 var capgreen := []                # per tile column: is the top of the ground grass there (for the turf lip)
-const LIPY := 28.0               # the row of the tile where the top meets the earth face
+var LIPY := 28.0                 # the row of the tile where the top meets the earth face (+ DEEP)
 const LIPC := Color8(111, 120, 56)        # leaf ramp step 3 (map palette)
 const LIPC2 := Color8(80, 81, 36)         # leaf ramp step 2
 ## where the turf lip runs out (the last grassy column at each end of each clearing): it tapers to nothing toward
@@ -1105,8 +1108,32 @@ func gzone(x: float) -> String:
 		if x >= z[0] and x < z[1]: return "clear"
 	return "lawn"
 
+## a ground tile with its plane (rows 3..28, back to front) stretched over 3..28+DEEP, nearest row: same colours,
+## more depth; the earth face below moves down with it
+func _deepen(im: Image) -> Image:
+	var w := im.get_width()
+	var h := im.get_height()
+	var st := Image.create(w, h + DEEP, false, Image.FORMAT_RGBA8)
+	st.blit_rect(im, Rect2i(0, 0, w, 3), Vector2i.ZERO)
+	for yy in range(3, 28 + DEEP):
+		var sy := 3 + int(float(yy - 3) * 25.0 / float(25 + DEEP))
+		st.blit_rect(im, Rect2i(0, sy, w, 1), Vector2i(0, yy))
+	st.blit_rect(im, Rect2i(0, 28, w, h - 28), Vector2i(0, 28 + DEEP))
+	return st
+
 func _build_ground2() -> void:
 	if not tex.has("k_lawn"): return
+	for k in arena.dbg:
+		if String(k).begins_with("deep"): DEEP = int(String(k).substr(4))
+	RAISE = 12.0 + DEEP
+	LIPY = 28.0 + DEEP
+	if DEEP > 0:
+		for ck in ["k_clear_cap", "k_stone_cap"]:
+			if not tex.has(ck): continue
+			var ci: Image = tex[ck].get_image()
+			ci.decompress()
+			ci.convert(Image.FORMAT_RGBA8)
+			tex[ck] = ImageTexture.create_from_image(_deepen(ci))
 	for k in ["lawn", "clear", "stone"]:
 		if not tex.has("k_" + k): continue
 		var im: Image = tex["k_" + k].get_image()
@@ -1116,6 +1143,9 @@ func _build_ground2() -> void:
 		var h := im.get_height()
 		var deep := 520
 		var solid := Image.create(w, deep, false, Image.FORMAT_RGBA8)
+		if DEEP > 0:
+			im = _deepen(im)
+			h = im.get_height()
 		solid.blit_rect(im, Rect2i(0, 0, w, h), Vector2i.ZERO)
 		var last := im.get_region(Rect2i(0, h - 1, w, 1))
 		for y in range(h, deep): solid.blit_rect(last, Rect2i(0, 0, w, 1), Vector2i(0, y))
@@ -1123,7 +1153,7 @@ func _build_ground2() -> void:
 		var gr := []
 		for xx in w:
 			var ng := 0
-			for yy in range(14, 28):
+			for yy in range(14 + DEEP, 28 + DEEP):
 				var c := im.get_pixel(xx, yy)
 				if c.a > 0.5 and c.g > c.r + 0.03: ng += 1
 			gr.append(ng >= 3)             # grass reaching the front edge of the top at this column
@@ -1173,7 +1203,7 @@ func _clear_caps(a: float, b: float, f: Callable) -> void:
 				ci.decompress()
 				for xx in ci.get_width():
 					var ng := 0
-					for yy in range(14, 28):
+					for yy in range(14 + DEEP, 28 + DEEP):
 						var c := ci.get_pixel(xx, yy)
 						if c.a > 0.5 and c.g > c.r + 0.03: ng += 1
 					capgreen.append(ng >= 3)
