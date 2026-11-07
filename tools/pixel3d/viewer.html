@@ -1,0 +1,246 @@
+<title>본관 코드 도트</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* layout: the building at true cells (scaled up, pixelated) over a control strip; single dark look like the sheets
+   the owner reviews art on */
+:root {
+  --bg: #2f3d48; --panel: #263240; --line: #3e5060; --fg: #e8e1d2; --dim: #9fb0bb; --accent: #e0a24a; --stage: #5b6f5e;
+  --f-ui: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --f-num: "IBM Plex Mono", ui-monospace, monospace;
+  color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font-family: var(--f-ui); font-size: 14px; }
+.wrap { max-width: 980px; margin: 0 auto; padding-block: 14px 28px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 12px; }
+h1 { font-size: 17px; margin: 0; font-weight: 600; text-wrap: balance; }
+.sub { color: var(--dim); font-size: 12.5px; margin: 2px 0 0; line-height: 1.5; }
+.stage { position: relative; background: var(--stage); border: 1px solid var(--line); border-radius: 4px; overflow: hidden;
+  touch-action: none; aspect-ratio: 436 / 296; max-width: 100%; }
+.stage canvas, .stage img { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+.stage.free { cursor: grab; }
+.ctl { display: grid; gap: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 12px; }
+.row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.seg button { font: inherit; font-size: 13px; color: var(--fg); background: transparent; border: 1px solid var(--line);
+  border-radius: 3px; padding: 6px 10px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #241a0c; border-color: var(--accent); font-weight: 600; }
+.seg button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+label { color: var(--dim); font-size: 12.5px; min-width: 3.6em; }
+input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); }
+.val { font-family: var(--f-num); font-variant-numeric: tabular-nums; font-size: 13px; min-width: 4.2em; text-align: right; }
+.note { color: var(--dim); font-size: 12.5px; line-height: 1.55; margin: 0; }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400&family=IBM+Plex+Sans+KR:wght@400;600&display=swap">
+
+<div class="wrap">
+  <div>
+    <h1>본관 · 코드로 쌓은 도트</h1>
+    <p class="sub">벽, 나무틀, 창, 기와, 굴뚝, 박공, 문, 간판을 three.js 코드로 하나씩 쌓아 한 칸 = 한 도트로 그린다. 레퍼런스는 지금 본관 그림. 색은 마을 팔레트 재질 램프 안에서만, 명암은 해로 따로.</p>
+  </div>
+  <div class="stage" id="stage">
+    <canvas id="cv"></canvas>
+    <img id="ref" alt="레퍼런스: 지금 본관" hidden>
+  </div>
+  <div class="ctl">
+    <div class="row seg" role="group" aria-label="보기">
+      <button id="m-game" aria-pressed="true">도트 결과</button>
+      <button id="m-ref" aria-pressed="false">레퍼런스</button>
+      <button id="m-flat" aria-pressed="false">명암 없이</button>
+      <button id="m-light" aria-pressed="false">빛만</button>
+      <button id="m-layers" aria-pressed="false">층 3D</button>
+    </div>
+    <div class="row">
+      <label for="hour">시간</label>
+      <input type="range" id="hour" min="5.5" max="19" step="0.25" value="12">
+      <span class="val" id="hour-v">12:00</span>
+    </div>
+    <div class="row" id="spread-row" hidden>
+      <label for="spread">벌리기</label>
+      <input type="range" id="spread" min="0" max="40" step="1" value="14">
+      <span class="val" id="spread-v">14</span>
+    </div>
+    <p class="note" id="note">해는 하나: 왼쪽에서 떠서 오른쪽으로 지고, 정오엔 앞쪽 높이, 아침·저녁엔 마을 뒤쪽. 빛을 많이 받는 면은 램프 한 칸 밝게, 덜 받으면 한 칸, 가려지면 두 칸 어둡게. 외곽선은 그 재질의 짙은 색 1칸, 꺾이는 모서리는 어두운 쪽에 1칸.</p>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script>
+__HALL_JS__
+</script>
+<script>
+const PALETTE = __PALETTE__, STEPS = __STEPS__;
+const REF_SRC = "__REF__";
+THREE.ColorManagement.enabled = false;                       // ids and palette bytes pass through untouched
+const { W, H, B0, K, MAT, RAMP, LAYERS } = HALL;
+const cv = document.getElementById("cv"), stage = document.getElementById("stage");
+document.getElementById("ref").src = REF_SRC;
+const renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: false, alpha: true, preserveDrawingBuffer: true });
+renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+renderer.toneMapping = THREE.NoToneMapping;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.BasicShadowMap;
+
+const scene = new THREE.Scene();
+const parts = HALL.build(THREE);
+const matNames = Object.keys(MAT);
+const litMat = new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+const nrmMat = new THREE.MeshNormalMaterial({ side: THREE.DoubleSide });
+const depMat = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, side: THREE.DoubleSide });
+const idMats = {}, flatMats = {};
+for (const n of matNames) {
+  const [rn, base] = MAT[n], r = RAMP[rn];
+  idMats[n] = new THREE.MeshBasicMaterial({ color: new THREE.Color((r + 1) / 255, base / 255, (matNames.indexOf(n) + 1) / 255), side: THREE.DoubleSide });
+  const c = PALETTE[r][base];
+  flatMats[n] = new THREE.MeshBasicMaterial({ color: new THREE.Color(c[0] / 255, c[1] / 255, c[2] / 255), side: THREE.DoubleSide });
+}
+for (const p of parts) { p.mesh.castShadow = p.mesh.receiveShadow = true; p.mesh.userData.home = p.mesh.position.clone(); scene.add(p.mesh); }
+
+const sun = new THREE.DirectionalLight(0xffffff, Math.PI);   // Lambert: pi x N.L x shadow = N.L x shadow
+sun.castShadow = true;
+sun.shadow.mapSize.set(4096, 4096);
+Object.assign(sun.shadow.camera, { left: -360, right: 360, top: 360, bottom: -360, near: 1, far: 3000 });
+sun.shadow.bias = -0.0008;
+sun.shadow.normalBias = 0.6;
+const center = new THREE.Vector3(W / 2, 110, -30);
+sun.target.position.copy(center);
+scene.add(sun, sun.target);
+// the town's sun (lit.gd sun3): left at dawn, right at dusk; behind the town early and late, in front at noon
+function sunDir(h) {
+  const day = Math.min(1, Math.max(0, (h - 5.5) / 13.5)), a = day * Math.PI;
+  return new THREE.Vector3(-Math.cos(a), 0.3 + 0.9 * Math.sin(a), -0.55 + 1.0 * Math.sin(a)).normalize();
+}
+
+// the oblique camera: one cell per pixel, front faces true, depth recedes up K rows per cell
+const CZ = 2000;
+const cam = new THREE.OrthographicCamera(0, W, B0, B0 - H, 1, 4000);
+cam.position.set(0, K * CZ, CZ);
+cam.updateMatrixWorld();
+cam.updateProjectionMatrix();
+cam.projectionMatrix.multiply(new THREE.Matrix4().set(1, 0, 0, 0, 0, 1, -K, 0, 0, 0, 1, 0, 0, 0, 0, 1));
+cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
+
+const mkRT = () => new THREE.WebGLRenderTarget(W, H, { magFilter: THREE.NearestFilter, minFilter: THREE.NearestFilter });
+const rtId = mkRT(), rtLit = mkRT(), rtNrm = mkRT(), rtDep = mkRT();
+const NP = PALETTE.length;
+const palData = new Uint8Array(8 * NP * 4);
+PALETTE.forEach((row, r) => { for (let s = 0; s < 8; s++) { const c = row[Math.min(s, row.length - 1)]; palData.set([c[0], c[1], c[2], STEPS[r]], (r * 8 + s) * 4); } });
+const palTex = new THREE.DataTexture(palData, 8, NP, THREE.RGBAFormat);
+palTex.magFilter = palTex.minFilter = THREE.NearestFilter; palTex.needsUpdate = true;
+
+const comp = new THREE.ShaderMaterial({
+  uniforms: { tId: { value: rtId.texture }, tLit: { value: rtLit.texture }, tNrm: { value: rtNrm.texture }, tDep: { value: rtDep.texture },
+              pal: { value: palTex }, mode: { value: 0 } },
+  vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
+  fragmentShader: `
+    #include <packing>
+    uniform sampler2D tId, tLit, tNrm, tDep, pal; uniform int mode; varying vec2 vUv;
+    const vec2 S = vec2(${W}.0, ${H}.0);
+    vec4 at(sampler2D t, vec2 c) { return texture2D(t, (c + 0.5) / S); }
+    float dep(vec2 c) { return unpackRGBAToDepth(at(tDep, c)) * 3999.0; }      // in cells
+    float stepOf(float L) { return L > 0.7 ? 1.0 : L > 0.3 ? 0.0 : L > 0.05 ? -1.0 : -2.0; }
+    vec3 palc(float r, float k) {
+      float n = texture2D(pal, vec2(0.5 / 8.0, (r + 0.5) / ${NP}.0)).a * 255.0;
+      return texture2D(pal, vec2((clamp(k, 0.0, n - 1.0) + 0.5) / 8.0, (r + 0.5) / ${NP}.0)).rgb;
+    }
+    void main() {
+      vec2 c = floor(vUv * S);
+      vec4 id = at(tId, c);
+      if (id.b < 0.5 / 255.0) discard;
+      float r = floor(id.r * 255.0 + 0.5) - 1.0, base = floor(id.g * 255.0 + 0.5);
+      float L = at(tLit, c).r, st = stepOf(L);
+      if (mode == 1) st = 0.0;
+      float d = dep(c);
+      vec3 n = at(tNrm, c).rgb * 2.0 - 1.0;
+      int line = 0;
+      for (int i = 0; i < 4; i++) {
+        vec2 o = i == 0 ? vec2(1, 0) : i == 1 ? vec2(-1, 0) : i == 2 ? vec2(0, 1) : vec2(0, -1);
+        vec4 nid = at(tId, c + o);
+        if (nid.b < 0.5 / 255.0) { line = 1; continue; }                // the silhouette
+        // a step in depth: the neighbour lies farther than this cell's own surface continued (the opposite neighbour
+        // gives the slope; sloped tops and roofs change depth row by row without being an edge)
+        float nd = dep(c + o);
+        float ex = d;
+        if (at(tId, c - o).b >= 0.5 / 255.0) ex = d + (d - dep(c - o));
+        if (nd > ex + 1.0) { line = 1; continue; }                       // this cell is the nearer edge
+        if (abs(nd - ex) <= 1.0 && line == 0) {
+          vec3 nn = at(tNrm, c + o).rgb * 2.0 - 1.0;
+          float nL = at(tLit, c + o).r;
+          if (dot(normalize(n), normalize(nn)) < 0.8 && L < nL - 0.02) line = 2;   // a crease, on its darker side
+        }
+      }
+      float k = base + st;
+      if (line == 1) k = base - 4.0; else if (line == 2) k = base + st - 2.0;
+      vec3 col = palc(r, max(k, 0.0));
+      if (mode == 2) col = vec3(st == 1.0 ? 0.95 : st == 0.0 ? 0.7 : st == -1.0 ? 0.45 : 0.22);
+      gl_FragColor = vec4(col, 1.0);
+    }`,
+});
+const quadScene = new THREE.Scene();
+quadScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), comp));
+const quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+const pCam = new THREE.PerspectiveCamera(35, W / H, 1, 6000);
+let yaw = -0.6, pitch = 0.3, spread = 14, mode = "game";
+const hourEl = document.getElementById("hour");
+
+function pass(rt, pick) {
+  for (const p of parts) p.mesh.material = pick(p);
+  renderer.setRenderTarget(rt);
+  renderer.setClearColor(0x000000, 0);
+  renderer.clear();
+  renderer.render(scene, cam);
+}
+function render() {
+  const h = parseFloat(hourEl.value), hh = Math.floor(h), mm = Math.round((h - hh) * 60);
+  document.getElementById("hour-v").textContent = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+  sun.position.copy(center).addScaledVector(sunDir(h), 1500);
+  if (mode === "layers") {
+    const rc = stage.getBoundingClientRect();
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    renderer.setSize(rc.width, rc.height, false);
+    parts.forEach(p => { p.mesh.material = flatMats[p.mat];
+      p.mesh.position.copy(p.mesh.userData.home); p.mesh.position.z += LAYERS.indexOf(p.layer) * spread; });
+    const d = 900;
+    pCam.position.set(center.x + d * Math.sin(yaw) * Math.cos(pitch), center.y + d * Math.sin(pitch), center.z + d * Math.cos(yaw) * Math.cos(pitch));
+    pCam.lookAt(center.x, center.y, center.z + LAYERS.length * spread / 2);
+    renderer.setRenderTarget(null);
+    renderer.setClearColor(0x22303a, 1);
+    renderer.render(scene, pCam);
+    parts.forEach(p => p.mesh.position.copy(p.mesh.userData.home));
+    return;
+  }
+  renderer.setPixelRatio(1);
+  renderer.setSize(W, H, false);
+  pass(rtId, p => idMats[p.mat]);
+  pass(rtLit, () => litMat);
+  pass(rtNrm, () => nrmMat);
+  pass(rtDep, () => depMat);
+  renderer.setRenderTarget(null);
+  renderer.setClearColor(0x000000, 0);
+  renderer.clear();
+  comp.uniforms.mode.value = mode === "flat" ? 1 : mode === "light" ? 2 : 0;
+  renderer.render(quadScene, quadCam);
+}
+
+const modes = { game: "m-game", ref: "m-ref", flat: "m-flat", light: "m-light", layers: "m-layers" };
+function setMode(m) {
+  mode = m;
+  for (const [k, id] of Object.entries(modes)) document.getElementById(id).setAttribute("aria-pressed", String(k === m));
+  document.getElementById("ref").hidden = m !== "ref";
+  cv.hidden = m === "ref";
+  document.getElementById("spread-row").hidden = m !== "layers";
+  stage.classList.toggle("free", m === "layers");
+  if (m !== "ref") render();
+}
+for (const [k, id] of Object.entries(modes)) document.getElementById(id).addEventListener("click", () => setMode(k));
+hourEl.addEventListener("input", () => { if (mode !== "ref") render(); });
+const spreadEl = document.getElementById("spread");
+spreadEl.addEventListener("input", () => { spread = parseFloat(spreadEl.value); document.getElementById("spread-v").textContent = spread; render(); });
+let drag = null;
+stage.addEventListener("pointerdown", e => { if (mode !== "layers") return; drag = [e.clientX, e.clientY, yaw, pitch]; stage.setPointerCapture(e.pointerId); });
+stage.addEventListener("pointermove", e => { if (!drag) return;
+  yaw = drag[2] - (e.clientX - drag[0]) * 0.008; pitch = Math.max(-0.2, Math.min(1.2, drag[3] + (e.clientY - drag[1]) * 0.006)); render(); });
+stage.addEventListener("pointerup", () => { drag = null; });
+window.addEventListener("resize", () => { if (mode === "layers") render(); });
+render();
+</script>
