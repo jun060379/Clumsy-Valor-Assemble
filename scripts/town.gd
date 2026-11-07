@@ -25,6 +25,7 @@ const LWA := STX1                # the slope down to the lower street: LWA..STX1
 const SURFR := 6.0
 const PXK := 1.78
 const CAMPFIRE := preload("res://assets/fx/town/campfire.png")
+const CAMP_APEX := 24.0         # the crossed logs' top above the ground (pixel3d ring); the flames start there
 const CAMP_UP := 14.0            # the campfire set back on the plane, behind the people (owner 2026-11-08: "모닥불 좀 밀고")
 const RIVER := preload("res://assets/fx/town/river.png")
 const LIFE := preload("res://scripts/town_life.gd")
@@ -39,7 +40,7 @@ const HALL_WIN := [[87, 359], [93, 289], [169, 287], [169, 369], [247, 235], [25
 ## leaf rows of the canopies (baked by splitting each tree by the prototype's colour rule: g >= r*0.85 and g > b*1.3)
 const TREE_ROWS := {"f_tree2": [2, 247], "f_tree3": [2, 247], "f_bigtree": [2, 307],
 	"f_oak": [0, 276], "f_round": [0, 251], "f_young": [0, 195], "f_tall": [0, 281]}   # tools/make_town_trees.py, drawn 1:1
-const LAMP_BAN := Vector2(30, 97)     # where the lamp's banner (q_lamp_ban) sits on q_lamp
+const LAMP_BAN := Vector2(34, 102)    # where the lamp's banner (hx/q_lamp_ban, pixel3d) sits on hx/q_lamp_base
 ## the wagon's horse (horse_strip: 8 cells of 214x184, 2-px grid, 2026-11-06 redraw; frame 0 is cut into base / neck / tail / neck root)
 const HCW := 214
 const HCH := 184
@@ -85,7 +86,12 @@ var hx := {}
 ## the tents' pegs and the kiln's front are kept on/behind the stand line, owner 2026-11-08: "너무 앞으로 나와있음")
 const P3D := {"g_hall": [0.0, 0.0], "g_forge": [32.0, 14.0], "g_barn": [20.0, 14.0], "g_store": [20.0, 16.0],
 	"g_tentR": [48.0, 10.0], "g_tentL": [48.0, 10.0], "g_kiln": [16.0, 14.0], "q_fountain": [12.0, 14.0],
-	"g_cottage": [20.0, 14.0], "g_well": [16.0, 14.0]}
+	"g_cottage": [20.0, 14.0], "g_well": [16.0, 14.0],
+	# the props, rebuilt on the 2-px grid (owner 2026-11-08: "2px 칸으로 다시 짓기" / "넣자")
+	"q_barrelL": [4.0, 14.0], "q_barrelM": [4.0, 14.0], "q_barrelS": [4.0, 14.0], "q_crateL": [4.0, 14.0], "q_crateS": [4.0, 14.0],
+	"q_bench": [4.0, 14.0], "q_benchL": [4.0, 14.0], "q_board": [6.0, 14.0], "q_planter": [6.0, 14.0], "q_planterL": [6.0, 14.0],
+	"q_pot": [4.0, 14.0], "g_ring": [2.0, 16.0], "g_yard": [4.0, 14.0], "g_wagon2": [16.0, 16.0],
+	"q_lamp_base": [4.0, 16.0], "q_bridge": [8.0, 14.0], "q_lights": [2.0, 14.0]}
 ## where the base of a pixel3d building meets the ground plane, px below the stand line (the P3D set-downs above are
 ## for 14); the plane's back edge is RAISE above the stand line (owner 2026-11-08: buildings behind the people, on the plane)
 var FOOT := 0.0
@@ -145,7 +151,8 @@ func _ready() -> void:
 	# pixels the same size as the characters'. tex[] keeps the originals for layout, climb tops and shadows
 	for k in tex.keys():
 		if ResourceLoader.exists("res://assets/town/hx/" + k + ".png"): hx[k] = load("res://assets/town/hx/" + k + ".png")
-	hx["g_tentL"] = load("res://assets/town/hx/g_tentL.png")    # the pixel3d tent built mirrored (not a flipped sprite)
+	for k in ["g_tentL", "q_benchL", "q_planterL"]:      # the pixel3d solids built mirrored (not a flipped sprite)
+		hx[k] = load("res://assets/town/hx/" + k + ".png")
 	# the sun-side versions (tools/bake_sun_light.py): <k>_m = sun from the left (morning), <k>_e = from the right
 	for f in DirAccess.get_files_at("res://assets/town/shadow"):
 		var sk := f.replace(".import", "").get_basename()
@@ -280,7 +287,7 @@ func _layout() -> void:
 		_hp(12, 98, 141), _hp(207, 292, 141), _hp(10, 100, 115), _hp(205, 294, 115), _hp(37, 117, 56), _hp(186, 266, 56), _hp(74, 98, 30), _hp(202, 228, 30)]
 	# [sprite, left x, surface y, sink, door dx|null, name, target, flip]
 	bld = [["g_store", 300.0, G, 0, 160.0, "창고", ""], ["g_yard", 820.0, G, 0, 378.0, "훈련장", "arena"],
-		["g_tentR", 4120.0, G, 2, null, "", "", true], ["g_ring", 4350.0, G - CAMP_UP, 4, null], ["g_tentR", 4490.0, G, 2, null],
+		["g_tentR", 4120.0, G, 2, null, "", "", true], ["g_ring", 4350.0, G - CAMP_UP, 0, null], ["g_tentR", 4490.0, G, 2, null],
 		["g_wagon", 4820.0, G, 0, 287.0, "출격 마차", "dungeon"], ["g_well", 5281.0, G, 0, null], ["g_barn", 5600.0, G, 0, 230.0, "헛간", ""],
 		["g_cottage", 6629.0, LOWF, 0, 140.0, "목욕집", ""], ["g_forge", 7269.0, LOWF, 0, 373.0, "대장간", "forge"], ["g_anvil", 7695.0, LOWF, 0, null], ["g_kiln", 7883.0, LOWF, 0, 113.0, "숯가마", ""]]
 	doors = []
@@ -607,6 +614,8 @@ func lantern_at(x: float, surf: float) -> Vector2:
 	# drifted off the glass when the lamp was redrawn)
 	var lx := 86.0 / 113.0 * im.get_width() - 56.0
 	var ly := 90.0 / 197.0 * im.get_height()
+	if hx.has("q_lamp_base"):      # the pixel3d lantern: its glass 112 px over the foot, the lamp set down 2
+		return Vector2(x + lx, surf - 110.0)
 	return Vector2(x + lx, surf - (im.get_height() - ly))
 
 
@@ -713,9 +722,10 @@ func shade_occluders() -> Array:
 	for b in bld:
 		var k: String = b[0]
 		if k == "g_ring" or k == "g_anvil": continue
+		if k == "g_wagon": k = "g_wagon2"
 		if P3D.has(k) and hx.has(k):
 			# the pixel3d art's own silhouette (clouds pass over it); no sun volume: its ground shadow is baked (shadow/)
-			o.append([hx[k], b[1], b[2] + b[3] * PK * BS + setdown(k), 0.0, b.size() > 7 and b[7], 1.0, false, true])
+			o.append([hx[k], b[1], b[2] + b[3] * PK * ks(k) + setdown(k), 0.0, b.size() > 7 and b[7], 1.0, false, true])
 			continue
 		var tx: Texture2D = tex["g_wagon2"] if k == "g_wagon" and tex.has("g_wagon2") else tex[k]
 		o.append([tx, b[1], b[2], b[3], b.size() > 7 and b[7], ks(k), false])
@@ -1238,6 +1248,10 @@ func _spr(k: String, x: float, y_bottom: float, sink := 0.0, flip := false, ci: 
 		im = hx[k]
 		w = im.get_width()
 		h = im.get_height()
+	if flip and hx.has(k + "L"):         # its own mirrored build, lit by the same sun
+		k = k + "L"
+		flip = false
+		im = hx[k]
 	var lv := sun_side()
 	if lv != "" and lit_tex.has(k + lv): im = lit_tex[k + lv]
 	var y := y_bottom - h + sink * PK * s + setdown(k)
@@ -1277,9 +1291,9 @@ func _draw_ground() -> void:
 	_shear(t_solid, RX1, RIV0, func(_x): return LOWF)
 	_shear(t_solid, RIV1, TOWN_W + PK, func(_x): return LOWF)
 	# 3. lower plaza: light strings, fountain
-	var L: Texture2D = tex["q_lights"]
+	var L: Texture2D = hx.get("q_lights", tex["q_lights"])
 	for s in light_strings:
-		var yy: float = up_y((s[0] + s[1]) / 2.0) + BAND - 10.0
+		var yy: float = up_y((s[0] + s[1]) / 2.0) + BAND - 10.0 - (P3D["q_lights"][0] if hx.has("q_lights") else 0.0)
 		gn.draw_texture_rect(L, Rect2(s[0], yy, s[1] - s[0], L.get_height()), false)
 	_spr("q_fountain", HDOOR - 52.0 * PK * BS, LOWF, 0.0, false, gn)
 	# 4. upper bands, west street, ramp
@@ -1331,7 +1345,7 @@ func _draw() -> void:
 	var fxx := 4350.0 + 27.0 * PK
 	var cfi := int(tt * 30.0) % 90
 	# the flames start at the top of the log teepee (g_ring's apex at 54,1; the ring sits at G - 55), as a log fire does
-	draw_texture_rect_region(CAMPFIRE, Rect2(roundf(fxx - 64.0), roundf(G - CAMP_UP - 47.0 - 112.0), 128, 128), Rect2((cfi % 10) * 128, (cfi / 10) * 128, 128, 128))
+	draw_texture_rect_region(CAMPFIRE, Rect2(roundf(fxx - 64.0), roundf(G - CAMP_UP - CAMP_APEX - 112.0), 128, 128), Rect2((cfi % 10) * 128, (cfi / 10) * 128, 128, 128))
 
 ## crates, barrels, benches, pots and lamps: the ones whose foot is on the stand line here, the nearer ones on near_node
 func _is_near(x: float, y: float) -> bool:
@@ -1562,11 +1576,15 @@ func _sway(k: String, x: float, y_bottom: float, sink: float, flip: bool, amp: f
 ## street lamp: the banner under the arm flutters, more in a gust
 func _lamp(x: float, surf: float, vr: Rect2, ci: CanvasItem = null) -> void:
 	if ci == null: ci = self
-	var base: Texture2D = lit_tex.get("q_lamp_base" + sun_side(), tex["q_lamp_base"])
-	var ban: Texture2D = tex["q_lamp_ban"]
+	var lv := sun_side()
+	var base: Texture2D = lit_tex.get("q_lamp_base" + lv, hx.get("q_lamp_base", tex["q_lamp_base"]))
+	var ban: Texture2D = hx.get("q_lamp_ban", tex["q_lamp_ban"])
 	x = roundf(x)
 	if x > vr.end.x or x + base.get_width() < vr.position.x: return
-	var y := roundf(surf - base.get_height())
+	var y := roundf(surf - base.get_height() + setdown("q_lamp_base"))
+	if sh_tex.has("q_lamp_base" + lv):
+		var st: Texture2D = sh_tex["q_lamp_base" + lv]
+		ci.draw_texture_rect(st, Rect2(x - 24.0, y, st.get_width(), st.get_height()), false)
 	ci.draw_texture(base, Vector2(x, y))
 	var t := Time.get_ticks_msec() / 1000.0
 	var bh := float(ban.get_height())
@@ -1655,12 +1673,10 @@ func _horse_step(dt: float) -> void:
 	H["tail"] = sin(H["t"] / 430.0) * 0.12 + sin(H["t"] / 170.0) * 0.05 * (1.0 if sin(H["t"] / 2300.0) > 0.6 else 0.0)
 
 func _draw_wagon(b: Array) -> void:
-	var W2: Texture2D = lit_tex.get("g_wagon2" + sun_side(), tex["g_wagon2"])
 	var x := roundf(b[1])
 	var vr: Rect2 = arena.view_rect()
 	if x > vr.end.x + 20.0 or x + 480.0 < vr.position.x: return
-	var wy := roundf(b[2] - W2.get_height() + b[3] * PK)
-	draw_texture(W2, Vector2(x, wy))
+	_spr("g_wagon2", x, b[2], b[3])
 	var H := horse
 	var hx := x + HDX
 	var hy := roundf(b[2] - HCH + 2.0)
