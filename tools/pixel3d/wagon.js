@@ -1,4 +1,4 @@
-// The covered wagon built in code (owner 2026-11-07: 작은 소품). The reference sprite (assets/town/g_wagon2.png, 280 x
+// The cart built in code (a covered wagon at first) (owner 2026-11-07: 작은 소품). The reference sprite (assets/town/g_wagon2.png, 280 x
 // 218, one cell per pixel; the town hitches its horse at the shaft separately) is only the guide. A plank bed on posts,
 // a canvas bonnet over hoops, open at the front end, big spoked wheels behind and smaller ones in front, the shaft out
 // to the right. Built as a real solid: world units, x right, y up from the ground (a ref row r is at y = 218 - r), z
@@ -10,10 +10,11 @@ const WAGON = (function () {
   const RAMP = { red: 0, wood: 1, ochre: 2, cream: 3, leaf: 4, green: 5, blue: 6, violet: 7, stone: 8, iron: 9 };
   const MAT = {
     sand: ["ochre", 5],
-    canvas: ["cream", 6], lip: ["cream", 7], hoop: ["ochre", 4], inside: ["ochre", 1],
+    canvas: ["cream", 5], rope: ["ochre", 3], barrel: ["wood", 5], barrelTop: ["wood", 6], hoopIron: ["iron", 3],
+    crate: ["wood", 6], crateDk: ["wood", 4], sack: ["ochre", 5],
     plank: ["wood", 5], post: ["wood", 4], rim: ["wood", 6], rail: ["wood", 6], cap: ["iron", 3], rivet: ["iron", 2], tyre: ["wood", 3], hub: ["wood", 3], spoke: ["wood", 4], shaft: ["wood", 5],
   };
-  const LAYERS = ["ground", "bed", "bonnet", "wheels"];
+  const LAYERS = ["ground", "bed", "load", "wheels"];
 
   function build(THREE) {
     const parts = [];
@@ -23,59 +24,48 @@ const WAGON = (function () {
     const R = (row) => 218 - row;
     const Z0 = -48, Z1 = 0, ZM = (Z0 + Z1) / 2;
 
-    // (owner 2026-11-07: 돌린 각도, 천 주름, 천 모양, 짐칸·바퀴 디테일) side on again; the bonnet fuller than the bed
-    // and flaring out at its ends; the cloth hung in U folds between the hoops; a top rail and iron-capped posts on the
-    // bed; heavier, lighter-rimmed wheels with big square hubs
-    // ---- the bed: side planks between posts, a top rail along them, a floor, the shaft out to the right
-    cube("bed", "post", 10, 226, R(168), R(100), Z0 + 2, Z1 - 2);                  // the body
-    for (const [r0, r1] of [[108, 120], [123, 136], [139, 152], [155, 166]]) cube("bed", "plank", 12, 224, R(r1), R(r0), Z1 - 2, Z1);
-    cube("bed", "rail", 6, 230, R(108), R(98), Z0, Z1 + 2.5);                       // the top rail
-    for (const x of [22, 84, 142, 200]) { cube("bed", "post", x, x + 14, R(170), R(98), Z1 - 3, Z1 + 1.5);
-      cube("bed", "cap", x - 1, x + 15, R(108), R(100), Z1 + 1.5, Z1 + 3.5);         // iron caps over the rail
-      for (const yy of [R(104)]) cube("bed", "rivet", x + 5, x + 9, yy - 2, yy + 2, Z1 + 3.5, Z1 + 4.2); }
+    // (owner 2026-11-07: "씁 미묘한데. 래퍼런스 다시 찾아서 다시 만들어봐" -> 상인 수레) A merchant's cart: an open plank
+    // bed with low sides, the load at the back under a tarp lashed down with rope, barrels, a crate and a sack up front.
+    const BT = 120;                                                   // the bed's top row
+    // ---- the bed: low sides of planks between posts, a top rail, the shaft out to the right
+    cube("bed", "post", 10, 226, R(166), R(BT), Z0 + 2, Z1 - 2);
+    for (const [r0, r1] of [[126, 138], [141, 152], [155, 164]]) cube("bed", "plank", 12, 224, R(r1), R(r0), Z1 - 2, Z1);
+    cube("bed", "rail", 6, 230, R(126), R(BT - 2), Z0, Z1 + 2.5);
+    for (const x of [22, 84, 142, 200]) { cube("bed", "post", x, x + 12, R(168), R(BT - 6), Z1 - 3, Z1 + 1.5);
+      cube("bed", "cap", x - 1, x + 13, R(BT - 2), R(BT - 8), Z1 - 3.5, Z1 + 2);
+      cube("bed", "rivet", x + 4, x + 8, R(131), R(127), Z1 + 1.5, Z1 + 2.2); }
     cube("bed", "shaft", 214, 272, R(152), R(138), ZM - 4, ZM + 4);
     cube("bed", "post", 264, 278, R(156), R(134), ZM - 5, ZM + 5);
 
-    // ---- the bonnet (owner 2026-11-07: "그냥 원본 형태 좀 더 따라해주면 안되나. 끝부분에 저 형태가 너무 다른데"):
-    // its outline taken off the reference row by row - the back end swelling out past the bed and rounding over, the
-    // front end belling out wide around its open mouth - and the cloth hung between those ends over the hoops, with
-    // two U folds in each bay. L(y), Rx(y): the cloth's ends at height y above the bed top (the reference's columns)
-    const lerpT = (tab) => (y) => { if (y <= tab[0][0]) return tab[0][1];
-      for (let k = 1; k < tab.length; k++) if (y <= tab[k][0]) { const [y0, x0] = tab[k - 1], [y1, x1] = tab[k]; return x0 + (x1 - x0) * (y - y0) / (y1 - y0); }
-      return tab[tab.length - 1][1]; };
-    const L = lerpT([[0, 10], [20, 4], [50, 2], [72, 5], [84, 10], [92, 18], [97, 30]]);
-    const Rx = lerpT([[0, 220], [30, 234], [56, 238], [74, 236], [86, 229], [94, 218], [97, 206]]);
-    { const HO = [22, 90, 148, 212], NU = 260, NV = 90, t = [];
-      const bays = [[22, 90], [90, 148], [148, 212]];
-      const top = (x) => { let d = 1e9; for (const h of HO) d = Math.min(d, Math.abs(x - h));
-        return 97 * (1 - 0.05 * Math.pow(Math.sin(Math.min(d, 30) / 30 * Math.PI / 2), 2)); };
-      const fold = (x, yRel) => { let f = 0;
-        for (const [a, b] of bays) { if (x < a || x > b) continue; const u = (x - (a + b) / 2) / ((b - a) / 2);
-          for (const [low, high] of [[44, 86], [24, 70]]) { const yu = low + (high - low) * u * u;
-            f += 0.09 * Math.exp(-Math.pow((yRel - yu) / 6, 2)) * (1 - u * u * 0.6); } }
-        return f; };
-      const P = (iu, iv) => { const th = Math.PI * iv / NV, sn = Math.sin(th), cs = Math.cos(th);
-        let y = 97 * sn; const x0 = L(y), x1 = Rx(y), x = x0 + (x1 - x0) * iu / NU;
-        y = Math.min(y, top(x) * sn + (97 - top(x)) * 0);                  // the cloth sags a touch between hoops
-        const r = 1 - (cs > 0 ? fold(x, y) : 0);
-        return [x, R(100) + y * (1 - (1 - r) * 0.3), ZM + 26.5 * r * cs]; };
+    // ---- the load under a tarp: a rounded heap over the back two thirds, sagging between the ropes
+    const ROPES = [36, 78, 120];
+    { const XA = 14, XB = 150, NU = 200, NV = 70, t = [], HMAX = 70, DW = 25;
+      const P = (iu, iv) => { const u = iu / NU, th = Math.PI * iv / NV, x = XA + (XB - XA) * u;
+        const ends = Math.pow(Math.sin(Math.PI * Math.min(1, Math.min(u, 1 - u) * 5) / 2), 0.6);   // rounded at both ends
+        let d = 1e9; for (const r of ROPES) d = Math.min(d, Math.abs(x - r));
+        const sag = 1 - 0.07 * Math.exp(-Math.pow(d / 4, 2)) - 0.03 * Math.sin(x * 0.21);       // pulled in under the ropes
+        const h = HMAX * ends * (0.92 + 0.08 * Math.sin(x * 0.05 + 1)) * sag;
+        return [x, R(BT) + h * Math.sin(th), ZM + DW * sag * Math.cos(th) * (0.7 + 0.3 * ends)]; };
       const q = (a, b, c, d) => t.push(...a, ...b, ...c, ...a, ...c, ...d);
       for (let iu = 0; iu < NU; iu++) for (let iv = 0; iv < NV; iv++) q(P(iu, iv), P(iu, iv + 1), P(iu + 1, iv + 1), P(iu + 1, iv));
-      for (let iv = 0; iv < NV; iv++) { const a = P(0, iv), b = P(0, iv + 1), c = [L(0) + 4, R(100) + 30, ZM]; t.push(...a, ...b, ...c); }   // the closed back
       const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(t, 3)); g.computeVertexNormals();
-      add(g, "canvas", "bonnet");
-      // the open mouth at the front: the inside of the belled cloth seen past its lip - a dark sliver inside the edge,
-      // the lip itself a light band
-      const band = (mat, dx0, dx1, dz) => { const tt = [];
-        const Q = (k, d) => { const th = Math.PI * 0.5 * k / 40, y = 97 * Math.sin(th) * 0.98, x = Rx(y) - d; return [x, R(100) + y, ZM + 26.5 * Math.cos(th) + dz]; };
-        for (let k = 0; k < 40; k++) tt.push(...Q(k, dx0), ...Q(k, dx1), ...Q(k + 1, dx1), ...Q(k, dx0), ...Q(k + 1, dx1), ...Q(k + 1, dx0));
-        const gg = new THREE.BufferGeometry(); gg.setAttribute("position", new THREE.Float32BufferAttribute(tt, 3)); gg.computeVertexNormals();
-        add(gg, mat, "bonnet"); };
-      band("inside", 3.5, 13, 0.6);
-      band("lip", 0.5, 3.5, 0.9); }
-    for (const x of [22, 90, 148, 212]) {                             // the hoops: a rib under the cloth, standing just proud
-      const pts = []; for (let k = 0; k <= 32; k++) { const th = Math.PI * k / 32; pts.push(new THREE.Vector3(x, R(100) + 96.2 * Math.sin(th), ZM + 27.6 * Math.cos(th))); }
-      add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 64, 1.9, 6, false), "hoop", "bonnet"); }
+      add(g, "canvas", "load");
+      for (const x of ROPES) { const pts = []; for (let k = 0; k <= 32; k++) { const pp = P(Math.round((x - XA) / (XB - XA) * NU), k * NV / 32);
+          pts.push(new THREE.Vector3(pp[0], pp[1], pp[2]).add(new THREE.Vector3(0, Math.sin(Math.PI * k / 32) * 0.8, Math.cos(Math.PI * k / 32) * 0.8))); }
+        add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 48, 1.3, 5, false), "rope", "load"); } }
+    // ---- up front: two barrels, a crate with a sack on it
+    const barrel = (x, z, h, r) => { const prof = []; for (let k = 0; k <= 10; k++) { const t2 = k / 10; prof.push(new THREE.Vector2(r * (0.86 + 0.14 * Math.sin(Math.PI * t2)), h * t2)); }
+      const g = new THREE.LatheGeometry(prof, 16); const m = add(g, "barrel", "load"); m.position.set(x, R(BT), z);
+      for (const f of [0.15, 0.85]) { const gg = new THREE.TorusGeometry(r * (0.86 + 0.14 * Math.sin(Math.PI * f)) + 0.4, 1.0, 5, 18);
+        const mm = add(gg, "hoopIron", "load"); mm.rotation.x = Math.PI / 2; mm.position.set(x, R(BT) + h * f, z); }
+      const lid = new THREE.CircleGeometry(r * 0.86, 16); const ml = add(lid, "barrelTop", "load"); ml.rotation.x = -Math.PI / 2; ml.position.set(x, R(BT) + h + 0.1, z); };
+    barrel(170, ZM + 8, 44, 13);
+    barrel(170, ZM - 12, 38, 12);
+    cube("load", "crate", 188, 224, R(BT), R(BT) + 30, ZM - 14, ZM + 14);
+    for (const [a, b] of [[188, 191], [221, 224]]) cube("load", "crateDk", a, b, R(BT), R(BT) + 30, ZM + 14, ZM + 14.6);
+    cube("load", "crateDk", 188, 224, R(BT) + 13.5, R(BT) + 16.5, ZM + 14, ZM + 14.6);
+    { const g = new THREE.SphereGeometry(1, 12, 8); const m = add(g, "sack", "load"); m.scale.set(15, 9, 11); m.position.set(205, R(BT) + 37, ZM + 2); m.rotation.z = 0.2;
+      const g2 = new THREE.CylinderGeometry(2.2, 3.6, 6, 8); const m2 = add(g2, "sack", "load"); m2.position.set(216, R(BT) + 45, ZM + 2); m2.rotation.z = -0.7; }
 
     // ---- the wheels: an iron-shod rim, eight spokes, a hub; big at the back, smaller at the front
     const wheel = (cx, cyRow, r, z) => {
