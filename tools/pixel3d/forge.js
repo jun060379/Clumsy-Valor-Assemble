@@ -74,37 +74,34 @@ const FORGE = (function () {
     let seed = 11;
     const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
 
-    // dressed stone laid in courses over a mortar bed: `span(row)` gives the [x0, x1] the wall covers on that row (so
-    // a course follows a sloped or curved outline), `skip(x0, x1, r0, r1)` leaves an opening. Each stone a slab with
-    // its top corners rounded, a lit top edge and a shaded foot, now and then a greyer stone or a crack.
+    // dressed stone laid in courses (owner 2026-11-07: "벽돌이 과하게 들쭉날쭉한듯. 역시나 래퍼런스 찾아서 재구성"; the
+    // pixel-art rule, SLYNYRD Pixelblog 45: one brick size per wall, a 1-cell joint, a regular running bond, only now
+    // and then a discoloured or cracked one). Every stone in a wall the same width `w` and the course height, each
+    // course shifted half a stone; the same small rounding on every corner; a lit top edge. Over a mortar bed that
+    // leaves the openings (`skip`) open; `span(row)` gives the wall's [x0, x1] on a row (sloped or curved outlines).
     function courses(layer, rows, span, zf, opts = {}) {
-      const { wMin = 9, wMax = 18, skip = () => false, grey = 0.08 } = opts;
+      const { w = 14, skip = () => false } = opts;
       for (let i = 0; i < rows.length - 1; i++) {
         const r0 = rows[i], r1 = rows[i + 1] - 1;
         const [a, b] = span(r0 + (r1 - r0) / 2);
         if (b - a < 3) continue;
-        // the mortar bed, in runs that leave the openings open
         let m0 = null;
         for (let xx = a; xx <= b; xx++) {
           const open = xx === b || skip(xx, xx + 1, r0, r1);
           if (!open && m0 === null) m0 = xx;
           if (open && m0 !== null) { box(layer, "mortar2", m0, xx, r0, r1 + 1, zf - 6, zf - 0.8); m0 = null; }
         }
-        let x = a + (i % 2 ? -Math.floor(wMin / 2) : 0);
-        while (x < b - 2) {
-          let x0 = Math.max(x, a), w = wMin + Math.floor(rnd() * (wMax - wMin + 1)), x1 = Math.min(x + w - 1, b);
-          x += w;
+        const x00 = a - (i % 2 ? Math.floor(w / 2) : 0);
+        for (let x = x00; x < b - 2; x += w) {
+          const x0 = Math.max(x, a), x1 = Math.min(x + w - 2, b);
           if (x1 - x0 < 3 || skip(x0, x1, r0, r1)) continue;
-          const c = 1 + Math.floor(rnd() * 2), c2 = 1 + Math.floor(rnd() * 2);
-          const m = rnd() < grey ? "stoneGr" : rnd() < 0.1 ? "stoneLt" : "stone";
-          slab(layer, m, [[x0, r1 - 1], [x0 + 1, r1], [x1 - 1, r1], [x1, r1 - 1], [x1, r0 + c2], [x1 - c2, r0], [x0 + c, r0], [x0, r0 + c]], zf - 1.4, zf);
-          if (m !== "stoneGr") {
-            box(layer, "plinthHi", x0 + c, x1 - c2, r0, r0 + 1, zf - 0.5, zf + 0.15);
-            if (r1 - r0 > 4) box(layer, "plinthLo", x0 + 1, x1 - 1, r1 - 1, r1, zf - 0.5, zf + 0.15);
-          }
-          if (rnd() < 0.18 && x1 - x0 > 10) {
+          const h = rnd();
+          const m = h < 0.05 ? "stoneLt" : h > 0.96 ? "stoneGr" : "stone";       // rarely a stone of another shade
+          slab(layer, m, [[x0, r1 - 1], [x0 + 1, r1], [x1 - 1, r1], [x1, r1 - 1], [x1, r0 + 1], [x1 - 1, r0], [x0 + 1, r0], [x0, r0 + 1]], zf - 1.4, zf);
+          box(layer, "plinthHi", x0 + 1, x1 - 1, r0, r0 + 1, zf - 0.5, zf + 0.15);      // the lit top edge
+          if (rnd() < 0.05 && x1 - x0 > 10) {                                          // rarely a crack
             const sx = x0 + 3 + rnd() * (x1 - x0 - 6);
-            bar(layer, "crack", sx, r0 + 1, sx + (rnd() < 0.5 ? -2 : 2), r0 + 4, 1, zf - 0.3, zf + 0.2);
+            bar(layer, "crack", sx, r0 + 1, sx + 2, r0 + 4, 1, zf - 0.3, zf + 0.2);
           }
         }
       }
@@ -124,7 +121,7 @@ const FORGE = (function () {
          [mouth.slice().reverse(), [[57, 145], [57, 131], [83, 131], [83, 145]].reverse()]);
     const inMouth = (x0, x1, r0, r1) => x1 > 44 && x0 < 90 && r1 > 90 && r0 < 123;
     const pit = (x0, x1, r0, r1) => x1 > 56 && x0 < 84 && r1 > 131;
-    courses("furnace", rowsFrom(72, 145, 7), fspan, ZF, { skip: (a, b, c, d) => inMouth(a, b, c, d) || pit(a, b, c, d) });
+    courses("furnace", rowsFrom(72, 145, 7), fspan, ZF, { w: 14, skip: (a, b, c, d) => inMouth(a, b, c, d) || pit(a, b, c, d) });
     // the voussoirs round the mouth
     { const cx = 67, sp = 113, ri = 21, ro = 27, n = 7;
       slab("furnace", "mortar2", archPts(40, 94, 86, 122), ZF - 2, ZF + 0.5, [mouth.slice().reverse()]);
@@ -150,7 +147,7 @@ const FORGE = (function () {
     // ---- the chimney stack, a little narrower, with a capstone course
     const ZC = 2;
     slab("chimney", "mortar2", [[35, 72], [74, 72], [74, 9], [35, 9]], -26, ZC - 1);
-    courses("chimney", rowsFrom(9, 72, 7), () => [35, 74], ZC, { wMin: 10, wMax: 20, grey: 0.08 });
+    courses("chimney", rowsFrom(9, 72, 7), () => [35, 74], ZC, { w: 13 });
     box("chimney", "stoneLt", 33, 76, 3, 9, -12, ZC + 2);                         // the capstone course, not too deep
     box("chimney", "plinthHi", 33, 76, 3, 4, -12, ZC + 2.2);
     box("chimney", "soot", 37, 72, 2, 3, -10, -2);
@@ -164,11 +161,11 @@ const FORGE = (function () {
       if (px1 < 280) bar("porch", "timber", px1, 96, px1 + 14, 81, 4, ZP - 3.5, ZP - 0.5);
     }
     // stone feet under the posts: two or three big blocks each
-    courses("stone wall", [115, 125, 135, 145], () => [107, 128], ZP + 3, { wMin: 10, wMax: 11, grey: 0.1 });
-    courses("stone wall", [128, 136, 145], () => [259, 280], ZP + 3, { wMin: 10, wMax: 11, grey: 0.1 });
+    courses("stone wall", [115, 125, 135, 145], () => [107, 128], ZP + 3, { w: 11 });
+    courses("stone wall", [128, 136, 145], () => [259, 280], ZP + 3, { w: 11 });
     // the low wall between: smaller stones, three courses
-    courses("stone wall", [118, 127, 136, 145], () => [128, 194], ZP, { wMin: 11, wMax: 16, grey: 0.12 });
-    courses("stone wall", [128, 136, 145], () => [194, 204], ZP + 2, { wMin: 10, wMax: 10, grey: 0.1 });
+    courses("stone wall", [118, 127, 136, 145], () => [128, 194], ZP, { w: 16 });
+    courses("stone wall", [128, 136, 145], () => [194, 204], ZP + 2, { w: 11 });
 
     // ---- on the back wall: hanging tools, a window with a board under it
     box("tools", "ironDk", 129, 151, 88, 89.6, -15, -13.5);                          // the rail
@@ -193,7 +190,7 @@ const FORGE = (function () {
     // ---- the door wall: stone, an arched plank door in a wooden frame
     const ZD = 0;
     const dOpen = (x0, x1, r0, r1) => x1 > 211 && x0 < 251 && r1 > 80;
-    courses("door", rowsFrom(80, 145, 8), () => [204, 259], ZD, { skip: dOpen, grey: 0.08 });
+    courses("door", rowsFrom(80, 145, 8), () => [204, 259], ZD, { w: 14, skip: dOpen });
     slab("door", "frame", archPts(210, 252, 82, 145), ZD - 1, ZD + 1.5, [archPts(214, 248, 86, 145).slice().reverse()]);
     slab("door", "doorGap", archPts(214, 248, 86, 145), ZD - 3, ZD - 2.6);
     { const rad = 17, cx = 231, spring = 103;
@@ -249,7 +246,7 @@ const FORGE = (function () {
     // ---- the lean-to at the left: a short roof down from the chimney over a post and a stone foot
     const ZL = 10;
     box("lean-to", "timber", 12, 17, 80, 113, ZL - 6, ZL - 2);
-    courses("lean-to", [113, 124, 135, 145], () => [6, 28], ZL - 2, { wMin: 11, wMax: 11, grey: 0.1 });
+    courses("lean-to", [113, 124, 135, 145], () => [6, 28], ZL - 2, { w: 11 });
     bar("lean-to", "roofBase", 35, 56, 2, 80, 7, ZL - 8, ZL);
     bar("lean-to", "fascia", 35, 61, 2, 85, 3, ZL - 7, ZL + 0.5);
     for (let i = 0, n = 4; i < n; i++) {                                           // tiles down the short slope
