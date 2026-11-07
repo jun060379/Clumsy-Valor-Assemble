@@ -22,6 +22,7 @@ const FORGE3 = (function () {
   };
   const LAYERS = ["ground", "walls", "timber", "windows", "door", "forge", "chimney", "roof", "tiles", "verge", "sign", "props"];
 
+  let ROT = true;                                                       // the wing turned to run back (owner's question)
   function build(THREE) {
     const parts = [];
     const add = (geo, mat, layer) => { const m = new THREE.Mesh(geo); parts.push({ mesh: m, mat, layer }); return m; };
@@ -132,7 +133,7 @@ const FORGE3 = (function () {
     }
 
     // ---- a stone foot along the whole front
-    courses("walls", [136, 145], () => [14, 256], 8, { w: 13, gx: 14, gr: 136, ch: 9 });
+    courses("walls", [136, 145], () => [14, 206], 8, { w: 13, gx: 14, gr: 136, ch: 9 });
 
     // ---- the left: a front gable over the door
     const ZG = 6, AX = 66, AR = 20;                                                  // apex column and row
@@ -177,48 +178,23 @@ const FORGE3 = (function () {
       shell("verge", "slate", (u, v) => [AX + (xe - AX) * v, ya + (yb - ya) * v - 1, ZV0 - 3 + (-40 - ZV0 + 3) * u], [0, 1], [0, 0.5, 1], [0, -3, 0]);
     }
 
-    // ---- the right wing, turned to run back (owner 2026-11-07: "오른 쪽에 있는 집을 90도 돌려서 뒤편을 향하게" /
-    // "붙여"): its gable end now faces the street, set right against the forge; a shop window with shutters below, a
-    // small window in the gable, the timber frame and slate verges as on the left gable; its roof runs far back
-    const ZR = 2, BX = 212, BR = 34, BH = 42;                                        // apex column, apex row, half width
-    const vR = (x) => BR + 12 + Math.abs(x - BX) * 0.95;
-    const w0 = parts.length;
-    slab("walls", "plaster", [[BX - BH, 136], [BX + BH, 136], [BX + BH, vR(BX + BH)], [BX, BR + 12], [BX - BH, vR(BX - BH)]], -90, ZR,
-         [[[194, 101], [230, 101], [230, 123], [194, 123]].reverse()]);
-    for (const [a, b] of [[BX - BH, BX - BH + 6], [BX + BH - 6, BX + BH]]) box("timber", "timber", a, b, vR(a) - 1, 136, ZR - 2, ZR + 2);
-    box("timber", "timber", BX - BH, BX + BH, 86, 91, ZR - 2, ZR + 2);
-    for (const [a, b] of [[BX - 30, BX - 24], [BX + 24, BX + 30]]) box("timber", "timber", a, b, vR((a + b) / 2) - 1, 86, ZR - 2, ZR + 2);
-    bar("timber", "timber", BX - 24, 86, BX - 8, 66, 4, ZR - 2, ZR + 1.5);
-    bar("timber", "timber", BX + 24, 86, BX + 8, 66, 4, ZR - 2, ZR + 1.5);
-    { const x0 = BX - 8, x1 = BX + 8, r0 = 54, r1 = 70, z = ZR;                       // the gable window
-      slab("windows", "frame", [[x0, r1], [x1, r1], [x1, r0], [x0, r0]], z, z + 1.6, [[[x0 + 3, r0 + 3], [x1 - 3, r0 + 3], [x1 - 3, r1 - 3], [x0 + 3, r1 - 3]]]);
-      box("windows", "glass", x0 + 3, x1 - 3, r0 + 3, r1 - 3, z, z + 0.3);
-      box("windows", "mullion", BX - 1, BX + 1, r0 + 3, r1 - 3, z, z + 0.9);
-      box("windows", "frame", x0 - 2, x1 + 2, r1, r1 + 3, z, z + 3); }
-    { // the shop window: a dark inside, a frame with a cross, shutters swung open, a sill board
-      box("windows", "plankDk", 194, 230, 101, 123, ZR - 8, ZR - 7);
-      slab("windows", "frame", [[192, 125], [232, 125], [232, 99], [192, 99]], ZR - 1, ZR + 1.6, [[[195, 102], [229, 102], [229, 122], [195, 122]]]);
-      box("windows", "mullion", 211, 213, 102, 122, ZR - 1, ZR + 0.6);
-      box("windows", "mullion", 195, 229, 111, 113, ZR - 1, ZR + 0.6);
-      for (const [a, b] of [[184, 192], [232, 240]]) { box("windows", "plank", a, b, 99, 125, ZR, ZR + 1.4); box("windows", "ironDk", a + 1, b - 1, 104, 105, ZR + 1.4, ZR + 1.8); box("windows", "ironDk", a + 1, b - 1, 119, 120, ZR + 1.4, ZR + 1.8); }
-      box("windows", "frame", 190, 234, 125, 128, ZR, ZR + 4); }
-    { const ZV0 = ZR + 2, ZV1 = ZR + 10;                                              // verges and the long roof behind
-      for (const s of [-1, 1]) {
-        const xe = BX + s * (BH + 12), re = BR + (BH + 12) * 0.95 + 12;
-        bar("verge", "plankDk", BX, BR + 14, xe, re + 2, 4, ZV0, ZV1 - 2);
-        for (let i = 0, n = 6; i < n; i++) {
-          const t0 = i / n + 0.006, t1 = (i + 1) / n - 0.012;
-          const hh = Math.abs(Math.sin((i + 5) * 9.137 + s * 4.1) * 43758.5453) % 1;
-          const m = hh < 0.15 ? "slateDk" : "slate";
-          const pr = (u) => u < 0.55 ? 0.4 + 3.0 * u / 0.55 : 3.4 - 2.4 * (u - 0.55) / 0.45;
-          const F = (u, v) => { const t = t0 + (t1 - t0) * v, x = BX + (xe - BX) * t, row = BR + (re - BR - 12) * t + 12 * u;
-            return [x, Y(row, ZV1), ZV1 - 1 + pr(u) + 0.6 * v]; };
-          shell("verge", m, F, [0, 0.2, 0.4, 0.55, 0.75, 1], [0, 0.5, 1], [0, 0, -2.5]);
-        }
-        const ya = Y(BR, ZV1), yb = Y(re - 12, ZV1);
-        shell("verge", "slate", (u, v) => [BX + (xe - BX) * v, ya + (yb - ya) * v - 1, ZV0 - 3 + (-100 - ZV0 + 3) * u], [0, 1], [0, 0.5, 1], [0, -3, 0]);
-      }
+    // ---- the right wing: plaster in a timber frame, two windows, under a long slate roof
+    const ZR = 2, w0 = parts.length;
+    slab("walls", "plaster", [[168, 136], [278, 136], [278, 80], [168, 80]], -30, ZR,
+         [[[188, 98], [208, 98], [208, 118], [188, 118]].reverse(), [[[238, 98], [258, 98], [258, 118], [238, 118]]][0].reverse()]);
+    for (const [a, b] of [[168, 174], [218, 224], [272, 278]]) box("timber", "timber", a, b, 80, 136, ZR - 2, ZR + 2);
+    box("timber", "timber", 168, 278, 80, 85, ZR - 2, ZR + 2);
+    box("timber", "timber", 168, 278, 124, 128, ZR - 2, ZR + 2);
+    for (const x0 of [186, 236]) {
+      const x1 = x0 + 24, r0 = 96, r1 = 120, z = ZR;
+      slab("windows", "frame", [[x0, r1], [x1, r1], [x1, r0], [x0, r0]], z - 2, z + 1.6, [[[x0 + 2, r0 + 2], [x1 - 2, r0 + 2], [x1 - 2, r1 - 2], [x0 + 2, r1 - 2]]]);
+      box("windows", "glass", x0 + 2, x1 - 2, r0 + 2, r1 - 2, z - 2, z - 1.7);
+      box("windows", "mullion", x0 + 11, x0 + 13, r0 + 2, r1 - 2, z - 2, z - 1);
+      box("windows", "mullion", x0 + 2, x1 - 2, 107, 109, z - 2, z - 1);
+      box("windows", "frame", x0 - 2, x1 + 2, r1, r1 + 3, z, z + 3);
     }
+    slateRoof("roof", 122, 284, 78, 30, 16, -34, 17, 6);
+    box("roof", "ridge", 122, 284, 26, 31, -38, -30);
     const w1 = parts.length;
 
     // ---- the forge in the chimney's foot: a stone block, an arched fire mouth, a hearth ledge; the hood narrows into
@@ -254,14 +230,14 @@ const FORGE3 = (function () {
 
     // ---- the signs: a scrolled iron bracket and a board at the right, a lantern on a bracket at the left
     const s0 = parts.length;
-    box("sign", "ironDk", 252, 276, 92, 94, ZR, ZR + 2);
-    bar("sign", "ironDk", 256, 106, 272, 94, 1.6, ZR, ZR + 2);
-    { const g = new THREE.TorusGeometry(4, 0.8, 6, 16, Math.PI * 1.5); const m = add(g, "ironDk", "sign"); m.position.set(262, Y(90, ZR + 1), ZR + 1); }
-    for (const x of [259, 271]) box("sign", "ironDk", x, x + 1, 94, 100, ZR, ZR + 1);
-    slab("sign", "sign", [[255, 100], [275, 100], [275, 118], [265, 123], [255, 118]], ZR - 1, ZR + 2);
-    bar("sign", "signMark", 259, 117, 271, 103, 1.6, ZR + 2, ZR + 2.6);                   // crossed swords
-    bar("sign", "signMark", 271, 117, 259, 103, 1.6, ZR + 2, ZR + 2.6);
-    box("sign", "signMark", 263, 267, 109, 111, ZR + 2.2, ZR + 2.8);
+    box("sign", "ironDk", 270, 294, 62, 64, ZR, ZR + 2);
+    bar("sign", "ironDk", 276, 76, 292, 64, 1.6, ZR, ZR + 2);
+    { const g = new THREE.TorusGeometry(4, 0.8, 6, 16, Math.PI * 1.5); const m = add(g, "ironDk", "sign"); m.position.set(282, Y(60, ZR + 1), ZR + 1); }
+    for (const x of [279, 291]) box("sign", "ironDk", x, x + 1, 64, 70, ZR, ZR + 1);
+    slab("sign", "sign", [[275, 70], [295, 70], [295, 88], [285, 93], [275, 88]], ZR - 1, ZR + 2);
+    bar("sign", "signMark", 279, 87, 291, 73, 1.6, ZR + 2, ZR + 2.6);                   // crossed swords
+    bar("sign", "signMark", 291, 87, 279, 73, 1.6, ZR + 2, ZR + 2.6);
+    box("sign", "signMark", 283, 287, 79, 81, ZR + 2.2, ZR + 2.8);
     const s1 = parts.length;
     box("sign", "ironDk", 8, 24, 84, 86, ZG - 2, ZG);                                   // the lantern's bracket
     box("sign", "ironDk", 10, 11, 86, 91, ZG - 2, ZG - 1);
@@ -270,12 +246,29 @@ const FORGE3 = (function () {
     box("sign", "iron", 6, 15, 101, 103, ZG - 4, ZG + 1);
 
     // ---- props: a barrel by the wing, a shield leaning on the hearth
-    { const g = new THREE.CylinderGeometry(10, 10, 24, 16); const m = add(g, "barrel", "props"); m.position.set(244, Y(133, 22), 22);
-      for (const r of [125, 141]) { const gg = new THREE.CylinderGeometry(10.4, 10.4, 1.6, 16); const mm = add(gg, "ironDk", "props"); mm.position.set(244, Y(r, 22), 22); } }
+    { const g = new THREE.CylinderGeometry(10, 10, 24, 16); const m = add(g, "barrel", "props"); m.position.set(218, Y(133, 22), 22);
+      for (const r of [125, 141]) { const gg = new THREE.CylinderGeometry(10.4, 10.4, 1.6, 16); const mm = add(gg, "ironDk", "props"); mm.position.set(218, Y(r, 22), 22); } }
     slab("props", "shieldRim", [[172, 118], [190, 118], [190, 132], [181, 141], [172, 132]], ZF + 4, ZF + 6);
     slab("props", "shield", [[174, 120], [188, 120], [188, 131], [181, 138], [174, 131]], ZF + 6, ZF + 7);
     box("props", "signMark", 180, 182, 122, 134, ZF + 7, ZF + 7.6);
 
+    // ---- the wing turned a quarter (owner 2026-11-07: "오른 쪽에 있는 집을 90도 돌려서 뒤편을 향하게 배치할 수
+    // 있나?"): the wing and its sign, built as above, turned 90 degrees about the vertical so its length runs away from
+    // the street, then set back so its new front (its old right end) stands on the old front line, its left side
+    // against the forge
+    if (ROT) {
+      const rot = new THREE.Matrix4().makeRotationY(Math.PI / 2);
+      const ms = parts.slice(w0, w1).concat(parts.slice(s0, s1)).map(p => p.mesh);
+      for (const m of ms) { m.updateMatrix(); m.geometry = m.geometry.clone(); m.geometry.applyMatrix4(m.matrix); m.position.set(0, 0, 0); m.rotation.set(0, 0, 0); m.scale.set(1, 1, 1);
+                            m.geometry.applyMatrix4(rot); }
+      // placed by its wall (the roof overhangs it): the wall's left side right against the forge's right side (x 172),
+      // its new front (the old right end) on the wing's old front line (Z 2), its floor on the ground (owner 2026-11-07:
+      // "붙여" - the turned wing as it is, set close)
+      const wall = parts[w0].mesh.geometry; wall.computeBoundingBox();
+      const bb = wall.boundingBox;
+      const shift = new THREE.Matrix4().makeTranslation(172 - bb.min.x, -bb.min.y, 2 - bb.max.z);
+      for (const m of ms) m.geometry.applyMatrix4(shift);
+    }
     return parts;
   }
   return { W, H, B0, K, TOP, Y, RAMP, MAT, LAYERS, build };
