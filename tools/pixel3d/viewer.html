@@ -302,6 +302,7 @@ const comp = new THREE.ShaderMaterial({
     uniform vec2 sunS; uniform float lmax, lowSun; uniform sampler2D lowT, highT; uniform sampler2D tPat, tId, tLit, tFace, tNrm, tDep, pal, shadeT, sunT, coreT, tGL, tGF; uniform int mode, gview; varying vec2 vUv;
     const vec2 S = vec2(${RW}.0, ${H}.0);
     vec4 at(sampler2D t, vec2 c) { return texture2D(t, (c + 0.5) / S); }
+    #define METALQ (${matNames.some(n => n.startsWith("metal")) ? matNames.map((n, i) => n.startsWith("metal") ? `abs(mi - ${i + 1}.0) < 0.5` : "").filter(Boolean).join(" || ") : "false"})
     float dep(vec2 c) { return unpackRGBAToDepth(at(tDep, c)) * 3999.0; }      // in cells
     float stepOf(float L) { return L > 0.7 ? 1.0 : L > 0.3 ? 0.0 : L > 0.05 ? -1.0 : -3.0; }   // cast shade three steps down: more contrast
     vec3 palc(float r, float k) {
@@ -461,6 +462,14 @@ const comp = new THREE.ShaderMaterial({
           vec2 uvH = vec2((clamp(k + up, 0.0, nH - 1.0) + 0.5) / 8.0, (r + 0.5) / ${NP}.0);
           if (up > 0.0) col = lowSun > 0.5 ? texture2D(lowT, uvH).rgb : texture2D(highT, uvH).rgb;
         }
+        // metal (owner 2026-11-07: "빛 들어오면 더 밝아도 될것같은데 림라이트도 깔만하고"): any material named metal*
+        // catches the light harder than wood or stone - lit, it goes one or two steps up in the sun's colour
+        if (METALQ && !shadow) {
+          float nM = texture2D(pal, vec2(0.5 / 8.0, (r + 0.5) / ${NP}.0)).a * 255.0;
+          float upM = Lf > 0.55 ? 2.0 : Lf > 0.15 ? 1.0 : 0.0;
+          vec2 uvM = vec2((clamp(k + upM, 0.0, nM - 1.0) + 0.5) / 8.0, (r + 0.5) / ${NP}.0);
+          if (upM > 0.0) col = lowSun > 0.5 ? texture2D(lowT, uvM).rgb : texture2D(highT, uvM).rgb;
+        }
       }
       // the outline: the dark of the warm ramps (the reference draws stone, plaster and wood alike in dark brown,
       // the roofs in their own deepest red)
@@ -480,9 +489,9 @@ const comp = new THREE.ShaderMaterial({
       if (mode == 0 && line == 1 && !shadow && mi != ${matNames.indexOf("letter") + 1}.0 && length(outN) > 0.0) {
         vec2 sn = normalize(sunS);
         float e = dot(normalize(outN), sn);
-        if (e > 0.3) {
+        if (e > (METALQ ? 0.0 : 0.3)) {                                    // metal: a rim on every edge the sun reaches
           float n = texture2D(pal, vec2(0.5 / 8.0, (r + 0.5) / ${NP}.0)).a * 255.0;
-          float kr = e > 0.6 ? n - 1.0 : max(n - 2.0, 0.0);   // facing the sun squarely: the top; obliquely: one under
+          float kr = (e > 0.6 || METALQ) ? n - 1.0 : max(n - 2.0, 0.0);   // facing the sun squarely: the top; obliquely: one under
           vec2 uv = vec2((kr + 0.5) / 8.0, (r + 0.5) / ${NP}.0);
           col = lowSun > 0.5 ? texture2D(lowT, uv).rgb : texture2D(highT, uv).rgb;
         }

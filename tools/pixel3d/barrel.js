@@ -10,7 +10,7 @@ const BARREL = (function () {
   const W = DIM[0], H = DIM[1] + 8, B0 = DIM[1], K = 0.12, TOP = 4;
   const Y = (row, z) => B0 + K * z - row;
   const RAMP = { red: 0, wood: 1, ochre: 2, cream: 3, leaf: 4, green: 5, blue: 6, violet: 7, stone: 8, iron: 9 };
-  const MAT = { sand: ["ochre", 5], stave: ["wood", 5], staveLt: ["wood", 6], gap: ["wood", 2], hoop: ["iron", 5], hoopDk: ["iron", 3], head: ["wood", 6] };
+  const MAT = { sand: ["ochre", 5], stave: ["wood", 5], staveLt: ["wood", 6], gap: ["wood", 2], metalHoop: ["stone", 5], hoopDk: ["stone", 3], head: ["wood", 6] };
   const LAYERS = ["ground", "barrel"];
 
   function build(THREE) {
@@ -27,7 +27,7 @@ const BARREL = (function () {
     // of each, a dark one under it - metal, not wood
     const BH = Math.max(4, Math.round(HT * 0.085));                     // the band's height, as the reference's
     for (const t of [0.09, 0.3, 0.7, 0.91]) { const r = rAt(t) + 1.4, y = HT * t;
-      { const g = new THREE.CylinderGeometry(r, r, BH, 40, 1, false); const m = add(g, "hoop", "barrel"); m.position.set(CX, y, CZ); }
+      { const g = new THREE.CylinderGeometry(r, r, BH, 40, 1, false); const m = add(g, "metalHoop", "barrel"); m.position.set(CX, y, CZ); }
       { const g = new THREE.CylinderGeometry(r - 1.2, r - 1.2, BH + 0.6, 40, 1, false); const m = add(g, "hoopDk", "barrel"); m.position.set(CX, y, CZ); } }
     { const g = new THREE.CircleGeometry(rAt(1) - 2.5, 24); const m = add(g, "head", "barrel"); m.rotation.x = -Math.PI / 2; m.position.set(CX, HT - 1.5, CZ); }
     return parts;
