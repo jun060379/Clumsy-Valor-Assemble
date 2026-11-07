@@ -279,6 +279,26 @@ const FORGE = (function () {
     if (ROOFV === "A") tileRoof(2, 287, 72, 25, 12, -40, -80, true, true);
     else {
       tileRoof(ROOFV === "D" ? 86 : 96, 287, 72, 25, 12, -40, -80, ROOFV !== "D", true);   // D: its left end cut square, run on 10 cells over the post (owner)
+      if (ROOFV === "D") {
+        // the square end finished as a gable verge (owner 2026-11-07, circled: the raw cut end of the tiles): a barge
+        // board down the roof's end standing proud of the tiles, a row of verge tiles rolled over its edge, and the
+        // ridge roll's end capped - the way a gable end is closed on a tiled roof
+        const ye = Y(72, 12), yr = Y(25, -40), XE = 86;
+        const sl = (t, dx, up) => { const n = new THREE.Vector3(0, 12 + 40, yr - ye).normalize();   // a point on the slope, lifted
+          return [XE + dx, ye + (yr - ye) * t + n.y * up, 12 + (-40 - 12) * t + n.z * up]; };
+        { const tri = [], quad = (a, b, c, d) => tri.push(...a, ...b, ...c, ...a, ...c, ...d);       // the barge board
+          const A = [sl(0, -3, -6), sl(0, 3, -6), sl(1, 3, -6), sl(1, -3, -6)], B = [sl(0, -3, 6), sl(0, 3, 6), sl(1, 3, 6), sl(1, -3, 6)];
+          quad(B[0], B[1], B[2], B[3]); quad(A[3], A[2], A[1], A[0]); quad(A[0], A[1], B[1], B[0]); quad(B[3], B[2], A[2], A[3]);
+          quad(A[0], B[0], B[3], A[3]); quad(B[1], A[1], A[2], B[2]);
+          const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(tri, 3)); g.computeVertexNormals();
+          add(g, "fascia", "roof"); }
+        for (let i = 0, n = 5; i < n; i++) {                                            // verge tiles over the board's top
+          const t0 = i / n + 0.01, t1 = (i + 1) / n - 0.01;
+          shell("tiles", i % 3 === 1 ? "tileDk" : "tile", (u, v) => { const th = Math.PI * u; const p = sl(t0 + (t1 - t0) * v, -2.6 * Math.cos(th) + 0.4, 6 + 2.4 * Math.sin(th)); return p; },
+                [0, 0.2, 0.4, 0.6, 0.8, 1], [0, 0.5, 1], [0, -1.5, 0]);
+        }
+        { const g = new THREE.SphereGeometry(3.2, 10, 8); const m = add(g, "tile", "tiles"); const p = sl(1, 0.5, 7); m.position.set(p[0], p[1], p[2]); }   // the ridge end cap
+      }
       if (ROOFV === "B") tileRoof(2, 106, 87, 52, 13, -34, -80, true, false);
       else if (ROOFV === "D") {
         // the lean-to as the owner drew it (2026-11-07: "우측 건물의 좌측 단편을 직각으로 처리하고. 그 상태에서 좌측 지붕이 우측
