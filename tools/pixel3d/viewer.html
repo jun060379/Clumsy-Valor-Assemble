@@ -96,6 +96,7 @@ renderer.shadowMap.type = THREE.BasicShadowMap;
 const scene = new THREE.Scene();
 const parts = HALL.build(THREE);
 const matNames = Object.keys(MAT);
+const EMIT = matNames.filter(n => /^(fire|ember)/.test(n));   // light sources: drawn as they are
 const litMat = new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide });
 const nrmMat = new THREE.MeshNormalMaterial({ side: THREE.DoubleSide });
 const depMat = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, side: THREE.DoubleSide });
@@ -205,7 +206,8 @@ function sunDir(h) {
 
 // the oblique camera: one cell per pixel, front faces true, depth recedes up K rows per cell
 const CZ = 2000, KX = 0.0;                                   // a front view (owner 2026-11-07): no side faces
-const cam = new THREE.OrthographicCamera(X0, X0 + RW, B0, B0 - H, 1, 4000);
+const TOP = HALL.TOP || 0;                                  // rows of sky above row 0, for buildings that need them
+const cam = new THREE.OrthographicCamera(X0, X0 + RW, B0 + TOP, B0 + TOP - H, 1, 4000);
 cam.position.set(-KX * CZ, K * CZ, CZ);
 cam.updateMatrixWorld();
 cam.updateProjectionMatrix();
@@ -355,6 +357,8 @@ const comp = new THREE.ShaderMaterial({
       }
       if (gview == 2) discard;                     // the ground's shade alone: no building
       float r = floor(id.r * 255.0 + 0.5) - 1.0, base = floor(id.g * 255.0 + 0.5), mi = floor(id.b * 255.0 + 0.5);
+      // a light source (the forge's fire): its own colour, never shaded, no outline
+      if (${EMIT.length ? EMIT.map(n => `mi == ${matNames.indexOf(n) + 1}.0`).join(" || ") : "false"}) { gl_FragColor = vec4(palc(r, base), 1.0); return; }
       vec4 pt = at(tPat, c);
       float poff = floor((pt.r - 0.5) * 4.0 + 0.5);
       if (pt.g > 0.5 / 255.0 && mode != 1) { r = floor(pt.g * 255.0 + 0.5) - 1.0; base = floor(pt.b * 255.0 + 0.5); }
