@@ -178,7 +178,8 @@ const COTTAGE = (function () {
       // 벽돌 넣고 그 위에 문 달라고")
     });
     for (const [a, b] of [[12, 22], [110, 120]]) box("timber", "timber", a, b, vU((a + b) / 2) - 1, 140, ZG - 2, ZG + 2.5);
-    // (no beam and king post over the door - the ㅗ of timber: owner 2026-11-07, "문 위 나무 ㅗ 모양 된거 그냥 빼기")
+    // (no king post over the door: owner 2026-11-07, "문 위 나무 ㅗ 모양 된거 그냥 빼기" / "ㅡ 자 판자는 두고" - the beam stays)
+    box("timber", "timber", 22, 110, 72, 80, ZG - 2, ZG + 2.5);                      // the beam
     // the door: planks in a round-topped arch of stone, a long iron strap and a handle
     { const outer = archPts(40, 90, 86, 140), inner = archPts(47, 83, 93, 140);
       slab("door", "arch", outer, ZG + 0.5, ZG + 2.6, [inner.slice().reverse()]);
