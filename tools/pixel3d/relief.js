@@ -3,7 +3,10 @@
 // the viewer's light and outlines read them. One unit a game px (CELL 2). y up from the picture's bottom row.
 const DATA = null;
 const RELIEF = (function () {
-  const W = DATA.w, H = DATA.h + 6, B0 = DATA.h, K = 0.12, TOP = 4;
+  // MX: room either side for a low sun's long shadow (cards: their shadow is all they are for); below the foot, the
+  // ground the shadow lies on
+  const MX = DATA.card ? 160 : 0;
+  const W = DATA.w + 2 * MX, H = DATA.h + (DATA.card ? 70 : 6), B0 = DATA.h, K = 0.12, TOP = 4;
   const Y = (row, z) => B0 + K * z - row;
   const RAMP = { red: 0, wood: 1, ochre: 2, cream: 3, leaf: 4, green: 5, blue: 6, violet: 7, stone: 8, iron: 9 };
   const MAT = { sand: ["ochre", 5], bark: ["wood", 5], barkDk: ["wood", 3], leaf: ["leaf", 4], leafDk: ["leaf", 3] };
@@ -41,10 +44,12 @@ const RELIEF = (function () {
       g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
       g.computeVertexNormals();
       const m = new THREE.Mesh(g);
-      m.position.z = -20;
+      m.position.z = DATA.card ? -DATA.depth / 2 : -20; m.position.x = MX;
       parts.push({ mesh: m, mat: NAMES[code], layer: code <= 2 ? "wood" : "leaves" });
     }
     return parts;
   }
-  return { W, H, B0, K, TOP, Y, RAMP, MAT, LAYERS, build };
+  // a card's shadow lies on the town's whole ground plane: 42 px behind the stand line (town.gd RAISE), 30 in front
+  const GROUND = DATA.card ? [42, 30] : null;
+  return { W, H, B0, K, TOP, Y, RAMP, MAT, LAYERS, GROUND, build };
 })();

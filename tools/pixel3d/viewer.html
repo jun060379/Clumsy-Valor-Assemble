@@ -247,7 +247,7 @@ const rtId = mkRT(), rtLit = mkRT(), rtFace = mkRT(), rtNrm = mkRT(), rtDep = mk
 // exported alone it is the mask the town's ground shader shades with its own palette.
 // the ground strip keeps the same rows on screen whatever the camera tilt (owner 2026-11-07: "바닥 띠는 둬야지"):
 // 6 rows behind the foot line, 13 in front, as at K 0.25
-const GZ0 = -6 / K, GZ1 = 13 / K;
+const GZ0 = -(HALL.GROUND ? HALL.GROUND[0] : 6) / K, GZ1 = (HALL.GROUND ? HALL.GROUND[1] : 13) / K;   // HALL.GROUND: [rows behind, rows in front]
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(RW, GZ1 - GZ0), new THREE.MeshLambertMaterial({ color: 0xffffff }));
 ground.rotation.x = -Math.PI / 2;
 ground.position.set(X0 + RW / 2, 0, (GZ0 + GZ1) / 2);
