@@ -42,8 +42,14 @@ func _initialize() -> void:
 	for l in T.light_sources():
 		var c: Color = l["c"]
 		lights.append([l["k"], l["x"], l["y"], l["r"], c.r, c.g, c.b, l["a"]])
+	# the ground's stand lines along the town (every 2 px): the walked surface, and the lower street under it
+	var floors: Array = []
+	var fx := 0.0
+	while fx <= T.TOWN_W:
+		floors.append([roundf(T.floor_at(fx)), T.LOWF])
+		fx += 2.0
 	var f := FileAccess.open(out, FileAccess.WRITE)
-	f.store_string(JSON.stringify({"W": T.TOWN_W, "p3d": p3d, "obj": obj, "lights": lights}, "  "))
+	f.store_string(JSON.stringify({"W": T.TOWN_W, "p3d": p3d, "obj": obj, "lights": lights, "floors": floors}))
 	f.close()
 	print("DUMP ", p3d.size(), " shadows ", obj.size(), " objects ", lights.size(), " lights")
 	quit()

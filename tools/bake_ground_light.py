@@ -95,6 +95,63 @@ def maps(L):
             S[y0:y1, x0:x1] = np.maximum(S[y0:y1, x0:x1], np.clip(a[y0 - gy:y1 - gy, x0 - gx:x1 - gx], 0, 1))
         return S
     weight = {"tree": 0.75, "bush": 0.55, "prop": 0.6}
+    # the lamps' and fires' light with its shadows (owner 2026-11-08: "빛이 실제로 타일과 오브젝트의 영역에 빛과 그림자로
+    # 영역에 영향을 주게"): every texel, ground or sprite, traced to each light over a label map of the pixel3d sprites
+    # (drawn order: the later on top); a texel first leaves its own sprite (its face toward the light is lit), then any
+    # other sprite on the way shades it. The sprite a light sits in (the forge's hearth, the fire ring, the lamp's own
+    # post) does not block it. The blue channel, read by the ground (warm on the palette) and by the night's ambient
+    # multiply (shaders/amb_light.gdshader) for everything else.
+    def labels():
+        lab = np.zeros((H, W), np.int16); boxes = []
+        for i, (k, cx, cy) in enumerate(L["p3d"]):
+            f = os.path.join(ROOT, f"assets/town/hx/{k}.png")
+            if not os.path.exists(f): boxes.append(None); continue
+            a = np.array(Image.open(f).convert("RGBA"))[::2, ::2, 3] > 127
+            gx, gy = int(round((cx + 24.0) / CX)), int(round((cy - Y0) / CY))
+            h, w = a.shape
+            x0, y0 = max(0, gx), max(0, gy); x1, y1 = min(W, gx + w), min(H, gy + h)
+            boxes.append((gx, gy, w, h))
+            if x1 <= x0 or y1 <= y0: continue
+            sub = a[y0 - gy:y1 - gy, x0 - gx:x1 - gx]
+            lab[y0:y1, x0:x1][sub] = i + 1
+        return lab, boxes
+    def night_light(L, X, Y):
+        lab, boxes = labels()
+        out = np.zeros_like(X)
+        for (kind, lx, ly, r, cr, cg, cb, la) in L["lights"]:
+            if kind not in ("lamp", "fire", "bulb"): continue
+            R_ = r * (1.7 if kind in ("lamp", "fire") else 1.2)
+            gx0, gx1 = max(0, int((lx - R_) / CX)), min(W, int((lx + R_) / CX) + 1)
+            gy0, gy1 = max(0, int((ly - R_ - Y0) / CY)), min(H, int((ly + R_ - Y0) / CY) + 1)
+            if gx1 <= gx0 or gy1 <= gy0: continue
+            xs_, ys_ = X[gy0:gy1, gx0:gx1], Y[gy0:gy1, gx0:gx1]
+            d = np.hypot(xs_ - lx, (ys_ - ly) * 1.4)
+            f = np.clip(1.0 - d / R_, 0, 1) ** 2 * la
+            # the sprites that hold the light do not block it
+            host = set()
+            lgx, lgy = int(lx / CX), int((ly - Y0) / CY)
+            for i, b in enumerate(boxes):
+                if b and b[0] - 2 <= lgx < b[0] + b[2] + 2 and b[1] - 2 <= lgy < b[1] + b[3] + 2: host.add(i + 1)
+            own = lab[gy0:gy1, gx0:gx1]
+            N = 40
+            t = (np.arange(N) + 0.5) / N * 0.94                      # stop short of the light itself
+            sx = (xs_[..., None] + (lx - xs_)[..., None] * t) / CX
+            sy = (ys_[..., None] - Y0 + (ly - ys_)[..., None] * t) / CY
+            sl = lab[np.clip(sy.astype(int), 0, H - 1), np.clip(sx.astype(int), 0, W - 1)]
+            for hh in host: sl = np.where(sl == hh, 0, sl)
+            other = (sl != 0) & (sl != own[..., None])
+            # leaving its own sprite first: only what lies past the first sample outside it counts
+            out_own = np.cumsum(sl != own[..., None], -1) > 0
+            blocked = (other & out_own).any(-1)
+            out[gy0:gy1, gx0:gx1] += f * (~blocked)
+        # only what is there takes the light: the sprites and the ground's plane and face, never the sky behind
+        surf = lab > 0
+        if "floors" in L:
+            for fl in (0, 1):
+                fy = np.array([f[fl] for f in L["floors"]], float)[:W]
+                fy = np.concatenate([fy, np.full(W - len(fy), fy[-1])]) if len(fy) < W else fy
+                surf |= (Y > fy[None, :] - RAISE - 2.0) & (Y < fy[None, :] + 30.0)
+        return np.clip(out, 0, 1) * surf
     out = {}
     for tag, suf in (("d", ""), ("m", "_m"), ("e", "_e"), ("n", "")):
         S = p3d(suf); Su = np.zeros_like(X); Wm = np.zeros_like(X)
@@ -106,11 +163,7 @@ def maps(L):
             if tag == "e":
                 S = np.maximum(S, cast(o, -1, 1.2, 0.85 * k)); Su = np.maximum(Su, sunny(o, -1, 0.6))
         if tag == "n":
-            for (kind, lx, ly, r, cr, cg, cb, la) in L["lights"]:
-                if kind == "soft": continue
-                R_ = r * (1.7 if kind in ("lamp", "fire") else (0.9 if kind == "win" else 1.2))
-                d = np.hypot(X - lx, (Y - (ly + (60.0 if kind == "lamp" else 0.0))) * 2.2)
-                Wm += la * (0.55 if kind == "win" else 1.0) * np.clip(1.0 - d / R_, 0, 1) ** 2
+            Wm = night_light(L, X, Y)
             S *= 0.6
         Su = np.where(S > 0.15, 0, Su)
         img = np.stack([S, Su, np.clip(Wm, 0, 1), np.ones_like(S)], -1)

@@ -102,6 +102,13 @@ var sh_tex := {}
 ## the pixel3d ground shadows (shadow/) are baked into the ground light maps (tools/bake_ground_light.py, from
 ## tests/dump_light_layout.gd), shaded there on the palette - not laid over as a translucent colour
 const SH_IN_MAP := true
+## the lamps' light with its shadows is baked (tools/bake_ground_light.py: ground_n blue, traced past the pixel3d
+## outlines); the night's ambient multiply is lifted by it (shaders/amb_light.gdshader), the ground warmed on the palette
+func _light_uniforms(T: Dictionary) -> void:
+	var m: ShaderMaterial = lit.amb_node.material
+	if m == null or not gmaps.has("n"): return
+	m.set_shader_parameter("gmap", gmaps["n"])
+	m.set_shader_parameter("lift", clampf((T["sky"].a - 0.33) / 0.33, 0.0, 1.0))
 var sh_log = null                    # dump_light_layout: {key@x: [shadow key, canvas x, canvas y]} of what was drawn
 func sh_place(k: String, x: float, y: float, ci: CanvasItem) -> void:
 	if sh_log != null: sh_log[k + "@" + str(roundf(x))] = [k, roundf(x) - 24.0, y]
@@ -299,7 +306,7 @@ func _layout() -> void:
 		_hp(12, 98, 141), _hp(207, 292, 141), _hp(10, 100, 115), _hp(205, 294, 115), _hp(37, 117, 56), _hp(186, 266, 56), _hp(74, 98, 30), _hp(202, 228, 30)]
 	# [sprite, left x, surface y, sink, door dx|null, name, target, flip]
 	bld = [["g_store", 300.0, G, 0, 160.0, "창고", ""], ["g_yard", 820.0, G, 0, 378.0, "훈련장", "arena"],
-		["g_tentR", 4120.0, G, 2, null, "", "", true], ["g_ring", 4350.0, G - CAMP_UP, 0, null], ["g_tentR", 4490.0, G, 2, null],
+		["g_ring", 4350.0, G - CAMP_UP, 0, null], ["g_tentR", 4490.0, G, 2, null],
 		["g_wagon", 4820.0, G, 0, 287.0, "출격 마차", "dungeon"], ["g_well", 5281.0, G, 0, null], ["g_barn", 5600.0, G, 0, 230.0, "헛간", ""],
 		["g_cottage", 6629.0, LOWF, 0, 140.0, "목욕집", ""], ["g_forge", 7269.0, LOWF, 0, 373.0, "대장간", "forge"], ["g_anvil", 7695.0, LOWF, 0, null], ["g_kiln", 7883.0, LOWF, 0, 113.0, "숯가마", ""]]
 	doors = []
@@ -315,7 +322,7 @@ func _layout() -> void:
 		var ax: float = b[1] + b[4] if b.size() > 4 and b[4] != null else ((b[1] + w if b.size() > 7 and b[7] else b[1]) if k == "g_tentR" else b[1] + w / 2.0)
 		b[1] = ax - (ax - b[1]) * BS
 	deco_back = [["f_oak", -110.0, G, 7, false, 1.0], ["f_young", 735.0, G, 4.5, true, 1.6], ["f_bush1", 250.0, G, 0, false, 0.8], ["f_grass1", 770.0, G, 0, false, 0.6],
-		["f_round", 1560.0, G, 4.5, true, 1.3], ["f_bush2", 1740.0, G, 0, false, 0.8], ["f_tall", 5440.0, G, 4.5, false, 1.4], ["f_grass1", 6040.0, G, 0, true, 0.6],
+		["f_round", 1560.0, G, 4.5, true, 1.3], ["f_bush2", 1740.0, G, 0, false, 0.8], ["f_bush1", 3930.0, floor_at(3990.0), 0, true, 0.8], ["f_tall", 5440.0, G, 4.5, false, 1.4], ["f_grass1", 6040.0, G, 0, true, 0.6],
 		["f_grass2", 8620.0, LOWF, 0, false, 0.6], ["f_bush3", 8620.0, LOWF, 0, false, 0.8], ["f_bigtree", 8609.0, LOWF, 0, false, 2.2], ["f_bush1", 9250.0, LOWF, 0, true, 0.8]]
 	for d in deco_back:
 		if BIGK.has(d[0]):
@@ -708,6 +715,7 @@ func _light_step(T: Dictionary) -> void:
 	_boost(L, T)
 	lit.L = L
 	lit.amb = T["amb"]
+	_light_uniforms(T)
 	# (the ambient multiply in lit.gd covers the whole screen, the sky behind the world included, as in the prototype)
 	shade.update(T, arena.tod_h, L)
 	lit.redraw()
