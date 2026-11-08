@@ -191,6 +191,9 @@ var blade_back: Node2D
 var blade_front: Node2D
 var blade_mat: ShaderMaterial
 var bmesh := {}
+var mirror_mat: ShaderMaterial
+var mirror_node: Node2D
+var mirror_bb: BackBufferCopy
 var tuft_mat: ShaderMaterial
 var tuft_node: Node2D
 var tufts: Array = []                 # town_life.build_tufts: [x, base y, kind, flip]
@@ -318,6 +321,24 @@ func _ready() -> void:
 	if arena.dbg.has("nolit"):
 		lit.visible = false
 		if shade.get("sv") != null: shade.sv.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	# the river as a mirror (owner 2026-11-08: "물에 미러효과 넣고 이런식으로"): over everything but the light and the
+	# front layer, so the people on the bank and the bridge show in it too
+	mirror_bb = BackBufferCopy.new()
+	mirror_bb.copy_mode = BackBufferCopy.COPY_MODE_RECT
+	mirror_bb.rect = Rect2(RIV0 - 80.0, LOWF - 300.0, RIV1 - RIV0 + 160.0, 720.0)     # the water and what it mirrors
+	mirror_bb.z_index = 7
+	arena.add_child(mirror_bb)
+	mirror_mat = ShaderMaterial.new()
+	mirror_mat.shader = preload("res://shaders/water_mirror.gdshader")
+	if ResourceLoader.exists("res://assets/town/light/pal_lut.png"):
+		mirror_mat.set_shader_parameter("pal_lut", load("res://assets/town/light/pal_lut.png"))
+		mirror_mat.set_shader_parameter("pal_fx", load("res://assets/town/light/pal_fx.png"))
+	mirror_mat.set_shader_parameter("wl", LOWF + 20.0)
+	mirror_node = Node2D.new()
+	mirror_node.z_index = 7
+	mirror_node.material = mirror_mat
+	mirror_node.draw.connect(func(): mirror_node.draw_rect(Rect2(RIV0, LOWF + 20.0, RIV1 - RIV0, 400.0), Color.WHITE))
+	arena.add_child(mirror_node)
 	front = Node2D.new()
 	front.z_index = 8
 	front.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -362,6 +383,8 @@ func cleanup() -> void:
 	blade_back.queue_free()
 	blade_front.queue_free()
 	tuft_node.queue_free()
+	mirror_node.queue_free()
+	mirror_bb.queue_free()
 	folk_node.queue_free()
 	lbl_layer.queue_free()
 	folk.town = null
@@ -1002,6 +1025,7 @@ func step(dt: float) -> void:
 	_light_step(T)
 	queue_redraw()
 	front.queue_redraw()
+	mirror_mat.set_shader_parameter("t", Time.get_ticks_msec() / 1000.0)
 	near_node.queue_redraw()
 	# the ground is static: drawn for the view and 600 px either side, redrawn only when the view leaves that
 	if ground_mat != null:
@@ -1623,7 +1647,7 @@ func _draw_front() -> void:
 	# the river in front of whoever wades it: the top rows of the water again, see-through, the waterline solid, so a
 	# body in the river is under the surface from the waist down (the bridge piers too)
 	var rfi2 := int(Time.get_ticks_msec() / 1000.0 * 10.0) % 120
-	front.draw_texture_rect_region(RIVER, Rect2(RIV0, LOWF + 20.0, 240.0, 44.0), Rect2((rfi2 % 7) * 240, (rfi2 / 7) * 96 + 2, 240, 44), Color(1, 1, 1, 0.55))
+	# (the mirror, z 7, covers a wading body from the waterline down; only the line itself is drawn again here)
 	front.draw_texture_rect_region(RIVER, Rect2(RIV0, LOWF + 18.0, 240.0, 2.0), Rect2((rfi2 % 7) * 240, (rfi2 / 7) * 96, 240, 2))
 	fxa.draw_water(front)
 	fxa.draw_bits(front)
