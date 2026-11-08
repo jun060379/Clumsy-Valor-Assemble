@@ -94,6 +94,27 @@ def maps(L):
             if x1 <= x0 or y1 <= y0: continue
             S[y0:y1, x0:x1] = np.maximum(S[y0:y1, x0:x1], np.clip(a[y0 - gy:y1 - gy, x0 - gx:x1 - gx], 0, 1))
         return S
+    # the trees' and bushes' shadows as their standing cards cast them under the same sun (tools/pixel3d/tree_relief.py
+    # --flat; owner 2026-11-08: "판떼기로 만들어도 결국 그림자만 손보면 되는거잖아"): canvas 172 px left of the sprite,
+    # its top TOP rows over the sprite's top; mirrored with the sprite
+    def cards(suf):
+        S = np.zeros_like(X)
+        for k, x, yb, flip, w, h in L.get("cards", []):
+            f = os.path.join(ROOT, f"assets/town/shadow/{k}_card{suf}.png")
+            if not os.path.exists(f): continue
+            im = Image.open(f).convert("RGBA")
+            if flip: im = im.transpose(Image.FLIP_LEFT_RIGHT)
+            a = np.array(im)[::2, ::2, 3].astype(float) / 110.0 * 0.75
+            hh = int(round(h)); top_eff = 4 + (hh + 4) % 2
+            px0 = (x + w + 172.0 - im.width) if flip else (x - 172.0)
+            py0 = yb - (hh + top_eff)
+            gx, gy = int(round(px0 / CX)), int(round((py0 - Y0) / CY))
+            ah, aw = a.shape
+            x0, y0 = max(0, gx), max(0, gy); x1, y1 = min(W, gx + aw), min(H, gy + ah)
+            if x1 <= x0 or y1 <= y0: continue
+            S[y0:y1, x0:x1] = np.maximum(S[y0:y1, x0:x1], np.clip(a[y0 - gy:y1 - gy, x0 - gx:x1 - gx], 0, 1))
+        return S
+    carded = set(round(c[1]) for c in L.get("cards", []))
     weight = {"tree": 0.75, "bush": 0.55, "prop": 0.6}
     # the lamps' and fires' light with its shadows (owner 2026-11-08: "빛이 실제로 타일과 오브젝트의 영역에 빛과 그림자로
     # 영역에 영향을 주게"): every texel, ground or sprite, traced to each light over a label map of the pixel3d sprites
@@ -172,8 +193,9 @@ def maps(L):
         return np.clip(out, 0, 1) * surf
     out = {}
     for tag, suf in (("d", ""), ("m", "_m"), ("e", "_e"), ("n", "")):
-        S = p3d(suf); Su = np.zeros_like(X); Wm = np.zeros_like(X)
+        S = np.maximum(p3d(suf), cards(suf)); Su = np.zeros_like(X); Wm = np.zeros_like(X)
         for o in L["obj"]:
+            if round(o[1]) in carded and o[0] in ("tree", "bush"): continue      # its card's shadow stands for it
             k = weight.get(o[0], 0.6)
             S = np.maximum(S, contact(o, 0.75 * k))
             if tag == "m":

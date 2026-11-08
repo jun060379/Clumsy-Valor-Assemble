@@ -34,6 +34,14 @@ func _initialize() -> void:
 		var h: float = T.tex[k].get_height() * T.ks(k)
 		var kind := "tree" if (k.contains("tree") or k in ["f_oak", "f_round", "f_young", "f_tall"]) else "bush"
 		obj.append([kind, d[1], d[1] + w, d[2], h])
+	# the trees' and bushes' card shadows (tools/pixel3d/tree_relief.py --flat): [key, sprite x, sprite bottom y, flip, width]
+	var cards: Array = []
+	for d in T.deco_back:
+		var ck: String = d[0]
+		if not FileAccess.file_exists("res://assets/town/shadow/" + ck + "_card.png"): continue
+		var cs: float = 1.0 if T.hx.has(ck) else T.ks(ck)
+		var ct: Texture2D = T.hx.get(ck, T.tex[ck])
+		cards.append([ck, d[1], d[2] + d[3] * T.PK * cs, d[4], ct.get_width() * cs, ct.get_height() * cs])
 	for r in T.rocks:
 		if T.tex.has(r[0]): obj.append(["prop", r[1], r[1] + T.tex[r[0]].get_width(), r[2], T.tex[r[0]].get_height()])
 	arena.tod_h = 21.0
@@ -49,7 +57,7 @@ func _initialize() -> void:
 		floors.append([roundf(T.floor_at(fx)), T.LOWF])
 		fx += 2.0
 	var f := FileAccess.open(out, FileAccess.WRITE)
-	f.store_string(JSON.stringify({"W": T.TOWN_W, "p3d": p3d, "obj": obj, "lights": lights, "floors": floors}))
+	f.store_string(JSON.stringify({"W": T.TOWN_W, "p3d": p3d, "obj": obj, "lights": lights, "floors": floors, "cards": cards}))
 	f.close()
 	print("DUMP ", p3d.size(), " shadows ", obj.size(), " objects ", lights.size(), " lights")
 	quit()
