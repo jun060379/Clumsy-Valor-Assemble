@@ -211,7 +211,9 @@ scene.add(sun, sun.target);
 // the night's warm lights (owner 2026-11-08: "빛은 넣어야지"): the town's lamps and fires near this solid, placed by
 // tools/pixel3d/night_lights.py (HALL.NIGHT_LIGHTS: [x, y, z, reach, strength] in the module's units); their own pass
 const warmLights = (HALL.NIGHT_LIGHTS || []).map(([x, y, z, reach, a]) => {
-  const l = new THREE.PointLight(0xffffff, Math.PI * 0.9 * a, reach, 0)   // no fall-off but the reach window: N.L x strength; l.position.set(x, y, z); l.visible = false; scene.add(l); return l; });
+  const l = new THREE.PointLight(0xffffff, Math.PI * 0.9 * a, reach, 0);   // no fall-off but the reach window: N.L x strength
+  l.position.set(x, y, z); l.visible = false; l.castShadow = true; l.shadow.mapSize.set(512, 512); l.shadow.camera.near = 1; l.shadow.camera.far = reach;
+  scene.add(l); return l; });
 // the town's sun (lit.gd sun3): left at dawn, right at dusk; behind the town early and late, in front at noon
 // night (owner 2026-11-08: the night looks from the solid itself, not guessed from the drawing): past 19:30 the light is
 // the moon, high behind the town on the right, cool and dim - the lit side one step down in the shade's cool colours,
@@ -227,6 +229,8 @@ function sunDir(h) {
 const CZ = 2000, KX = 0.0;                                   // a front view (owner 2026-11-07): no side faces
 const TOP = (HALL.TOP || 0) + ((B0 + (HALL.TOP || 0)) % CELL);   // rows of sky above row 0 (the ground row on a cell edge)
 const cam = new THREE.OrthographicCamera(X0, X0 + RW, B0 + TOP, B0 + TOP - H, 1, 4000);
+// the lights on screen, in cells (for the rims: an edge turned to a lamp catches it), up to 8
+const NLC = (HALL.NIGHT_LIGHTS || []).slice(0, 8).map(([x, y, z, reach, a]) => [(x - X0) / CELL, (B0 + TOP - (y - K * z)) / CELL, reach / CELL, a]);
 cam.position.set(-KX * CZ, K * CZ, CZ);
 cam.updateMatrixWorld();
 cam.updateProjectionMatrix();
@@ -310,11 +314,11 @@ const shadeTex = twinTex("shade"), sunTex = twinTex("sun"), coreTex = twinTex("c
 
 const comp = new THREE.ShaderMaterial({
   uniforms: { tPat: { value: rtPat.texture }, tId: { value: rtId.texture }, tLit: { value: rtLit.texture }, tFace: { value: rtFace.texture }, tNrm: { value: rtNrm.texture }, tDep: { value: rtDep.texture }, tGL: { value: rtGLit.texture }, tGF: { value: rtGFace.texture }, tWarm: { value: rtWarm.texture }, gview: { value: 0 },
-              sunS: { value: new THREE.Vector2(0, 1) }, pal: { value: palTex }, shadeT: { value: shadeTex }, sunT: { value: sunTex }, coreT: { value: coreTex }, lowT: { value: lowTex }, highT: { value: highTex }, lowSun: { value: 0 }, lmax: { value: 1 }, mode: { value: 0 }, night: { value: 0 } },
+              sunS: { value: new THREE.Vector2(0, 1) }, pal: { value: palTex }, shadeT: { value: shadeTex }, sunT: { value: sunTex }, coreT: { value: coreTex }, lowT: { value: lowTex }, highT: { value: highTex }, lowSun: { value: 0 }, lmax: { value: 1 }, mode: { value: 0 }, night: { value: 0 }, nl: { value: NLC.length }, nlp: { value: Array.from({ length: 8 }, (_, i) => new THREE.Vector4(...(NLC[i] || [0, 0, 0, 0]))) } },
   vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
   fragmentShader: `
     #include <packing>
-    uniform vec2 sunS; uniform float lmax, lowSun, night; uniform sampler2D lowT, highT; uniform sampler2D tWarm, tPat, tId, tLit, tFace, tNrm, tDep, pal, shadeT, sunT, coreT, tGL, tGF; uniform int mode, gview; varying vec2 vUv;
+    uniform vec2 sunS; uniform float lmax, lowSun, night; uniform int nl; uniform vec4 nlp[8]; uniform sampler2D lowT, highT; uniform sampler2D tWarm, tPat, tId, tLit, tFace, tNrm, tDep, pal, shadeT, sunT, coreT, tGL, tGF; uniform int mode, gview; varying vec2 vUv;
     const vec2 S = vec2(${CW}.0, ${CH}.0);
     vec4 at(sampler2D t, vec2 c) { return texture2D(t, (c + 0.5) / S); }
     #define METALQ (${matNames.some(n => n.startsWith("metal")) ? matNames.map((n, i) => n.startsWith("metal") ? `abs(mi - ${i + 1}.0) < 0.5` : "").filter(Boolean).join(" || ") : "false"})
@@ -520,12 +524,25 @@ const comp = new THREE.ShaderMaterial({
           float kn = (shadow || aoed) ? k - 1.0 : k - 1.0;
           col = texture2D(shadeT, vec2((clamp(kn, 0.0, nN - 1.0) + 0.5) / 8.0, (r + 0.5) / ${NP}.0)).rgb;
         }
-        // a lamp or a fire near: its side takes the warm light, in two steps (the near ring brighter)
+        // a lamp or a fire near (owner 2026-11-08: "빛도 림라이트랑 면으로 좀 쏘고 직접적으로 스프라이트에"): a face turned to
+        // it and not shaded from it takes the warm light, up to two steps over its own colour; an edge turned to it is a
+        // warm rim, the brightest of its ramp
         float wl = at(tWarm, c).r;
-        if (wl > 0.18 && line != 1) {
-          float kw = wl > 0.5 ? base : base - 1.0;
+        if (line != 1 && wl > 0.1) {
+          float kw = wl > 0.55 ? base + 2.0 : wl > 0.3 ? base + 1.0 : base;
           col = texture2D(lowT, vec2((clamp(kw, 0.0, nN - 1.0) + 0.5) / 8.0, (r + 0.5) / ${NP}.0)).rgb;
-        } else if (wl > 0.18 && line == 1) col = palc(r == 0.0 ? 0.0 : 1.0, 1.0);
+        }
+        if (line == 1 && length(outN) > 0.0) {
+          for (int i = 0; i < 8; i++) {
+            if (i >= nl) break;
+            vec2 dl = vec2(nlp[i].x - c.x, (${CH}.0 - 1.0 - c.y) - nlp[i].y);       // to the light, rows down the screen
+            float dist = length(dl);
+            if (dist > nlp[i].z || dist < 0.5) continue;
+            float e = dot(normalize(outN), normalize(dl));
+            bool seen = at(tWarm, c - normalize(outN)).r > 0.05 || wl > 0.05;
+            if (e > 0.35 && seen) { col = texture2D(lowT, vec2((nN - 1.0 + 0.5) / 8.0, (r + 0.5) / ${NP}.0)).rgb; break; }
+          }
+        }
       }
       if (mode == 2) col = vec3(st == 1.0 ? 0.95 : st == 0.0 ? 0.7 : st == -1.0 ? 0.45 : 0.22) * (occ >= 3.0 ? 0.75 : 1.0) + (hi == 1 ? 0.15 : 0.0);
       gl_FragColor = vec4(col, 1.0);
