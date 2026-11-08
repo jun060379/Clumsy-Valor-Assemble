@@ -20,11 +20,13 @@ const ANVIL = (function () {
     const cube = (layer, mat, x0, x1, y0, y1, z0, z1) => { const m = add(new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), mat, layer);
       m.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); return m; };
 
-    // ---- the block: a squared length of trunk, the grain in shallow grooves up its face
-    cube("block", "block", 5, 40, 0, 19, -24, 0);
-    for (const x of [13, 21, 30, 36]) cube("block", "grain", x, x + 1, 1, 18, -0.4, 0.3);
-    cube("block", "blockTop", 6, 39, 18.6, 19.2, -23, -1);                          // the sawn top
-
+    // ---- the block (owner 2026-11-08: "받침대를 낮추지뭐" - Bran's hammer lands at the face): a low sawn slab of
+    // trunk, its grain in a few short grooves; the anvil sits DROP units lower than it was drawn on the tall block
+    const BH = 4, DROP = 15;
+    cube("block", "block", 5, 40, 0, BH, -24, 0);
+    for (const x of [13, 21, 30, 36]) cube("block", "grain", x, x + 1, 0.8, BH - 0.8, -0.4, 0.3);
+    cube("block", "blockTop", 6, 39, BH - 0.4, BH + 0.2, -23, -1);                  // the sawn top
+    const n0 = parts.length;
     // ---- the anvil: feet, waist, face with its heel step, the horn
     // ---- the anvil, its outline drawn side on and run back through its depth: broad feet flaring up into a pinched
     // waist, sloping shoulders out to the face, the heel square at the right, the horn's underside curving up to a
@@ -45,13 +47,8 @@ const ANVIL = (function () {
     cube("anvil", "hole", 32, 34.5, 35.2, 35.6, -14, -11.5);                          // the hardy hole
     { const g = new THREE.CylinderGeometry(0.9, 0.9, 0.5, 8); const m = add(g, "hole", "anvil"); m.position.set(36.5, 35.4, -12); }
 
-    const groove = (x, y0, y1, w = 0.9) => cube("block", "grain", x, x + w, y0, y1, -0.4, 0.3);
-    for (const [x, y0, y1] of [[9, 3, 12], [9.6, 12, 17], [14, 1, 9], [13.4, 9, 18], [18, 5, 15], [23, 1, 7], [22.4, 7, 16],
-      [27, 2, 18], [31, 4, 11], [31.6, 11, 17], [35, 1, 14]]) groove(x, y0, y1);
-    cube("block", "grain", 19.5, 21, 12, 19.2, -0.6, 0.4);                            // the check, wider at the top
-    cube("block", "grain", 20, 20.8, 7, 12, -0.6, 0.4);
-    cube("block", "grain", 28.5, 31, 7.5, 9, -0.4, 0.3);                               // a knot
-    for (const x0 of [5, 38.6]) cube("block", "bark", x0, x0 + 1.4, 0, 19, -24.4, 0.4);   // bark left on the corners
+    for (const p of parts.slice(n0)) p.mesh.position.y -= DROP;                     // the anvil down onto the low block
+    for (const x0 of [5, 38.6]) cube("block", "bark", x0, x0 + 1.4, 0, BH, -24.4, 0.4);   // bark left on the corners
     return parts;
   }
   return { W, H, B0, K, TOP, Y, RAMP, MAT, LAYERS, build };
