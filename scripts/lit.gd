@@ -166,7 +166,7 @@ func _draw_glow() -> void:
 		if l["k"] == "win" or not in_view(l, vr): continue
 		var b: float = l.get("boost", 1.0)
 		if glow_soft: shape(glow, l, 1.15 * b)
-		if l["k"] == "lamp" or l["k"] == "bulb":
+		if (l["k"] == "lamp" and not l.get("glass", false)) or l["k"] == "bulb":     # a town lantern's glass is lit whole instead
 			glow.draw_rect(Rect2(roundf(l["x"]) - 1.0, roundf(l["y"]) - 1.0, 3.0, 3.0), Color(1.0, 250.0 / 255.0, 230.0 / 255.0, 0.8 * l["a"] * b))
 
 ## the rim lights for the character shader (pfx.gd _pix_frame): [pos, r, strength, colour]

@@ -92,7 +92,7 @@ func light_sources() -> Array:
 	var t := Time.get_ticks_msec() / 1000.0
 	for i in lamps.size():
 		var p := lamp_glass(lamps[i][0], lamps[i][1], lamps[i][2])
-		L.append({"k": "lamp", "x": p.x, "y": p.y, "gy": lamps[i][1], "r": 150.0, "a": LIT.fl(t, i + 1), "c": Color8(255, 196, 110)})
+		L.append({"k": "lamp", "x": p.x, "y": p.y, "gy": lamps[i][1], "r": 150.0, "a": LIT.fl(t, i + 1), "c": Color8(255, 196, 110), "glass": true})
 	return L
 
 ## occluders (the prototype's arena list): the yard's fence and gate, the three trees

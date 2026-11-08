@@ -27,6 +27,16 @@ bool in_mouth(vec2 p) {
 	float u = (d.x + 0.5) / mouth_hw, v = (h - mouth.w) / (mouth.z - mouth.w);
 	return u * u + v * v <= 1.0;
 }
+// the street lanterns' lit glass (town.gd GLASS): its own light, left out of the dark (owner 2026-11-08: "꽉 채우기")
+uniform vec4 glass[8];
+uniform int glass_n = 0;
+bool in_glass(vec2 p) {
+	for (int i = 0; i < glass_n; i++) {
+		vec4 r = glass[i];
+		if (p.x >= r.x && p.x < r.z && p.y >= r.y && p.y < r.w) return true;
+	}
+	return false;
+}
 bool same(vec3 a, vec3 b) { return all(lessThan(abs(a - b), vec3(0.6 / 255.0))); }
 bool is_star(vec3 c) {
 	return same(c, STAR0) || same(c, STAR1) || same(c, STAR2);
@@ -39,7 +49,7 @@ float bayer4(ivec2 p) {
 	return (float(m[y * 4 + x]) + 0.5) / 16.0 - 0.5;
 }
 void fragment() {
-	if (in_mouth(wp) || is_star(texture(scr, SCREEN_UV).rgb)) { COLOR = vec4(1.0); }
+	if (in_mouth(wp) || in_glass(floor(wp)) || is_star(texture(scr, SCREEN_UV).rgb)) { COLOR = vec4(1.0); }
 	else {
 	float w = 0.0;
 	vec2 cell = floor(wp / 2.0) * 2.0;

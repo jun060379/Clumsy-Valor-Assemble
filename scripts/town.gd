@@ -143,6 +143,12 @@ func _light_uniforms(T: Dictionary) -> void:
 	lit.glow_soft = false
 	m.set_shader_parameter("gmap", gmaps["n"])
 	m.set_shader_parameter("lift", clampf((T["sky"].a - 0.33) / 0.33, 0.0, 1.0))
+	glass_on = T["lamp"] > 0.3
+	var gr: Array = glass_r.duplicate()
+	glass_r.clear()
+	m.set_shader_parameter("glass_n", gr.size())
+	while gr.size() < 8: gr.append(Vector4.ZERO)
+	m.set_shader_parameter("glass", gr)
 var sh_log = null                    # dump_light_layout: {key@x: [shadow key, canvas x, canvas y]} of what was drawn
 var sh_seen := {}                     # every pixel3d ground shadow placed: key@x -> [shadow key, canvas x, canvas y]
 var sh_img := {}                      # their masks on the CPU (baked_shadow_at)
@@ -725,7 +731,7 @@ func light_sources() -> Array:
 	var t := Time.get_ticks_msec() / 1000.0
 	for i in lamps.size():
 		var p := lantern_at(lamps[i][0], lamps[i][1])
-		L.append({"k": "lamp", "x": p.x, "y": p.y, "gy": lamps[i][1], "r": 150.0, "a": LIT.fl(t, i), "c": Color8(255, 196, 110)})
+		L.append({"k": "lamp", "x": p.x, "y": p.y, "gy": lamps[i][1], "r": 150.0, "a": LIT.fl(t, i), "c": Color8(255, 196, 110), "glass": true})
 	for s in light_strings:
 		var yy: float = up_y((s[0] + s[1]) / 2.0) + BAND - 10.0 + 18.0
 		for i in 7:
@@ -1711,6 +1717,12 @@ func _sway(k: String, x: float, y_bottom: float, sink: float, flip: bool, amp: f
 	draw_set_transform(Vector2.ZERO)
 
 ## street lamp: the banner under the arm flutters, more in a gust
+## the lantern's glass lit full at night (owner 2026-11-08: "가로등 등 안에 지금 점 하나 들어있음. 꽉 채우기"): the
+## panes in the cream ramp's top three steps, hot low in the middle; the night's dark leaves them alone (amb_light glass)
+const GLASS_TEX := preload("res://assets/town/q_lamp_glass.png")
+const GLASS_AT := Vector2(76.0, 80.0)          # the panes on q_lamp_base (20 x 26 px)
+var glass_on := false
+var glass_r: Array = []                         # where the lit panes are drawn (world rects), for the ambient shader
 func _lamp(x: float, surf: float, vr: Rect2, ci: CanvasItem = null) -> void:
 	if ci == null: ci = self
 	var lv := sun_side()
@@ -1720,8 +1732,10 @@ func _lamp(x: float, surf: float, vr: Rect2, ci: CanvasItem = null) -> void:
 	if lv == "_n" and lit_tex.has("q_lamp_base_n_" + str(int(x))): base = lit_tex["q_lamp_base_n_" + str(int(x))]
 	if x > vr.end.x or x + base.get_width() < vr.position.x: return
 	var y := roundf(surf - base.get_height() + setdown("q_lamp_base"))
+	if glass_on and glass_r.size() < 8: glass_r.append(Vector4(x + GLASS_AT.x, y + GLASS_AT.y, x + GLASS_AT.x + 20.0, y + GLASS_AT.y + 26.0))
 	if sh_tex.has("q_lamp_base"): sh_place("q_lamp_base", x, y, ci)
 	ci.draw_texture(lit_ct("q_lamp_base", base), Vector2(x, y))
+	if glass_on: ci.draw_texture(GLASS_TEX, Vector2(x, y) + GLASS_AT)
 	var t := Time.get_ticks_msec() / 1000.0
 	var bh := float(ban.get_height())
 	var r := 0.0
