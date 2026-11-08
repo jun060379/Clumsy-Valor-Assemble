@@ -1304,6 +1304,7 @@ func _deepen(im: Image) -> Image:
 	st.blit_rect(im, Rect2i(0, 28, w, h - 28), Vector2i(0, 28 + DEEP))
 	return st
 
+const FIELD_EDGE := 10                  # the walk's earth edge left over the lawn in front (px)
 func _build_ground2() -> void:
 	if not tex.has("k_lawn_0"): return
 	for k in arena.dbg:
@@ -1326,7 +1327,7 @@ func _build_ground2() -> void:
 			cim.decompress()
 			cim.convert(Image.FORMAT_RGBA8)
 			if cim.get_height() > int(LIPY):
-				cim.fill_rect(Rect2i(0, int(LIPY), cim.get_width(), cim.get_height() - int(LIPY)), Color(0, 0, 0, 0))
+				cim.fill_rect(Rect2i(0, int(LIPY) + FIELD_EDGE, cim.get_width(), cim.get_height() - int(LIPY) - FIELD_EDGE), Color(0, 0, 0, 0))
 				tex[ck] = ImageTexture.create_from_image(cim)
 		var fparts: Array[Image] = []
 		var fi := 0
@@ -1368,7 +1369,9 @@ func _build_ground2() -> void:
 		for y in range(h, deep): solid.blit_rect(last, Rect2i(0, 0, w, 1), Vector2i(0, y))
 		# in front of the walk the lawn runs on toward the camera, no earth section (owner 2026-11-08: "풀 타일부터
 		# 근경까지 풀로 이어지게 할거임"; tools/make_town_field.py)
-		if field_im != null: solid.blit_rect(field_im, Rect2i(0, 0, mini(w, field_im.get_width()), field_im.get_height()), Vector2i(0, int(LIPY)))
+		# both (owner 2026-11-09: "둘 다 섞지 뭐"): the walk keeps a thin earth edge (FIELD_EDGE px of its section) so
+		# it still reads as a block, then the lawn
+		if field_im != null: solid.blit_rect(field_im, Rect2i(0, 0, mini(w, field_im.get_width()), field_im.get_height()), Vector2i(0, int(LIPY) + FIELD_EDGE))
 		var band := solid.get_region(Rect2i(0, 0, w, int(BAND + RAISE)))
 		var gr := []
 		for xx in w:
