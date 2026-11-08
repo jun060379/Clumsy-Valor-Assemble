@@ -17,5 +17,5 @@ void fragment() {
 		ivec2 gs = textureSize(gmap, 0);
 		if (gi.x >= 0 && gi.y >= 0 && gi.x < gs.x && gi.y < gs.y) w = texelFetch(gmap, gi, 0).b * lift;
 	}
-	COLOR = vec4(mix(COLOR.rgb, warm, clamp(w * 0.7, 0.0, 0.75)), 1.0);
+	COLOR = vec4(mix(COLOR.rgb, warm, clamp(w * 1.3, 0.0, 0.85)), 1.0);
 }

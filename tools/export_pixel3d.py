@@ -13,6 +13,7 @@ from PIL import Image
 S = sys.argv[1]
 for spec in sys.argv[2:]:
   f = spec.split(":"); n, key, W, top = f[0], f[1], int(f[2]), int(f[3]); cell = int(f[4]) if len(f) > 4 else 1
+  night_only = f[5] if len(f) > 5 else None      # a placement's own night look (lit/<this>.png), nothing else
   rk = {"g_tentL": "g_tentR", "q_benchL": "q_bench", "q_planterL": "q_planter"}.get(key, key)
   ref = Image.open(f"assets/town/{rk}.png")
   x0, pad_l = 12, 0
@@ -22,11 +23,12 @@ for spec in sys.argv[2:]:
     Hh = (ref.height + top) // 2 - top // 2
     W = -(-W // 2); x0 = 6; pad_l = 6; top = top // 2
   last = 0
-  for h in (8, 12, 17):
+  for h in ((21,) if night_only else (8, 12, 17)):
     a = np.array(Image.open(f"{S}/{n}_code_bB_{h}.png").convert("RGBA"))[:, :, 3] > 0
     last = max(last, np.where(a.any(1))[0][-1])
   ch = max(top + Hh, last + 1)
-  for h, suf, dst in ((8, "_m", "lit"), (12, "", "hx"), (17, "_e", "lit")):
+  if night_only: ch = Image.open(f"assets/town/hx/{key}.png").height // 2      # the day sprite's crop
+  for h, suf, dst in (() if night_only else ((8, "_m", "lit"), (12, "", "hx"), (17, "_e", "lit"))):
     im = Image.open(f"{S}/{n}_code_bB_{h}.png").convert("RGBA")
     pad = Image.new("RGBA", (im.width, max(im.height, ch)), (0, 0, 0, 0)); pad.alpha_composite(im, (0, 0))
     pad.crop((x0, 0, x0 + W, ch)).resize((W * 2, ch * 2), Image.NEAREST).save(f"assets/town/{dst}/{key}{suf}.png")
@@ -49,5 +51,5 @@ for spec in sys.argv[2:]:
   if os.path.exists(f"{S}/{n}_code_bB_21.png"):
     im = Image.open(f"{S}/{n}_code_bB_21.png").convert("RGBA")
     pad = Image.new("RGBA", (im.width, max(im.height, ch)), (0, 0, 0, 0)); pad.alpha_composite(im, (0, 0))
-    pad.crop((x0, 0, x0 + W, ch)).resize((W * 2, ch * 2), Image.NEAREST).save(f"assets/town/lit/{key}_n.png")
+    pad.crop((x0, 0, x0 + W, ch)).resize((W * 2, ch * 2), Image.NEAREST).save(f"assets/town/lit/{night_only or key + '_n'}.png")
   print(key, "size", W * 2, ch * 2, "top_px", top * 2, "ext_px", (ch - top - Hh) * 2, "gap_cells", top + Hh - 1 - last)

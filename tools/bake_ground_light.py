@@ -126,7 +126,7 @@ def maps(L):
             if gx1 <= gx0 or gy1 <= gy0: continue
             xs_, ys_ = X[gy0:gy1, gx0:gx1], Y[gy0:gy1, gx0:gx1]
             d = np.hypot(xs_ - lx, (ys_ - ly) * 1.4)
-            f = np.clip(1.0 - d / R_, 0, 1) ** 2 * la
+            f = np.clip(1.0 - d / R_, 0, 1) ** 1.3 * la
             # the sprites that hold the light do not block it
             host = set()
             lgx, lgy = int(lx / CX), int((ly - Y0) / CY)

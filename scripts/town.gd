@@ -1274,6 +1274,8 @@ func _spr(k: String, x: float, y_bottom: float, sink := 0.0, flip := false, ci: 
 		im = hx[k]
 	var lv := sun_side()
 	if lv != "" and lit_tex.has(k + lv): im = lit_tex[k + lv]
+	# a sprite drawn in several places has its own night look at each (the lamps near it differ)
+	if lv == "_n" and lit_tex.has(k + "_n_" + str(int(roundf(x)))): im = lit_tex[k + "_n_" + str(int(roundf(x)))]
 	var y := y_bottom - h + sink * PK * s + setdown(k)
 	# the ground shadow the building casts at this hour (owner 2026-11-07: "허공에 뜬거 수정"), drawn under it; its
 	# canvas starts 24 px left of the sprite (the render's margin) and at the sprite's top
@@ -1598,6 +1600,7 @@ func _lamp(x: float, surf: float, vr: Rect2, ci: CanvasItem = null) -> void:
 	var base: Texture2D = lit_tex.get("q_lamp_base" + lv, hx.get("q_lamp_base", tex["q_lamp_base"]))
 	var ban: Texture2D = hx.get("q_lamp_ban", tex["q_lamp_ban"])
 	x = roundf(x)
+	if lv == "_n" and lit_tex.has("q_lamp_base_n_" + str(int(x))): base = lit_tex["q_lamp_base_n_" + str(int(x))]
 	if x > vr.end.x or x + base.get_width() < vr.position.x: return
 	var y := roundf(surf - base.get_height() + setdown("q_lamp_base"))
 	if sh_tex.has("q_lamp_base"): sh_place("q_lamp_base", x, y, ci)
