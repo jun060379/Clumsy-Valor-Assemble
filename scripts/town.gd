@@ -991,6 +991,9 @@ func step(dt: float) -> void:
 			blade_mat.set_shader_parameter("pal_lut", ground_mat.get_shader_parameter("pal_lut"))
 			blade_mat.set_shader_parameter("pal_fx", ground_mat.get_shader_parameter("pal_fx"))
 			blade_mat.set_shader_parameter("lit_on", 1.0)
+			# the map's cell (tools/bake_ground_light.py CX, CY): the shader's default (4, 2) read every blade's light from
+			# half its x, so the blades stood lit over the trees' shadows (owner 2026-11-08: "나무 하단 그림자가 어긋나있음")
+			blade_mat.set_shader_parameter("gmap_cell", Vector2(2.0, 2.0))
 	var gvr: Rect2 = arena.view_rect()
 	if not g_vr.encloses(gvr): ground_node.queue_redraw()
 	blade_back.queue_redraw()
