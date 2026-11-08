@@ -1304,9 +1304,12 @@ func _deepen(im: Image) -> Image:
 	st.blit_rect(im, Rect2i(0, 28, w, h - 28), Vector2i(0, 28 + DEEP))
 	return st
 
+## no steps (owner 2026-11-09, Owlboy: "암만봐도 이게 젤 낫네"): the lawn runs straight on; depth from the near art
+const FIELD_STEPS := false
 ## the earth step under the walk at x (tile x; px, even): none mostly, in about every other 520 px a stretch 120..300 px rising
 ## to 8..16 px and easing out at both ends over 24 px
 func field_edge(x: float) -> int:
+	if not FIELD_STEPS: return 0
 	var _hsh := func(v: float) -> float: return fposmod(sin(v) * 43758.5453, 1.0)
 	var cell := floorf(x / 520.0)
 	var r: float = _hsh.call(cell * 3.17 + 11.0)
