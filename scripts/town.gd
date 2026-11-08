@@ -1304,7 +1304,20 @@ func _deepen(im: Image) -> Image:
 	st.blit_rect(im, Rect2i(0, 28, w, h - 28), Vector2i(0, 28 + DEEP))
 	return st
 
-const FIELD_EDGE := 10                  # the walk's earth edge left over the lawn in front (px)
+## the earth step under the walk at x (tile x; px, even): none mostly, in about every other 520 px a stretch 120..300 px rising
+## to 8..16 px and easing out at both ends over 24 px
+func field_edge(x: float) -> int:
+	var _hsh := func(v: float) -> float: return fposmod(sin(v) * 43758.5453, 1.0)
+	var cell := floorf(x / 520.0)
+	var r: float = _hsh.call(cell * 3.17 + 11.0)
+	if r > 0.6: return 0
+	var a: float = cell * 520.0 + 60.0 + _hsh.call(cell * 5.3) * 300.0
+	var len: float = 120.0 + _hsh.call(cell * 7.9) * 180.0
+	var h: float = 8.0 + roundf(_hsh.call(cell * 2.3) * 4.0) * 2.0
+	if x < a or x > a + len: return 0
+	var k := clampf(minf(x - a, a + len - x) / 24.0, 0.0, 1.0)
+	return int(roundf(h * k / 2.0)) * 2
+
 func _build_ground2() -> void:
 	if not tex.has("k_lawn_0"): return
 	for k in arena.dbg:
@@ -1327,7 +1340,7 @@ func _build_ground2() -> void:
 			cim.decompress()
 			cim.convert(Image.FORMAT_RGBA8)
 			if cim.get_height() > int(LIPY):
-				cim.fill_rect(Rect2i(0, int(LIPY) + FIELD_EDGE, cim.get_width(), cim.get_height() - int(LIPY) - FIELD_EDGE), Color(0, 0, 0, 0))
+				cim.fill_rect(Rect2i(0, int(LIPY), cim.get_width(), cim.get_height() - int(LIPY)), Color(0, 0, 0, 0))
 				tex[ck] = ImageTexture.create_from_image(cim)
 		var fparts: Array[Image] = []
 		var fi := 0
@@ -1369,9 +1382,13 @@ func _build_ground2() -> void:
 		for y in range(h, deep): solid.blit_rect(last, Rect2i(0, 0, w, 1), Vector2i(0, y))
 		# in front of the walk the lawn runs on toward the camera, no earth section (owner 2026-11-08: "풀 타일부터
 		# 근경까지 풀로 이어지게 할거임"; tools/make_town_field.py)
-		# both (owner 2026-11-09: "둘 다 섞지 뭐"): the walk keeps a thin earth edge (FIELD_EDGE px of its section) so
-		# it still reads as a block, then the lawn
-		if field_im != null: solid.blit_rect(field_im, Rect2i(0, 0, mini(w, field_im.get_width()), field_im.get_height()), Vector2i(0, int(LIPY) + FIELD_EDGE))
+		# both (owner 2026-11-09: "둘 다 섞지 뭐", "가끔씩만 단차두는 연출로"): here and there the walk keeps an earth
+		# edge (field_edge px of its section), a step down to the lawn; elsewhere the lawn runs straight on
+		if field_im != null:
+			var fx := 0
+			while fx < mini(w, field_im.get_width()):
+				solid.blit_rect(field_im, Rect2i(fx, 0, 2, field_im.get_height()), Vector2i(fx, int(LIPY) + field_edge(float(fx))))
+				fx += 2
 		var band := solid.get_region(Rect2i(0, 0, w, int(BAND + RAISE)))
 		var gr := []
 		for xx in w:
