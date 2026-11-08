@@ -23,6 +23,13 @@ uniform ivec4 s_t[80];             // tie bits: where the canvas's own coordinat
 uniform vec4 s_b[48];              // bands: dest top (world, rel. origin), dest height (world px), src top / bottom texel row
 uniform vec4 r_l[48];              // rim lights: offset xy (world px), strength
 uniform vec4 r_c[48];              // rim light colours
+// the town's lamps and fires on the pixel3d sprites (owner 2026-11-08, SLYNYRD's light-source sheet: the side turned to
+// the light lit, the edge toward it a rim, the far side left in shade): their normal maps (assets/town/nrm, alpha 128
+// marks one: alpha 77) lit by each light near, the colour taken one or two warm steps up on the palette (light/pal_fx)
+uniform int pl_n = 0;
+uniform vec4 pl_a[12];             // world x, y, reach (px), strength
+uniform sampler2D pal_lut : filter_nearest, repeat_disable;
+uniform sampler2D pal_fx : filter_nearest, repeat_disable;
 varying vec4 vcol;
 varying vec2 wp;
 varying float on;
@@ -152,6 +159,30 @@ void fragment() {
 		vec4 tc = texture(TEXTURE, UV);
 		if (fl == 1.0) tc.rgb = tc.rgb * 0.2 + 0.8;
 		COLOR = tc * vcol;
+		vec4 nm = texture(NORMAL_TEXTURE, UV);
+		if (pl_n > 0 && tc.a > 0.5 && abs(nm.a - 77.0 / 255.0) < 0.03) {
+			vec3 N = normalize(nm.rgb * 2.0 - 1.0); N.y = -N.y;          // rendered y up; the screen's y runs down
+			vec2 cell = floor(wp / 2.0) * 2.0 + 1.0;
+			float w = 0.0; bool rim = false;
+			for (int i = 0; i < 12; i++) {
+				if (i >= pl_n) break;
+				vec3 Lv = vec3(pl_a[i].xy - cell, 40.0);
+				float f = 1.0 - length(Lv.xy) / pl_a[i].z;
+				if (f <= 0.0) continue;
+				float ndl = dot(N, normalize(Lv));
+				w += max(ndl, 0.0) * f * pl_a[i].w;
+				// a rim: the edge cell whose neighbour toward the light is empty
+				vec2 dir = normalize(Lv.xy);
+				vec2 st = vec2(abs(dir.x) > 0.38 ? sign(dir.x) : 0.0, abs(dir.y) > 0.38 ? sign(dir.y) : 0.0);
+				if (f > 0.35 && texture(TEXTURE, UV + st * TEXTURE_PIXEL_SIZE * 2.0).a < 0.5) rim = true;
+			}
+			int col = rim ? 5 : w > 0.55 ? 5 : w > 0.22 ? 4 : 2;
+			if (col != 2) {
+				ivec3 q = ivec3(clamp(floor(tc.rgb * 255.0 / 8.0), 0.0, 31.0));
+				int idx = int(texelFetch(pal_lut, ivec2(q.r * 32 + q.g, q.b), 0).r * 255.0 + 0.5);
+				COLOR.rgb = texelFetch(pal_fx, ivec2(col, idx), 0).rgb * vcol.rgb;
+			}
+		}
 		if (mode == 0 && on > 0.5 && slot >= 0.0) {
 			// off: the rim still follows the raw sprite's edge, one world pixel at a time
 			int si = int(slot);

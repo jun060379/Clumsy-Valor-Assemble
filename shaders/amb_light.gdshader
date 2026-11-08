@@ -1,6 +1,6 @@
 // lit.gd's ambient multiply (the night's dark over the whole screen), eased where the lamps and fires reach so the
 // light the sprites, tiles and people carry themselves shows (tools/bake_ground_light.py: ground_n blue, traced past
-// the pixel3d outlines). In steps on the 2-px grid with an ordered dither, never a soft gradient (owner 2026-11-08).
+// the pixel3d outlines). In two hard steps on the 2-px grid, never a soft gradient (owner 2026-11-08).
 shader_type canvas_item;
 render_mode blend_mul;
 uniform sampler2D gmap : filter_nearest, repeat_disable;
@@ -23,7 +23,6 @@ void fragment() {
 		ivec2 gs = textureSize(gmap, 0);
 		if (gi.x >= 0 && gi.y >= 0 && gi.x < gs.x && gi.y < gs.y) w = texelFetch(gmap, gi, 0).b * lift;
 	}
-	float q = w + bayer4(ivec2(cell / 2.0)) * 0.25;
-	float st = q > 0.5 ? 0.6 : q > 0.2 ? 0.35 : 0.0;          // two steps, no gradient
+	float st = w > 0.45 ? 0.5 : w > 0.15 ? 0.25 : 0.0;        // two hard steps on the 2-px grid, no gradient, no dither
 	COLOR = vec4(mix(COLOR.rgb, warm, st), 1.0);
 }

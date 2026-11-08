@@ -102,6 +102,36 @@ var sh_tex := {}
 ## the pixel3d ground shadows (shadow/) are baked into the ground light maps (tools/bake_ground_light.py, from
 ## tests/dump_light_layout.gd), shaded there on the palette - not laid over as a translucent colour
 const SH_IN_MAP := true
+## the pixel3d sprites' normal maps (assets/town/nrm): the lamps light them live (shaders/char_pix.gdshader pl_*)
+var nrm := {}
+var ct_cache := {}
+func lit_ct(k: String, im: Texture2D) -> Texture2D:
+	if not nrm.has(k): return im
+	var id := im.get_instance_id()
+	if not ct_cache.has(id):
+		var ct := CanvasTexture.new()
+		ct.diffuse_texture = im
+		ct.normal_texture = nrm[k]
+		ct_cache[id] = ct
+	return ct_cache[id]
+func _lamp_uniforms(L: Array, T: Dictionary) -> void:
+	var nk := clampf((T["sky"].a - 0.33) / 0.33, 0.0, 1.0)
+	var vr: Rect2 = arena.view_rect().grow(300.0)
+	var arr: Array = []
+	if nk > 0.02:
+		for l in L:
+			if not (l["k"] in ["lamp", "fire", "bulb"]): continue
+			if not vr.has_point(Vector2(l["x"], l["y"])): continue
+			arr.append(Vector4(l["x"], l["y"], float(l["r"]) * (1.7 if l["k"] != "bulb" else 1.2), float(l["a"]) * nk))
+			if arr.size() >= 12: break
+	var n := arr.size()
+	while arr.size() < 12: arr.append(Vector4.ZERO)
+	for m in [material, near_node.material]:
+		if not (m is ShaderMaterial): continue
+		m.set_shader_parameter("pl_n", n)
+		m.set_shader_parameter("pl_a", arr)
+		m.set_shader_parameter("pal_lut", load("res://assets/town/light/pal_lut.png"))
+		m.set_shader_parameter("pal_fx", load("res://assets/town/light/pal_fx.png"))
 ## the lamps' light with its shadows (tools/bake_ground_light.py: ground_n blue, traced past the pixel3d outlines)
 ## eases the night's dark where it reaches, so the sprites' own lamp-lit faces and rims (the per-placement night
 ## renders), the ground's warm and the people near a lamp show; gently (owner 2026-11-08: not a glare)
@@ -174,6 +204,9 @@ func _ready() -> void:
 	for k in ["g_tentL", "q_benchL", "q_planterL"]:      # the pixel3d solids built mirrored (not a flipped sprite)
 		hx[k] = load("res://assets/town/hx/" + k + ".png")
 	# the sun-side versions (tools/bake_sun_light.py): <k>_m = sun from the left (morning), <k>_e = from the right
+	for f in DirAccess.get_files_at("res://assets/town/nrm"):
+		var nk2 := f.replace(".import", "").get_basename()
+		if not nrm.has(nk2): nrm[nk2] = load("res://assets/town/nrm/" + nk2 + ".png")
 	for f in DirAccess.get_files_at("res://assets/town/shadow"):
 		var sk := f.replace(".import", "").get_basename()
 		if not sh_tex.has(sk): sh_tex[sk] = load("res://assets/town/shadow/" + sk + ".png")
@@ -251,6 +284,7 @@ func _ready() -> void:
 	# people (owner 2026-11-06: depth). z 1: over the player (0), under the grass blades in front (8) and the light (9)
 	near_node = Node2D.new()
 	near_node.z_index = 1
+	near_node.material = material          # the same shader: the lamps light the near props too
 	near_node.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	near_node.draw.connect(_draw_near)
 	arena.add_child(near_node)
@@ -717,6 +751,7 @@ func _light_step(T: Dictionary) -> void:
 	_boost(L, T)
 	lit.L = L
 	lit.amb = T["amb"]
+	_lamp_uniforms(L, T)
 	_light_uniforms(T)
 	# (the ambient multiply in lit.gd covers the whole screen, the sky behind the world included, as in the prototype)
 	shade.update(T, arena.tod_h, L)
@@ -1282,6 +1317,7 @@ func _spr(k: String, x: float, y_bottom: float, sink := 0.0, flip := false, ci: 
 	# the ground shadow the building casts at this hour (owner 2026-11-07: "허공에 뜬거 수정"), drawn under it; its
 	# canvas starts 24 px left of the sprite (the render's margin) and at the sprite's top
 	if not flip and sh_tex.has(k): sh_place(k, x, y, ci)
+	im = lit_ct(k, im)
 	if flip:
 		ci.draw_set_transform_matrix(xf * Transform2D(0.0, Vector2(-1, 1), 0.0, Vector2(roundf(x) + w, 0)))
 		ci.draw_texture_rect(im, Rect2(0, y, w, h), false)
@@ -1606,7 +1642,7 @@ func _lamp(x: float, surf: float, vr: Rect2, ci: CanvasItem = null) -> void:
 	if x > vr.end.x or x + base.get_width() < vr.position.x: return
 	var y := roundf(surf - base.get_height() + setdown("q_lamp_base"))
 	if sh_tex.has("q_lamp_base"): sh_place("q_lamp_base", x, y, ci)
-	ci.draw_texture(base, Vector2(x, y))
+	ci.draw_texture(lit_ct("q_lamp_base", base), Vector2(x, y))
 	var t := Time.get_ticks_msec() / 1000.0
 	var bh := float(ban.get_height())
 	var r := 0.0

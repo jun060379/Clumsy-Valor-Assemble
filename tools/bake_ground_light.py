@@ -151,6 +151,12 @@ def maps(L):
                 fy = np.array([f[fl] for f in L["floors"]], float)[:W]
                 fy = np.concatenate([fy, np.full(W - len(fy), fy[-1])]) if len(fy) < W else fy
                 surf |= (Y > fy[None, :] - RAISE - 2.0) & (Y < fy[None, :] + 30.0)
+        # and the lights themselves (the flames, the lantern glass): not dimmed by the night
+        for (kind, lx, ly, r, cr, cg, cb, la) in L["lights"]:
+            if kind in ("lamp", "fire", "bulb"):
+                rr = {"fire": 34.0, "lamp": 12.0, "bulb": 6.0}[kind]
+                core = np.hypot(X - lx, Y - ly) < rr
+                surf |= core; out = np.where(core, 1.0, out)
         return np.clip(out, 0, 1) * surf
     out = {}
     for tag, suf in (("d", ""), ("m", "_m"), ("e", "_e"), ("n", "")):
