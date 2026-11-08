@@ -209,6 +209,24 @@ void fragment() {
 			vec4 Lt = s_l[si];
 			float vy = Lt.y > Lt.x ? (float(cl.y) - Lt.x) / (Lt.y - Lt.x) : 0.5;
 			o = vec4(grade(c.rgb, mode == 2 ? 1.08 - 0.22 * vy : 1.0) / 255.0, 1.0);
+			// the body's side toward a light (owner 2026-11-08: "캐릭터 조명"): the cells within a few px of the
+			// edge facing it take the light's warmth in two hard steps - the near band strongest - and the far side
+			// stays as drawn (a lamp or a fire reads on the face, not only on the outline)
+			if (mode == 2) {
+				float lk = 0.0; vec3 lc = vec3(0.0);
+				for (int i = 0; i < 3; i++) {
+					if (float(i) >= s_l[si].w) break;
+					vec4 R = r_l[si * 3 + i];
+					if (R.z < 0.12 || length(R.xy) < 0.5) continue;
+					vec2 u = normalize(R.xy);
+					int n = 0;
+					for (int k = 1; k <= 4; k++) if (solid(TEXTURE, cl + ivec2(round(u * float(k) * 2.0)), si)) n++;
+					float f = n <= 1 ? 1.0 : n == 2 ? 0.55 : 0.0;
+					if (f * R.z > lk) { lk = f * R.z; lc = r_c[si * 3 + i].rgb; }
+				}
+				float st = lk > 0.45 ? 1.0 : lk > 0.18 ? 0.55 : 0.0;
+				if (st > 0.0) o.rgb = min(vec3(1.0), o.rgb * (1.0 + 0.6 * st) * mix(vec3(1.0), lc, 0.4) + lc * 0.22 * st);
+			}
 		}
 		o *= vcol;
 		for (int i = 0; i < 3; i++) {
