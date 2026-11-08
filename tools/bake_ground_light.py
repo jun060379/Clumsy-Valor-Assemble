@@ -122,11 +122,17 @@ def maps(L):
             if kind not in ("lamp", "fire", "bulb"): continue
             R_ = r * (1.7 if kind in ("lamp", "fire") else 1.2)
             gx0, gx1 = max(0, int((lx - R_) / CX)), min(W, int((lx + R_) / CX) + 1)
-            gy0, gy1 = max(0, int((ly - R_ - Y0) / CY)), min(H, int((ly + R_ - Y0) / CY) + 1)
+            gy0, gy1 = max(0, int((ly - R_ - Y0) / CY)), min(H, int((ly + R_ + 120.0 - Y0) / CY) + 1)
             if gx1 <= gx0 or gy1 <= gy0: continue
             xs_, ys_ = X[gy0:gy1, gx0:gx1], Y[gy0:gy1, gx0:gx1]
-            d = np.hypot(xs_ - lx, (ys_ - ly) * 1.4)
-            f = np.clip(1.0 - d / R_, 0, 1) ** 2 * la
+            own0 = lab[gy0:gy1, gx0:gx1]
+            # a sprite takes the light by its distance to the light; the ground by its distance to the spot under it
+            # (owner 2026-11-08: "가로등 너무 은은하고 중심도 애매한듯": a lamp's pool lies round its foot, bright)
+            foot = ly + (110.0 if kind == "lamp" else 30.0 if kind == "fire" else 0.0)
+            ds = np.hypot(xs_ - lx, ys_ - ly)
+            dg = np.hypot(xs_ - lx, (ys_ - foot) * 2.2)
+            d = np.where(own0 > 0, ds, np.minimum(dg, ds))
+            f = np.clip(1.0 - d / R_, 0, 1) ** 1.4 * la
             # the sprites that hold the light do not block it
             host = set()
             lgx, lgy = int(lx / CX), int((ly - Y0) / CY)
@@ -154,7 +160,7 @@ def maps(L):
         # and the lights themselves (the flames, the lantern glass): not dimmed by the night
         for (kind, lx, ly, r, cr, cg, cb, la) in L["lights"]:
             if kind in ("lamp", "fire", "bulb"):
-                rr = {"fire": 34.0, "lamp": 12.0, "bulb": 6.0}[kind]
+                rr = {"fire": 34.0, "lamp": 16.0, "bulb": 6.0}[kind]
                 core = np.hypot(X - lx, Y - ly) < rr
                 surf |= core; out = np.where(core, 1.0, out)
         return np.clip(out, 0, 1) * surf
