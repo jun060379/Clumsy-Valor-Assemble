@@ -201,7 +201,7 @@ func _ready() -> void:
 	# pixels the same size as the characters'. tex[] keeps the originals for layout, climb tops and shadows
 	for k in tex.keys():
 		if ResourceLoader.exists("res://assets/town/hx/" + k + ".png"): hx[k] = load("res://assets/town/hx/" + k + ".png")
-	for k in ["g_tentL", "q_benchL", "q_planterL"]:      # the pixel3d solids built mirrored (not a flipped sprite)
+	for k in ["g_tentL", "q_benchL", "q_planterL", "bg_range_far", "bg_range_mid", "bg_range_near"]:   # pixel3d mirrored solids, far ranges
 		hx[k] = load("res://assets/town/hx/" + k + ".png")
 	# the sun-side versions (tools/bake_sun_light.py): <k>_m = sun from the left (morning), <k>_e = from the right
 	for f in DirAccess.get_files_at("res://assets/town/nrm"):
@@ -1018,7 +1018,15 @@ func _draw_bg() -> void:
 		bg_node.draw_texture_rect(sky, Rect2(x, roundf(-200.0 - cam_y * 0.08), sw, sh), false)
 		x += sw
 	var mt: Texture2D = tex["bg_mountains"]
-	_layer(hx.get("bg_mountains", mt), 0.16, G - mt.get_height() * PXK - 40.0 - cam_y * 0.12, 1.0 if hx.has("bg_mountains") else PXK, cam_x, vs)
+	var my := G - mt.get_height() * PXK - 40.0
+	if hx.has("bg_range_near"):
+		# three ranges, each wider than its parallax travel over the town (no repeat), the farther the paler
+		# (tools/make_bg_ranges.py; owner 2026-11-08: "원경도 반복임. 공기 산란도 없음")
+		_layer(hx["bg_range_far"], 0.05, my - 28.0 - 62.0 - cam_y * 0.06, 1.0, cam_x, vs)
+		_layer(hx["bg_range_mid"], 0.1, my - 28.0 - 30.0 - cam_y * 0.09, 1.0, cam_x, vs)
+		_layer(hx["bg_range_near"], 0.16, my - 28.0 - cam_y * 0.12, 1.0, cam_x, vs)
+	else:
+		_layer(hx.get("bg_mountains", mt), 0.16, my - cam_y * 0.12, 1.0 if hx.has("bg_mountains") else PXK, cam_x, vs)
 	var T := tod_now()
 	var dim: float = 1.0 - 0.75 * T["sun"]
 	bg_node.draw_rect(Rect2(Vector2.ZERO, vs), Color(0.07, 0.05, 0.16, 0.2 * dim))
