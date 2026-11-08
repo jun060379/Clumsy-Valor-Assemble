@@ -73,10 +73,11 @@ const YARD = (function () {
     // ---- the far fence (owner 2026-11-07: "좀 더 짙고 낮은 채도로 저 너머에 원경 울타리 깔기"): the same fence on the
     // yard's far side, plain, in darker, duller colours (the distance takes the warmth out)
     // (owner 2026-11-07: "원경이니까 멀고 작게" / "원근감. 그리고 투시도.") The yard laid out as a forced perspective,
-    // still a real solid so its shadows stay true: the far fence far back, half the size and a little over half as
+    // still a real solid so its shadows stay true: the far fence far back (owner 2026-11-08: "훈련장 울타리 뒷부분이 떠있음" -
+    // its feet kept inside the town ground plane's 42 px, z -335 = 40 px up), half the size and a little over half as
     // wide; a side fence down each side from the near fence's ends back to the far fence's, its posts shrinking and
     // closing in as they go, so the lines run together toward the back as in a perspective drawing.
-    { const ZF = -470, FHALF = 205, PH = 46, PW = 4.5, SP = 41;
+    { const ZF = -335, FHALF = 205, PH = 46, PW = 4.5, SP = 41;
       const fence = (pa, pb, ha, hb, wa, wb, n, rails) => {          // posts from a to b, height and width eased between
         const at = (t) => [pa[0] + (pb[0] - pa[0]) * t, pa[1] + (pb[1] - pa[1]) * t, ha + (hb - ha) * t, wa + (wb - wa) * t];
         for (let k = 0; k <= n; k++) { const t = k / n, [x, z, h, w] = at(t), mat = t > 0.5 ? "farPost" : "post";
