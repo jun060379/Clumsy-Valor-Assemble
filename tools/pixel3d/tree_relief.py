@@ -77,7 +77,11 @@ for key in [k for k in sys.argv[1:] if not k.startswith("--")]:
     # the picture's bottom row is the ground line
     zq = np.clip(np.round(z * 4), 0, 255).astype(np.uint8)
     data = {"w": W, "h": H, "mat": "".join(str(int(v)) for v in mat.ravel()), "z": [int(v) for v in zq.ravel()]}
+    # --shadow: the relief set up as a card (room for the long shadows, the town's whole ground plane) - the ground
+    # shadow the relief casts (owner 2026-11-08: "그림은 그대로 넣고, 그림자는 입체로 만든 거 기반으로 넣기")
+    SH = "--shadow" in sys.argv
+    if SH: data.update({"card": 1, "depth": float(zq.max()) / 4.0})
     js = open(os.path.join(os.path.dirname(__file__), "relief.js")).read()
     js = js.replace("const DATA = null;", "const DATA = " + json.dumps(data, separators=(",", ":")) + ";")
-    open(os.path.join(os.path.dirname(__file__), f"relief_{key}.js"), "w").write(js)
+    open(os.path.join(os.path.dirname(__file__), f"relief_{key}{'_card' if SH else ''}.js"), "w").write(js)
     print(key, W, H, "clumps", n)

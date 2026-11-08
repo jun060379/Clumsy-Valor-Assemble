@@ -44,7 +44,7 @@ const RELIEF = (function () {
       g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
       g.computeVertexNormals();
       const m = new THREE.Mesh(g);
-      m.position.z = DATA.card ? -DATA.depth / 2 : -20; m.position.x = MX;
+      m.position.z = DATA.card ? -DATA.depth / 2 : -20; m.position.x = MX;   // a card or a relief's shadow: centred on the stand line
       parts.push({ mesh: m, mat: NAMES[code], layer: (code <= 2 || code === 5) ? "wood" : "leaves" });
     }
     return parts;
