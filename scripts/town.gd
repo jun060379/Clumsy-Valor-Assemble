@@ -838,7 +838,9 @@ func shade_occluders() -> Array:
 	o.append([hx["g_hall"], HXB, TTOP + PK * BS + setdown("g_hall"), 0.0, false, 1.0, false, true])
 	for d in deco_back:
 		# a tree with a card shadow (tools/pixel3d/tree_relief.py --flat, baked into the ground maps) needs no sun volume
-		if d[0].contains("tree"): o.append([tex[d[0]], d[1], d[2], d[3], d[4], ks(d[0]), true, ResourceLoader.exists("res://assets/town/shadow/" + d[0] + "_card.png")])
+		# every tree (owner 2026-11-08: test_light's occluders): the oak, round, young and tall ones have no "tree" in
+		# their names and were left out, so the cloud shadows passed over them
+		if d[0].contains("tree") or d[0] in ["f_oak", "f_round", "f_young", "f_tall"]: o.append([tex[d[0]], d[1], d[2], d[3], d[4], ks(d[0]), true, ResourceLoader.exists("res://assets/town/shadow/" + d[0] + "_card.png")])
 	return o
 
 func shade_props() -> Array:
