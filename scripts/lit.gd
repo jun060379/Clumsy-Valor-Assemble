@@ -110,10 +110,6 @@ static func reach(l: Dictionary) -> float:
 func _init(a) -> void:
 	arena = a
 	z_index = 9
-	# a fresh copy of the screen for the ambient's self-lit test (stars, fire; shaders/amb_light.gdshader)
-	var bb := BackBufferCopy.new()
-	bb.copy_mode = BackBufferCopy.COPY_MODE_VIEWPORT
-	add_child(bb)
 	amb_node = _sub(CanvasItemMaterial.BLEND_MODE_MUL, _draw_amb)
 	var am := ShaderMaterial.new()                 # the night's dark, eased where the lamps reach (town sets them)
 	am.shader = preload("res://shaders/amb_light.gdshader")

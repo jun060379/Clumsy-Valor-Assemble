@@ -14,17 +14,22 @@ uniform sampler2D scr : hint_screen_texture, filter_nearest;
 const vec3 STAR0 = vec3(150.0, 156.0, 196.0) / 255.0;
 const vec3 STAR1 = vec3(205.0, 208.0, 226.0) / 255.0;
 const vec3 STAR2 = vec3(255.0, 250.0, 236.0) / 255.0;
-// the fire's own colours (pixelfx town fire ramp and the forge hearth's lit back wall, tools/pixelfx_fx/
-// town-forge-hearth.js; none of them is in the town palette, white left out): fire is its own light, the night's dark
-// leaves it alone (owner 2026-11-08, the forge hearth)
-const vec3 FIRE[11] = vec3[](vec3(74.0, 23.0, 18.0), vec3(138.0, 31.0, 23.0), vec3(201.0, 40.0, 31.0), vec3(242.0, 86.0, 29.0),
-	vec3(255.0, 138.0, 42.0), vec3(255.0, 194.0, 61.0), vec3(255.0, 226.0, 107.0), vec3(255.0, 243.0, 166.0),
-	vec3(86.0, 26.0, 20.0), vec3(127.0, 38.0, 23.0), vec3(168.0, 56.0, 26.0));
+// the forge's hearth mouth (world px: its floor-middle, half width, height, height of the jambs): fire is its own light,
+// the night's dark leaves the opening alone (owner 2026-11-08; town_fx.gd sets it, z 0 when there is none)
+uniform vec4 mouth = vec4(0.0);
+uniform float mouth_hw = 42.0;
+bool in_mouth(vec2 p) {
+	if (mouth.z <= 0.0) return false;
+	vec2 d = floor(p) - mouth.xy;
+	if (d.y >= 0.0 || d.y < -mouth.z || d.x < -mouth_hw || d.x >= mouth_hw) return false;
+	float h = -d.y;
+	if (h <= mouth.w) return true;
+	float u = (d.x + 0.5) / mouth_hw, v = (h - mouth.w) / (mouth.z - mouth.w);
+	return u * u + v * v <= 1.0;
+}
 bool same(vec3 a, vec3 b) { return all(lessThan(abs(a - b), vec3(0.6 / 255.0))); }
 bool is_star(vec3 c) {
-	if (same(c, STAR0) || same(c, STAR1) || same(c, STAR2)) return true;
-	for (int i = 0; i < 11; i++) if (same(c, FIRE[i] / 255.0)) return true;
-	return false;
+	return same(c, STAR0) || same(c, STAR1) || same(c, STAR2);
 }
 varying vec2 wp;
 void vertex() { wp = (MODEL_MATRIX * vec4(VERTEX, 0.0, 1.0)).xy; }
@@ -34,7 +39,7 @@ float bayer4(ivec2 p) {
 	return (float(m[y * 4 + x]) + 0.5) / 16.0 - 0.5;
 }
 void fragment() {
-	if (is_star(texture(scr, SCREEN_UV).rgb)) { COLOR = vec4(1.0); }
+	if (in_mouth(wp) || is_star(texture(scr, SCREEN_UV).rgb)) { COLOR = vec4(1.0); }
 	else {
 	float w = 0.0;
 	vec2 cell = floor(wp / 2.0) * 2.0;

@@ -210,6 +210,9 @@ func _draw_furnace(ci: CanvasItem) -> void:
 	var top: Vector2 = o - Vector2(0.0, p3[0] + p3[1] - town.setdown("g_forge"))
 	for t in [HEARTH_RIM, HEARTH, HEARTH_OUT]:
 		ci.draw_texture_rect_region(t, Rect2(top + HEARTH_AT, HEARTH_SZ), src)
+	# the opening (sprite px 92..175 x 216..273) keeps its own light at night (shaders/amb_light.gdshader mouth)
+	var am: ShaderMaterial = town.lit.amb_node.material
+	am.set_shader_parameter("mouth", Vector4(top.x + 134.0, top.y + 274.0, 58.0, 26.0))
 
 ## front layer: the chimney smoke (pixelfx fire/town-chimney-smoke: 80 frames 96x150 at 20 fps, the mouth at 24,140),
 ## each chimney on its own phase; grey at the forge, paler steam off the bathhouse
