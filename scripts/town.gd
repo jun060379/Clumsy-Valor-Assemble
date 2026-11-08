@@ -102,6 +102,46 @@ var sh_tex := {}
 ## the pixel3d ground shadows (shadow/) are baked into the ground light maps (tools/bake_ground_light.py, from
 ## tests/dump_light_layout.gd), shaded there on the palette - not laid over as a translucent colour
 const SH_IN_MAP := true
+var sh_log = null                    # dump_light_layout: {key@x: [shadow key, canvas x, canvas y]} of what was drawn
+func sh_place(k: String, x: float, y: float, ci: CanvasItem) -> void:
+	if sh_log != null: sh_log[k + "@" + str(roundf(x))] = [k, roundf(x) - 24.0, y]
+	if SH_IN_MAP: return
+	var lv := sun_side()
+	if sh_tex.has(k + lv):
+		var st: Texture2D = sh_tex[k + lv]
+		ci.draw_texture_rect(st, Rect2(roundf(x) - 24.0, y, st.get_width(), st.get_height()), false)                 # baked ground shadows under the pixel3d buildings: "<k>" / "<k>_m" / "<k>_e" (tools/pixel3d)
+var lit_tex := {}                # sun-side versions: "<k>_m" / "<k>_e"                     # pre-scaled (BS) textures, drawn 1:1
+var win_sv: SubViewport         # the hall windows drawn apart (LIT.wc): the heroine cut out of them
+var win_draw: Node2D
+var win_cut: Node2D
+var shade                     # shade.gd: sun shadow volumes, cloud shadows, the deep shade under the terraces
+var bg_layer: CanvasLayer
+var bg_node: Node2D
+var front: Node2D
+var ground_node: Node2D
+var blade_back: Node2D
+var blade_front: Node2D
+var blade_mat: ShaderMaterial
+var bmesh := {}
+var gci: CanvasItem              # what _shear draws on (the ground node)
+var ground_mat: ShaderMaterial
+var gmaps := {}
+var gmap_now := ""
+var g_vr := Rect2()              # the span the ground node was last drawn for
+var near_node: Node2D           # props standing nearer than the people's line (drawn over them)
+var light_tex: GradientTexture2D
+var tfx: Array = []
+var emit_t := {}
+var fxa                       # the ambient effects with a cause (town_fx.gd)
+var life                      # wind, grass, props, birds, weather (town_life.gd)
+var folk                      # townsfolk (lives on the arena)
+var bran
+var folk_node: Node2D
+var lbl_layer: CanvasLayer
+var labels: Node2D
+var prof_cache := {}
+var horse := {"st": "idle", "t": 0.0, "next": 4000.0, "neck": 0.0, "tail": 0.0, "chew": 0.0, "st_t": 0.0, "frame": 0, "wake": false}
+
 
 func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
