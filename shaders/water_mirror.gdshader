@@ -34,7 +34,7 @@ void fragment() {
 	float d = wp.y - wl;
 	float row = cell.y;
 	// the ripple: each 2-px row slides a whole number of cells, more the deeper below the line
-	float amp = 0.6 + d * 0.035;
+	float amp = 0.3 + d * 0.02;
 	float s = sin(row * 0.9 + t * 2.1) * 0.6 + sin(row * 2.3 - t * 3.3 + cell.x * 0.02) * 0.4;
 	float dx = round(s * amp) * 2.0;
 	vec2 uv = muv + du * dx;
@@ -43,10 +43,12 @@ void fragment() {
 		vec3 c = texture(screen_tex, uv).rgb;
 		ivec3 q = ivec3(clamp(floor(c * 255.0 / 8.0), 0.0, 31.0));
 		int idx = int(texelFetch(pal_lut, ivec2(q.r * 32 + q.g, q.b), 0).r * 255.0 + 0.5);
-		o = texelFetch(pal_fx, ivec2(0, idx), 0).rgb;
+		// high reflectance (owner 2026-11-08: "반사율을 엄청 높인 물"): the colours as they are, only the lightest
+		// shade step (pal_fx 1) on every other row, so the picture holds and still reads as water
+		o = texelFetch(pal_fx, ivec2(mod(row, 2.0) < 1.0 ? 2 : 1, idx), 0).rgb;
 	}
-	// the water between: every third row the river's own colour, broken where the ripple runs (Kingdom's look)
-	if (d > 3.0 && mod(row, 3.0) < 1.0 && sin(cell.x * 0.21 + row * 1.7 + t * 1.1) > -0.4) o = deep.rgb;
+	// the water between: now and then a short dash of the river's own colour where the ripple runs
+	if (d > 3.0 && mod(row, 4.0) < 1.0 && sin(cell.x * 0.21 + row * 1.7 + t * 1.1) > 0.55) o = deep.rgb;
 	// a light ripple line now and then, short, drifting
 	float hl = sin(cell.x * 0.11 + row * 5.1 + t * 0.9) + 0.5 * sin(cell.x * 0.29 - t * 1.7);
 	if (mod(row, 6.0) < 1.0 && hl > 1.15 && d > 2.0) o = lite.rgb;
