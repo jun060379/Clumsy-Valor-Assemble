@@ -406,11 +406,86 @@ func _blue(i: int, x: float) -> float:
 	return fposmod(52.9829189 * fposmod(0.06711056 * x + 0.00583715 * float(i * 37), 1.0), 1.0)
 
 func build_blades() -> void:
-	var edges: Array = town.grass_edges() if town.has_method("grass_edges") else []
 	var feet: Array = town.grass_feet() if town.has_method("grass_feet") else []
 	var plane: bool = not town.g2.is_empty()
 	var rows: Array = ROWS if plane else [0.0]
 	bl_rows = []
+	var keepx := _keep_map(plane)
+	tuft_keep = keepx if plane and TUFTS_ON else PackedFloat32Array()
+	tuft_feet = feet
+	_body_blades(rows, keepx, feet)
+
+# ---------- the tufts on the back of the plane (owner 2026-11-08: "아래 풀은 두고 위 영역의 포기는 전환") ----------
+# generated tufts cut onto the lawn ramp (tools/make_town_grass.py set b, tools/bake_grass_sway.py) stand in rows over
+# the plane behind the stand line, where the back blade rows were; the front rows keep their blades
+const TUFTS_ON := true
+const TUFT_KINDS := ["g_tuft_1", "g_tuft_2", "g_tuft_tall", "g_strip", "g_clover", "g_daisy", "g_cattail", "g_sprout", "g_tuft_wind"]
+var tuft_keep := PackedFloat32Array()
+var tuft_feet: Array = []
+## the tufts over the given surfaces ([x0, x1, surface(x)]): [x, base y, kind, flip, height], back rows first
+func build_tufts(surfs: Array) -> Array:
+	var out: Array = []
+	if tuft_keep.is_empty(): return out
+	var n := tuft_keep.size()
+	# one row along the plane's back edge, as in the preview the owner picked (grass_numbered.png row 5): the tufts
+	# stand side by side on the far lawn, overlapping a little, the walked plane in front of them left to the blades
+	var back := -float(town.RAISE) + 4.0          # RAISE already holds DEEP (town.gd)
+	var ri := 0
+	var d := back
+	while d <= back:
+		for sf in surfs:
+			var x0: float = sf[0]
+			var x1: float = sf[1]
+			var f: Callable = sf[2]
+			var x := x0 + roundf(_hsh(ri * 5.1 + x0) * 20.0 / 2.0) * 2.0
+			var k := 0
+			while x < x1:
+				k += 1
+				var keep: float = tuft_keep[clampi(int(x), 0, n - 1)]
+				var blocked := false
+				for ft in tuft_feet:
+					if x > ft[0] - 8.0 and x < ft[1] + 8.0 and d < ft[2] + 3.0:
+						blocked = true
+						break
+				var hh := lawn_h(x, d) * keep
+				var r := _hsh(k * 1.37 + ri * 7.1 + x0)
+				if not blocked and keep > 0.2 and r < 0.85:
+					var pick := _hsh(k * 3.3 + ri * 1.9)
+					var kind := "g_tuft_1"
+					if pick < 0.04: kind = "g_daisy"
+					elif pick < 0.08: kind = "g_clover"
+					elif pick < 0.12: kind = "g_sprout"
+					elif hh > 0.62: kind = "g_tuft_tall" if pick < 0.55 else "g_tuft_wind"
+					elif hh > 0.4: kind = "g_tuft_2" if pick < 0.7 else "g_strip"
+					elif pick > 0.75: kind = "g_strip"
+					var by := roundf((float(f.call(x)) + d + roundf((_hsh(k * 0.77 + ri) - 0.5) * 3.0)) / 2.0) * 2.0
+					if sf.size() > 3 and by < float(sf[3].call(x)):
+						x += 22.0
+						continue
+					out.append([roundf(x / 2.0) * 2.0, by, kind, _hsh(k * 8.1 + ri) < 0.5])
+				x += 20.0 + roundf(_hsh(k * 2.9 + ri) * 24.0 / 2.0) * 2.0
+		d += 12.0
+		ri += 1
+	out.sort_custom(func(p, q): return p[1] < q[1])
+	return out
+
+## a tuft's lean in cells at its top (its sway frame): the blades' wind and gusts, the walking push
+func tuft_lean(x: float, by: float, h: float) -> float:
+	var t: float = now() / 1000.0
+	var ph := x * 0.021 - t * 1.7
+	var sw := sin(ph) + 0.3 * sin(ph * 0.4 + 1.3)
+	var g := sin(x * 0.0065 - t * 2.4) * 0.6 + sin(x * 0.017 - t * 3.1 + 2.0) * 0.4
+	var gw := maxf(0.0, g - 0.35) * (0.6 + gust)
+	var lean := (sw * 0.6 + 0.45 + gw * 3.0) * (h / 40.0)
+	if not push.is_empty():
+		var pv: float = push[clampi(int(x / 4.0), 0, push.size() - 1)]
+		if absf(arena.player.position.y - by) < 48.0 and absf(pv) > 0.05: lean += signf(pv) * (1.0 - exp(-absf(pv) * 0.9)) * 3.0
+	return lean
+
+## how much grass may grow at each x (0..1): short near what stands there, none on paving, frayed on trodden paths
+func _keep_map(plane: bool) -> PackedFloat32Array:
+	var edges: Array = town.grass_edges() if town.has_method("grass_edges") else []
+	var feet: Array = town.grass_feet() if town.has_method("grass_feet") else []
 	var n := int(town.TOWN_W)
 	var keepx := PackedFloat32Array()
 	keepx.resize(n)
@@ -433,8 +508,12 @@ func build_blades() -> void:
 			if rim > 30.0 and not onslope: weeds = 0.8 * smoothstep(0.7, 0.85, _vn(x / 23.0, 21.0) * 0.6 + _vn(x / 71.0, 5.0) * 0.4)
 			keep *= maxf(0.5 * maxf(0.0, 1.0 - rim / 14.0), weeds)
 		keepx[xi] = keep
+	return keepx
+
+func _body_blades(rows: Array, keepx: PackedFloat32Array, feet: Array) -> void:
 	for ri in rows.size():
 		var dd: float = rows[ri]
+		if dd <= 0.0 and not tuft_keep.is_empty(): continue      # the back of the plane has the tufts
 		var xs := PackedFloat32Array()
 		var hs := PackedByteArray()
 		var cs := PackedByteArray()
