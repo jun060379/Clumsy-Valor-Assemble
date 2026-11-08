@@ -528,19 +528,21 @@ const comp = new THREE.ShaderMaterial({
         // it and not shaded from it takes the warm light, up to two steps over its own colour; an edge turned to it is a
         // warm rim, the brightest of its ramp
         float wl = at(tWarm, c).r;
-        if (line != 1 && wl > 0.1) {
-          float kw = wl > 0.55 ? base + 2.0 : wl > 0.3 ? base + 1.0 : base;
-          col = texture2D(lowT, vec2((clamp(kw, 0.0, nN - 1.0) + 0.5) / 8.0, (r + 0.5) / ${NP}.0)).rgb;
+        // (owner 2026-11-08: "이렇게 과하게 세게하라는 게 아님": the light and shade of the lamps in the sprite's own colours,
+        // not a glare) a lit face takes its own day colour in the lamp's warm, one step over it only near the lamp
+        if (line != 1 && wl > 0.15) {
+          float kw = wl > 0.6 ? base + 1.0 : base;
+          col = texture2D(lowT, vec2((clamp(kw + st, 0.0, nN - 1.0) + 0.5) / 8.0, (r + 0.5) / ${NP}.0)).rgb;
         }
         if (line == 1 && length(outN) > 0.0) {
           for (int i = 0; i < 8; i++) {
             if (i >= nl) break;
             vec2 dl = vec2(nlp[i].x - c.x, (${CH}.0 - 1.0 - c.y) - nlp[i].y);       // to the light, rows down the screen
             float dist = length(dl);
-            if (dist > nlp[i].z || dist < 0.5) continue;
+            if (dist > nlp[i].z * 0.6 || dist < 0.5) continue;                  // a rim only close to the lamp
             float e = dot(normalize(outN), normalize(dl));
-            bool seen = at(tWarm, c - normalize(outN)).r > 0.05 || wl > 0.05;
-            if (e > 0.35 && seen) { col = texture2D(lowT, vec2((nN - 1.0 + 0.5) / 8.0, (r + 0.5) / ${NP}.0)).rgb; break; }
+            bool seen = at(tWarm, c - normalize(outN)).r > 0.2 || wl > 0.2;
+            if (e > 0.6 && seen) { col = texture2D(lowT, vec2((clamp(base, 0.0, nN - 1.0) + 0.5) / 8.0, (r + 0.5) / ${NP}.0)).rgb; break; }   // the edge in its own colour, warm
           }
         }
       }
