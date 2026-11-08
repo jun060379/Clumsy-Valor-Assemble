@@ -36,6 +36,8 @@ const LIT := preload("res://scripts/lit.gd")
 const SHADE := preload("res://scripts/shade.gd")
 const SKY := preload("res://scripts/sky.gd")
 ## the hall facade's windows (g_hall_win px): they light up from 18:40 and before 06:20
+# the pixel3d hall's windows (px in hx/g_hall_win.png, from its glass; owner 2026-11-08: "창문 빛")
+const HALL_WIN3 := [[116, 476], [116, 386], [218, 386], [218, 478], [336, 325], [336, 479], [436, 185], [436, 325], [536, 324], [536, 479], [654, 384], [654, 478], [756, 386], [756, 478]]
 const HALL_WIN := [[87, 359], [93, 289], [169, 287], [169, 369], [247, 235], [253, 365], [323, 129], [327, 233], [389, 359], [401, 235], [489, 369], [495, 287], [561, 289], [563, 359]]
 ## leaf rows of the canopies (baked by splitting each tree by the prototype's colour rule: g >= r*0.85 and g > b*1.3)
 const TREE_ROWS := {"f_tree2": [2, 247], "f_tree3": [2, 247], "f_bigtree": [2, 307],
@@ -677,9 +679,6 @@ func lantern_at(x: float, surf: float) -> Vector2:
 # ---------- lights (lightSources, drawLighting: lit.gd / shade.gd) ----------
 ## the hall windows' glow: up from 18:40, down by 06:20
 func hall_win() -> float:
-	# PLACEHOLDER: the lit-window overlay (g_hall_win, HALL_WIN) fits the old hall art; off until it is redrawn for the
-	# pixel3d hall
-	if P3D.has("g_hall"): return 0.0
 	var hh := fposmod(arena.tod_h, 24.0)
 	return clampf((hh - 18.7) / 0.9, 0.0, 1.0) if hh >= 12.0 else clampf((6.3 - hh) / 0.7, 0.0, 1.0)
 
@@ -692,7 +691,13 @@ func bm(k: String, x: float, y: float) -> Vector2:
 	return Vector2(x, y)
 
 func win_y0() -> float:
+	if P3D.has("g_hall"): return TTOP - hx["g_hall"].get_height() + PK * BS + setdown("g_hall")   # the hall sprite's top
 	return TTOP - (tex["g_hall_win"].get_height() - PK) * BS
+
+## the lit windows' canvas size (the pixel3d hall: its own size, hx/g_hall_win.png drawn from its glass)
+func win_size() -> Vector2:
+	if P3D.has("g_hall") and hx.has("g_hall_win"): return hx["g_hall_win"].get_size()
+	return tex["g_hall_win"].get_size() * BS
 
 func light_sources() -> Array:
 	var L: Array = []
@@ -722,8 +727,10 @@ func light_sources() -> Array:
 	var wf := hall_win()
 	if wf > 0.01:
 		var y0 := win_y0()
-		for w in HALL_WIN:
-			L.append({"k": "win", "x": HXB + w[0] * BS, "y": y0 + w[1] * BS, "r": 70.0 * BS, "a": wf * (0.9 + 0.1 * sin(t * 1.3 + w[0])), "c": Color8(255, 200, 120)})
+		var p3w := P3D.has("g_hall")
+		for w in (HALL_WIN3 if p3w else HALL_WIN):
+			var wk: float = 1.0 if p3w else BS
+			L.append({"k": "win", "x": HXB + w[0] * wk, "y": y0 + w[1] * wk, "r": 70.0 * BS, "a": wf * (0.9 + 0.1 * sin(t * 1.3 + w[0])), "c": Color8(255, 200, 120)})
 	return L
 
 ## how deep the shade is at each light (cheap geometric test) -> boost: lights read brighter in shade
@@ -831,8 +838,7 @@ func _win_setup() -> void:
 	win_sv.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	win_sv.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
 	var k := 0.5 if arena.low_end else 1.0
-	var im: Texture2D = tex["g_hall_win"]
-	win_sv.size = Vector2i(ceili(im.get_width() * BS * k), ceili(im.get_height() * BS * k))
+	win_sv.size = Vector2i(ceili(win_size().x * k), ceili(win_size().y * k))
 	lit.add_child(win_sv)
 	win_sv.canvas_transform = Transform2D(0.0, Vector2(k, k), 0.0, -Vector2(HXB, win_y0()) * k)
 	win_draw = Node2D.new()
@@ -856,7 +862,7 @@ func _win_setup() -> void:
 
 func _win_on() -> bool:
 	var vr: Rect2 = arena.view_rect()
-	return hall_win() > 0.01 and HXB + tex["g_hall_win"].get_width() * BS > vr.position.x and HXB < vr.end.x and win_y0() < vr.end.y and TTOP > vr.position.y
+	return hall_win() > 0.01 and HXB + win_size().x > vr.position.x and HXB < vr.end.x and win_y0() < vr.end.y and TTOP > vr.position.y
 
 func _win_step() -> void:
 	var on := _win_on()
@@ -871,7 +877,7 @@ func _draw_win_canvas() -> void:
 	var imh: Texture2D = hx.get("g_hall_win", im)
 	win_draw.draw_texture_rect(imh, Rect2(HXB, y0, imh.get_width() if hx.has("g_hall_win") else im.get_width() * BS, imh.get_height() if hx.has("g_hall_win") else im.get_height() * BS), false)
 	var s2 = life.sil
-	if s2 != null:
+	if s2 != null and not P3D.has("g_hall"):      # PLACEHOLDER: the passing silhouette is laid out on the old hall art
 		# the silhouette darkens only the window pixels: the window art itself, tinted brown
 		var u: float = s2["t"] / s2["life"]
 		var wx: float = s2["wx"] + s2["dir"] * (u - 0.5) * 34.0
@@ -885,8 +891,7 @@ func _draw_win_canvas() -> void:
 
 func _draw_windows(ci: CanvasItem) -> void:
 	if not _win_on(): return
-	var im: Texture2D = tex["g_hall_win"]
-	ci.draw_texture_rect(win_sv.get_texture(), Rect2(HXB, win_y0(), im.get_width() * BS, im.get_height() * BS), false, Color(1, 1, 1, hall_win()))
+	ci.draw_texture_rect(win_sv.get_texture(), Rect2(HXB, win_y0(), win_size().x, win_size().y), false, Color(1, 1, 1, hall_win()))
 
 
 # ---------- step ----------
