@@ -196,6 +196,16 @@ func _draw_sun() -> void:
 				var p := b.position + u * d
 				_sil(d_sun, o, p, yb + 4.0 - p.y, col)          # clipped at the foot
 				d += st
+	# what stands in a building's baked ground shadow is in its shade too (the props, the heroine)
+	if sun > 0.01 and level.has_method("baked_shadow_at"):
+		var cs := Color(1, 1, 1, 0.42 * minf(1.0, sun * 1.6))
+		for o in level.shade_props():
+			var b := box(o)
+			if b.end.x < vx0 or b.position.x > vx1: continue
+			if level.baked_shadow_at(Vector2(b.get_center().x, o[2] - 2.0)) > 0.3: _sil(d_sun, o, b.position, b.size.y, cs)
+		var P = arena.player
+		if P.visible and level.baked_shadow_at(P.position + Vector2(0, -2)) > 0.3:
+			P.draw_frame(P.who, P.anim, P.f, P.position, P.dir, cs, "", d_sun)
 	level.shade_extra(d_sun)
 
 ## cloud shadows on what is solid: the ground under the surface line and every standing thing

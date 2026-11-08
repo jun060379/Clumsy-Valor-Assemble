@@ -144,13 +144,34 @@ func _light_uniforms(T: Dictionary) -> void:
 	m.set_shader_parameter("gmap", gmaps["n"])
 	m.set_shader_parameter("lift", clampf((T["sky"].a - 0.33) / 0.33, 0.0, 1.0))
 var sh_log = null                    # dump_light_layout: {key@x: [shadow key, canvas x, canvas y]} of what was drawn
+var sh_seen := {}                     # every pixel3d ground shadow placed: key@x -> [shadow key, canvas x, canvas y]
+var sh_img := {}                      # their masks on the CPU (baked_shadow_at)
 func sh_place(k: String, x: float, y: float, ci: CanvasItem) -> void:
 	if sh_log != null: sh_log[k + "@" + str(roundf(x))] = [k, roundf(x) - 24.0, y]
+	sh_seen[k + "@" + str(roundf(x))] = [k, roundf(x) - 24.0, y]
 	if SH_IN_MAP: return
 	var lv := sun_side()
 	if sh_tex.has(k + lv):
 		var st: Texture2D = sh_tex[k + lv]
 		ci.draw_texture_rect(st, Rect2(roundf(x) - 24.0, y, st.get_width(), st.get_height()), false)                 # baked ground shadows under the pixel3d buildings: "<k>" / "<k>_m" / "<k>_e" (tools/pixel3d)
+## how deep the buildings' baked ground shadow is at a point (0..1): what stands there is in it too (owner
+## 2026-11-08: "물체끼리 드리우는 그림자" - a barrel or a person in the hall's shadow is shaded, shade.gd)
+func baked_shadow_at(p: Vector2) -> float:
+	var lv := sun_side()
+	if lv == "_n": return 0.0
+	for e in sh_seen.values():
+		var key: String = e[0] + lv
+		if not sh_tex.has(key): continue
+		var t: Texture2D = sh_tex[key]
+		var q := p - Vector2(e[1], e[2])
+		if q.x < 0.0 or q.y < 0.0 or q.x >= t.get_width() or q.y >= t.get_height(): continue
+		if not sh_img.has(key):
+			var im: Image = t.get_image()
+			if im.is_compressed(): im.decompress()
+			sh_img[key] = im
+		var a: float = sh_img[key].get_pixel(int(q.x), int(q.y)).a
+		if a > 0.0: return a
+	return 0.0
 var lit_tex := {}                # sun-side versions: "<k>_m" / "<k>_e"                     # pre-scaled (BS) textures, drawn 1:1
 var win_sv: SubViewport         # the hall windows drawn apart (LIT.wc): the heroine cut out of them
 var win_draw: Node2D
@@ -801,7 +822,13 @@ func shade_occluders() -> Array:
 func shade_props() -> Array:
 	var o: Array = []
 	for d in deco_props:
-		o.append([tex[d[0]], d[1], d[2], 0.0, d.size() > 3 and d[3], ks(d[0]), false])
+		var k: String = d[0]
+		if hx.has(k):        # the pixel3d prop as drawn (_spr): its own art 1:1, set down, its mirrored build
+			var fl: bool = d.size() > 3 and d[3]
+			var kk := k + "L" if fl and hx.has(k + "L") else k
+			o.append([hx[kk], d[1], d[2] + setdown(kk), 0.0, fl and kk == k, 1.0, false])
+		else:
+			o.append([tex[k], d[1], d[2], 0.0, d.size() > 3 and d[3], ks(k), false])
 	return o
 
 ## surfTop: what clouds land on from above
