@@ -97,10 +97,10 @@ def maps(L):
     weight = {"tree": 0.75, "bush": 0.55, "prop": 0.6}
     # the lamps' and fires' light with its shadows (owner 2026-11-08: "빛이 실제로 타일과 오브젝트의 영역에 빛과 그림자로
     # 영역에 영향을 주게"): every texel, ground or sprite, traced to each light over a label map of the pixel3d sprites
-    # (drawn order: the later on top); a texel first leaves its own sprite (its face toward the light is lit), then any
+    # (drawn order: the later on top); the ground warms on the palette by it, the sprites carry their own (the
+    # pixel3d night renders lit by the same lamps); a texel first leaves its own sprite (its face toward the light is lit), then any
     # other sprite on the way shades it. The sprite a light sits in (the forge's hearth, the fire ring, the lamp's own
-    # post) does not block it. The blue channel, read by the ground (warm on the palette) and by the night's ambient
-    # multiply (shaders/amb_light.gdshader) for everything else.
+    # post) does not block it. The blue channel: the ground's warm, on the palette.
     def labels():
         lab = np.zeros((H, W), np.int16); boxes = []
         for i, (k, cx, cy) in enumerate(L["p3d"]):
@@ -126,7 +126,7 @@ def maps(L):
             if gx1 <= gx0 or gy1 <= gy0: continue
             xs_, ys_ = X[gy0:gy1, gx0:gx1], Y[gy0:gy1, gx0:gx1]
             d = np.hypot(xs_ - lx, (ys_ - ly) * 1.4)
-            f = np.clip(1.0 - d / R_, 0, 1) ** 1.3 * la
+            f = np.clip(1.0 - d / R_, 0, 1) ** 2 * la
             # the sprites that hold the light do not block it
             host = set()
             lgx, lgy = int(lx / CX), int((ly - Y0) / CY)
