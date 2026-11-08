@@ -20,6 +20,8 @@ const HEARTH := preload("res://assets/fx/town/hearth.png")
 const HEARTH_OUT := preload("res://assets/fx/town/hearth_out.png")
 const HEARTH_RIM := preload("res://assets/fx/town/hearth_rim.png")
 const HEARTH_AT := Vector2(70, 168)
+const FWATER := preload("res://assets/fx/town/fountain_water.png")
+const FWATER_SPR_H := 216.0                     # assets/town/hx/q_fountain.png's height
 const HEARTH_SZ := Vector2(128, 120)
 const SMOKE := preload("res://assets/fx/town/chimney_smoke.png")
 # pixelfx weather/town-bigtree-rays, kept to the air under the big tree's canopy (tools/bake_town_fx.py rays): 48 frames
@@ -407,11 +409,6 @@ func _step_water(dt: float) -> void:
 			splash(P.position.x, wy, 14, true)
 		if P.on: remove_meta("dove")
 	wade_f = P.f
-	# the fountain's stream churns where it lands
-	var fo = _fountain()
-	if fo != null and arena.view_rect().grow(100.0).has_point(fo + Vector2(140, 130)) and randf() < dt / 70.0:
-		var bx: float = fo.x + randf_range(124.0, 156.0)
-		drops.append({"x": bx, "y": fo.y + 128.0, "vx": randf_range(-0.05, 0.05), "vy": -0.06 - randf() * 0.07, "t": 0.0, "life": 500.0, "gy": fo.y + 129.0})
 	for d in drops:
 		d["t"] += dt
 		d["vy"] += 0.0006 * dt
@@ -432,17 +429,11 @@ func draw_water(ci: CanvasItem) -> void:
 	var t := Time.get_ticks_msec() / 1000.0
 	var fo = _fountain()
 	if fo != null and arena.view_rect().grow(60.0).has_point(fo + Vector2(140, 100)):
-		# light sliding down the stream (x 132..148, y 68..129 in the sprite): two bright runs and a dark seam
-		for i in 4:
-			var yy: float = fmod(t * 70.0 + i * 15.5, 62.0)
-			var x: float = fo.x + 134.0 + float((i * 5) % 12)
-			ci.draw_rect(Rect2(x, fo.y + 68.0 + yy, 1, 4), Color(W_HI, 0.85))
-		ci.draw_rect(Rect2(fo.x + 140.0 + roundf(sin(t * 9.0)), fo.y + 70.0, 1, 58), Color(W_LO, 0.35))
-		# foam at the foot
-		for i in 9:
-			var fx: float = fo.x + 122.0 + i * 4.0 + roundf(sin(t * 11.0 + i * 1.7) * 1.5)
-			var on := sin(t * 13.0 + i * 2.3) > -0.2
-			if on: ci.draw_rect(Rect2(fx, fo.y + 127.0 - (1.0 if i % 3 == 0 else 0.0), 2 if i % 2 == 0 else 1, 1), Color(W_HI, 0.9))
+		# the fountain's water (tools/bake_fountain_water.py: pixelfx water/waterfall on the 2-px grid, 30 fps): the
+		# stream from the niche's spout down into the basin, the water churning and ringing where it lands
+		var fi := int(t * 30.0) % 60
+		var fx: Vector2 = Vector2(roundf(town.HDOOR - 52.0 * town.PK * town.BS), town.LOWF - FWATER_SPR_H + town.setdown("q_fountain")) + Vector2(-4, -93)
+		ci.draw_texture_rect_region(FWATER, Rect2(fx, Vector2(288, 272)), Rect2((fi % 8) * 288, (fi / 8) * 272, 288, 272))
 	for sh in shots:
 		var fi: int = mini(int(sh["t"] * 30.0 / 1000.0), sh["n"] - 1)
 		var src := Rect2((fi % sh["cols"]) * sh["fw"], (fi / sh["cols"]) * sh["fh"], sh["fw"], sh["fh"])
