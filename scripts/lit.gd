@@ -19,6 +19,9 @@ var L: Array = []
 var amb := Color.WHITE
 var shade: Node2D = null          # shade.gd composite (town only)
 var amb_node: Node2D
+## the soft glow blobs and cones over the screen; off in the town (owner 2026-11-08): there the light is in the
+## sprites, the tiles and the people themselves
+var glow_soft := true
 var pre: Node2D                   # drawn after the ambient, before the lights (pre_fn)
 var glow: Node2D
 var post: Node2D                  # after the lights (post_fn)
@@ -157,7 +160,7 @@ func _draw_glow() -> void:
 	for l in L:
 		if l["k"] == "win" or not in_view(l, vr): continue
 		var b: float = l.get("boost", 1.0)
-		shape(glow, l, 1.15 * b)
+		if glow_soft: shape(glow, l, 1.15 * b)
 		if l["k"] == "lamp" or l["k"] == "bulb":
 			glow.draw_rect(Rect2(roundf(l["x"]) - 1.0, roundf(l["y"]) - 1.0, 3.0, 3.0), Color(1.0, 250.0 / 255.0, 230.0 / 255.0, 0.8 * l["a"] * b))
 

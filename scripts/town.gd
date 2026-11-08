@@ -108,6 +108,7 @@ const SH_IN_MAP := true
 func _light_uniforms(T: Dictionary) -> void:
 	var m = lit.amb_node.material
 	if not (m is ShaderMaterial) or not gmaps.has("n"): return
+	lit.glow_soft = false
 	m.set_shader_parameter("gmap", gmaps["n"])
 	m.set_shader_parameter("lift", clampf((T["sky"].a - 0.33) / 0.33, 0.0, 1.0))
 var sh_log = null                    # dump_light_layout: {key@x: [shadow key, canvas x, canvas y]} of what was drawn
