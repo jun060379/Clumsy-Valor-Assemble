@@ -4,7 +4,7 @@
 shader_type canvas_item;
 render_mode blend_mul;
 uniform sampler2D gmap : filter_nearest, repeat_disable;
-uniform vec2 gmap_org = vec2(0.0, 120.0);
+uniform vec2 gmap_org = vec2(0.0, -360.0);     // tools/bake_ground_light.py Y0 (up to the hall's windows)
 uniform vec2 gmap_cell = vec2(2.0, 2.0);
 uniform float lift = 0.0;
 uniform vec3 warm = vec3(1.0, 0.86, 0.64);

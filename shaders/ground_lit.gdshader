@@ -7,7 +7,7 @@ shader_type canvas_item;
 uniform sampler2D gmap : filter_nearest, repeat_disable;
 uniform sampler2D pal_lut : filter_nearest, repeat_disable;
 uniform sampler2D pal_fx : filter_nearest, repeat_disable;
-uniform vec2 gmap_org = vec2(0.0, 120.0);
+uniform vec2 gmap_org = vec2(0.0, -360.0);     // tools/bake_ground_light.py Y0 (up to the hall's windows)
 uniform vec2 gmap_cell = vec2(4.0, 2.0);
 uniform float on = 1.0;
 

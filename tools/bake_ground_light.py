@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Light and shade on the town's ground from what stands around it (owner 2026-11-07: "바닥에도 주변요소에 따라 빛과
 그늘이 남게하고"), on the map palette. Baked, swapped by the hour like the sprites (bake_light2):
-  assets/town/light/ground_{d,m,e,n}.png   world-space maps, one texel = 4 x 2 px, x from 0, y from Y0:
+  assets/town/light/ground_{d,m,e,n}.png   world-space maps, one texel = 2 x 2 px, x from 0, y from Y0 (-360: up to the hall's windows):
         R = shade (0..1), G = sun on the ground (0..1), B = warm light from lamps / fires / windows (0..1)
       d / m / e  noon / morning / evening: the pixel3d sprites' own ground shadows (rendered with the same sun,
          assets/town/shadow, placed where the town draws them: tests/dump_light_layout.gd); the trees, bushes and
@@ -27,7 +27,7 @@ src = open(os.path.join(ROOT, "tools/bake_light2.py")).read().replace("\nmain()\
 exec(compile(src, "bake_light2", "exec"))           # palette, ramps, shade(), snap()
 sys.argv = _argv
 
-CX, CY, Y0, Y1 = 2.0, 2.0, 120.0, 820.0       # town.gd sets the shader's gmap_cell to (CX, CY)
+CX, CY, Y0, Y1 = 2.0, 2.0, -360.0, 820.0      # town.gd sets the shader's gmap_cell to (CX, CY)
 RAISE = 42.0                                    # town.gd RAISE: the plane behind the stand line (16 px in front)
 
 
@@ -119,8 +119,11 @@ def maps(L):
         lab, boxes = labels()
         out = np.zeros_like(X)
         for (kind, lx, ly, r, cr, cg, cb, la) in L["lights"]:
-            if kind not in ("lamp", "fire", "bulb"): continue
-            R_ = r * (1.7 if kind in ("lamp", "fire") else 1.2)
+            if kind not in ("lamp", "fire", "bulb", "win"): continue
+            # a lit window (owner 2026-11-08: "밤 창문 조명도 다른 조명처럼 빛나게"): its glow on the wall round it and
+            # a pool on the ground before it, like a lamp's, softer
+            R_ = r * (1.7 if kind in ("lamp", "fire") else 0.85 if kind == "win" else 1.2)
+            if kind == "win": la *= 0.8
             gx0, gx1 = max(0, int((lx - R_) / CX)), min(W, int((lx + R_) / CX) + 1)
             gy0, gy1 = max(0, int((ly - R_ - Y0) / CY)), min(H, int((ly + R_ + 120.0 - Y0) / CY) + 1)
             if gx1 <= gx0 or gy1 <= gy0: continue
@@ -129,6 +132,9 @@ def maps(L):
             # a sprite takes the light by its distance to the light; the ground by its distance to the spot under it
             # (owner 2026-11-08: "가로등 너무 은은하고 중심도 애매한듯": a lamp's pool lies round its foot, bright)
             foot = ly + (110.0 if kind == "lamp" else 30.0 if kind == "fire" else 0.0)
+            if kind == "win" and "floors" in L:                     # the ground under it: the walked line below
+                fi = min(len(L["floors"]) - 1, max(0, int(lx / 2.0)))
+                foot = min(L["floors"][fi][0], ly + 200.0)
             ds = np.hypot(xs_ - lx, ys_ - ly)
             dg = np.hypot(xs_ - lx, (ys_ - foot) * 2.2)
             d = np.where(own0 > 0, ds, np.minimum(dg, ds))
