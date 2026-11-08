@@ -325,7 +325,7 @@ func _ready() -> void:
 	# front layer, so the people on the bank and the bridge show in it too
 	mirror_bb = BackBufferCopy.new()
 	mirror_bb.copy_mode = BackBufferCopy.COPY_MODE_RECT
-	mirror_bb.rect = Rect2(RIV0 - 80.0, LOWF - 300.0, RIV1 - RIV0 + 160.0, 720.0)     # the water and what it mirrors
+	mirror_bb.rect = Rect2(RIV0 - 420.0, LOWF - 400.0, RIV1 - RIV0 + 840.0, 820.0)     # the water and what it mirrors
 	mirror_bb.z_index = 7
 	arena.add_child(mirror_bb)
 	mirror_mat = ShaderMaterial.new()
@@ -334,7 +334,7 @@ func _ready() -> void:
 	mirror_node = Node2D.new()
 	mirror_node.z_index = 7
 	mirror_node.material = mirror_mat
-	mirror_node.draw.connect(func(): mirror_node.draw_rect(Rect2(RIV0, LOWF + 20.0, RIV1 - RIV0, 400.0), Color.WHITE))
+	mirror_node.draw.connect(func(): mirror_node.draw_colored_polygon(river_poly(), Color.WHITE))
 	arena.add_child(mirror_node)
 	front = Node2D.new()
 	front.z_index = 8
@@ -1317,6 +1317,27 @@ func _build_ground2() -> void:
 			ci.decompress()
 			ci.convert(Image.FORMAT_RGBA8)
 			tex[ck] = ImageTexture.create_from_image(_deepen(ci))
+	var field_im: Image = null
+	if tex.has("k_field_0"):
+		# the caps at the clearings' and the paving's ends end at the walk's front edge too: the lawn runs on below
+		for ck in ["k_clear_cap", "k_stone_cap"]:
+			if not tex.has(ck): continue
+			var cim: Image = tex[ck].get_image()
+			cim.decompress()
+			cim.convert(Image.FORMAT_RGBA8)
+			if cim.get_height() > int(LIPY):
+				cim.fill_rect(Rect2i(0, int(LIPY), cim.get_width(), cim.get_height() - int(LIPY)), Color(0, 0, 0, 0))
+				tex[ck] = ImageTexture.create_from_image(cim)
+		var fparts: Array[Image] = []
+		var fi := 0
+		while tex.has("k_field_%d" % fi):
+			var fim: Image = tex["k_field_%d" % fi].get_image()
+			fim.decompress()
+			fim.convert(Image.FORMAT_RGBA8)
+			fparts.append(fim)
+			fi += 1
+		field_im = Image.create(fparts.size() * fparts[0].get_width(), fparts[0].get_height(), false, Image.FORMAT_RGBA8)
+		for j in fparts.size(): field_im.blit_rect(fparts[j], Rect2i(0, 0, fparts[j].get_width(), fparts[j].get_height()), Vector2i(j * fparts[0].get_width(), 0))
 	for k in ["lawn", "clear", "stone"]:
 		if not tex.has("k_" + k + "_0"): continue
 		# the tile in 2400-px pieces (tools/split_wide.py: a 9600-px texture fails on phones), joined here on the CPU
@@ -1345,6 +1366,9 @@ func _build_ground2() -> void:
 		solid.blit_rect(im, Rect2i(0, 0, w, h), Vector2i.ZERO)
 		var last := im.get_region(Rect2i(0, h - 1, w, 1))
 		for y in range(h, deep): solid.blit_rect(last, Rect2i(0, 0, w, 1), Vector2i(0, y))
+		# in front of the walk the lawn runs on toward the camera, no earth section (owner 2026-11-08: "풀 타일부터
+		# 근경까지 풀로 이어지게 할거임"; tools/make_town_field.py)
+		if field_im != null: solid.blit_rect(field_im, Rect2i(0, 0, mini(w, field_im.get_width()), field_im.get_height()), Vector2i(0, int(LIPY)))
 		var band := solid.get_region(Rect2i(0, 0, w, int(BAND + RAISE)))
 		var gr := []
 		for xx in w:
@@ -1488,6 +1512,22 @@ func _draw_ground() -> void:
 	_shear(t_solid, STX1 - 40.0, STX1 + SL + 40.0, func(_x): return LOWF)
 	_shear(t_solid, SX0, RX1, ramp_y)
 
+## the river in front of the walk (owner 2026-11-08, sketch 5): from the waterline under the bridge it runs on toward
+## the camera between the lawns, widening and bending a little left; the water, its mirror and its banks share it
+func river_poly() -> PackedVector2Array:
+	var wl := LOWF + 20.0
+	var L := PackedVector2Array()
+	var R := PackedVector2Array()
+	for i in 41:
+		var d := float(i) * 10.0
+		var u := d / 100.0
+		var c := (RIV0 + RIV1) / 2.0 - 30.0 * minf(u, 1.0)
+		var hw := (RIV1 - RIV0) / 2.0 + u * u * 70.0 + u * 30.0
+		L.append(Vector2(roundf((c - hw) / PK) * PK, wl + d))
+		R.append(Vector2(roundf((c + hw) / PK) * PK, wl + d))
+	R.reverse()
+	return L + R
+
 func _draw() -> void:
 	var tt := Time.get_ticks_msec() / 1000.0
 	# the river: pixelfx water/town-river (tools/pixelfx_fx/town-river.js), 120 frames 240x96 at 10 fps, exactly the
@@ -1495,6 +1535,23 @@ func _draw() -> void:
 	var rfi := int(tt * 10.0) % 120
 	draw_texture_rect_region(RIVER, Rect2(RIV0, LOWF + 18.0, 240.0, 96.0), Rect2((rfi % 7) * 240, (rfi / 7) * 96, 240, 96))
 	draw_rect(Rect2(RIV0, LOWF + 114.0, RIV1 - RIV0, 700.0), Color("#05222b"))
+	var rp := river_poly()
+	draw_colored_polygon(rp, Color8(12, 88, 98))
+	# its banks: a cell of sand at the water, a cell of earth under the lawn's edge (palette)
+	var n := rp.size() / 2
+	for side in 2:
+		for i in n - 1:
+			var p: Vector2 = rp[i] if side == 0 else rp[rp.size() - 1 - i]
+			var q: Vector2 = rp[i + 1] if side == 0 else rp[rp.size() - 2 - i]
+			var sgn := -1.0 if side == 0 else 1.0
+			var y := p.y
+			while y < q.y:
+				var x := roundf(lerpf(p.x, q.x, (y - p.y) / (q.y - p.y)) / PK) * PK
+				# outside the water (the mirror covers the polygon): sand at the edge, earth beyond it
+				var xs := x - PK if side == 0 else x
+				draw_rect(Rect2(xs, y, PK, PK), Color8(222, 190, 144))
+				draw_rect(Rect2(xs + sgn * PK, y, PK, PK), Color8(101, 60, 46))
+				y += PK
 	draw_rect(Rect2(RIV0, LOWF + 18.0, RIV1 - RIV0, 5.0), Color(0.05, 0.1, 0.18, 0.35))
 	# 5. trees, buildings, the hall, props, lamps, bridge
 	var vr0: Rect2 = arena.view_rect().grow(60.0)
