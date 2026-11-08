@@ -14,9 +14,17 @@ uniform sampler2D scr : hint_screen_texture, filter_nearest;
 const vec3 STAR0 = vec3(150.0, 156.0, 196.0) / 255.0;
 const vec3 STAR1 = vec3(205.0, 208.0, 226.0) / 255.0;
 const vec3 STAR2 = vec3(255.0, 250.0, 236.0) / 255.0;
+// the fire's own colours (pixelfx town fire ramp and the forge hearth's lit back wall, tools/pixelfx_fx/
+// town-forge-hearth.js; none of them is in the town palette, white left out): fire is its own light, the night's dark
+// leaves it alone (owner 2026-11-08, the forge hearth)
+const vec3 FIRE[11] = vec3[](vec3(74.0, 23.0, 18.0), vec3(138.0, 31.0, 23.0), vec3(201.0, 40.0, 31.0), vec3(242.0, 86.0, 29.0),
+	vec3(255.0, 138.0, 42.0), vec3(255.0, 194.0, 61.0), vec3(255.0, 226.0, 107.0), vec3(255.0, 243.0, 166.0),
+	vec3(86.0, 26.0, 20.0), vec3(127.0, 38.0, 23.0), vec3(168.0, 56.0, 26.0));
+bool same(vec3 a, vec3 b) { return all(lessThan(abs(a - b), vec3(0.6 / 255.0))); }
 bool is_star(vec3 c) {
-	return all(lessThan(abs(c - STAR0), vec3(0.6 / 255.0))) || all(lessThan(abs(c - STAR1), vec3(0.6 / 255.0)))
-		|| all(lessThan(abs(c - STAR2), vec3(0.6 / 255.0)));
+	if (same(c, STAR0) || same(c, STAR1) || same(c, STAR2)) return true;
+	for (int i = 0; i < 11; i++) if (same(c, FIRE[i] / 255.0)) return true;
+	return false;
 }
 varying vec2 wp;
 void vertex() { wp = (MODEL_MATRIX * vec4(VERTEX, 0.0, 1.0)).xy; }

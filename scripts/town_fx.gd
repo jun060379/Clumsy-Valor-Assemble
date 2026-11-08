@@ -1,6 +1,6 @@
 extends RefCounted
 ## The town's ambient effects, each with a cause in the scene (owner 2026-11-06: "환경이나 그 외에 의한 근거가 있어야지"):
-##  - fire: the forge's furnace glows from inside and flares (painted per frame, tools/bake_town_fx.py furnace)
+##  - fire: the forge's hearth burns in its mouth and lights the stones round it (tools/bake_forge_hearth.py)
 ##  - smoke: the forge and the bathhouse chimneys smoke (pixelfx fire/town-chimney-smoke sheet)
 ##  - heat: the air shimmers over the campfire, the hearth and the forge chimney (a screen-reading shader that shifts
 ##    whole world-px rows, so the shimmer stays on the pixel grid)
@@ -13,12 +13,14 @@ extends RefCounted
 ##    cloth flap; feet: running through grass kicks bits of it up
 ## Everything is drawn on the 1-px world grid (the characters' dot), positions from the placed sprites.
 
-# the forge's furnace, painted per frame (tools/bake_town_fx.py furnace): 48 frames 150x112 at 12 fps, cols 8, laid
-# over the forge sprite at 60,150 — the mouth glowing from inside, the light spilling onto the arch's stones and outlines
-const FURNACE := preload("res://assets/fx/town/furnace.png")
-const FUR_SPILL := preload("res://assets/fx/town/furnace_spill.png")
-const FUR_AT := Vector2(60, 150)
-const FUR_SZ := Vector2(150, 112)
+# the forge's hearth (owner 2026-11-08: "용광로 fx가 많이 허접해서 다시 짜야할것 같음"): pixelfx fire/town-forge-hearth
+# baked by tools/bake_forge_hearth.py on the 2-px grid - the fire cut to the pixel3d forge's mouth, the embers that leave
+# it, and the stones round it lit up their own ramp with the fire; 48 frames 128x120 at 12 fps, cols 8
+const HEARTH := preload("res://assets/fx/town/hearth.png")
+const HEARTH_OUT := preload("res://assets/fx/town/hearth_out.png")
+const HEARTH_RIM := preload("res://assets/fx/town/hearth_rim.png")
+const HEARTH_AT := Vector2(70, 168)
+const HEARTH_SZ := Vector2(128, 120)
 const SMOKE := preload("res://assets/fx/town/chimney_smoke.png")
 # pixelfx weather/town-bigtree-rays, kept to the air under the big tree's canopy (tools/bake_town_fx.py rays): 48 frames
 # 690x150 at 8 fps, cols 6; its top-left 28 px in from the tree's left and 138 px above the tree's foot
@@ -193,20 +195,21 @@ func step(dt: float) -> void:
 	haze.queue_redraw()
 
 
-## world layer, right after the buildings: the furnace light on the stones round its mouth (under the scene's light)
+## world layer, right after the buildings (the hearth is drawn on emis, over the building)
 func draw_world(ci: CanvasItem) -> void:
 	emis.queue_redraw()
-	var o = origin("g_forge")
-	if o == null: return
-	var fi := int(Time.get_ticks_msec() / 1000.0 * 12.0) % 48
-	ci.draw_texture_rect_region(FUR_SPILL, Rect2(o + FUR_AT, FUR_SZ), Rect2((fi % 8) * FUR_SZ.x, (fi / 8) * FUR_SZ.y, FUR_SZ.x, FUR_SZ.y))
 
-## the furnace glows on its own light, over the dusk (z 10, above lit.gd's ambient)
+## the hearth: the stones' fire light, the fire in the mouth, the embers leaving it
 func _draw_furnace(ci: CanvasItem) -> void:
 	var o = origin("g_forge")
 	if o == null: return
 	var fi := int(Time.get_ticks_msec() / 1000.0 * 12.0) % 48
-	ci.draw_texture_rect_region(FURNACE, Rect2(o + FUR_AT, FUR_SZ), Rect2((fi % 8) * FUR_SZ.x, (fi / 8) * FUR_SZ.y, FUR_SZ.x, FUR_SZ.y))
+	var src := Rect2((fi % 8) * HEARTH_SZ.x, (fi / 8) * HEARTH_SZ.y, HEARTH_SZ.x, HEARTH_SZ.y)
+	# origin() is the old art's frame; the pixel3d sprite itself is drawn TOP + set-down rows higher, then town.setdown
+	var p3: Array = town.P3D.get("g_forge", [0.0, 0.0])
+	var top: Vector2 = o - Vector2(0.0, p3[0] + p3[1] - town.setdown("g_forge"))
+	for t in [HEARTH_RIM, HEARTH, HEARTH_OUT]:
+		ci.draw_texture_rect_region(t, Rect2(top + HEARTH_AT, HEARTH_SZ), src)
 
 ## front layer: the chimney smoke (pixelfx fire/town-chimney-smoke: 80 frames 96x150 at 20 fps, the mouth at 24,140),
 ## each chimney on its own phase; grey at the forge, paler steam off the bathhouse
@@ -230,7 +233,11 @@ func _draw_haze() -> void:
 	if o != null:
 		var p: Vector2 = o + FORGE_CHIMNEY
 		haze.draw_texture_rect(w, Rect2(p.x - 18.0, p.y - 44.0, 36.0, 44.0), false, Color(1, 1, 1, 0.8))
-		haze.draw_texture_rect(w, Rect2(o.x + FORGE_BOX.x + 20.0, o.y + FORGE_BOX.y + 8.0, 60.0, 40.0), false, Color(1, 1, 1, 0.6))
+		# the hearth's heat: over the arch's crown, not in the mouth (the fire keeps its exact colours there, which the
+		# night's dark looks for; shaders/amb_light.gdshader)
+		var p3: Array = town.P3D.get("g_forge", [0.0, 0.0])
+		var top: Vector2 = o - Vector2(0.0, p3[0] + p3[1] - town.setdown("g_forge"))
+		haze.draw_texture_rect(w, Rect2(top.x + 104.0, top.y + 190.0, 60.0, 22.0), false, Color(1, 1, 1, 0.6))
 
 
 # ---------- light ----------
