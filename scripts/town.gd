@@ -201,7 +201,7 @@ func _ready() -> void:
 	# pixels the same size as the characters'. tex[] keeps the originals for layout, climb tops and shadows
 	for k in tex.keys():
 		if ResourceLoader.exists("res://assets/town/hx/" + k + ".png"): hx[k] = load("res://assets/town/hx/" + k + ".png")
-	for k in ["g_tentL", "q_benchL", "q_planterL", "bg_range_far", "bg_range_mid", "bg_range_near"]:   # pixel3d mirrored solids, far ranges
+	for k in ["g_tentL", "q_benchL", "q_planterL", "bg_range_far", "bg_range_mid", "bg_range_near", "bg_wood", "bg_hills"]:   # pixel3d mirrored solids, far ranges
 		hx[k] = load("res://assets/town/hx/" + k + ".png")
 	# the sun-side versions (tools/bake_sun_light.py): <k>_m = sun from the left (morning), <k>_e = from the right
 	for f in DirAccess.get_files_at("res://assets/town/nrm"):
@@ -1031,8 +1031,17 @@ func _draw_bg() -> void:
 	var dim: float = 1.0 - 0.75 * T["sun"]
 	bg_node.draw_rect(Rect2(Vector2.ZERO, vs), Color(0.07, 0.05, 0.16, 0.2 * dim))
 	var fo: Texture2D = tex["bg_forest"]
-	_layer(hx.get("bg_forest", fo), 0.42, G + 2.0 - 242.0 * PXK - cam_y * 0.25, 1.0 if hx.has("bg_forest") else PXK, cam_x, vs)
+	if hx.has("bg_wood"):
+		# the middle distance (owner 2026-11-08: "근경과 가까운 배경은 없는데"), pixel3d strips wider than their travel
+		# (tools/pixel3d/bgmid.js, branch wip/layer3d): the far wood, then nearer hills with trees, drawn below
+		_layer(hx["bg_wood"], 0.42, G - 198.0 - cam_y * 0.25, 1.0, cam_x, vs)
+		bg_node.draw_rect(Rect2(0, roundf(G - 198.0 - cam_y * 0.25) + 168.0, vs.x, vs.y + 400.0), Color8(12, 88, 98))   # its ground on down
+	else:
+		_layer(hx.get("bg_forest", fo), 0.42, G + 2.0 - 242.0 * PXK - cam_y * 0.25, 1.0 if hx.has("bg_forest") else PXK, cam_x, vs)
 	bg_node.draw_rect(Rect2(0, G + 1.0 - cam_y * 0.25, vs.x, vs.y + 400.0), Color8(14, 74, 78))
+	if hx.has("bg_hills"):
+		_layer(hx["bg_hills"], 0.65, G - 182.0 - cam_y * 0.28, 1.0, cam_x, vs)
+		bg_node.draw_rect(Rect2(0, roundf(G - 182.0 - cam_y * 0.28) + 298.0, vs.x, vs.y + 400.0), Color8(61, 81, 46))
 	# far haze: a vertical gradient, light above the forest, heavier toward the ground
 	var hy0 := G - 260.0 - cam_y * 0.25
 	var hy1 := G + 20.0 - cam_y * 0.25
