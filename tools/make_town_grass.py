@@ -29,6 +29,9 @@ PIECES = [
     ["b_bush_l", (2, 1), 58, BUSH],
     ["g_fern", (2, 2), 38, LAWN],
 ]
+if SET == "bush":
+    # the picked bushes (row 3) at the size the town draws its bushes (assets/town/hx/f_bush1..3: 174, 132, 108 px)
+    PIECES = [["f_bush1", (2, 1), 87, BUSH], ["f_bush2", (2, 0), 66, BUSH], ["f_bush3", (1, 2), 54, BUSH]]
 if SET == "b":
     PIECES = [
         ["g_tuft_1", (0, 0), 18, LAWN], ["g_tuft_2", (0, 1), 24, LAWN], ["g_tuft_tall", (0, 2), 30, LAWN],
@@ -103,7 +106,7 @@ for name, (r, c), wc, cols in PIECES:
             me = tuple(out[y, x, :3])
             if nb and me not in nb and not (white[y, x] or warm[y, x]):
                 out[y, x, :3] = max(set(nb), key=nb.count)
-    if name.startswith("b_"):
+    if name.startswith("b_") or name.startswith("f_bush"):
         # the outline: every empty cell beside the body (4-neighbour), in the body's darkest
         pad = np.pad(keep, 1)
         ring = ~pad[1:-1, 1:-1] & (pad[:-2, 1:-1] | pad[2:, 1:-1] | pad[1:-1, :-2] | pad[1:-1, 2:])

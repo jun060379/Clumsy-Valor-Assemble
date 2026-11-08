@@ -1747,7 +1747,7 @@ func _sway(k: String, x: float, y_bottom: float, sink: float, flip: bool, amp: f
 		s = 1.0
 	var w := float(im.get_width())
 	var h := float(im.get_height())
-	x = roundf(x)
+	x = roundf(x / PK) * PK                   # on the 2-px grid
 	if x > vr.end.x or x + w * s < vr.position.x or y_bottom - h * s > vr.end.y or y_bottom < vr.position.y: return
 	var t := Time.get_ticks_msec() / 1000.0
 	var g: float = 0.6 + life.gust * 0.8
@@ -1757,7 +1757,8 @@ func _sway(k: String, x: float, y_bottom: float, sink: float, flip: bool, amp: f
 	var r := 0.0
 	while r < h:
 		var u := maxf(0.0, 1.0 - r / cut)
-		var o := roundf((sin(t * 1.6 + ph + r * 0.06) * amp * u * g + sin(t * 0.55 + ph) * amp * 0.5 * u) * PK) if r < cut else 0.0
+		# whole cells only (owner 2026-11-08: "깨지지 않고 들어가는지"): a 1-px shift broke the 2-px grid
+		var o := roundf(sin(t * 1.6 + ph + r * 0.06) * amp * u * g + sin(t * 0.55 + ph) * amp * 0.5 * u) * PK if r < cut else 0.0
 		var rh := minf(2.0, h - r)
 		draw_texture_rect_region(im, Rect2(o, y0 + r, w, rh), Rect2(0, r, w, rh))
 		r += 2.0
