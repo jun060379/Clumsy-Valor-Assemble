@@ -499,6 +499,9 @@ const comp = new THREE.ShaderMaterial({
       // the outline: the dark of the warm ramps (the reference draws stone, plaster and wood alike in dark brown,
       // the roofs in their own deepest red)
       if (line == 1) col = sil ? palc(1.0, 0.0) : r == 0.0 ? palc(0.0, 0.0) : palc(1.0, 1.0);   // the silhouette darkest
+      // leaves (the leaf and green ramps) outlined in their own darkest green, not the wood's brown (AGENTS.md: 외곽선은
+      // 안쪽 색의 짙은 색)
+      if (line == 1 && (r == ${RAMP.leaf}.0 || r == ${RAMP.green}.0)) col = palc(${RAMP.green}.0, 0.0);
       // which way the outline's face looks: out of the shape, toward the empty or farther side (summed again here,
       // outside the edge loop: accumulating inside it came back empty on the software renderer)
       vec2 outN = vec2(0.0);
