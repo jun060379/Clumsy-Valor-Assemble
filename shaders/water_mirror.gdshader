@@ -1,13 +1,11 @@
 // The river as a mirror (owner 2026-11-08: "물에 미러효과 넣고 이런식으로", Kingdom's water): the water shows what
-// stands over it, upside down about the waterline, every 2-px row slid sideways by the ripples (more the further
-// from the line), each colour taken one shade step down its own palette ramp (pal_fx, never "a darker mix"), and
-// now and then a light ripple line. Every pixel a palette
-// colour; whole cells only.
+// stands over it - the people passing too - upside down about the waterline, every 2-px row slid sideways by the
+// ripples (more the further from the line), its colours a little darker and drawn toward the river's; short dashes
+// of the river's colour and now and then a light ripple line. Off the palette here by the owner's leave; whole
+// cells only.
 shader_type canvas_item;
 
 uniform sampler2D screen_tex : hint_screen_texture, filter_nearest;
-uniform sampler2D pal_lut : filter_nearest, repeat_disable;
-uniform sampler2D pal_fx : filter_nearest, repeat_disable;
 uniform float wl = 0.0;                         // the waterline (world y)
 uniform vec4 deep : source_color = vec4(0.047, 0.345, 0.384, 1.0);   // the river's body (palette)
 uniform vec4 lite : source_color = vec4(0.373, 0.576, 0.624, 1.0);   // a ripple's light (palette)
@@ -40,12 +38,10 @@ void fragment() {
 	vec2 uv = muv + du * dx;
 	vec3 o = deep.rgb;
 	if (uv.y > 0.0 && uv.y < 1.0 && uv.x > 0.0 && uv.x < 1.0) {
+		// the reflection as it is, a little darker and drawn toward the river's colour: the one place off the
+		// palette (owner 2026-11-08: "이건 좀 팔레트 밖 색 써도 될듯. 반사율을 래퍼런스에 가깝게")
 		vec3 c = texture(screen_tex, uv).rgb;
-		ivec3 q = ivec3(clamp(floor(c * 255.0 / 8.0), 0.0, 31.0));
-		int idx = int(texelFetch(pal_lut, ivec2(q.r * 32 + q.g, q.b), 0).r * 255.0 + 0.5);
-		// high reflectance (owner 2026-11-08: "반사율을 엄청 높인 물"): the colours as they are, only the lightest
-		// shade step (pal_fx 1) on every other row, so the picture holds and still reads as water
-		o = texelFetch(pal_fx, ivec2(mod(row, 2.0) < 1.0 ? 2 : 1, idx), 0).rgb;
+		o = mix(c * 0.9, deep.rgb, 0.16 + clamp(d / 400.0, 0.0, 0.14));
 	}
 	// the water between: now and then a short dash of the river's own colour where the ripple runs
 	if (d > 3.0 && mod(row, 4.0) < 1.0 && sin(cell.x * 0.21 + row * 1.7 + t * 1.1) > 0.55) o = deep.rgb;

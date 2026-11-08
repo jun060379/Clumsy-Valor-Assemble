@@ -330,9 +330,6 @@ func _ready() -> void:
 	arena.add_child(mirror_bb)
 	mirror_mat = ShaderMaterial.new()
 	mirror_mat.shader = preload("res://shaders/water_mirror.gdshader")
-	if ResourceLoader.exists("res://assets/town/light/pal_lut.png"):
-		mirror_mat.set_shader_parameter("pal_lut", load("res://assets/town/light/pal_lut.png"))
-		mirror_mat.set_shader_parameter("pal_fx", load("res://assets/town/light/pal_fx.png"))
 	mirror_mat.set_shader_parameter("wl", LOWF + 20.0)
 	mirror_node = Node2D.new()
 	mirror_node.z_index = 7
