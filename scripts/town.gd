@@ -191,11 +191,6 @@ var blade_back: Node2D
 var blade_front: Node2D
 var blade_mat: ShaderMaterial
 var bmesh := {}
-var tuft_mat: ShaderMaterial
-var tuft_node: Node2D
-var tufts: Array = []                 # town_life.build_tufts: [x, base y, kind, flip]
-var tuft_tex := {}                    # kind -> [sway strip, frame width, height]
-const TUFT_LEANS := -2                # the first frame's lean (tools/bake_grass_sway.py LEANS = -2..4)
 var gci: CanvasItem              # what _shear draws on (the ground node)
 var ground_mat: ShaderMaterial
 var gmaps := {}
@@ -298,14 +293,6 @@ func _ready() -> void:
 	blade_back.material = blade_mat
 	blade_back.draw.connect(func(): _draw_blade_meshes(blade_back, "back"))
 	arena.add_child(blade_back)
-	tuft_mat = ShaderMaterial.new()
-	tuft_mat.shader = preload("res://shaders/grass_tuft.gdshader")
-	tuft_node = Node2D.new()
-	tuft_node.z_index = -6
-	tuft_node.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	tuft_node.material = tuft_mat
-	tuft_node.draw.connect(_draw_tufts)
-	arena.add_child(tuft_node)
 	blade_front = Node2D.new()
 	blade_front.z_index = 8
 	blade_front.material = blade_mat
@@ -314,7 +301,6 @@ func _ready() -> void:
 	if arena.dbg.has("nograss"):
 		blade_back.visible = false
 		blade_front.visible = false
-		tuft_node.visible = false
 	if arena.dbg.has("nolit"):
 		lit.visible = false
 		if shade.get("sv") != null: shade.sv.render_target_update_mode = SubViewport.UPDATE_DISABLED
@@ -361,7 +347,6 @@ func cleanup() -> void:
 	ground_node.queue_free()
 	blade_back.queue_free()
 	blade_front.queue_free()
-	tuft_node.queue_free()
 	folk_node.queue_free()
 	lbl_layer.queue_free()
 	folk.town = null
@@ -1015,15 +1000,10 @@ func step(dt: float) -> void:
 			# the map's cell (tools/bake_ground_light.py CX, CY): the shader's default (4, 2) read every blade's light from
 			# half its x, so the blades stood lit over the trees' shadows (owner 2026-11-08: "나무 하단 그림자가 어긋나있음")
 			blade_mat.set_shader_parameter("gmap_cell", Vector2(2.0, 2.0))
-			tuft_mat.set_shader_parameter("gmap", gmaps[gt])
-			tuft_mat.set_shader_parameter("pal_lut", ground_mat.get_shader_parameter("pal_lut"))
-			tuft_mat.set_shader_parameter("pal_fx", ground_mat.get_shader_parameter("pal_fx"))
-			tuft_mat.set_shader_parameter("lit_on", 1.0)
 	var gvr: Rect2 = arena.view_rect()
 	if not g_vr.encloses(gvr): ground_node.queue_redraw()
 	blade_back.queue_redraw()
 	blade_front.queue_redraw()
-	tuft_node.queue_redraw()
 	life.blade_uniforms(blade_mat)
 	bg_node.queue_redraw()
 	folk_node.queue_redraw()
@@ -1560,38 +1540,11 @@ func _draw_blade_meshes(ci: CanvasItem, which: String) -> void:
 	if bmesh.is_empty():
 		var fg: Callable = func(_x): return G
 		var fl: Callable = func(_x): return LOWF
-		var surfs := [[-PK, SX0, fg], [SX0, STX1 + SL, up_y], [SX0, RX1, ramp_y], [RX1, RIV0, fl], [RIV1, TOWN_W + PK, fl]]
-		bmesh = life.build_blade_meshes(surfs)
-		# the lower level under the terraces and the slopes has the recess wall or the hill's face behind it, not the plane: no tufts
-		var under: Callable = func(x): return 1e9 if x >= SX0 and x <= STX1 + SL else -1e9
-		var none: Callable = func(_x): return -1e9
-		tufts = life.build_tufts([[-PK, SX0, fg, none], [SX0, STX1 + SL, up_y, none], [SX0, RX1, ramp_y, under], [RX1, RIV0, fl, under], [RIV1, TOWN_W + PK, fl, under]])
-		for k in life.TUFT_KINDS:
-			var tx: Texture2D = load("res://assets/town/grass/" + k + ".png")
-			tuft_tex[k] = [tx, tx.get_width() / 7.0, float(tx.get_height())]
+		bmesh = life.build_blade_meshes([[-PK, SX0, fg], [SX0, STX1 + SL, up_y], [SX0, RX1, ramp_y], [RX1, RIV0, fl], [RIV1, TOWN_W + PK, fl]])
 	var vr: Rect2 = arena.view_rect()
 	for c in bmesh[which]:
 		if c[1] < vr.position.x or c[0] > vr.end.x: continue
 		ci.draw_mesh(c[2], null)
-
-## the tufts on the back of the plane, each in the sway frame of its wind (town_life.tuft_lean)
-func _draw_tufts() -> void:
-	if bmesh.is_empty(): return
-	var vr: Rect2 = arena.view_rect()
-	for t in tufts:
-		var x: float = t[0]
-		if x + 60.0 < vr.position.x or x - 60.0 > vr.end.x: continue
-		var e: Array = tuft_tex[t[2]]
-		var fw: float = e[1]
-		var h: float = e[2]
-		var fi := clampi(roundi(life.tuft_lean(x, t[1], h)) - TUFT_LEANS, 0, 6)
-		var at := Vector2(x - fw / 2.0, t[1] - h)
-		if t[3]:
-			tuft_node.draw_set_transform(Vector2(2.0 * x, 0.0), 0.0, Vector2(-1, 1))
-			tuft_node.draw_texture_rect_region(e[0], Rect2(at, Vector2(fw, h)), Rect2(clampi(4 - fi, 0, 6) * fw, 0, fw, h))     # mirrored: the frame leaning the other way
-			tuft_node.draw_set_transform(Vector2.ZERO)
-		else:
-			tuft_node.draw_texture_rect_region(e[0], Rect2(at, Vector2(fw, h)), Rect2(fi * fw, 0, fw, h))
 
 func _draw_front() -> void:
 	# grass strip in front of feet
