@@ -16,7 +16,38 @@ const RELIEF = (function () {
     const parts = [];
     const w = DATA.w, h = DATA.h, M = DATA.mat, Z = DATA.z;
     const at = (x, y) => (x < 0 || y < 0 || x >= w || y >= h) ? 0 : +M[y * w + x];
-    const zz = (x, y) => Z[y * w + x] / 4;
+    const zz = (x, y) => Z[y * w + x] / (DATA.zs || 4);
+    if (DATA.card) {
+      // the shadow caster (owner 2026-11-08: a slab cast a square shadow): the picture turned about its own middle, row
+      // by row - each row's run of pixels a round slice as deep as it is wide - so the crown is a rounded mass and
+      // its shadow a rounded pool, the trunk a column
+      for (let y = 0; y < h; y += 2) {
+        let x0 = -1, x1 = -1;
+        for (let x = 0; x < w; x++) if (+M[y * w + x] || +M[Math.min(h - 1, y + 1) * w + x]) { if (x0 < 0) x0 = x; x1 = x; }
+        if (x0 < 0) continue;
+        // runs: split where the row has a gap of 6 px or more (two limbs), each run its own slice
+        const on = (x) => +M[y * w + x] || +M[Math.min(h - 1, y + 1) * w + x];
+        const runs = []; let a = -1, last = -1;
+        for (let x = x0; x <= x1; x++) {
+          if (!on(x)) continue;
+          if (a < 0) a = x;
+          else if (x - last > 6) { runs.push([a, last + 1]); a = x; }
+          last = x;
+        }
+        runs.push([a, last + 1]);
+        for (const [ra, rb] of runs) {
+          const r = (rb - ra) / 2;
+          if (r < 0.5) continue;
+          // pressed down to a third of its height (owner 2026-11-08: "나무 하단 그림자가 어긋나있음" - a tall crown under
+          // a high sun throws its shadow past the town's shallow ground plane, apart from the trunk): the pool stays
+          // round the foot and still leans with the sun
+          const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 2 * 0.3, 16));
+          m.position.set(MX + (ra + rb) / 2, (h - y - 1) * 0.3, 0);
+          parts.push({ mesh: m, mat: "leaf", layer: "leaves" });
+        }
+      }
+      return parts;
+    }
     for (let code = 1; code <= 6; code++) {
       const pos = [];
       const quad = (a, b, c, d) => pos.push(...a, ...b, ...c, ...a, ...c, ...d);

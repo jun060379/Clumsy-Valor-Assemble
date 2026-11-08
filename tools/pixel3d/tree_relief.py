@@ -23,8 +23,10 @@ for key in [k for k in sys.argv[1:] if not k.startswith("--")]:
         mat = np.where(a[:, :, 3] > 0, 3, 0).astype(np.uint8)
         # a slab as deep as a third of its width (a flat board would cast only a line under a high sun; a tree's crown
         # has depth), centred on the stand line
-        D = min(240, int(W * 0.33 * 4))
-        data = {"w": W, "h": H, "card": 1, "depth": D / 4, "mat": "".join(str(int(v)) for v in mat.ravel()), "z": [D] * (W * H)}
+        # (owner 2026-11-08, seeing a third-deep slab cast only a thin line: "뭐가 어캐 들어간건지 잘 모르겠네") a crown is about
+        # as deep as it is wide: the slab 0.8 of the width deep, so its shadow spreads over the ground plane under it
+        D = min(255, int(W * 0.8))
+        data = {"w": W, "h": H, "card": 1, "zs": 1, "depth": D, "mat": "".join(str(int(v)) for v in mat.ravel()), "z": [D] * (W * H)}
         js = open(os.path.join(os.path.dirname(__file__), "relief.js")).read()
         js = js.replace("const DATA = null;", "const DATA = " + json.dumps(data, separators=(",", ":")) + ";")
         open(os.path.join(os.path.dirname(__file__), f"relief_{key}_card.js"), "w").write(js)
