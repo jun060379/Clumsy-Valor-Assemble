@@ -7,6 +7,9 @@ const POR := preload("res://assets/bran/por.png")
 const TF := preload("res://scripts/townsfolk.gd")
 const PX := preload("res://assets/bran/px.png")
 const ANVIL := preload("res://assets/town/q_anvil.png")
+# the pixel3d anvil on its low block (tools/pixel3d/anvil.js, owner 2026-11-08: "받침대를 낮추지뭐"), noon and night
+const ANVIL3 := preload("res://assets/town/q_anvil3d.png")
+const ANVIL3_N := preload("res://assets/town/q_anvil3d_n.png")
 const CW := 66
 const CHH := 70
 const AX := 2.5
@@ -180,9 +183,8 @@ func draw(ci: CanvasItem) -> void:
 	var vr: Rect2 = arena.view_rect()
 	if x < vr.position.x - 250.0 or x > vr.end.x + 250.0: return
 	# the anvil behind him: the hammer head reads as landing on its face
-	var aw := roundf(ANVIL.get_width() * ANV_S)
-	var ah := roundf(ANVIL.get_height() * ANV_S)
-	ci.draw_texture_rect(ANVIL, Rect2(anvil_left, town.LOWF - ah, aw, ah), false)
+	var at: Texture2D = ANVIL3_N if town.sun_side() == "_n" else ANVIL3
+	ci.draw_texture_rect(at, Rect2(anvil_left + 6.0, town.LOWF - at.get_height() + 2.0, at.get_width(), at.get_height()), false)
 	if anim == "walk":
 		# the walk's cells: the body's column on his body line (x + MID), mirrored about it walking left
 		ci.draw_set_transform(Vector2(roundf(x) + MID, roundf(y)), 0.0, Vector2(S * dir, S))
