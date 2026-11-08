@@ -94,8 +94,8 @@ def maps(L):
             if x1 <= x0 or y1 <= y0: continue
             S[y0:y1, x0:x1] = np.maximum(S[y0:y1, x0:x1], np.clip(a[y0 - gy:y1 - gy, x0 - gx:x1 - gx], 0, 1))
         return S
-    # the trees' and bushes' shadows as their standing cards cast them under the same sun (tools/pixel3d/tree_relief.py
-    # --flat; owner 2026-11-08: "판떼기로 만들어도 결국 그림자만 손보면 되는거잖아"): canvas 172 px left of the sprite,
+    # the trees' and bushes' shadows as their reliefs cast them under the same sun (tools/pixel3d/tree_relief.py
+    # --shadow; owner 2026-11-08: "그림은 그대로 넣고, 그림자는 입체로 만든 거 기반으로 넣기"): canvas 172 px left of the sprite,
     # its top TOP rows over the sprite's top; mirrored with the sprite
     def cards(suf):
         S = np.zeros_like(X)
