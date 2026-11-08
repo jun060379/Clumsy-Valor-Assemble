@@ -164,7 +164,7 @@ def save(name, plane, face_src, face_row=29):
     face = np.tile(face, (1, reps, 1))[:, :W]
     top = np.repeat(np.repeat(plane, 2, 0), 2, 1)
     out = np.concatenate([np.zeros((TOP, W, 4), np.uint8), top, face], 0)
-    Image.fromarray(out).save(f"assets/town/{name}.png")
+    Image.fromarray(out).save(f"assets/town/wide/{name}.png" if name in ("k_lawn", "k_clear", "k_stone") else f"assets/town/{name}.png")
     print(name, out.shape)
 
 if __name__ == "__main__":
@@ -183,15 +183,17 @@ if __name__ == "__main__":
         R = Image.open(sys.argv[2]).convert("RGBA")
         R = np.array(R.crop((6, 0, 6 + 460, R.height)).resize((920, R.height * 2), Image.NEAREST))
         PX0 = 3024 - 420 - 40
-        lawn_im = np.array(Image.open("assets/town/k_lawn.png"))
+        lawn_im = np.array(Image.open("assets/town/wide/k_lawn.png"))
         st = lawn_im.copy()                                          # the paving strip: the lawn's plane and face
         for im in (st, lawn_im):
             seg = im[:R.shape[0], PX0:PX0 + 920]
             m = R[:, :, 3] > 0
             seg[m] = R[m]
-        Image.fromarray(st).save("assets/town/k_stone.png")
-        Image.fromarray(lawn_im).save("assets/town/k_lawn.png")
+        Image.fromarray(st).save("assets/town/wide/k_stone.png")
+        Image.fromarray(lawn_im).save("assets/town/wide/k_lawn.png")
         Image.fromarray(np.zeros((131, 96, 4), np.uint8)).save("assets/town/k_stone_cap.png")
         print("paving laid at", PX0)
+    import split_wide                                    # the game reads them in 2400-px pieces
+    for k in ("k_lawn", "k_clear", "k_stone"): split_wide.split(k)
     else:
         save("k_stone_cap", cap("stone", 48, 20, 32), f"{O}/k_stone_cap.png")

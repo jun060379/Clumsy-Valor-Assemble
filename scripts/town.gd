@@ -366,7 +366,7 @@ func _layout() -> void:
 			d[1] = d[1] + w2 / 2.0 - w2 * BS / 2.0
 	# nature on the ground plane (owner 2026-11-06): one palette with the ground, no outlines; the old bushes become the
 	# old bushes kept (owner: the code-drawn shrub did not fit); small clusters at doors and trees, set at depths on the plane (y = stand line + d), calm stretches between
-	if tex.has("k_lawn"):
+	if tex.has("k_lawn_0"):
 		for d in deco_back:
 			if String(d[0]).begins_with("f_grass"): d[0] = ""      # the old grass sprites go too: the blades do that job
 		deco_back = deco_back.filter(func(d): return d[0] != "")
@@ -390,7 +390,7 @@ func _layout() -> void:
 	CLEAR.append([6720.0, 6880.0])                             # the bath house door
 	CLEAR.sort_custom(func(p, q): return p[0] < q[0])
 	# crates, barrels, benches, pots and lamps step forward onto the plane like the people (buildings stay at its back)
-	if tex.has("k_lawn"):
+	if tex.has("k_lawn_0"):
 		var dep := [6.0, 9.0, 4.0, 8.0, 11.0, 5.0, 7.0]
 		for i in deco_props.size(): deco_props[i][2] = deco_props[i][2] + dep[i % dep.size()]
 		for lp in lamps: lp[1] = lp[1] + 7.0
@@ -1091,11 +1091,12 @@ func _shear(t: Texture2D, x0: float, x1: float, f: Callable, clip_h := -1.0) -> 
 		if vi >= 0 and not g2.is_empty():
 			# the ground plane (owner 2026-11-06): its back edge RAISE px above the line people and buildings stand on
 			var k: String = gzone(x)
-			var tt: Texture2D = g2[k][vi]
-			var tw2 := float(tt.get_width())
-			var th2: float = tt.get_height() if clip_h < 0.0 else minf(tt.get_height(), clip_h + RAISE)
+			var tw2 := float(g2w[k])
 			var sx2 := fposmod(x, tw2)
-			gc.draw_texture_rect_region(tt, Rect2(x, y0 - RAISE, PK, th2), Rect2(minf(sx2, tw2 - PK), 0, PK, th2))
+			sx2 = minf(sx2, tw2 - PK)
+			var tt: Texture2D = g2[k][vi][int(sx2) / GPIECE]
+			var th2: float = tt.get_height() if clip_h < 0.0 else minf(tt.get_height(), clip_h + RAISE)
+			gc.draw_texture_rect_region(tt, Rect2(x, y0 - RAISE, PK, th2), Rect2(sx2 - float(int(sx2) / GPIECE * GPIECE), 0, PK, th2))
 			# the turf lip: wherever the top of this column is grass (the lawn, and the grassy bits inside the clearing),
 			# the green runs a ragged few rows down over the earth face -- the edge that makes the ground a block
 			var green: bool = k == "lawn" or (g2green.has(k) and g2green[k][int(sx2) % g2green[k].size()])
@@ -1127,8 +1128,19 @@ var RAISE := 12.0               # rows of the plane showing behind the stand lin
 var DEEP := 30
 # trodden paths (owner 2026-11-06: a lot of it is walked -- worn dirt before every door and gate, the camp, the barn)
 var CLEAR := [[300.0, 700.0], [4080.0, 4960.0], [5440.0, 6100.0]]
-var g2 := {}
+var g2 := {}                    # per zone: [solid pieces, band pieces], each piece GPIECE px wide (phones' texture limit)
+var g2w := {}                   # per zone: the tile's whole width
 var g2green := {}
+const GPIECE := 2400
+
+## an image as textures GPIECE px wide, left to right
+func _pieces(im: Image) -> Array:
+	var out := []
+	var x := 0
+	while x < im.get_width():
+		out.append(ImageTexture.create_from_image(im.get_region(Rect2i(x, 0, mini(GPIECE, im.get_width() - x), im.get_height()))))
+		x += GPIECE
+	return out
 var capgreen := []                # per tile column: is the top of the ground grass there (for the turf lip)
 var LIPY := 28.0                 # the row of the tile where the top meets the earth face (+ DEEP)
 const LIPC := Color8(111, 120, 56)        # leaf ramp step 3 (map palette)
@@ -1208,7 +1220,7 @@ func _deepen(im: Image) -> Image:
 	return st
 
 func _build_ground2() -> void:
-	if not tex.has("k_lawn"): return
+	if not tex.has("k_lawn_0"): return
 	for k in arena.dbg:
 		if String(k).begins_with("deep"): DEEP = int(String(k).substr(4))
 	RAISE = 12.0 + DEEP
@@ -1221,10 +1233,23 @@ func _build_ground2() -> void:
 			ci.convert(Image.FORMAT_RGBA8)
 			tex[ck] = ImageTexture.create_from_image(_deepen(ci))
 	for k in ["lawn", "clear", "stone"]:
-		if not tex.has("k_" + k): continue
-		var im: Image = tex["k_" + k].get_image()
-		im.decompress()
-		im.convert(Image.FORMAT_RGBA8)
+		if not tex.has("k_" + k + "_0"): continue
+		# the tile in 2400-px pieces (tools/split_wide.py: a 9600-px texture fails on phones), joined here on the CPU
+		var parts: Array[Image] = []
+		var pi := 0
+		while tex.has("k_%s_%d" % [k, pi]):
+			var pim: Image = tex["k_%s_%d" % [k, pi]].get_image()
+			pim.decompress()
+			pim.convert(Image.FORMAT_RGBA8)
+			parts.append(pim)
+			pi += 1
+		var fw := 0
+		for pim in parts: fw += pim.get_width()
+		var im := Image.create(fw, parts[0].get_height(), false, Image.FORMAT_RGBA8)
+		var px := 0
+		for pim in parts:
+			im.blit_rect(pim, Rect2i(0, 0, pim.get_width(), pim.get_height()), Vector2i(px, 0))
+			px += pim.get_width()
 		var w := im.get_width()
 		var h := im.get_height()
 		var deep := 520
@@ -1245,7 +1270,8 @@ func _build_ground2() -> void:
 			gr.append(ng >= 3)             # grass reaching the front edge of the top at this column
 		if k == "stone": gr.fill(false)     # moss between the stones is not a turf lip
 		g2green[k] = gr
-		g2[k] = [ImageTexture.create_from_image(solid), ImageTexture.create_from_image(band)]
+		g2w[k] = w
+		g2[k] = [_pieces(solid), _pieces(band)]
 
 ## the paving's ends (tools/make_town_stone.py): cobbles thinning into the turf, the front curb ending on a stone.
 ## The cap's first STONE_B px lie over the lawn (transparent where it is plain lawn), the rest over the paving.

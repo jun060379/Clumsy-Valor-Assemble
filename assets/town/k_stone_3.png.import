@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://byyysh3m3i47g"
-path="res://.godot/imported/k_lawn.png-6390f18f788b2cb2d1ff164492ec0f7e.ctex"
+uid="uid://o2ixq43p2x8c"
+path="res://.godot/imported/k_stone_3.png-4c30863d39147531e1ded83007a47cdd.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/town/k_lawn.png"
-dest_files=["res://.godot/imported/k_lawn.png-6390f18f788b2cb2d1ff164492ec0f7e.ctex"]
+source_file="res://assets/town/k_stone_3.png"
+dest_files=["res://.godot/imported/k_stone_3.png-4c30863d39147531e1ded83007a47cdd.ctex"]
 
 [params]
 

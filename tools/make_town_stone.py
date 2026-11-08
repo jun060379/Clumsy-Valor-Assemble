@@ -10,8 +10,8 @@ from PIL import Image
 from scipy import ndimage as ndi
 
 cob = np.array(Image.open(sys.argv[1]).convert("RGBA"))
-cl = np.array(Image.open("assets/town/k_clear.png").convert("RGBA"))
-lawn = np.array(Image.open("assets/town/k_lawn.png").convert("RGBA"))
+cl = np.array(Image.open("assets/town/wide/k_clear.png").convert("RGBA"))
+lawn = np.array(Image.open("assets/town/wide/k_lawn.png").convert("RGBA"))
 x2 = lambda a: np.repeat(np.repeat(a, 2, 0), 2, 1)
 TOP0, TOP1 = 4, 28                       # the walkable top's rows in the ground tiles
 band = x2(cob[12:24, 30:160])[:TOP1 - TOP0]          # cobbles, 260 wide
@@ -26,7 +26,7 @@ reg = st[TOP1:TOP1 + 16]; m = c[..., 3] > 127; reg[m] = c[m]
 # a dark shadow line under the curb, then the earth face as before
 sh = st[TOP1 + 16:TOP1 + 18]; o = sh[..., 3] > 127; sh[o, :3] = (sh[o, :3] * 0.6).astype(np.uint8)
 st[:TOP0, :, 3] = 0
-Image.fromarray(st).save("assets/town/k_stone.png")
+Image.fromarray(st).save("assets/town/wide/k_stone.png")
 
 # the end cap: 96 px; left = lawn, right = paving; the edge walks along whole cobbles
 CW = 96
@@ -53,3 +53,6 @@ cap[TOP1:TOP1 + 18, cx0:] = src[TOP1:TOP1 + 18, cx0:]
 cap[TOP1:TOP1 + 18, cx0:cx0 + 2, :3] = (src[TOP1:TOP1 + 18, cx0:cx0 + 2, :3] * 0.55).astype(np.uint8)   # the curb's end face
 Image.fromarray(cap).save("assets/town/k_stone_cap.png")
 print("k_stone", st.shape, "cap", cap.shape)
+
+import split_wide                                        # the game reads them in 2400-px pieces (tools/split_wide.py)
+for _k in ("k_lawn", "k_clear", "k_stone"): split_wide.split(_k)

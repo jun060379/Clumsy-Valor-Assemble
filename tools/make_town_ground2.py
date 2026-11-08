@@ -107,8 +107,11 @@ for y in range(0, 29):
         row[gr, 3] = 0
 clear = ragged(clear, 6)
 clear[:5, :, 3] = 0          # the strip of curb/stone the scene had above the dirt: off (it read as a grey line on the slopes)
-Image.fromarray(lawn).save("assets/town/k_lawn.png")
-Image.fromarray(clear).save("assets/town/k_clear.png")
+Image.fromarray(lawn).save("assets/town/wide/k_lawn.png")
+Image.fromarray(clear).save("assets/town/wide/k_clear.png")
 Image.fromarray(cap).save("assets/town/k_clear_cap.png")
 for n, a in pieces.items(): Image.fromarray(a).save(f"assets/town/f2_{n}.png")
 print("palette", len(set(map(tuple, pal))), "lawn", lawn.shape, "clear", clear.shape)
+
+import split_wide                                        # the game reads them in 2400-px pieces (tools/split_wide.py)
+for _k in ("k_lawn", "k_clear", "k_stone"): split_wide.split(_k)
