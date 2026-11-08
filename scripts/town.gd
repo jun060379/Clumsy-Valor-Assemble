@@ -126,7 +126,7 @@ func _lamp_uniforms(L: Array, T: Dictionary) -> void:
 			if arr.size() >= 12: break
 	var n := arr.size()
 	while arr.size() < 12: arr.append(Vector4.ZERO)
-	for m in [material, near_node.material]:
+	for m in [material, near_node.material if near_node != null else null]:
 		if not (m is ShaderMaterial): continue
 		m.set_shader_parameter("pl_n", n)
 		m.set_shader_parameter("pl_a", arr)
