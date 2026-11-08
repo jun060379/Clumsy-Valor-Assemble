@@ -193,6 +193,8 @@ var blade_mat: ShaderMaterial
 var bmesh := {}
 var mirror_mat: ShaderMaterial
 var mirror_node: Node2D
+var near_grass: Node2D
+const NEAR_GRASS := preload("res://assets/town/near_grass.png")
 var mirror_bb: BackBufferCopy
 var tuft_mat: ShaderMaterial
 var tuft_node: Node2D
@@ -349,6 +351,12 @@ func _ready() -> void:
 	near_node.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	near_node.draw.connect(_draw_near)
 	arena.add_child(near_node)
+	# the near grass along the bottom of the screen (owner 2026-11-09, sketch 5): in front of everything but the light
+	near_grass = Node2D.new()
+	near_grass.z_index = 8
+	near_grass.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	near_grass.draw.connect(_draw_near_grass)
+	arena.add_child(near_grass)
 	life = LIFE.new(self)
 	fxa = TFX.new(self)
 	bran = BRAN.new(self)
@@ -381,6 +389,7 @@ func cleanup() -> void:
 	blade_front.queue_free()
 	tuft_node.queue_free()
 	mirror_node.queue_free()
+	near_grass.queue_free()
 	mirror_bb.queue_free()
 	folk_node.queue_free()
 	lbl_layer.queue_free()
@@ -1022,6 +1031,7 @@ func step(dt: float) -> void:
 	_light_step(T)
 	queue_redraw()
 	front.queue_redraw()
+	near_grass.queue_redraw()
 	mirror_mat.set_shader_parameter("t", Time.get_ticks_msec() / 1000.0)
 	near_node.queue_redraw()
 	# the ground is static: drawn for the view and 600 px either side, redrawn only when the view leaves that
@@ -1550,6 +1560,27 @@ func river_poly() -> PackedVector2Array:
 		R.append(Vector2(roundf((c + hw) / PK) * PK, wl + d))
 	R.reverse()
 	return L + R
+
+## the near grass: a strip at the bottom of the view, sliding a little faster than the world (it is nearer), sunk
+## low where the river comes out under it so the water shows
+func _draw_near_grass() -> void:
+	var vr: Rect2 = arena.view_rect()
+	var tw := float(NEAR_GRASS.get_width())
+	var th := float(NEAR_GRASS.get_height())
+	var y0 := roundf((vr.end.y - th) / PK) * PK
+	var off := vr.position.x * 0.25                  # parallax: 1.25x the world's scroll
+	var rc := (RIV0 + RIV1) / 2.0 - 30.0
+	var x := floorf(vr.position.x / PK) * PK
+	while x < vr.end.x:
+		var sx := fposmod(x + off, tw)
+		sx = floorf(sx / PK) * PK
+		if x >= SX0 and x <= STX1 + SL:                 # the lower street under the terraces: its own front (later)
+			x += PK
+			continue
+		var dip := clampf((340.0 - absf(x - rc)) / 60.0, 0.0, 1.0)      # over the river's mouth
+		var y := y0 + roundf(dip * 22.0 / PK) * PK
+		near_grass.draw_texture_rect_region(NEAR_GRASS, Rect2(x, y, PK, th), Rect2(minf(sx, tw - PK), 0, PK, th))
+		x += PK
 
 func _draw() -> void:
 	var tt := Time.get_ticks_msec() / 1000.0
