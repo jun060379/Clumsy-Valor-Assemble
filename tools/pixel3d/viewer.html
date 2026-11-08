@@ -218,6 +218,7 @@ const warmLights = (HALL.NIGHT_LIGHTS || []).map(([x, y, z, reach, a]) => {
 // night (owner 2026-11-08: the night looks from the solid itself, not guessed from the drawing): past 19:30 the light is
 // the moon, high behind the town on the right, cool and dim - the lit side one step down in the shade's cool colours,
 // the shadow side two more, the rims a cool glint; fire and glass glow as by day
+var NORMOUT = false;                                         // sweep2 mode N: the normal map
 const isNight = (h) => h > 19.5 || h < 5.5;
 function sunDir(h) {
   if (isNight(h)) return new THREE.Vector3(0.45, 0.85, -0.35).normalize();
@@ -383,6 +384,7 @@ const comp = new THREE.ShaderMaterial({
         return;
       }
       if (gview == 2) discard;                     // the ground's shade alone: no building
+      if (mode == 3) { gl_FragColor = vec4(at(tNrm, c).rgb, 1.0); return; }    // the normal map (town lamps light it live)
       float r = floor(id.r * 255.0 + 0.5) - 1.0, base = floor(id.g * 255.0 + 0.5), mi = floor(id.b * 255.0 + 0.5);
       // a light source (the forge's fire): its own colour, never shaded, no outline
       if (${EMIT.length ? EMIT.map(n => `mi == ${matNames.indexOf(n) + 1}.0`).join(" || ") : "false"}) { gl_FragColor = vec4(palc(r, base), 1.0); return; }
@@ -614,7 +616,7 @@ function render() {
   renderer.setRenderTarget(null);
   renderer.setClearColor(0x000000, 0);
   renderer.clear();
-  comp.uniforms.mode.value = mode === "flat" ? 1 : mode === "light" ? 2 : 0;
+  comp.uniforms.mode.value = NORMOUT ? 3 : mode === "flat" ? 1 : mode === "light" ? 2 : 0;
   renderer.render(quadScene, quadCam);
 }
 
