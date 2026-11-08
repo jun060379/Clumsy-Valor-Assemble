@@ -546,14 +546,16 @@ func tod_now() -> Dictionary:
 	var k: float = (hh - a[0]) / maxf(0.001, b[0] - a[0])
 	var sky := Color(lerpf(a[1][0], b[1][0], k) / 255.0, lerpf(a[1][1], b[1][1], k) / 255.0, lerpf(a[1][2], b[1][2], k) / 255.0, lerpf(a[1][3], b[1][3], k))
 	var amb := Color(lerpf(a[2][0], b[2][0], k), lerpf(a[2][1], b[2][1], k), lerpf(a[2][2], b[2][2], k))
+	# the night sky's strength from the clear sky's tint (stars hide behind cloud: "stars" 0 when overcast)
+	var nk := clampf((sky.a - 0.33) / 0.33, 0.0, 1.0)
 	if weather != "clear":
 		# overcast: the sky greys over, the light drops, lamps stay lit
 		var r := weather == "rain"
 		sky = Color(sky.r * 0.5 + 110.0 / 255.0 * 0.5, sky.g * 0.5 + 118.0 / 255.0 * 0.5, sky.b * 0.5 + 132.0 / 255.0 * 0.5, maxf(sky.a, 0.42 if r else 0.3))
 		amb = Color(amb.r * (0.78 if r else 0.92), amb.g * (0.78 if r else 0.92), amb.b * (0.78 if r else 0.92))
 		if not r: amb.b = minf(1.0, amb.b * 1.06)
-		return {"sky": sky, "amb": amb, "sun": lerpf(a[3], b[3], k) * 0.25, "lamp": maxf(lerpf(a[4], b[4], k), 0.5)}
-	return {"sky": sky, "amb": amb, "sun": lerpf(a[3], b[3], k), "lamp": lerpf(a[4], b[4], k)}
+		return {"sky": sky, "amb": amb, "sun": lerpf(a[3], b[3], k) * 0.25, "lamp": maxf(lerpf(a[4], b[4], k), 0.5), "nk": nk, "stars": 0.0}
+	return {"sky": sky, "amb": amb, "sun": lerpf(a[3], b[3], k), "lamp": lerpf(a[4], b[4], k), "nk": nk, "stars": nk}
 
 ## a member leaves the party for town (or comes back); the townsfolk take over whoever is not along
 func toggle_member(c: String) -> void:

@@ -8,6 +8,16 @@ uniform vec2 gmap_org = vec2(0.0, 120.0);
 uniform vec2 gmap_cell = vec2(2.0, 2.0);
 uniform float lift = 0.0;
 uniform vec3 warm = vec3(1.0, 0.86, 0.64);
+// the stars (sky.gd STAR) are drawn in three exact marker colours: where one still shows on screen (nothing in front
+// of it) the night's dark leaves it alone, so the stars stay crisp (owner 2026-11-08: "반짝반짝 선명해지기도하고")
+uniform sampler2D scr : hint_screen_texture, filter_nearest;
+const vec3 STAR0 = vec3(150.0, 156.0, 196.0) / 255.0;
+const vec3 STAR1 = vec3(205.0, 208.0, 226.0) / 255.0;
+const vec3 STAR2 = vec3(255.0, 250.0, 236.0) / 255.0;
+bool is_star(vec3 c) {
+	return all(lessThan(abs(c - STAR0), vec3(0.6 / 255.0))) || all(lessThan(abs(c - STAR1), vec3(0.6 / 255.0)))
+		|| all(lessThan(abs(c - STAR2), vec3(0.6 / 255.0)));
+}
 varying vec2 wp;
 void vertex() { wp = (MODEL_MATRIX * vec4(VERTEX, 0.0, 1.0)).xy; }
 float bayer4(ivec2 p) {
@@ -16,6 +26,8 @@ float bayer4(ivec2 p) {
 	return (float(m[y * 4 + x]) + 0.5) / 16.0 - 0.5;
 }
 void fragment() {
+	if (is_star(texture(scr, SCREEN_UV).rgb)) { COLOR = vec4(1.0); }
+	else {
 	float w = 0.0;
 	vec2 cell = floor(wp / 2.0) * 2.0;
 	if (lift > 0.0) {
@@ -25,4 +37,5 @@ void fragment() {
 	}
 	float st = w > 0.45 ? 0.5 : w > 0.15 ? 0.25 : 0.0;        // two hard steps on the 2-px grid, no gradient, no dither
 	COLOR = vec4(mix(COLOR.rgb, warm, st), 1.0);
+	}
 }
