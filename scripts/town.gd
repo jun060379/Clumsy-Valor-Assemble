@@ -423,7 +423,7 @@ func _layout() -> void:
 	# stones on the ground (owner 2026-11-06), cut from the map scene, 2-px grid: [piece, x, surface y]
 	# only on level ground: a flat-bottomed stone on the slope's bend sat on it like a lid (owner 2026-11-07)
 	rocks = [["f2_pebble", 1534.0, G + 9.0], ["f2_pebble", 5420.0, G + 12.0], ["f2_rock", 6080.0, G - 4.0],
-		["f2_pebble", 7050.0, LOWF + 10.0], ["f2_rock", 8560.0, LOWF + 6.0], ["f2_pebble", 9180.0, LOWF + 13.0], ["f2_rock", 2446.0, TTOP + 4.0], ["f2_pebble", 2410.0, TTOP + 12.0]]
+		["f2_pebble", 7050.0, LOWF + 10.0], ["f2_pebble", 9180.0, LOWF + 13.0], ["f2_rock", 2446.0, TTOP + 4.0], ["f2_pebble", 2410.0, TTOP + 12.0]]
 	lamps = [[SX1 + 40.0, TTOP], [DX1 - 40.0, TTOP], [HDOOR - 400.0, LOWF], [HDOOR + 380.0, LOWF], [4700.0, LOWF], [5600.0, LOWF], [1700.0, G]]
 	light_strings = [[HDOOR - 420.0, HDOOR - 20.0], [HDOOR + 20.0, HDOOR + 420.0], [4250.0, 4650.0], [5250.0, 5650.0]]
 	STONE.append([HDOOR - 420.0, HDOOR + 420.0])               # the hall's forecourt / the plaza under it: paved
