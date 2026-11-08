@@ -9,15 +9,15 @@ const RELIEF = (function () {
   const W = DATA.w + 2 * MX, H = DATA.h + (DATA.card ? 70 : 6), B0 = DATA.h, K = 0.12, TOP = 4;
   const Y = (row, z) => B0 + K * z - row;
   const RAMP = { red: 0, wood: 1, ochre: 2, cream: 3, leaf: 4, green: 5, blue: 6, violet: 7, stone: 8, iron: 9 };
-  const MAT = { sand: ["ochre", 5], bark: ["wood", 5], barkDk: ["wood", 3], leaf: ["leaf", 4], leafDk: ["leaf", 3] };
+  const MAT = { sand: ["ochre", 5], bark: ["wood", 5], barkDk: ["wood", 3], leaf: ["leaf", 4], leafDk: ["leaf", 3], barkLt: ["wood", 6], leafLt: ["leaf", 5] };
   const LAYERS = ["ground", "wood", "leaves"];
-  const NAMES = [null, "bark", "barkDk", "leaf", "leafDk"];
+  const NAMES = [null, "bark", "barkDk", "leaf", "leafDk", "barkLt", "leafLt"];
   function build(THREE) {
     const parts = [];
     const w = DATA.w, h = DATA.h, M = DATA.mat, Z = DATA.z;
     const at = (x, y) => (x < 0 || y < 0 || x >= w || y >= h) ? 0 : +M[y * w + x];
     const zz = (x, y) => Z[y * w + x] / 4;
-    for (let code = 1; code <= 4; code++) {
+    for (let code = 1; code <= 6; code++) {
       const pos = [];
       const quad = (a, b, c, d) => pos.push(...a, ...b, ...c, ...a, ...c, ...d);
       for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
@@ -45,7 +45,7 @@ const RELIEF = (function () {
       g.computeVertexNormals();
       const m = new THREE.Mesh(g);
       m.position.z = DATA.card ? -DATA.depth / 2 : -20; m.position.x = MX;
-      parts.push({ mesh: m, mat: NAMES[code], layer: code <= 2 ? "wood" : "leaves" });
+      parts.push({ mesh: m, mat: NAMES[code], layer: (code <= 2 || code === 5) ? "wood" : "leaves" });
     }
     return parts;
   }

@@ -30,7 +30,11 @@ for key in [k for k in sys.argv[1:] if not k.startswith("--")]:
         open(os.path.join(os.path.dirname(__file__), f"relief_{key}_card.js"), "w").write(js)
         print(key, W, H, "card")
         continue
-    lf = np.array(Image.open(f"assets/town/{key}_leaf.png").convert("RGBA"))[:, :, 3] > 0
+    if os.path.exists(f"assets/town/{key}_leaf.png") and not os.path.exists(f"assets/town/hx/{key}.png"):
+        lf = np.array(Image.open(f"assets/town/{key}_leaf.png").convert("RGBA"))[:, :, 3] > 0
+    else:                                             # no leaf layer (the big tree, the bushes): the lit greens
+        g0, r0, b0 = a[:, :, 1], a[:, :, 0], a[:, :, 2]
+        lf = (a[:, :, 3] > 0) & (g0 > b0 + 15) & (g0 + 12 > r0) & (g0 > 92)
     H, W = a.shape[:2]
     op = a[:, :, 3] > 0
     r, g, b = a[:, :, 0], a[:, :, 1], a[:, :, 2]
@@ -41,7 +45,12 @@ for key in [k for k in sys.argv[1:] if not k.startswith("--")]:
     mat[op & lf] = 3                                  # lit leaves
     mat[op & ~lf & green] = 4                         # the canopy's shaded mass (and the grass at the foot)
     bark = op & ~lf & ~green
-    mat[bark] = np.where(lum[bark] < 95, 2, 1)        # bark, its grooves darker
+    # the bark keeps the picture's own tones in three bands (its grooves, body, ridges): the light comes on top
+    mat[bark] = np.where(lum[bark] < 80, 2, np.where(lum[bark] < 130, 1, 5))
+    # the lit leaves keep theirs in two (the clumps' shaded and sunny sides as drawn)
+    ll = op & lf
+    mat[ll & (lum < 120)] = 3
+    mat[ll & (lum >= 120)] = 6
     # outlines join the part they edge (the viewer draws its own): the most common part among the 8 neighbours
     for _ in range(3):
         o = op & dark & (mat != 0)
@@ -53,7 +62,7 @@ for key in [k for k in sys.argv[1:] if not k.startswith("--")]:
                 if v: mat[y, x] = v
     # heights: each lit clump a dome over its own area; the mass behind them; the wood rounded across its width
     z = np.zeros((H, W), np.float32)
-    lab, n = ndimage.label(mat == 3)
+    lab, n = ndimage.label((mat == 3) | (mat == 6))
     for i in range(1, n + 1):
         m = lab == i
         d = ndimage.distance_transform_edt(m)
@@ -62,9 +71,9 @@ for key in [k for k in sys.argv[1:] if not k.startswith("--")]:
     m = mat == 4
     d = ndimage.distance_transform_edt(m)
     z[m] = 11.0 + 2.0 * np.sqrt(np.minimum(d[m], 9.0))
-    m = (mat == 1) | (mat == 2)
+    m = (mat == 1) | (mat == 2) | (mat == 5)
     d = ndimage.distance_transform_edt(m)
-    z[m] = 4.0 + 2.2 * np.sqrt(np.minimum(d[m], 25.0)) - np.where(mat[m] == 2, 0.8, 0.0)
+    z[m] = 4.0 + 2.2 * np.sqrt(np.minimum(d[m], 25.0)) - np.where(mat[m] == 2, 0.8, np.where(mat[m] == 5, -0.4, 0.0))
     # the picture's bottom row is the ground line
     zq = np.clip(np.round(z * 4), 0, 255).astype(np.uint8)
     data = {"w": W, "h": H, "mat": "".join(str(int(v)) for v in mat.ravel()), "z": [int(v) for v in zq.ravel()]}
