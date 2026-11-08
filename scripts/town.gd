@@ -102,6 +102,14 @@ var sh_tex := {}
 ## the pixel3d ground shadows (shadow/) are baked into the ground light maps (tools/bake_ground_light.py, from
 ## tests/dump_light_layout.gd), shaded there on the palette - not laid over as a translucent colour
 const SH_IN_MAP := true
+## the lamps' light with its shadows (tools/bake_ground_light.py: ground_n blue, traced past the pixel3d outlines)
+## eases the night's dark where it reaches, so the sprites' own lamp-lit faces and rims (the per-placement night
+## renders), the ground's warm and the people near a lamp show; gently (owner 2026-11-08: not a glare)
+func _light_uniforms(T: Dictionary) -> void:
+	var m = lit.amb_node.material
+	if not (m is ShaderMaterial) or not gmaps.has("n"): return
+	m.set_shader_parameter("gmap", gmaps["n"])
+	m.set_shader_parameter("lift", clampf((T["sky"].a - 0.33) / 0.33, 0.0, 1.0))
 var sh_log = null                    # dump_light_layout: {key@x: [shadow key, canvas x, canvas y]} of what was drawn
 func sh_place(k: String, x: float, y: float, ci: CanvasItem) -> void:
 	if sh_log != null: sh_log[k + "@" + str(roundf(x))] = [k, roundf(x) - 24.0, y]
@@ -708,6 +716,7 @@ func _light_step(T: Dictionary) -> void:
 	_boost(L, T)
 	lit.L = L
 	lit.amb = T["amb"]
+	_light_uniforms(T)
 	# (the ambient multiply in lit.gd covers the whole screen, the sky behind the world included, as in the prototype)
 	shade.update(T, arena.tod_h, L)
 	lit.redraw()

@@ -108,6 +108,9 @@ func _init(a) -> void:
 	arena = a
 	z_index = 9
 	amb_node = _sub(CanvasItemMaterial.BLEND_MODE_MUL, _draw_amb)
+	var am := ShaderMaterial.new()                 # the night's dark, eased where the lamps reach (town sets them)
+	am.shader = preload("res://shaders/amb_light.gdshader")
+	amb_node.material = am
 	pre = _sub(-1, func(): if pre_fn.is_valid(): pre_fn.call(pre))
 	glow = _sub(CanvasItemMaterial.BLEND_MODE_ADD, _draw_glow)
 	post = _sub(-1, func(): if post_fn.is_valid(): post_fn.call(post))
