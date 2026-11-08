@@ -34,9 +34,11 @@ uniform float alpha = 1.0;
 varying vec2 wp;
 void vertex() { wp = (MODEL_MATRIX * vec4(VERTEX, 0.0, 1.0)).xy; }
 void fragment() {
-	vec2 u = (wp - org) / csize;
+	// on the 2-px grid, with a hard edge (owner 2026-11-08: the shade a stepped area, not a soft smudge)
+	vec2 u = (floor(wp / 2.0) * 2.0 - org) / csize;
 	float c = (u.y < 0.0 || u.y > 1.0) ? 0.0 : texture(ck, vec2(fract(u.x), u.y)).r;
-	COLOR = vec4(0.0, 0.0, 0.0, texture(TEXTURE, UV).a * c * alpha);
+	c = c > 0.42 ? 1.0 : 0.0;
+	COLOR = vec4(1.0, 1.0, 1.0, texture(TEXTURE, UV).a * c * alpha);
 }
 """
 
@@ -59,7 +61,16 @@ var clock := -1.0                 # tests: a fixed cloud clock in seconds (the p
 func _init(a, lv) -> void:
 	arena = a
 	level = lv
-	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST     # the mask is on the 2-px grid: hard edges
+	var comp := ShaderMaterial.new()
+	var shc := Shader.new()
+	shc.code = COMP_SH
+	comp.shader = shc
+	if ResourceLoader.exists("res://assets/town/light/pal_lut.png"):
+		comp.set_shader_parameter("pal_lut", load("res://assets/town/light/pal_lut.png"))
+		comp.set_shader_parameter("pal_fx", load("res://assets/town/light/pal_fx.png"))
+		comp.set_shader_parameter("has_pal", true)
+	material = comp
 	if arena.low_end:
 		k = 0.34
 		steps = 4
@@ -113,8 +124,36 @@ func redraw() -> void:
 	d_cloud.queue_redraw()
 	d_cut.queue_redraw()
 
+## the shade's colour: the sky's cool, dull blue, never black (AGENTS.md: 그림자는 검정을 곱하지 않는다; owner 2026-11-08:
+## "그림자를 저런식으로 넣을거면 지면이랑 오브젝트에도 그림자가 들어가고 대비가 드러나야지")
+const SHADE_C := Color8(30, 52, 84)
+## laying the shade on: a palette colour under it steps down its own ramp into the cool shade colours (assets/town/light/
+## pal_fx: one step where the shade is light, two where it is full), so lit and shaded read as two clear areas; a colour
+## off the palette (the people, effects) takes the cool tint instead
+const COMP_SH := """
+shader_type canvas_item;
+uniform sampler2D scr : hint_screen_texture, filter_nearest;
+uniform sampler2D pal_lut : filter_nearest, repeat_disable;
+uniform sampler2D pal_fx : filter_nearest, repeat_disable;
+uniform bool has_pal = false;
+uniform vec3 tint = vec3(0.12, 0.2, 0.33);
+void fragment() {
+	float m = texture(TEXTURE, UV).a;
+	if (m < 0.12) { discard; }
+	vec3 c = texture(scr, SCREEN_UV).rgb;
+	vec3 o = mix(c, c * tint * 2.2, min(1.0, m) * 0.62);
+	if (has_pal) {
+		ivec3 q = ivec3(clamp(floor(c * 255.0 / 8.0), 0.0, 31.0));
+		int idx = int(texelFetch(pal_lut, ivec2(q.r * 32 + q.g, q.b), 0).r * 255.0 + 0.5);
+		vec3 pc = texelFetch(pal_fx, ivec2(2, idx), 0).rgb;
+		if (all(lessThan(abs(pc - c), vec3(1.5 / 255.0)))) o = texelFetch(pal_fx, ivec2(m > 0.5 ? 0 : 1, idx), 0).rgb;
+	}
+	COLOR = vec4(o, 1.0);
+}
+"""
+
 func _draw() -> void:
-	draw_texture_rect(sv.get_texture(), vr, false, Color(1, 1, 1, 0.62))
+	draw_texture_rect(sv.get_texture(), vr, false)
 
 ## the silhouette rectangle of an occluder entry
 static func box(o: Array) -> Rect2:
@@ -144,7 +183,7 @@ func _draw_sun() -> void:
 	if sun > 0.01:
 		var n := dir.length()
 		var u := dir / n
-		var col := Color(0, 0, 0, 0.34 * sun)
+		var col := Color(1, 1, 1, 0.34 * sun)
 		for o in level.shade_occluders():
 			if o.size() > 7 and o[7]: continue          # its ground shadow is baked
 			var b := box(o)
@@ -168,7 +207,8 @@ func _draw_cloud() -> void:
 	var bot := PackedVector2Array()
 	var x := floorf(vx0 / 24.0) * 24.0
 	while x <= vx1 + 24.0:
-		var t: float = level.surf_top(x)
+		# from the plane's back edge (the walked ground behind the stand line), not only its face below
+		var t: float = level.surf_top(x) - float(level.get("RAISE") if level.get("RAISE") != null else 0.0)
 		var b: float = level.cloud_bottom(x)
 		top.append(Vector2(x, t))
 		bot.append(Vector2(x, maxf(t, b)))

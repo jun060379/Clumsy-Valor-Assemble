@@ -819,7 +819,7 @@ func shade_extra(ci: CanvasItem) -> void:
 		x += 40.0
 	pts.append(Vector2(STX1 + SL, LOWF + 40.0))
 	pts.append(Vector2(SX0, LOWF + 40.0))
-	ci.draw_colored_polygon(pts, Color(0, 0, 0, 0.55))
+	ci.draw_colored_polygon(pts, Color(1, 1, 1, 0.55))      # shade.gd colours it (cool, never black)
 
 ## the hall facade's lit windows: drawn into their own small canvas (the facade's size) with someone walking past one now
 ## and then, the window glows, and the heroine cut out of it (whoever stands in front of the hall hides them); laid over

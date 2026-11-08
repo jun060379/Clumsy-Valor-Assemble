@@ -138,6 +138,11 @@ func set_shade(s: Node2D) -> void:
 	shade = s
 	add_child(s)
 	move_child(s, 0)
+	# the shade lays palette steps on what is drawn (shade.gd COMP_SH): a fresh copy of the screen just before it
+	var bb := BackBufferCopy.new()
+	bb.copy_mode = BackBufferCopy.COPY_MODE_VIEWPORT
+	add_child(bb)
+	move_child(bb, 0)
 
 func redraw() -> void:
 	amb_node.queue_redraw()
