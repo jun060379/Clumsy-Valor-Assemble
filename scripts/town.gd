@@ -829,7 +829,7 @@ func _boost(L: Array, T: Dictionary) -> void:
 		var lx: float = l["x"]
 		var ly: float = l["y"]
 		if kind == "town" and lx > SX0 and lx < STX1 + SL and ly > minf(LOWF, up_y(lx) + BAND - 14.0):
-			sh = 0.85            # under the terraces
+			sh = 0.85 * deep_shade()            # under the terraces (open to the sun with the slope in)
 		else:
 			for o in occ:
 				var bx: Rect2 = SHADE.box(o)
@@ -908,11 +908,24 @@ func surf_top(x: float) -> float:
 
 ## cloud shade stops at the terraces' edge: the lower plaza lives in their shade
 func cloud_bottom(x: float) -> float:
-	if x >= SX0 and x <= STX1 + SL: return minf(LOWF, up_y(x) + BAND - 14.0)
+	if x >= SX0 and x <= STX1 + SL and not HILL_ON: return minf(LOWF, up_y(x) + BAND - 14.0)
 	return G + 380.0
+
+## how much of the old "under the terraces" deep shade the lower plaza and the hall's slope keep (0..1). With the slope
+## in (HILL_ON) the plaza is open to the sky: the sun reaches it and the slope unless it is right behind the town, low
+## (owner 2026-11-09: "빛을 언덕 아래로도 쏘자 완전 뒤에서 오는 역광이 아닌 이상 빛이 들어올겅ㆍ님"): only round sunrise
+## and sunset, and at night (the ambient carries the night).
+func deep_shade() -> float:
+	if not HILL_ON: return 1.0
+	var hh := fposmod(arena.tod_h, 24.0)
+	var day := clampf((hh - 5.5) / 13.5, 0.0, 1.0)
+	var low := 1.0 - sin(day * PI)              # 0 at noon, 1 with the sun on the horizon behind the town
+	return clampf((low - 0.8) / 0.18, 0.0, 1.0)
 
 ## the lower plaza lives under the terraces: deep shade
 func shade_extra(ci: CanvasItem) -> void:
+	var dk := deep_shade()
+	if dk <= 0.01: return
 	var vr: Rect2 = arena.view_rect()
 	if vr.end.x < SX0 or vr.position.x > STX1 + SL: return
 	var pts := PackedVector2Array([Vector2(SX0, G)])
@@ -922,7 +935,7 @@ func shade_extra(ci: CanvasItem) -> void:
 		x += 40.0
 	pts.append(Vector2(STX1 + SL, LOWF + 40.0))
 	pts.append(Vector2(SX0, LOWF + 40.0))
-	ci.draw_colored_polygon(pts, Color(1, 1, 1, 0.55))      # shade.gd colours it (cool, never black)
+	ci.draw_colored_polygon(pts, Color(1, 1, 1, 0.55 * dk))      # shade.gd colours it (cool, never black)
 
 ## the hall facade's lit windows: drawn into their own small canvas (the facade's size) with someone walking past one now
 ## and then, the window glows, and the heroine cut out of it (whoever stands in front of the hall hides them); laid over
