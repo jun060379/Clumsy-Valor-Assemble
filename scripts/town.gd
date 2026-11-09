@@ -19,6 +19,8 @@ const SL := 420.0
 const BAND := 58.0
 const HILL_ON := false         # the hall's slope picture as the recess face (false: the old dark dirt). Off (owner
 # 2026-11-09: "일단 그 언덕 텍스쳐 넣은 거 빼자. 옆에 오르 내리막길이라던가 막 잘림")
+const SLOPE_ON := true         # the slope drawn for the face's own shape (k_slope.png, top-left at SX0, SLOPE_Y0)
+const SLOPE_Y0 := 270.0        # = Y0 in tools/make_town_slope.py
 const PLAZA_SUN := true        # the sun reaches the lower plaza (owner 2026-11-09: "빛을 언덕 아래로도 쏘자"), kept with the slope picture out
 const HILL_FOOT := 4.0         # where the slope picture's last row sits, below the lower street's floor line
 # the slopes (owner 2026-11-06 dropped the stone stairs: back to the long slopes)
@@ -1701,8 +1703,13 @@ func _draw_ground() -> void:
 	pts.append(Vector2(SX0, LOWF + 20.0))
 	var uvs := PackedVector2Array()
 	var wo := Vector2(0.0, G) if HILL_ON else Vector2.ZERO
-	for p in pts: uvs.append((p - wo) / t_wall.get_size())
-	gn.draw_colored_polygon(pts, Color.WHITE, uvs, t_wall)
+	var wt: Texture2D = t_wall
+	if SLOPE_ON and tex.has("k_slope"):
+		# the hall's slope drawn for its own shape (tools/make_town_slope.py; owner 2026-11-09 "비탈이되 그림문제")
+		wt = tex["k_slope"]
+		wo = Vector2(SX0, SLOPE_Y0)
+	for p in pts: uvs.append((p - wo) / wt.get_size())
+	gn.draw_colored_polygon(pts, Color.WHITE, uvs, wt)
 	# 2. lower level: floor + valley, river
 	_shear(t_solid, RX1, RIV0, func(_x): return LOWF)
 	_shear(t_solid, RIV1, TOWN_W + PK, func(_x): return LOWF)
