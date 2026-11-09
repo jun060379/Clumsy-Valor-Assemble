@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # python3 tools/export_p3d_shadow.py RENDERDIR SHPAD name:key[:2] ...
 # The pixel3d solids' ground shadows only (assets/town/shadow/<key>{,_m,_e}.png), from renders widened by SHPAD units
-# each side (wip/layer3d tools/pixel3d: SHPAD=<n> build.py ..., sweep2.js "B:8,B:12,B:17,M:8,M:12,M:17").
+# each side (wip/layer3d tools/pixel3d: SHPAD=<n> SHK=0.4 SHDN=60 build.py ..., sweep2.js
+# "B:8,B:12,B:17,M:8,M:12,M:17,U:12"; SHK: the ground seen deeper, so the shadow on it reads - owner 2026-11-09 "2번").
 # Before, the render was the sprite's own width, so a low sun's shadow running off along the ground was cut at the
 # sprite's edge and only the contact line under the base was left (owner 2026-11-09: "그림자 작업해야지 그래").
 # The sprites themselves are not touched (tools/export_pixel3d.py made them).
@@ -25,6 +26,11 @@ for spec in sys.argv[3:]:
     for h, suf in ((8, "_m"), (12, ""), (17, "_e")):
         m = np.array(Image.open(f"{S}/{n}_code_bM_{h}.png").convert("RGBA"))[:, :, 3] > 0
         b = np.array(Image.open(f"{S}/{n}_code_bB_{h}.png").convert("RGBA"))[:, :, 3] > 0
+        # the ground under the solid (dark with the sun overhead, sweep2 mode U) is not shadow: with the ground seen at
+        # the deeper SHK angle it lies below the solid's foot on screen
+        uf = f"{S}/{n}_code_bU_12.png"
+        if os.path.exists(uf):
+            m &= ~(np.array(Image.open(uf).convert("RGBA"))[:, :, 3] > 0)
         # as export_pixel3d.py: the ground in the solid's shadow (cool shade colour, never black), and a contact
         # shade under the base (3 cells, fading)
         out = np.zeros(m.shape + (4,), np.uint8)
