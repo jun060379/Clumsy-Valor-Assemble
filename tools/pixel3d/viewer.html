@@ -88,7 +88,11 @@ const { W, B0, K, MAT, RAMP, LAYERS } = HALL;
 // the props were modelled at one unit per game px, so they render at CELL 2: one cell = 2 world units = 2 game px,
 // the town's 2-px grid (owner 2026-11-08: "2px 칸으로 다시 짓기"). Patterns and outlines work in cells.
 const CELL = HALL.CELL || 1;
-const RW = Math.ceil((W + 16) / CELL / 2) * 2 * CELL, X0 = -12;   // the render is 16 units wider: the west side shows
+// SHPAD (set by build.py for the ground-shadow renders, tools/export_p3d_shadow.py): the render widened by SHPAD units
+// each side, so a low sun's shadow running off along the ground is kept whole (it was cut at the sprite's own width,
+// leaving only the contact line: owner 2026-11-09 "그림자 작업해야지 그래")
+const SHPAD = (typeof SHPAD_IN !== "undefined") ? SHPAD_IN : 0;
+const RW = Math.ceil((W + 16 + 2 * SHPAD) / CELL / 2) * 2 * CELL, X0 = -12 - SHPAD;   // the render is 16 units wider: the west side shows
 const H = Math.ceil(HALL.H / CELL) * CELL, CW = RW / CELL, CH = H / CELL;   // world size, and the render's cells
 const cv = document.getElementById("cv"), stage = document.getElementById("stage");
 // the stage takes the render's own shape (owner 2026-11-07: "왜 찌그러져있노 페이지" - it was fixed at the hall's
@@ -202,7 +206,7 @@ function patMat(p) {
 const sun = new THREE.DirectionalLight(0xffffff, Math.PI);   // Lambert: pi x N.L x shadow = N.L x shadow
 sun.castShadow = true;
 sun.shadow.mapSize.set(4096, 4096);
-Object.assign(sun.shadow.camera, { left: -360, right: 360, top: 360, bottom: -360, near: 1, far: 3000 });
+Object.assign(sun.shadow.camera, { left: -360 - SHPAD, right: 360 + SHPAD, top: 360 + SHPAD, bottom: -360 - SHPAD, near: 1, far: 3000 });
 sun.shadow.bias = -0.0008;
 sun.shadow.normalBias = 1.0;
 const center = new THREE.Vector3(W / 2, 110, -30);

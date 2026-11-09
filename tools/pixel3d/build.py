@@ -1,5 +1,5 @@
 """Bake a code-built building viewer into one page: python3 tools/pixel3d/build.py OUT.html [hall|forge]"""
-import sys, json, base64, io, re
+import sys, os, json, base64, io, re
 import numpy as np
 from PIL import Image
 
@@ -19,6 +19,7 @@ if NAME != "hall": js += ("\nconst HALL = RELIEF;\n" if NAME in RELIEFS or NAME.
 # the props (modelled one unit per game px) render on the town's 2-px grid: two units a cell (owner 2026-11-08)
 PROPS = {"bush", "relief_f_bigtree", "relief_f_bush1", "relief_f_bush2", "relief_f_bush3", "relief_f_oak", "relief_f_round", "relief_f_young", "relief_f_tall", "anvil", "bgmid", "paving", "bench", "board", "bridge", "lamp", "planter", "pot", "ring", "lights", "yard", "wagon", "barrel", "crate"}
 if BASE in PROPS or NAME.endswith("_card"): js += "\nHALL.CELL = 2;\n"
+if os.environ.get("SHPAD"): js += f"\nvar SHPAD_IN = {int(os.environ['SHPAD'])};\n"   # widened for the ground shadows (viewer SHPAD)
 REFN = {"bushL": "f_bush1", "bushM": "f_bush2", "bushS": "f_bush3", "forge2": "g_forge", "forge3": "g_forge", "tent": "g_tentR", "tentL": "g_tentR", "fountain": "q_fountain", "bench": "q_bench", "benchL": "q_bench", "board": "q_board", "bridge": "q_bridge", "lamp": "q_lamp", "planter": "q_planter", "planterL": "q_planter", "pot": "q_pot", "ring": "g_ring", "lights": "q_lights", "yard": "g_yard", "wagon": "g_wagon2", "paving": "k_stone_cap", "barrelL": "q_barrelL", "barrelM": "q_barrelM", "barrelS": "q_barrelS", "crateL": "q_crateL", "crateS": "q_crateS", "bgwood": "bg_wood", "bghills": "bg_hills", "treeOak": "f_oak", "treeRound": "f_round", "treeYoung": "f_young", "treeTall": "f_tall", "reliefOak": "f_oak", "reliefRound": "f_round", "reliefYoung": "f_young", "reliefTall": "f_tall", "reliefBig": "f_bigtree", "reliefBush1": "f_bush1", "reliefBush2": "f_bush2", "reliefBush3": "f_bush3"}.get(NAME, NAME[:-5] if NAME.endswith("_card") else "g_" + NAME)
 import os
 # the big buildings' references are drawn at twice the cell (assets/town/hx, halved here); the props are drawn at
