@@ -240,9 +240,7 @@ func _ready() -> void:
 	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 	z_index = -5
 	G = arena.ground_y
-	# the lower street goes on at the road's own height and only the upper walk climbs (owner 2026-11-09: "하나는 쭉
-	# 가고 하나는 위로 가는", "1안해보자"): it was 320 below, the two splitting up and down at the fork
-	LOWF = G
+	LOWF = G + 320.0
 	TTOP = G - 195.0
 	HS = PK * 3.2 / 3.0
 	HTOP2 = TTOP - 220.0 * PK + 2.0
@@ -425,13 +423,13 @@ func ks(k: String) -> float:
 	return BS if BIGK.has(k) else 1.0
 
 func _layout() -> void:
-	tpl = [{"x0": SX0, "x1": SX1, "y0": G, "y1": TTOP, "a": UPA}, {"x0": SX1, "x1": DX1, "y0": TTOP, "y1": TTOP}, {"x0": DX1, "x1": EX1, "y0": TTOP, "y1": TTOP},
-		{"x0": EX1, "x1": STX1, "y0": TTOP, "y1": TTOP}, {"x0": STX1, "x1": STX1 + SL, "y0": TTOP, "y1": LOWF, "a": LWA}, {"x0": RIV0 - 20.0, "x1": RIV1 + 20.0, "y0": LOWF, "y1": LOWF},
+	tpl = [{"x0": SX0, "x1": SX1, "y0": G, "y1": TTOP, "a": UPA}, {"x0": SX1, "x1": DX1, "y0": TTOP, "y1": TTOP}, {"x0": DX1, "x1": EX1, "y0": TTOP, "y1": G, "b": DNB},
+		{"x0": EX1, "x1": STX1, "y0": G, "y1": G}, {"x0": STX1, "x1": STX1 + SL, "y0": G, "y1": LOWF, "a": LWA}, {"x0": RIV0 - 20.0, "x1": RIV1 + 20.0, "y0": LOWF, "y1": LOWF},
 		_hp(12, 98, 141), _hp(207, 292, 141), _hp(10, 100, 115), _hp(205, 294, 115), _hp(37, 117, 56), _hp(186, 266, 56), _hp(74, 98, 30), _hp(202, 228, 30)]
 	# [sprite, left x, surface y, sink, door dx|null, name, target, flip]
 	bld = [["g_store", 300.0, G, 0, 160.0, "창고", ""], ["g_yard", 820.0, G, 0, 378.0, "훈련장", "arena"],
-		["g_ring", 4350.0, TTOP - CAMP_UP, 0, null], ["g_tentR", 4490.0, TTOP, 2, null],
-		["g_wagon", 4820.0, TTOP, 0, 287.0, "출격 마차", "dungeon"], ["g_well", 5281.0, TTOP, 0, null], ["g_barn", 5600.0, TTOP, 0, 230.0, "헛간", ""],
+		["g_ring", 4350.0, G - CAMP_UP, 0, null], ["g_tentR", 4490.0, G, 2, null],
+		["g_wagon", 4820.0, G, 0, 287.0, "출격 마차", "dungeon"], ["g_well", 5281.0, G, 0, null], ["g_barn", 5600.0, G, 0, 230.0, "헛간", ""],
 		["g_cottage", 6629.0, LOWF, 0, 140.0, "목욕집", ""], ["g_forge", 7269.0, LOWF, 0, 373.0, "대장간", "forge"], ["g_anvil", 7695.0, LOWF, 0, null], ["g_kiln", 7883.0, LOWF, 0, 113.0, "숯가마", ""]]
 	doors = []
 	for b in bld:
@@ -446,7 +444,7 @@ func _layout() -> void:
 		var ax: float = b[1] + b[4] if b.size() > 4 and b[4] != null else ((b[1] + w if b.size() > 7 and b[7] else b[1]) if k == "g_tentR" else b[1] + w / 2.0)
 		b[1] = ax - (ax - b[1]) * BS
 	deco_back = [["f_oak", -110.0, G, 7, false, 1.0], ["f_young", 735.0, G, 4.5, true, 1.6], ["f_bush1", 250.0, G, 0, false, 0.8], ["f_grass1", 770.0, G, 0, false, 0.6],
-		["f_round", 1560.0, G, 4.5, true, 1.3], ["f_bush2", 1740.0, G, 0, false, 0.8], ["f_bush1", 3930.0, floor_at(3990.0), 0, true, 0.8], ["f_tall", 5440.0, TTOP, 4.5, false, 1.4], ["f_grass1", 6040.0, TTOP, 0, true, 0.6],
+		["f_round", 1560.0, G, 4.5, true, 1.3], ["f_bush2", 1740.0, G, 0, false, 0.8], ["f_bush1", 3930.0, floor_at(3990.0), 0, true, 0.8], ["f_tall", 5440.0, G, 4.5, false, 1.4], ["f_grass1", 6040.0, G, 0, true, 0.6],
 		["f_grass2", 8620.0, LOWF, 0, false, 0.6], ["f_bush3", 8620.0, LOWF, 0, false, 0.8], ["f_bigtree", 8609.0, LOWF, 0, false, 2.2], ["f_bush1", 9250.0, LOWF, 0, true, 0.8]]
 	for d in deco_back:
 		if BIGK.has(d[0]):
@@ -466,7 +464,7 @@ func _layout() -> void:
 		["q_barrelL", 5000.0, LOWF], ["q_crateL", 5700.0, LOWF], ["q_barrelS", 5764.0, LOWF], ["q_barrelM", 8180.0, LOWF], ["q_crateS", 8235.0, LOWF]]
 	# stones on the ground (owner 2026-11-06), cut from the map scene, 2-px grid: [piece, x, surface y]
 	# only on level ground: a flat-bottomed stone on the slope's bend sat on it like a lid (owner 2026-11-07)
-	rocks = [["f2_pebble", 1534.0, G + 9.0], ["f2_pebble", 5420.0, TTOP + 12.0], ["f2_rock", 6080.0, TTOP - 4.0],
+	rocks = [["f2_pebble", 1534.0, G + 9.0], ["f2_pebble", 5420.0, G + 12.0], ["f2_rock", 6080.0, G - 4.0],
 		["f2_pebble", 7050.0, LOWF + 10.0], ["f2_pebble", 9180.0, LOWF + 13.0], ["f2_rock", 2446.0, TTOP + 4.0], ["f2_pebble", 2410.0, TTOP + 12.0]]
 	lamps = [[SX1 + 40.0, TTOP], [DX1 - 40.0, TTOP], [HDOOR - 400.0, LOWF], [HDOOR + 380.0, LOWF], [4700.0, LOWF], [5600.0, LOWF], [1700.0, G]]
 	light_strings = [[HDOOR - 420.0, HDOOR - 20.0], [HDOOR + 20.0, HDOOR + 420.0], [4250.0, 4650.0], [5250.0, 5650.0]]
@@ -536,10 +534,10 @@ func _build_tex() -> void:
 	if HILL_ON:
 		var hi := (load("res://assets/town/k_hill.png") as Texture2D).get_image()
 		hi.convert(Image.FORMAT_RGBA8)
-		var hh := int(LOWF + 20.0 - TTOP)
+		var hh := int(LOWF + 20.0 - G)
 		var hw := hi.get_width()
 		var him := Image.create(hw, hh, false, Image.FORMAT_RGBA8)
-		var foot := int(LOWF + HILL_FOOT - TTOP)       # the image row where the picture's last row lands
+		var foot := int(LOWF + HILL_FOOT - G)          # the image row where the picture's last row lands
 		for y in hh:
 			var sy := clampi(hi.get_height() - 1 - (foot - y), 0, hi.get_height() - 1)
 			him.blit_rect(hi, Rect2i(0, sy, hw, 1), Vector2i(0, y))
@@ -684,9 +682,10 @@ func plat_y(p: Dictionary, x: float) -> float:
 
 func up_y(x: float) -> float:
 	if x < SX1: return G + (TTOP - G) * rr((x - UPA) / (SX1 - UPA), SX1 - UPA)
-	# (owner 2026-11-09 "1안"): the walk stays up from the hall's terrace to the slope down at STX1 - no dip to G between
-	if x < STX1: return TTOP
-	return TTOP + (LOWF - TTOP) * rr((x - LWA) / (STX1 + SL - LWA), STX1 + SL - LWA)
+	if x < DX1: return TTOP
+	if x < EX1: return TTOP + (G - TTOP) * rr((x - DX1) / (DNB - DX1), DNB - DX1)
+	if x < STX1: return G
+	return G + (LOWF - G) * rr((x - LWA) / (STX1 + SL - LWA), STX1 + SL - LWA)
 
 func ramp_y(x: float) -> float:
 	return G + (LOWF - G) * rr((x - RMA) / (RX1 - RMA), RX1 - RMA) if x < RX1 else LOWF
@@ -809,7 +808,7 @@ func light_sources() -> Array:
 		for i in 7:
 			var bu: Array = LIT.BULBS[i]
 			L.append({"k": "bulb", "x": s[0] + (s[1] - s[0]) * bu[0], "y": yy - 18.0 + bu[1], "r": 60.0, "a": 0.8 + 0.2 * sin(t * 3.0 + i * 1.7), "c": Color8(255, 214, 140)})
-	L.append({"k": "fire", "x": 4350.0 + 27.0 * PK, "y": TTOP - CAMP_UP - 30.0, "gy": TTOP - CAMP_UP, "r": 230.0, "a": LIT.fl(t, 9) * 1.1, "c": Color8(255, 150, 70)})
+	L.append({"k": "fire", "x": 4350.0 + 27.0 * PK, "y": G - CAMP_UP - 30.0, "gy": G - CAMP_UP, "r": 230.0, "a": LIT.fl(t, 9) * 1.1, "c": Color8(255, 150, 70)})
 	var fp := bm("g_forge", 7348.0, LOWF - 52.0)        # the forge: a contained glow in the mouth, not a sun
 	L.append({"k": "fire", "x": fp.x, "y": fp.y, "gy": LOWF, "r": 170.0, "a": LIT.fl(t, 4) * 0.5, "c": Color8(255, 140, 60)})
 	L.append({"k": "soft", "x": HDOOR, "y": LOWF - 80.0 * BS, "r": 200.0, "a": 0.7, "c": Color8(200, 230, 255)})
@@ -1699,7 +1698,7 @@ func _draw_ground() -> void:
 	pts.append(Vector2(STX1 + SL, LOWF + 20.0))
 	pts.append(Vector2(SX0, LOWF + 20.0))
 	var uvs := PackedVector2Array()
-	var wo := Vector2(0.0, TTOP) if HILL_ON else Vector2.ZERO
+	var wo := Vector2(0.0, G) if HILL_ON else Vector2.ZERO
 	for p in pts: uvs.append((p - wo) / t_wall.get_size())
 	gn.draw_colored_polygon(pts, Color.WHITE, uvs, t_wall)
 	# 2. lower level: floor + valley, river
@@ -1814,7 +1813,7 @@ func _draw() -> void:
 	var fxx := 4350.0 + 27.0 * PK
 	var cfi := int(tt * 30.0) % 90
 	# the flames start at the top of the log teepee (g_ring's apex at 54,1; the ring sits at G - 55), as a log fire does
-	draw_texture_rect_region(CAMPFIRE, Rect2(roundf(fxx - 64.0), roundf(TTOP - CAMP_UP - CAMP_APEX - 112.0), 128, 128), Rect2((cfi % 10) * 128, (cfi / 10) * 128, 128, 128))
+	draw_texture_rect_region(CAMPFIRE, Rect2(roundf(fxx - 64.0), roundf(G - CAMP_UP - CAMP_APEX - 112.0), 128, 128), Rect2((cfi % 10) * 128, (cfi / 10) * 128, 128, 128))
 
 ## crates, barrels, benches, pots and lamps: the ones whose foot is on the stand line here, the nearer ones on near_node
 func _is_near(x: float, y: float) -> bool:

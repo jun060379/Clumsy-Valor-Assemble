@@ -9,4 +9,3 @@
 - 2026-11-08 40702b5 BOSS boss cleared=true time=20.9 hp_lost=0/85 party_down=false
 - 2026-11-08 80a5a60 BOSS boss cleared=true time=23.1 hp_lost=3/85 party_down=false
 - 2026-11-09 7f7980b BOSS boss cleared=true time=21.3 hp_lost=0/85 party_down=false
-- 2026-11-09 e5d3e3b BOSS boss cleared=true time=21.6 hp_lost=3/85 party_down=false

@@ -504,7 +504,7 @@ func _keep_map(plane: bool) -> PackedFloat32Array:
 			# a trodden path: bare, its rim fraying; on a wide one (the camp, the barn yard) low weed patches survive
 			# where feet do not go, in noise
 			var weeds := 0.0
-			var onslope: bool = (x > town.UPA - 40.0 and x < town.RX1 + 20.0) or (x > town.LWA - 40.0 and x < town.STX1 + town.SL + 20.0)
+			var onslope: bool = (x > town.UPA - 40.0 and x < town.RX1 + 20.0) or (x > town.DX1 - 10.0 and x < town.DNB + 40.0) or (x > town.LWA - 40.0 and x < town.STX1 + town.SL + 20.0)
 			if rim > 30.0 and not onslope: weeds = 0.8 * smoothstep(0.7, 0.85, _vn(x / 23.0, 21.0) * 0.6 + _vn(x / 71.0, 5.0) * 0.4)
 			keep *= maxf(0.5 * maxf(0.0, 1.0 - rim / 14.0), weeds)
 		keepx[xi] = keep
