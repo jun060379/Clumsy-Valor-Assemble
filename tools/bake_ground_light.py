@@ -82,9 +82,14 @@ def maps(L):
         t = ((x0 - X) if side > 0 else (X - x1)) / max(h * 0.4, 1.0)
         return np.clip(1.0 - t, 0, 1) * (t > 0) * band(yf) * k
     # the pixel3d sprites' own ground shadows, rendered with the same sun (assets/town/shadow), where the town drew them
+    # (their canvases start PAD px further left since they were widened to keep a low sun's shadow whole:
+    # data/shadow_pad.json, tools/export_p3d_shadow.py)
+    padf = os.path.join(ROOT, "data/shadow_pad.json")
+    PADS = json.load(open(padf)) if os.path.exists(padf) else {}
     def p3d(suf):
         S = np.zeros_like(X)
         for k, cx, cy in L["p3d"]:
+            cx = cx - PADS.get(k, 0)
             f = os.path.join(ROOT, f"assets/town/shadow/{k}{suf}.png")
             if not os.path.exists(f): continue
             a = np.array(Image.open(f).convert("RGBA"))[::2, ::2, 3].astype(float) / 150.0

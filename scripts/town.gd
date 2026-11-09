@@ -154,14 +154,25 @@ func _light_uniforms(T: Dictionary) -> void:
 var sh_log = null                    # dump_light_layout: {key@x: [shadow key, canvas x, canvas y]} of what was drawn
 var sh_seen := {}                     # every pixel3d ground shadow placed: key@x -> [shadow key, canvas x, canvas y]
 var sh_img := {}                      # their masks on the CPU (baked_shadow_at)
+## how far left of the usual place (x - 24) a shadow canvas starts: widened so a low sun's shadow is whole
+## (data/shadow_pad.json, tools/export_p3d_shadow.py; owner 2026-11-09 "그림자 작업해야지 그래")
+var sh_pad := {}
+func _sh_pad(k: String) -> float:
+	if sh_pad.is_empty():
+		sh_pad["_"] = 0
+		var f := FileAccess.open("res://data/shadow_pad.json", FileAccess.READ)
+		if f != null:
+			var d = JSON.parse_string(f.get_as_text())
+			if d is Dictionary: sh_pad.merge(d)
+	return float(sh_pad.get(k, 0))
 func sh_place(k: String, x: float, y: float, ci: CanvasItem) -> void:
 	if sh_log != null: sh_log[k + "@" + str(roundf(x))] = [k, roundf(x) - 24.0, y]
-	sh_seen[k + "@" + str(roundf(x))] = [k, roundf(x) - 24.0, y]
+	sh_seen[k + "@" + str(roundf(x))] = [k, roundf(x) - 24.0 - _sh_pad(k), y]
 	if SH_IN_MAP: return
 	var lv := sun_side()
 	if sh_tex.has(k + lv):
 		var st: Texture2D = sh_tex[k + lv]
-		ci.draw_texture_rect(st, Rect2(roundf(x) - 24.0, y, st.get_width(), st.get_height()), false)                 # baked ground shadows under the pixel3d buildings: "<k>" / "<k>_m" / "<k>_e" (tools/pixel3d)
+		ci.draw_texture_rect(st, Rect2(roundf(x) - 24.0 - _sh_pad(k), y, st.get_width(), st.get_height()), false)                 # baked ground shadows under the pixel3d buildings: "<k>" / "<k>_m" / "<k>_e" (tools/pixel3d)
 ## how deep the buildings' baked ground shadow is at a point (0..1): what stands there is in it too (owner
 ## 2026-11-08: "물체끼리 드리우는 그림자" - a barrel or a person in the hall's shadow is shaded, shade.gd)
 func baked_shadow_at(p: Vector2) -> float:
