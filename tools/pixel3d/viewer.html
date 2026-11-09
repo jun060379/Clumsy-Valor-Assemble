@@ -93,7 +93,12 @@ const CELL = HALL.CELL || 1;
 // leaving only the contact line: owner 2026-11-09 "그림자 작업해야지 그래")
 const SHPAD = (typeof SHPAD_IN !== "undefined") ? SHPAD_IN : 0;
 const RW = Math.ceil((W + 16 + 2 * SHPAD) / CELL / 2) * 2 * CELL, X0 = -12 - SHPAD;   // the render is 16 units wider: the west side shows
-const H = Math.ceil(HALL.H / CELL) * CELL, CW = RW / CELL, CH = H / CELL;   // world size, and the render's cells
+// SHK / SHDN (build.py, for the ground-shadow renders only; owner 2026-11-09 picked "2번": the ground's shadow drawn with
+// its depth exaggerated): the ground passes see the ground receding SHK rows a unit of depth (the sprite's own K is
+// near straight-on, so a shadow lay on the ground as a sliver a few rows thin); SHDN more units of canvas below, for
+// the shadow thrown toward the viewer. The solid itself is unchanged, and still K in every other pass.
+const SHK = (typeof SHK_IN !== "undefined") ? SHK_IN : 0, SHDN = SHK ? ((typeof SHDN_IN !== "undefined") ? SHDN_IN : 0) : 0;
+const H = Math.ceil(HALL.H / CELL) * CELL + Math.ceil(SHDN / CELL) * CELL, CW = RW / CELL, CH = H / CELL;   // world size, and the render's cells
 const cv = document.getElementById("cv"), stage = document.getElementById("stage");
 // the stage takes the render's own shape (owner 2026-11-07: "왜 찌그러져있노 페이지" - it was fixed at the hall's
 // 452 x 296, squashing every other building), no taller than most of the screen
@@ -224,7 +229,11 @@ const warmLights = (HALL.NIGHT_LIGHTS || []).map(([x, y, z, reach, a]) => {
 // the shadow side two more, the rims a cool glint; fire and glass glow as by day
 var NORMOUT = false;                                         // sweep2 mode N: the normal map
 const isNight = (h) => h > 19.5 || h < 5.5;
+// SUN_UP (sweep2 mode U): the sun straight overhead - the ground it leaves dark is the ground UNDER the solid, which
+// the SHK ground passes would otherwise show below the solid's foot as shadow (tools/export_p3d_shadow.py takes it out)
+var SUN_UP = false;
 function sunDir(h) {
+  if (SUN_UP) return new THREE.Vector3(0.0, 1.0, 0.0001).normalize();
   if (isNight(h)) return new THREE.Vector3(0.45, 0.85, -0.35).normalize();
   const day = Math.min(1, Math.max(0, (h - 5.5) / 13.5)), a = day * Math.PI;
   return new THREE.Vector3(-Math.cos(a), 0.3 + 0.9 * Math.sin(a), -0.55 + 1.0 * Math.sin(a)).normalize();
@@ -239,7 +248,11 @@ const NLC = (HALL.NIGHT_LIGHTS || []).slice(0, 8).map(([x, y, z, reach, a]) => [
 cam.position.set(-KX * CZ, K * CZ, CZ);
 cam.updateMatrixWorld();
 cam.updateProjectionMatrix();
+const projFlat = cam.projectionMatrix.clone();
 cam.projectionMatrix.multiply(new THREE.Matrix4().set(1, 0, KX, 0, 0, 1, -K, 0, 0, 0, 1, 0, 0, 0, 0, 1));
+const projK = cam.projectionMatrix.clone();
+// (the camera sits K * CZ up to make the K shear land the ground on its rows; SHK takes back the difference)
+const projG = SHK ? projFlat.clone().multiply(new THREE.Matrix4().set(1, 0, KX, 0, 0, 1, -SHK, -(SHK - K) * CZ, 0, 0, 1, 0, 0, 0, 0, 1)) : projK;
 cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
 
 const mkRT = () => new THREE.WebGLRenderTarget(CW, CH, { magFilter: THREE.NearestFilter, minFilter: THREE.NearestFilter });
@@ -258,6 +271,7 @@ ground.position.set(X0 + RW / 2, 0, (GZ0 + GZ1) / 2);
 ground.receiveShadow = true; ground.castShadow = false; ground.visible = false;
 scene.add(ground);
 const blackMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide });
+const hideMat = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });   // casts, not seen (SHK ground passes)
 let gview = 0;                                               // 0: ground and its shade, 1: the building alone, 2: the ground's shade alone
 const NP = PALETTE.length;
 const palData = new Uint8Array(8 * NP * 4);
@@ -620,8 +634,12 @@ function render() {
   // the ground's own two passes: the building only blocks (black) and casts; the ground takes the light
   ground.visible = true;
   ground.material = litMat;
-  pass(rtGLit, () => blackMat);
-  sun.castShadow = false; pass(rtGFace, () => blackMat); sun.castShadow = true;
+  // (SHK: the ground seen at its own deeper angle, the solid not seen there - only its shadow)
+  const gm = SHK ? hideMat : blackMat;
+  if (SHK) { cam.projectionMatrix.copy(projG); cam.projectionMatrixInverse.copy(projG).invert(); }
+  pass(rtGLit, () => gm);
+  sun.castShadow = false; pass(rtGFace, () => gm); sun.castShadow = true;
+  if (SHK) { cam.projectionMatrix.copy(projK); cam.projectionMatrixInverse.copy(projK).invert(); }
   ground.visible = false;
   comp.uniforms.gview.value = gview;
   renderer.setRenderTarget(null);

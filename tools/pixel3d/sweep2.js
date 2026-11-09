@@ -10,8 +10,9 @@ const { chromium } = require('playwright');
   await p.waitForTimeout(2500);
   for (const s of process.argv[4].split(',')) {
     const [bm, h] = s.split(':');
-    await p.click("#b-2"); await p.click(bm === "M" ? "#g-2" : (bm === "B" || bm === "N") ? "#g-1" : "#g-0"); if (bm === "L") await p.click("#m-light"); else await p.click("#m-game");
+    await p.click("#b-2"); await p.click((bm === "M" || bm === "U") ? "#g-2" : (bm === "B" || bm === "N") ? "#g-1" : "#g-0"); if (bm === "L") await p.click("#m-light"); else await p.click("#m-game");
     await p.evaluate((n) => { NORMOUT = n; }, bm === "N");
+    await p.evaluate((u) => { SUN_UP = u; }, bm === "U");     // U: the ground under the solid (the sun overhead)
     await p.$eval('#hour', (el, v) => { el.value = v; el.dispatchEvent(new Event('input')); }, h);
     await p.waitForTimeout(500);
     const data = await p.$eval('#cv', c => c.toDataURL());
