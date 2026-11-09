@@ -34,10 +34,10 @@ func _initialize() -> void:
 	var d8: Vector2 = LIT.sun_dir(8.0)
 	var d17: Vector2 = LIT.sun_dir(17.0)
 	ok(d8.x < -0.5 and d17.x > 0.5 and absf(LIT.sun_dir(12.0).x) < 0.1, "shadows lean with the hour (8:00 %.2f, 17:00 %.2f)" % [d8.x, d17.x])
-	# under the terraces: with the hall's slope in (HILL_ON) the plaza is open to the noon sun (owner 2026-11-09): no deep
+	# under the terraces: with the plaza open to the sun (PLAZA_SUN) the plaza is open to the noon sun (owner 2026-11-09): no deep
 	# shade, no boost, clouds pass over it; the deep shade comes back with the sun low behind the town and at night
 	var under: Array = T.lit.L.filter(func(l): return l["k"] == "bulb")
-	if T.HILL_ON:
+	if T.PLAZA_SUN:
 		ok(T.deep_shade() < 0.01 and not under.is_empty() and under[0]["boost"] <= 1.0, "noon: the lower plaza in the sun, bulbs not boosted")
 		ok(T.cloud_bottom(3000.0) > T.LOWF, "clouds pass over the slope and the lower plaza")
 		arena.tod_h = 21.0

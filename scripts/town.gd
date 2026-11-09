@@ -17,7 +17,9 @@ const RIV0 := 8350.0
 const RIV1 := 8590.0
 const SL := 420.0
 const BAND := 58.0
-const HILL_ON := true          # the hall's slope picture as the recess face (false: the old dark dirt)
+const HILL_ON := false         # the hall's slope picture as the recess face (false: the old dark dirt). Off (owner
+# 2026-11-09: "일단 그 언덕 텍스쳐 넣은 거 빼자. 옆에 오르 내리막길이라던가 막 잘림")
+const PLAZA_SUN := true        # the sun reaches the lower plaza (owner 2026-11-09: "빛을 언덕 아래로도 쏘자"), kept with the slope picture out
 const HILL_FOOT := 4.0         # where the slope picture's last row sits, below the lower street's floor line
 # the slopes (owner 2026-11-06 dropped the stone stairs: back to the long slopes)
 const UPA := SX0                 # the slope up to the hall terrace: UPA..SX1
@@ -919,15 +921,15 @@ func surf_top(x: float) -> float:
 
 ## cloud shade stops at the terraces' edge: the lower plaza lives in their shade
 func cloud_bottom(x: float) -> float:
-	if x >= SX0 and x <= STX1 + SL and not HILL_ON: return minf(LOWF, up_y(x) + BAND - 14.0)
+	if x >= SX0 and x <= STX1 + SL and not PLAZA_SUN: return minf(LOWF, up_y(x) + BAND - 14.0)
 	return G + 380.0
 
 ## how much of the old "under the terraces" deep shade the lower plaza and the hall's slope keep (0..1). With the slope
-## in (HILL_ON) the plaza is open to the sky: the sun reaches it and the slope unless it is right behind the town, low
+## in (PLAZA_SUN) the plaza is open to the sky: the sun reaches it and the slope unless it is right behind the town, low
 ## (owner 2026-11-09: "빛을 언덕 아래로도 쏘자 완전 뒤에서 오는 역광이 아닌 이상 빛이 들어올겅ㆍ님"): only round sunrise
 ## and sunset, and at night (the ambient carries the night).
 func deep_shade() -> float:
-	if not HILL_ON: return 1.0
+	if not PLAZA_SUN: return 1.0
 	var hh := fposmod(arena.tod_h, 24.0)
 	var day := clampf((hh - 5.5) / 13.5, 0.0, 1.0)
 	var low := 1.0 - sin(day * PI)              # 0 at noon, 1 with the sun on the horizon behind the town
