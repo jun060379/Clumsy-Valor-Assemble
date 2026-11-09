@@ -129,7 +129,7 @@ STONE = [c(8, 3), c(4, 3), c(8, 5), c(8, 7), c(8, 6)]
 from scipy.spatial import cKDTree
 QX, QV = 2.2, 1.0                     # a stone's width : depth
 STEP = 4.6                            # a course's depth in "far" cells (about 9 px at the curb)
-seeds, kinds = [], []
+seeds, kinds, ranks = [], [], []
 # courses down the screen, each as deep as the row's size says; seeds along it spaced to match
 yc = -STEP * 0.5
 while yc < H + STEP * 3:
@@ -138,6 +138,7 @@ while yc < H + STEP * 3:
     while xx < W + STEP * QX * 3:
         seeds.append((xx / QX, yc + (rng.random() - 0.5) * STEP * s_ * 0.35))
         kinds.append(B1 if rng.random() < 0.22 else B0)
+        ranks.append(1 + int(rng.random() * 254))
         xx += STEP * QX * s_ * (0.75 + rng.random() * 0.7)
     yc += STEP * s_
 tree = cKDTree(np.array(seeds))
@@ -163,3 +164,8 @@ for yy, xx in zip(jy[pick], jx[pick]):
     for k in range(int(rng.integers(2, 4))):
         if xx + k < W and lab[yy, xx + k] == J: lab[yy, xx + k] = MOSS
 print("paving colours", to_png(lab, STONE, "k_field_stone"))
+# each stone's rank (1..255, 0 in the joints), one pixel a cell: where the paving meets the lawn, town.gd keeps the
+# stones whose rank is over a threshold that rises toward the lawn, so the paving ends in loose stones in the grass
+# (owner 2026-11-09: "돌타일, 흙타일과 풀 타일이 맞닿는 부분의 연결타일 더자연스럽게 다듬어서 넣기")
+rk = np.where(lab == J, 0, np.where(lab == MOSS, 0, np.array(ranks)[sid])).astype(np.uint8)
+Image.fromarray(np.stack([rk, rk, rk, np.full_like(rk, 255)], -1)).save(os.path.join(OUT, "k_field_rank.png"))

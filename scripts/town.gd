@@ -1224,7 +1224,9 @@ func _shear(t: Texture2D, x0: float, x1: float, f: Callable, clip_h := -1.0) -> 
 			# the turf lip: wherever the top of this column is grass (the lawn, and the grassy bits inside the clearing),
 			# the green runs a ragged few rows down over the earth face -- the edge that makes the ground a block
 			var green: bool = k == "lawn" or (g2green.has(k) and g2green[k][int(sx2) % g2green[k].size()])
-			if green:
+			# (the turf lip made the ground a block with an earth face; with the lawn running on in front there is no
+			# face: owner 2026-11-09 "사전에 입체감 넣겠다고 넣은 이런거 빼버리고")
+			if green and not FIELD_ON:
 				var d := roundf(3.0 + 6.0 * _vnoise(x / 11.0) + 2.0 * _vnoise(x / 3.0 + 40.0))
 				var rim := 99.0
 				for z in CLEAR: rim = minf(rim, minf(absf(x - z[0]), absf(x - z[1])))
@@ -1244,6 +1246,7 @@ func _shear(t: Texture2D, x0: float, x1: float, f: Callable, clip_h := -1.0) -> 
 	if vi >= 0 and not g2.is_empty():
 		_clear_caps(a, b, f)
 		_stone_caps(a, b, f)
+		_clear_front(a, b, f)
 
 ## ---------- ground plane (tools/make_town_ground2.py) ----------
 var RAISE := 12.0               # rows of the plane showing behind the stand line (+ DEEP)
@@ -1276,6 +1279,80 @@ func _lip_taper(x: float) -> float:
 	var m := 1.0
 	for e in lip_ends: m = minf(m, absf(x - e) / 16.0)
 	return clampf(m + 0.25 * (_vnoise(x / 2.3 + 5.0) - 0.5), 0.0, 1.0)
+
+var FIELD_ON := false
+const CURB := 18                 # the paving tile's curb rows above LIPY (rows 40..57 of k_stone)
+const PAVE_FADE := 72.0          # px each side of a paving end over which the stones thin out into the grass
+const FIELD_LAWN := Color8(131, 141, 64)      # the lawn ramp's body (row 4 step 4: the field's and the plane's front)
+const FIELD_LAWN_L := Color8(151, 161, 76)    # a step lighter: a blade's tip
+
+## the paving's ends below the walk: a stone stays where its rank (k_field_rank, tools/make_town_field.py) is over a
+## threshold rising from 0 at PAVE_FADE inside the paving to 1 at PAVE_FADE outside; a joint stays beside a kept stone.
+## inside (the paving's own solid): what goes shows the lawn's solid there; outside (the lawn's): kept stones laid on it,
+## from the paving's first field row (where its curb was)
+func _paving_ends(solid: Image, inside: bool, lawn: Image, stone: Image) -> void:
+	var rk: Image = tex["k_field_rank"].get_image()
+	rk.decompress()
+	var rw := rk.get_width()
+	var rh := rk.get_height()
+	var fy0 := int(LIPY) - CURB
+	var sw := solid.get_width()
+	var keep := func(cx: int, cy: int, t: float) -> bool:
+		if cx < 0 or cy < 0 or cx >= rw or cy >= rh: return false
+		var r := rk.get_pixel(cx, cy).r
+		return r > 0.001 and r > t
+	# (built before _layout fills STONE: the same zone as _layout's)
+	var zones: Array = STONE if not STONE.is_empty() else [[HDOOR - 420.0, HDOOR + 420.0]]
+	for z in zones:
+		for side in 2:
+			var e: float = z[0] if side == 0 else z[1]
+			var xa := int(floorf((e - PAVE_FADE) / 2.0)) * 2
+			while xa < int(e + PAVE_FADE):
+				var d: float = (e - (xa + 1.0)) if side == 0 else ((xa + 1.0) - e)     # > 0 outside the paving
+				if (d < 0.0) != inside or xa < 0 or xa >= sw:
+					xa += 2
+					continue
+				var t := clampf((d + PAVE_FADE) / (2.0 * PAVE_FADE), 0.0, 1.0)
+				var cx := xa / 2
+				var y := fy0
+				while y < solid.get_height() - 1:
+					var cy := (y - fy0) / 2
+					var on := false
+					if keep.call(cx, cy, t): on = true
+					elif rk.get_pixel(clampi(cx, 0, rw - 1), clampi(cy, 0, rh - 1)).r <= 0.001:
+						for j in [-1, 0, 1]:
+							for i in [-1, 0, 1]:
+								if not on and keep.call(cx + i, cy + j, t): on = true
+					if inside and not on:
+						for q in 4: solid.set_pixel(xa + (q & 1), y + (q >> 1), lawn.get_pixel(xa + (q & 1), y + (q >> 1)))
+					elif not inside and on:
+						for q in 4: solid.set_pixel(xa + (q & 1), y + (q >> 1), stone.get_pixel(xa + (q & 1), y - fy0 + (q >> 1)))
+					y += 2
+				xa += 2
+
+## the clearing's front edge: the lawn in front grows a few cells up over the path, raggedly, with a blade standing up
+## here and there (no earth face, no dark line). Drawn over the ground and the clearing's end caps alike, so the edge
+## runs on through the caps and thins out where their path does.
+func _clear_front(a: float, b: float, f: Callable) -> void:
+	if not FIELD_ON or not tex.has("k_clear_cap"): return
+	var gc: CanvasItem = gci if gci != null else self
+	var hw := float(tex["k_clear_cap"].get_width()) / 2.0
+	for z in CLEAR:
+		var x := maxf(floorf(a / PK) * PK, floorf((z[0] - hw) / PK) * PK)
+		var x1 := minf(b, z[1] + hw)
+		while x < x1:
+			var dout := maxf(z[0] - x, x - z[1])                  # > 0 out on the cap
+			var tp := clampf(1.0 - dout / hw, 0.0, 1.0)
+			var n := (0.4 + 2.2 * _vnoise(x / 30.0 + 3.0) + 0.8 * _vnoise(x / 8.0 + 71.0)) * tp
+			var e := int(roundf(n))
+			var yb: float = roundf(f.call(x)) - RAISE + LIPY
+			if e > 0: gc.draw_rect(Rect2(x, yb - 2.0 * e, PK, 2.0 * e), FIELD_LAWN)
+			var r := fposmod(sin(x * 0.731 + 4.1) * 43758.5453, 1.0)
+			if r > 0.9 and tp > 0.5:                                # a blade a cell or two above the edge
+				var bh := 1.0 if r < 0.96 else 2.0
+				gc.draw_rect(Rect2(x, yb - 2.0 * (e + bh), PK, 2.0 * bh), FIELD_LAWN)
+				gc.draw_rect(Rect2(x, yb - 2.0 * (e + bh), PK, PK), FIELD_LAWN_L)
+			x += PK
 
 ## smooth value noise in [0, 1] (no period)
 func _vnoise(u: float) -> float:
@@ -1388,7 +1465,9 @@ func _build_ground2() -> void:
 			ci.convert(Image.FORMAT_RGBA8)
 			tex[ck] = ImageTexture.create_from_image(_deepen(ci))
 	var field_im: Image = null
+	var lawn_solid: Image = null
 	var field_stone: Image = _join_field("k_field_stone_")
+	FIELD_ON = tex.has("k_field_0")
 	if tex.has("k_field_0"):
 		# the caps at the clearings' and the paving's ends end at the walk's front edge too: the lawn runs on below
 		for ck in ["k_clear_cap", "k_stone_cap"]:
@@ -1396,8 +1475,9 @@ func _build_ground2() -> void:
 			var cim: Image = tex[ck].get_image()
 			cim.decompress()
 			cim.convert(Image.FORMAT_RGBA8)
-			if cim.get_height() > int(LIPY):
-				cim.fill_rect(Rect2i(0, int(LIPY), cim.get_width(), cim.get_height() - int(LIPY)), Color(0, 0, 0, 0))
+			var cy := int(LIPY) - (CURB if ck == "k_stone_cap" else 0)
+			if cim.get_height() > cy:
+				cim.fill_rect(Rect2i(0, cy, cim.get_width(), cim.get_height() - cy), Color(0, 0, 0, 0))
 				tex[ck] = ImageTexture.create_from_image(cim)
 		var fparts: Array[Image] = []
 		var fi := 0
@@ -1441,12 +1521,21 @@ func _build_ground2() -> void:
 		# 근경까지 풀로 이어지게 할거임"; tools/make_town_field.py)
 		# both (owner 2026-11-09: "둘 다 섞지 뭐", "가끔씩만 단차두는 연출로"): here and there the walk keeps an earth
 		# edge (field_edge px of its section), a step down to the lawn; elsewhere the lawn runs straight on
+		# the paving's curb (rows LIPY - CURB .. LIPY, the walk's front face drawn for depth) goes (owner 2026-11-09:
+		# "사전에 입체감 넣겠다고 넣은 이런거 빼버리고"): the flagstones start where the cobbles end
 		var fim: Image = field_stone if k == "stone" and field_stone != null else field_im
+		var fy0 := int(LIPY) - (CURB if k == "stone" and field_stone != null else 0)
 		if fim != null:
 			var fx := 0
 			while fx < mini(w, fim.get_width()):
-				solid.blit_rect(fim, Rect2i(fx, 0, 2, fim.get_height()), Vector2i(fx, int(LIPY) + field_edge(float(fx))))
+				solid.blit_rect(fim, Rect2i(fx, 0, 2, fim.get_height()), Vector2i(fx, fy0 + field_edge(float(fx))))
 				fx += 2
+		# where the kinds meet (owner 2026-11-09: "돌타일, 흙타일과 풀 타일이 맞닿는 부분의 연결타일 더자연스럽게 다듬어서
+		# 넣기"): the paving ends in loose stones in the grass, the clearing's front edge is grass grown ragged over it
+		if field_im != null and field_stone != null and tex.has("k_field_rank"):
+			if k == "lawn": _paving_ends(solid, false, null, field_stone)
+			elif k == "stone" and lawn_solid != null: _paving_ends(solid, true, lawn_solid, field_stone)
+		if k == "lawn": lawn_solid = solid
 		var band := solid.get_region(Rect2i(0, 0, w, int(BAND + RAISE)))
 		var gr := []
 		for xx in w:
@@ -1515,6 +1604,7 @@ func _clear_caps(a: float, b: float, f: Callable) -> void:
 					lip_ends.append(zc[0] - cwi / 2.0 + last)
 					lip_ends.append(zc[1] + cwi / 2.0 - last)
 			for xx in int(cw):
+				if FIELD_ON: break
 				var col: int = xx if side == 0 else int(cw) - 1 - xx
 				if not capgreen[col]: continue
 				var wx: float = x0 + xx
