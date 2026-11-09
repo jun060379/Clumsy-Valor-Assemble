@@ -5,6 +5,9 @@
 # the lawn tile's own plane rows (assets/town/k_lawn_0..3, rows 30..57), stacked in blocks each slid sideways so the
 # repeat does not show, the nearer blocks one step down the lawn ramp (row 4 of assets/town/palette.png, never a
 # darker mix). Out: assets/town/k_field_0..3.png (2400-px pieces like the tiles; town.gd joins them).
+# Also the paving's own (owner 2026-11-09: "하단 길은 바닥 타일이 돌이니까 풀이 아니라 돌 타일로 확장해야지"): the
+# stone tile's plane rows the same way, not slid far (the paving stays where it is), each block offset half a stone
+# so the courses alternate. Out: assets/town/k_field_stone_0..3.png
 import numpy as np
 from PIL import Image
 
@@ -42,3 +45,18 @@ while y < H:
 for i in range(4):
     Image.fromarray(out[:, i * 2400:(i + 1) * 2400]).save(f"assets/town/k_field_{i}.png")
 print("field", out.shape)
+
+stone = np.concatenate([np.array(Image.open(f"assets/town/k_stone_{i}.png").convert("RGBA")) for i in range(4)], 1)
+splane = stone[ROWS[0]:ROWS[1]]
+out = np.zeros((H, W, 4), np.uint8)
+y, k = 0, 0
+while y < H:
+    blk = np.roll(splane, (k % 2) * 8, 1)
+    blk = darker(blk, 0 if y < 36 else 1 if y < 120 else 2)
+    n = min(bh, H - y)
+    out[y:y + n] = blk[:n]
+    y += n
+    k += 1
+for i in range(4):
+    Image.fromarray(out[:, i * 2400:(i + 1) * 2400]).save(f"assets/town/k_field_stone_{i}.png")
+print("field stone", out.shape)

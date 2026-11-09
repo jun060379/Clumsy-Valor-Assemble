@@ -1316,6 +1316,20 @@ func _deepen(im: Image) -> Image:
 
 ## no steps (owner 2026-11-09, Owlboy: "암만봐도 이게 젤 낫네"): the lawn runs straight on; depth from the near art
 const FIELD_STEPS := false
+## the front of the walk joined from its 2400-px pieces (tools/make_town_field.py), or null
+func _join_field(pre: String) -> Image:
+	if not tex.has(pre + "0"): return null
+	var parts: Array[Image] = []
+	var i := 0
+	while tex.has(pre + str(i)):
+		var im: Image = tex[pre + str(i)].get_image()
+		im.decompress()
+		im.convert(Image.FORMAT_RGBA8)
+		parts.append(im)
+		i += 1
+	var out := Image.create(parts.size() * parts[0].get_width(), parts[0].get_height(), false, Image.FORMAT_RGBA8)
+	for j in parts.size(): out.blit_rect(parts[j], Rect2i(0, 0, parts[j].get_width(), parts[j].get_height()), Vector2i(j * parts[0].get_width(), 0))
+	return out
 ## the earth step under the walk at x (tile x; px, even): none mostly, in about every other 520 px a stretch 120..300 px rising
 ## to 8..16 px and easing out at both ends over 24 px
 func field_edge(x: float) -> int:
@@ -1345,6 +1359,7 @@ func _build_ground2() -> void:
 			ci.convert(Image.FORMAT_RGBA8)
 			tex[ck] = ImageTexture.create_from_image(_deepen(ci))
 	var field_im: Image = null
+	var field_stone: Image = _join_field("k_field_stone_")
 	if tex.has("k_field_0"):
 		# the caps at the clearings' and the paving's ends end at the walk's front edge too: the lawn runs on below
 		for ck in ["k_clear_cap", "k_stone_cap"]:
@@ -1397,10 +1412,11 @@ func _build_ground2() -> void:
 		# 근경까지 풀로 이어지게 할거임"; tools/make_town_field.py)
 		# both (owner 2026-11-09: "둘 다 섞지 뭐", "가끔씩만 단차두는 연출로"): here and there the walk keeps an earth
 		# edge (field_edge px of its section), a step down to the lawn; elsewhere the lawn runs straight on
-		if field_im != null:
+		var fim: Image = field_stone if k == "stone" and field_stone != null else field_im
+		if fim != null:
 			var fx := 0
-			while fx < mini(w, field_im.get_width()):
-				solid.blit_rect(field_im, Rect2i(fx, 0, 2, field_im.get_height()), Vector2i(fx, int(LIPY) + field_edge(float(fx))))
+			while fx < mini(w, fim.get_width()):
+				solid.blit_rect(fim, Rect2i(fx, 0, 2, fim.get_height()), Vector2i(fx, int(LIPY) + field_edge(float(fx))))
 				fx += 2
 		var band := solid.get_region(Rect2i(0, 0, w, int(BAND + RAISE)))
 		var gr := []
