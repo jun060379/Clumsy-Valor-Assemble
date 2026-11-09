@@ -17,6 +17,8 @@ const RIV0 := 8350.0
 const RIV1 := 8590.0
 const SL := 420.0
 const BAND := 58.0
+const HILL_ON := true          # the hall's slope picture as the recess face (false: the old dark dirt)
+const HILL_FOOT := 4.0         # where the slope picture's last row sits, below the lower street's floor line
 # the slopes (owner 2026-11-06 dropped the stone stairs: back to the long slopes)
 const UPA := SX0                 # the slope up to the hall terrace: UPA..SX1
 const DNB := EX1                 # the slope down from it: DX1..DNB
@@ -515,6 +517,20 @@ func _build_tex() -> void:
 			var c := wall.get_pixel(x, y)
 			wall.set_pixel(x, y, Color(c.r * 0.38, c.g * 0.38, c.b * 0.38, c.a))
 	t_wall = ImageTexture.create_from_image(wall)
+	# the hall's slope (owner 2026-11-09: "길드 본관 밑 근경은 안오는 게 자연스러워보이고 대신 밑 풀밭을 언덕처럼"): the
+	# processed slope picture (tools/make_town_hill_nai.py, palette only) as the face between the upper walk and the lower
+	# street, its foot on the lower street's floor; rows past its ends repeat its edge rows. Lit like the ground.
+	if HILL_ON:
+		var hi := (load("res://assets/town/k_hill.png") as Texture2D).get_image()
+		hi.convert(Image.FORMAT_RGBA8)
+		var hh := int(LOWF + 20.0 - G)
+		var hw := hi.get_width()
+		var him := Image.create(hw, hh, false, Image.FORMAT_RGBA8)
+		var foot := int(LOWF + HILL_FOOT - G)          # the image row where the picture's last row lands
+		for y in hh:
+			var sy := clampi(hi.get_height() - 1 - (foot - y), 0, hi.get_height() - 1)
+			him.blit_rect(hi, Rect2i(0, sy, hw, 1), Vector2i(0, y))
+		t_wall = ImageTexture.create_from_image(him)
 
 
 # ---------- climbable tops: one-way (sloped) surfaces traced from each placed sprite's top silhouette ----------
@@ -1544,7 +1560,8 @@ func _draw_ground() -> void:
 	pts.append(Vector2(STX1 + SL, LOWF + 20.0))
 	pts.append(Vector2(SX0, LOWF + 20.0))
 	var uvs := PackedVector2Array()
-	for p in pts: uvs.append(p / t_wall.get_size())
+	var wo := Vector2(0.0, G) if HILL_ON else Vector2.ZERO
+	for p in pts: uvs.append((p - wo) / t_wall.get_size())
 	gn.draw_colored_polygon(pts, Color.WHITE, uvs, t_wall)
 	# 2. lower level: floor + valley, river
 	_shear(t_solid, RX1, RIV0, func(_x): return LOWF)
