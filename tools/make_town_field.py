@@ -168,4 +168,7 @@ print("paving colours", to_png(lab, STONE, "k_field_stone"))
 # stones whose rank is over a threshold that rises toward the lawn, so the paving ends in loose stones in the grass
 # (owner 2026-11-09: "돌타일, 흙타일과 풀 타일이 맞닿는 부분의 연결타일 더자연스럽게 다듬어서 넣기")
 rk = np.where(lab == J, 0, np.where(lab == MOSS, 0, np.array(ranks)[sid])).astype(np.uint8)
-Image.fromarray(np.stack([rk, rk, rk, np.full_like(rk, 255)], -1)).save(os.path.join(OUT, "k_field_rank.png"))
+# G: how far the stone's middle lies from this cell (cells, 128 = here), so a stone is kept or dropped whole
+cxs = np.array(seeds)[:, 0] * QX
+dxm = np.clip(np.round(cxs[sid] - X) + 128, 0, 255).astype(np.uint8)
+Image.fromarray(np.stack([rk, dxm, rk, np.full_like(rk, 255)], -1)).save(os.path.join(OUT, "k_field_rank.png"))

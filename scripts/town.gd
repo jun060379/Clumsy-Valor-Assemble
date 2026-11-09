@@ -1282,14 +1282,16 @@ func _lip_taper(x: float) -> float:
 
 var FIELD_ON := false
 const CURB := 18                 # the paving tile's curb rows above LIPY (rows 40..57 of k_stone)
-const PAVE_FADE := 72.0          # px each side of a paving end over which the stones thin out into the grass
+const PAVE_WIN := 96.0           # px each side of a paving end looked at (a stone's half-width more than the meander)
 const FIELD_LAWN := Color8(131, 141, 64)      # the lawn ramp's body (row 4 step 4: the field's and the plane's front)
 const FIELD_LAWN_L := Color8(151, 161, 76)    # a step lighter: a blade's tip
 
-## the paving's ends below the walk: a stone stays where its rank (k_field_rank, tools/make_town_field.py) is over a
-## threshold rising from 0 at PAVE_FADE inside the paving to 1 at PAVE_FADE outside; a joint stays beside a kept stone.
-## inside (the paving's own solid): what goes shows the lawn's solid there; outside (the lawn's): kept stones laid on it,
-## from the paving's first field row (where its curb was)
+## the paving's ends below the walk (owner 2026-11-09: "돌타일, 흙타일과 풀 타일이 맞닿는 부분의 연결타일 더자연스럽게
+## 다듬어서 넣기", "좀 더 자연스럽게"): each stone is kept or dropped WHOLE, by where its middle lies against an edge that
+## meanders down the rows, its rank (k_field_rank R, tools/make_town_field.py) shifting it a little so a few stones stand
+## out in the grass or leave a gap; a joint stays beside a kept stone; the grass grows over the rim of the stones that
+## border it, a cell here and there. inside (the paving's own solid): what goes shows the lawn's solid; outside (the
+## lawn's): kept stones laid on it, from the paving's first field row (where its curb was)
 func _paving_ends(solid: Image, inside: bool, lawn: Image, stone: Image) -> void:
 	var rk: Image = tex["k_field_rank"].get_image()
 	rk.decompress()
@@ -1297,38 +1299,59 @@ func _paving_ends(solid: Image, inside: bool, lawn: Image, stone: Image) -> void
 	var rh := rk.get_height()
 	var fy0 := int(LIPY) - CURB
 	var sw := solid.get_width()
-	var keep := func(cx: int, cy: int, t: float) -> bool:
-		if cx < 0 or cy < 0 or cx >= rw or cy >= rh: return false
-		var r := rk.get_pixel(cx, cy).r
-		return r > 0.001 and r > t
+	var ny := mini(rh, (solid.get_height() - 1 - fy0) / 2)
 	# (built before _layout fills STONE: the same zone as _layout's)
 	var zones: Array = STONE if not STONE.is_empty() else [[HDOOR - 420.0, HDOOR + 420.0]]
 	for z in zones:
 		for side in 2:
 			var e: float = z[0] if side == 0 else z[1]
-			var xa := int(floorf((e - PAVE_FADE) / 2.0)) * 2
-			while xa < int(e + PAVE_FADE):
-				var d: float = (e - (xa + 1.0)) if side == 0 else ((xa + 1.0) - e)     # > 0 outside the paving
-				if (d < 0.0) != inside or xa < 0 or xa >= sw:
-					xa += 2
-					continue
-				var t := clampf((d + PAVE_FADE) / (2.0 * PAVE_FADE), 0.0, 1.0)
-				var cx := xa / 2
-				var y := fy0
-				while y < solid.get_height() - 1:
-					var cy := (y - fy0) / 2
-					var on := false
-					if keep.call(cx, cy, t): on = true
-					elif rk.get_pixel(clampi(cx, 0, rw - 1), clampi(cy, 0, rh - 1)).r <= 0.001:
-						for j in [-1, 0, 1]:
-							for i in [-1, 0, 1]:
-								if not on and keep.call(cx + i, cy + j, t): on = true
-					if inside and not on:
+			var c0 := int(floorf((e - PAVE_WIN) / 2.0))
+			var nc := int(PAVE_WIN)                       # cells across the window (2 * PAVE_WIN px / 2)
+			# 0 grass, 1 kept stone, 2 kept joint
+			var g := PackedByteArray(); g.resize(nc * ny)
+			for cy in ny:
+				var edge := (_vnoise(cy / 9.0 + 13.0 + side * 40.0) - 0.5) * 44.0 + (_vnoise(cy / 3.0 + 7.0) - 0.5) * 12.0
+				for i in nc:
+					var cx := c0 + i
+					if cx < 0 or cx >= rw: continue
+					var px := rk.get_pixel(cx, cy)
+					if px.r <= 0.001: continue
+					var mx := (cx + roundi(px.g * 255.0) - 128) * 2.0 + 1.0       # the stone's middle (px)
+					var dc := (e - mx) if side == 0 else (mx - e)                  # > 0 out on the lawn
+					if dc + (px.r - 0.5) * 28.0 < edge: g[cy * nc + i] = 1
+			for cy in ny:                                   # the joints round the kept stones
+				for i in nc:
+					var cx := c0 + i
+					if g[cy * nc + i] != 0 or cx < 0 or cx >= rw: continue
+					if rk.get_pixel(cx, cy).r > 0.001: continue
+					var nb := false
+					for j in [-1, 0, 1]:
+						for q in [-1, 0, 1]:
+							var yy: int = cy + j
+							var ii: int = i + q
+							if yy >= 0 and yy < ny and ii >= 0 and ii < nc and g[yy * nc + ii] == 1: nb = true
+					if nb: g[cy * nc + i] = 2
+			for cy in ny:
+				var y := fy0 + cy * 2
+				for i in nc:
+					var xa := (c0 + i) * 2
+					if xa < 0 or xa >= sw - 1: continue
+					var d: float = (e - (xa + 1.0)) if side == 0 else ((xa + 1.0) - e)
+					if (d < 0.0) != inside: continue
+					var v := g[cy * nc + i]
+					# the grass over a bordering stone's rim: a cell of the stone's outline (joint or stone) that touches
+					# grass, now and then
+					if v != 0:
+						var gr := false
+						for o in [[-1, 0], [1, 0], [0, -1]]:
+							var ii: int = i + o[0]
+							var yy: int = cy + o[1]
+							if ii >= 0 and ii < nc and yy >= 0 and g[yy * nc + ii] == 0: gr = true
+						if gr and fposmod(sin((c0 + i) * 12.9898 + cy * 78.233) * 43758.5453, 1.0) < 0.55: v = 0
+					if inside and v == 0:
 						for q in 4: solid.set_pixel(xa + (q & 1), y + (q >> 1), lawn.get_pixel(xa + (q & 1), y + (q >> 1)))
-					elif not inside and on:
+					elif not inside and v != 0:
 						for q in 4: solid.set_pixel(xa + (q & 1), y + (q >> 1), stone.get_pixel(xa + (q & 1), y - fy0 + (q >> 1)))
-					y += 2
-				xa += 2
 
 ## the clearing's front edge: the lawn in front grows a few cells up over the path, raggedly, with a blade standing up
 ## here and there (no earth face, no dark line). Drawn over the ground and the clearing's end caps alike, so the edge
@@ -1341,17 +1364,18 @@ func _clear_front(a: float, b: float, f: Callable) -> void:
 		var x := maxf(floorf(a / PK) * PK, floorf((z[0] - hw) / PK) * PK)
 		var x1 := minf(b, z[1] + hw)
 		while x < x1:
-			var dout := maxf(z[0] - x, x - z[1])                  # > 0 out on the cap
-			var tp := clampf(1.0 - dout / hw, 0.0, 1.0)
-			var n := (0.4 + 2.2 * _vnoise(x / 30.0 + 3.0) + 0.8 * _vnoise(x / 8.0 + 71.0)) * tp
-			var e := int(roundf(n))
+			# the edge as a fringe of grass, not a smooth mound: a slow rise and fall, each column a cell up or down
+			# of it, the odd blade two cells taller; a column standing over both neighbours lights its tip
+			var ef := func(xx: float) -> int:
+				var hj := fposmod(sin(xx * 0.731 + 4.1) * 43758.5453, 1.0)
+				var base := 0.6 + 1.8 * _vnoise(xx / 34.0 + 3.0) + (1.0 if hj > 0.6 else 0.0) + (2.0 if hj > 0.95 else 0.0)
+				return int(floorf(base * clampf(1.0 - maxf(z[0] - xx, xx - z[1]) / hw, 0.0, 1.0)))
+			var e: int = ef.call(x)
 			var yb: float = roundf(f.call(x)) - RAISE + LIPY
-			if e > 0: gc.draw_rect(Rect2(x, yb - 2.0 * e, PK, 2.0 * e), FIELD_LAWN)
-			var r := fposmod(sin(x * 0.731 + 4.1) * 43758.5453, 1.0)
-			if r > 0.9 and tp > 0.5:                                # a blade a cell or two above the edge
-				var bh := 1.0 if r < 0.96 else 2.0
-				gc.draw_rect(Rect2(x, yb - 2.0 * (e + bh), PK, 2.0 * bh), FIELD_LAWN)
-				gc.draw_rect(Rect2(x, yb - 2.0 * (e + bh), PK, PK), FIELD_LAWN_L)
+			if e > 0:
+				gc.draw_rect(Rect2(x, yb - 2.0 * e, PK, 2.0 * e), FIELD_LAWN)
+				if e >= 2 and e > ef.call(x - PK) and e > ef.call(x + PK):
+					gc.draw_rect(Rect2(x, yb - 2.0 * e, PK, PK), FIELD_LAWN_L)
 			x += PK
 
 ## smooth value noise in [0, 1] (no period)
