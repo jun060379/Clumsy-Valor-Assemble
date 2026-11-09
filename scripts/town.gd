@@ -209,6 +209,7 @@ var blade_front: Node2D
 var blade_mat: ShaderMaterial
 var bmesh := {}
 var mirror_mat: ShaderMaterial
+var back_river: Node2D
 var mirror_node: Node2D
 var near_grass: Node2D
 const NEAR_GRASS := preload("res://assets/town/near_grass.png")
@@ -355,6 +356,12 @@ func _ready() -> void:
 	mirror_node.material = mirror_mat
 	mirror_node.draw.connect(func(): mirror_node.draw_colored_polygon(river_poly(), Color.WHITE))
 	arena.add_child(mirror_node)
+	# the river behind the bridge (owner 2026-11-10, sketch A: "A가 더 깊이감 있네. 아래 물이랑 색 맞추고"): it comes out
+	# of the far meadow, bends twice and runs in under the bridge; behind the ground, in front of the backdrop
+	back_river = Node2D.new()
+	back_river.z_index = -8
+	back_river.draw.connect(_draw_back_river)
+	arena.add_child(back_river)
 	front = Node2D.new()
 	front.z_index = 8
 	front.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -1077,6 +1084,7 @@ func step(dt: float) -> void:
 	front.queue_redraw()
 	near_grass.queue_redraw()
 	mirror_mat.set_shader_parameter("t", Time.get_ticks_msec() / 1000.0)
+	if back_river != null and absf(arena.view_rect().get_center().x - (RIV0 + RIV1) / 2.0) < 1400.0: back_river.queue_redraw()
 	near_node.queue_redraw()
 	# the ground is static: drawn for the view and 600 px either side, redrawn only when the view leaves that
 	if ground_mat != null:
@@ -1740,6 +1748,43 @@ func river_poly() -> PackedVector2Array:
 		R.append(Vector2(roundf((c + hw) / PK) * PK, wl + d))
 	R.reverse()
 	return L + R
+
+## the river's own colours (assets/fx/town/river.png, the water under the bridge): darkest to lightest
+const RIVC := [Color8(5, 34, 43), Color8(8, 51, 61), Color8(14, 69, 73), Color8(25, 90, 91), Color8(47, 119, 113)]
+const BACKRIV_FAR := 150.0       # how far above the waterline (world px) the river comes out of the meadow
+
+## the river behind the bridge, drawn row by row (2-px rows, whole cells): from a thread at the meadow's far edge it
+## bends twice and widens to the bridge's span at the waterline; far off it is lighter (the sky in it), near it is the
+## water's own colour as under the bridge; its middle carries short light dashes drifting downstream (toward the camera)
+func _draw_back_river() -> void:
+	var wl := LOWF + 20.0
+	var c0 := (RIV0 + RIV1) / 2.0
+	var y0 := wl - BACKRIV_FAR
+	var tt := Time.get_ticks_msec() / 1000.0
+	var y := floorf(y0 / PK) * PK
+	while y < wl + 4.0:
+		var t := clampf((y - y0) / (wl + 2.0 - y0), 0.0, 1.0)
+		t = pow(t, 1.0 / 1.25)                                  # rows crowd toward the far end (the depth)
+		var cx := c0 + 150.0 * sin(TAU * 1.3 * t + 0.3) * (1.0 - t)
+		var w := 4.0 + (RIV1 - RIV0 - 4.0) * pow(t, 1.6)
+		var x0 := roundf((cx - w / 2.0) / PK) * PK
+		var x1 := roundf((cx + w / 2.0) / PK) * PK
+		var far := t < 0.45
+		back_river.draw_rect(Rect2(x0 - PK, y, PK, PK), Color8(48, 67, 32))           # the bank's grass lip (green ramp 1)
+		back_river.draw_rect(Rect2(x1, y, PK, PK), Color8(48, 67, 32))
+		back_river.draw_rect(Rect2(x0, y, x1 - x0, PK), RIVC[3] if far else RIVC[2])
+		var ew := maxf(PK, roundf((x1 - x0) * 0.15 / PK) * PK)
+		if x1 - x0 > 3.0 * PK:
+			back_river.draw_rect(Rect2(x0, y, ew, PK), RIVC[2] if far else RIVC[1])
+			back_river.draw_rect(Rect2(x1 - ew, y, ew, PK), RIVC[2] if far else RIVC[1])
+		# light dashes along the middle, every 4th row, drifting down the river
+		var row := int(roundf(y / PK))
+		var ph := fposmod(float(row) * 0.37 - tt * 0.6, 1.0)
+		if t > 0.3 and row % 4 == 0 and ph < 0.5 and x1 - x0 > 8.0 * PK:
+			var dl := roundf((x1 - x0) * 0.22 / PK) * PK
+			var dx := roundf((cx - dl / 2.0 + (ph - 0.25) * 40.0) / PK) * PK
+			back_river.draw_rect(Rect2(dx, y, dl, PK), RIVC[4])
+		y += PK
 
 ## the near grass: a strip at the bottom of the view, sliding a little faster than the world (it is nearer), sunk
 ## low where the river comes out under it so the water shows
