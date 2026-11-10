@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# python3 tools/make_town_knoll.py SRC.png OUT.png [BLOCK]
+# python3 tools/make_town_knoll.py SRC.png OUT.png [BLOCK] [knoll|blossom|blossom7]
 # The memorial knoll behind the fountain (owner 2026-11-10: "이런것들 처럼 배경 가까이 있는 근경 그림", "1번 가볼까"):
 # the owner's NAI picture (a drawn, not pixel, picture with its background removed; the AI original stays out of the
 # repo) brought to the town's rules:
@@ -29,6 +29,7 @@ keep = alpha.mean(2) > 0.5
 val_px = blk[..., :3].max(3) / 255.0
 dark_px = (val_px < 0.36) & alpha
 linec = keep & (dark_px.sum(2) / np.maximum(alpha.sum(2), 1) > 0.42)
+if len(sys.argv) > 4 and sys.argv[4].startswith('blossom'): linec &= False   # a pixel picture already: no drawn line to find by coverage
 c = np.zeros((H, W, 3))
 for y in range(H):
     for x in range(W):
@@ -44,18 +45,34 @@ hue = np.where(mx == r, ((g - b) / d) % 6, np.where(mx == g, (b - r) / d + 2, (r
 sat, val = d / (mx + 1e-6), mx
 lum = 0.299 * c[..., 0] + 0.587 * c[..., 1] + 0.114 * c[..., 2]
 
+PRESET = sys.argv[4] if len(sys.argv) > 4 else "knoll"
+LINE_V = 0.3 if PRESET.startswith("blossom") else 0.36
 body = keep & ~linec
-linec |= body & (val < 0.36)
+linec |= body & (val < LINE_V)
 body = keep & ~linec
-green = body & (hue >= 47) & (hue < 90) & (sat > 0.5)
-leaf = green & (val < 0.56)
-lawn = green & ~leaf
-pale = body & ~green & (sat < 0.36) & (val > 0.6)
-trunk = body & ~green & ~pale & (hue < 28)
-stone = body & ~green & ~pale & ~trunk
-MATS = [("lawn", lawn, ramp(4, [3, 4, 5, 6])), ("leaf", leaf, ramp(5, [1, 2, 3, 5])), ("trunk", trunk, ramp(1, [2, 3, 4, 6])),
-        ("stone", stone, ramp(8, [4, 5, 6, 7])), ("pale", pale, ramp(3, [3, 5, 7]))]
-DARK = {"lawn": tuple(P[4, 1]), "leaf": tuple(P[5, 0]), "trunk": tuple(P[1, 0]), "stone": tuple(P[8, 2]), "pale": tuple(P[3, 0])}
+if PRESET.startswith("blossom"):
+    # the blossom tree (owner 2026-11-10: "1 3 다 넣으면?", the tree picture): petals, the trunk and branches (a dark
+    # wine brown), the bench, swing and the ledge's earth (wood), the ledge's grass
+    red = (hue >= 315) | (hue < 10)
+    green = body & (hue >= 42) & (hue < 95) & (sat > 0.4)
+    petal = body & red & (val > 0.52)
+    trunk = body & red & ~petal
+    wood = body & ~green & ~petal & ~trunk
+    # petals: "blossom" = the red ramp's salmon steps; "blossom7" = the violet/pink ramp (pink on violet shade)
+    pr = ramp(7, [3, 4, 5]) if PRESET == "blossom7" else ramp(0, [2, 5, 6, 7])
+    MATS = [("lawn", green, ramp(4, [2, 3, 4, 5])), ("petal", petal, pr), ("trunk", trunk, ramp(1, [1, 2, 3])),
+            ("wood", wood, ramp(1, [3, 4, 5, 6]))]
+    DARK = {"lawn": tuple(P[4, 1]), "petal": tuple(P[7, 2] if PRESET == "blossom7" else P[0, 1]), "trunk": tuple(P[1, 0]), "wood": tuple(P[1, 1])}
+else:
+    green = body & (hue >= 47) & (hue < 90) & (sat > 0.5)
+    leaf = green & (val < 0.56)
+    lawn = green & ~leaf
+    pale = body & ~green & (sat < 0.36) & (val > 0.6)
+    trunk = body & ~green & ~pale & (hue < 28)
+    stone = body & ~green & ~pale & ~trunk
+    MATS = [("lawn", lawn, ramp(4, [3, 4, 5, 6])), ("leaf", leaf, ramp(5, [1, 2, 3, 5])), ("trunk", trunk, ramp(1, [2, 3, 4, 6])),
+            ("stone", stone, ramp(8, [4, 5, 6, 7])), ("pale", pale, ramp(3, [3, 5, 7]))]
+    DARK = {"lawn": tuple(P[4, 1]), "leaf": tuple(P[5, 0]), "trunk": tuple(P[1, 0]), "stone": tuple(P[8, 2]), "pale": tuple(P[3, 0])}
 
 out = np.zeros((H, W, 3), np.uint8)
 mat = np.full((H, W), -1)
