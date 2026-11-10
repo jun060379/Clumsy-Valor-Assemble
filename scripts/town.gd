@@ -21,7 +21,7 @@ const HILL_ON := false         # the hall's slope picture as the recess face (fa
 # 2026-11-09: "일단 그 언덕 텍스쳐 넣은 거 빼자. 옆에 오르 내리막길이라던가 막 잘림")
 const KNOLL_ON := false        # the memorial knoll behind the fountain (k_knoll.png)
 const KNOLL_X := 2718.0
-const NEAR_BACK := [["k_blossom", 2648.0, 780.0]]      # the blossom tree right behind the fountain, its own ledge sunk behind the plaza's back edge (owner 2026-11-10: "좀 더 크게 분수대 바로 뒤에")
+const NEAR_BACK := [["k_blossom", 2588.0, 780.0]]      # the blossom tree right behind the fountain, its own ledge sunk behind the plaza's back edge (owner 2026-11-10: "좀 더 크게 분수대 바로 뒤에")
 const SLOPE_ON := true         # the slope drawn for the face's own shape (k_slope.png, top-left at SX0, SLOPE_Y0)
 const SLOPE_Y0 := 270.0        # = Y0 in tools/make_town_slope.py
 const PLAZA_SUN := true        # the sun reaches the lower plaza (owner 2026-11-09: "빛을 언덕 아래로도 쏘자"), kept with the slope picture out
