@@ -19,6 +19,8 @@ const SL := 420.0
 const BAND := 58.0
 const HILL_ON := false         # the hall's slope picture as the recess face (false: the old dark dirt). Off (owner
 # 2026-11-09: "일단 그 언덕 텍스쳐 넣은 거 빼자. 옆에 오르 내리막길이라던가 막 잘림")
+const KNOLL_ON := true         # the memorial knoll behind the fountain (k_knoll.png)
+const KNOLL_X := 2718.0
 const SLOPE_ON := true         # the slope drawn for the face's own shape (k_slope.png, top-left at SX0, SLOPE_Y0)
 const SLOPE_Y0 := 270.0        # = Y0 in tools/make_town_slope.py
 const PLAZA_SUN := true        # the sun reaches the lower plaza (owner 2026-11-09: "빛을 언덕 아래로도 쏘자"), kept with the slope picture out
@@ -1718,6 +1720,11 @@ func _draw_ground() -> void:
 		wo = Vector2(SX0, SLOPE_Y0)
 	for p in pts: uvs.append((p - wo) / wt.get_size())
 	gn.draw_colored_polygon(pts, Color.WHITE, uvs, wt)
+	# the memorial knoll right behind the fountain (owner 2026-11-10: "배경 가까이 있는 근경 그림", "1번 가볼까";
+	# tools/make_town_knoll.py): its foot on the lower street's back edge, lit like the ground
+	if KNOLL_ON and tex.has("k_knoll"):
+		var kt: Texture2D = tex["k_knoll"]
+		gn.draw_texture(kt, Vector2(KNOLL_X, roundf((terr_y(KNOLL_X + kt.get_width() / 2.0) - RAISE + 8.0 - kt.get_height()) / PK) * PK))
 	# 2. lower level: floor + valley, river
 	_shear(t_solid, RX1, RIV0, func(_x): return LOWF)
 	_shear(t_solid, RIV1, TOWN_W + PK, func(_x): return LOWF)
