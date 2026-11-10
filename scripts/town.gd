@@ -19,7 +19,7 @@ const SL := 420.0
 const BAND := 58.0
 const HILL_ON := false         # the hall's slope picture as the recess face (false: the old dark dirt). Off (owner
 # 2026-11-09: "일단 그 언덕 텍스쳐 넣은 거 빼자. 옆에 오르 내리막길이라던가 막 잘림")
-const KNOLL_ON := true         # the memorial knoll behind the fountain (k_knoll.png)
+const KNOLL_ON := false        # the memorial knoll behind the fountain (k_knoll.png)
 const KNOLL_X := 2718.0
 const SLOPE_ON := true         # the slope drawn for the face's own shape (k_slope.png, top-left at SX0, SLOPE_Y0)
 const SLOPE_Y0 := 270.0        # = Y0 in tools/make_town_slope.py
